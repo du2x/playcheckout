@@ -168,7 +168,7 @@ the Phase 2 sim's event surface and a protocol-skill review.
 | SKEL-06 | P1: Server transport shell | Design | Pending |
 | SKEL-07 | P1: Client shell | Design | Pending |
 | SKEL-08 | P1: Client shell (prod hook strip) | Design | Pending |
-| SKEL-09 | P2: Wire envelope + telemetry schema | - | Pending |
+| SKEL-09 | P2: Wire envelope + telemetry schema | Tasks | Implementing |
 
 **ID format:** `SKEL-[NUMBER]`
 

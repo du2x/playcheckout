@@ -116,7 +116,7 @@ T6 → T7
 
 ---
 
-### T3: packages/shared — protocol envelope + FR-23 telemetry types
+### T3: packages/shared — protocol envelope + FR-23 telemetry types ✅ (commit: feat(shared))
 
 **What**: `protocol/` module exporting per-player event-stream + personal-snapshot envelope types, client→server intent base, and the FR-23 telemetry event schema; every exported message type carries a one-line intended-recipient comment.
 **Where**: `packages/shared/src/protocol/`
