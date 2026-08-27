@@ -89,7 +89,7 @@ T6 → T7
 
 ---
 
-### T2: packages/shared — domain constants + unit tests
+### T2: packages/shared — domain constants + unit tests ✅ (commit: feat(shared))
 
 **What**: `packages/shared` with `layout.ts` (1 lobby + 3×8 = 24 rooms), `roomState.ts` (closed `RoomState` union), `tuning.ts` (verbatim prd §7), each exported typed; vitest unit tests asserting every value against prd §7 / roadmap step 0 literals.
 **Where**: `packages/shared/`

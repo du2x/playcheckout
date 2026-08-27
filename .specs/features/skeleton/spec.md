@@ -163,8 +163,8 @@ the Phase 2 sim's event surface and a protocol-skill review.
 | SKEL-01 | P1: Workspace + gate tooling | Design | Pending |
 | SKEL-02 | P1: Workspace + gate tooling | Design | Pending |
 | SKEL-03 | P1: Workspace + gate tooling | Design | Pending |
-| SKEL-04 | P1: Shared package | Design | Pending |
-| SKEL-05 | P1: Shared package | Design | Pending |
+| SKEL-04 | P1: Shared package | Tasks | Implementing |
+| SKEL-05 | P1: Shared package | Tasks | Implementing |
 | SKEL-06 | P1: Server transport shell | Design | Pending |
 | SKEL-07 | P1: Client shell | Design | Pending |
 | SKEL-08 | P1: Client shell (prod hook strip) | Design | Pending |

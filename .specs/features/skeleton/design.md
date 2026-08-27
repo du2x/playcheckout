@@ -186,6 +186,7 @@ recipient comments.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Server runs from TS in dev and tests | tsx (no tsup build in Phase 1) | Server has no logic to bundle yet; tsup lands in Phase 2 with the real entry. Avoids a build step nothing consumes |
+| TS module format | Base `module: ESNext` + `moduleResolution: bundler` for all Phase 1 packages; shared publishes TS source directly via `exports` | Everything runs through tsx/Vite/vitest, which compile TS natively — no declaration emit anywhere until tsup (Phase 2); NodeNext's explicit-extension rule adds churn with no Phase 1 consumer. Server can re-introduce NodeNext per-package when its build lands |
 | Typecheck fan-out | Root script runs `pnpm -r typecheck`; each workspace package owns `typecheck: tsc --noEmit -p tsconfig.json` | Solution-style `tsc -b` fails (TS18003) with zero references, i.e. in T1 before packages exist; per-package `--noEmit` keeps each tsconfig authoritative and the root script a pure fan-out |
 | Client→server validation now or Phase 2 | Phase 2 (zod `validate()` handlers) | No intents exist until the sim has inputs; only the intent base type ships now |
 | Vitest for both gate 2 and gate 3 runner internals | `@playwright/test` drives the browser; plain vitest wraps nothing | Gate 3 is Playwright-native per CI; keep the runner the CI contract already names |
