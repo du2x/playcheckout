@@ -120,9 +120,13 @@ graph TD
   - `positionOf(playerId)` — room reads for later cycles (AD-005 seam)
 - **Determinism**: positions are **integer millitiles** (x × 1000). Per-tick dx = `PLAYER_SPEED_TILES_PER_SEC × 1000 / TICK_HZ` = 300 exactly — bit-for-bit replay (spec success criterion). Wire x = `xMillis / 1000` (e.g. `12.3`).
 - **Events emitted**: `player:moved` when a player's x, floor, or facing changed
-  this tick; `elevator:called` for immediate dispatches and decoys (announced
+  this tick, plus ONE terminal event on the tick after a move intent ends
+  (carries the authoritative rest x so the moving client reconciles prediction
+  overshoot — post-Execute fix; amends MOVE-03's letter: an intent-ending tick
+  emits even without a position change, truly idle ticks still emit nothing);
+  `elevator:called` for immediate dispatches and decoys (announced
   the tick after acceptance; queued calls announce at dispatch); `elevator:moved`
-  whenever a car's floor changes. Nothing on idle ticks (MOVE-03).
+  whenever a car's floor changes.
 
 ### Elevator model (inside `movement.ts`, pure — one file, one concept pair)
 
@@ -143,14 +147,20 @@ graph TD
 
 - **`simEvents.ts`**: gains `MovementEvent` union next to `SimEvent`:
   `{ type: 'player:moved'; playerId; floor; x; facing } | { type: 'elevator:called'; floor; car } | { type: 'elevator:moved'; car; floor }`.
-- **`messages.ts` payloads**: `PlayerMoved`, `ElevatorCalled`, `ElevatorMoved` (+ `PlayerLeft`, `MovementSnapshot`); `FloorId = (typeof FLOORS_IDS)[number]`, `Facing = 'left' | 'right'`, `CarId = 1 | 2`.
+- **`messages.ts` payloads**: `PlayerMoved`, `ElevatorCalled`, `ElevatorMoved` (+ `PlayerLeft`, `MovementSnapshot`); `FloorId = (typeof FLOOR_IDS)[number]`, `Facing = 'left' | 'right'`, `CarId = 1 | 2`.
 - **`intents.ts`** (new): zod schemas `moveStartIntentSchema` (`move:start {dir}`), `moveStopIntentSchema`, `elevatorCallIntentSchema` (`elevator:call {target}`) — strict, same pattern as `lobbyStartIntentSchema`. Intents stay outside the registry.
 - **`registry.ts`**: `Payloads` + 5 rows; satisfies extended to
   `& { [K in SimEvent['type'] | MovementEvent['type']]: unknown }`;
   `Entry<K>`'s `fromSim` conditional widened to the combined union. Recipients: all
   five new rows are `'all'` except `movement:snapshot` (`'self'`). No new
-  `RecipientPolicy` variants (the 2.4 movement broadcasts are global; `nearby`
-  lands with 2.6 evidence per spec out-of-scope table).
+  `RecipientPolicy` variants this cycle — reconciled with AD-008 post-Execute
+  (verifier Gap 1 ruling): 2.4 ships global broadcasts, and live players see
+  their current floor only via the WorldScene view filter (renders the local
+  player's floor — AD-008's client-visible outcome). AD-008's **server-side**
+  per-recipient routing (`sameFloor`/`spectators`) is deferred to the first
+  cycle that must hide positions on the wire (room interiors / evidence); until
+  then a modded client could read cross-floor positions — accepted and recorded
+  in AD-008's amended Scope.
 
 ### TurnoverRoom wiring — `apps/server/src/rooms/TurnoverRoom.ts` (edited)
 

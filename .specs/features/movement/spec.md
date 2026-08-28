@@ -65,7 +65,7 @@ host start.
 
 1. WHEN a connected player holds a move direction THEN the client SHALL send a `move:start` intent, and the server SHALL integrate that player's x position at TUNING.PLAYER_SPEED_TILES_PER_SEC (6 tiles/s) at 20 Hz while the intent persists.
 2. WHEN the player releases the direction THEN the client SHALL send `move:stop` and the server SHALL stop that player's x at its current value.
-3. WHEN a player's position changes THEN the server SHALL broadcast a `player:moved` event (playerId, floor, x, facing) to all players; WHEN no position changed during a tick THEN the server SHALL broadcast nothing.
+3. WHEN a player's position changes THEN the server SHALL broadcast a `player:moved` event (playerId, floor, x, facing) to all players; WHEN a move intent ends THEN the server SHALL emit one terminal `player:moved` carrying the authoritative rest x (client prediction reconciliation); WHEN no position changed during a tick AND no move intent ended THEN the server SHALL broadcast nothing.
 4. WHILE the room is in lobby state THEN every player's floor SHALL remain `lobby` and x SHALL be clamped to the grand lobby bounds (0 to HALL_LENGTH_TILES).
 5. WHEN a player's move intent would move them through another player THEN both SHALL pass through each other (no collision) and both positions SHALL be broadcast.
 

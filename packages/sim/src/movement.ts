@@ -31,7 +31,9 @@ interface PlayerMoveState {
   facing: MoveDir
   moving: MoveDir | null
   inCar: 1 | 2 | null
-  /** Set when facing changed without an x change this tick — still broadcast. */
+  /** Event owed without an x change: facing flip, or move end (one terminal
+   *  rest-x event so clients reconcile prediction overshoot — MOVE-02/03
+   *  amendment). */
   facingDirty: boolean
 }
 

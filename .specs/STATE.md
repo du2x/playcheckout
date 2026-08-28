@@ -143,9 +143,63 @@
   pipeline — built as visibility-class channels, not a special case. Cross-floor
   elevator-exit sightings stay impossible for live players (FR-6: "who rode when"
   stays voice testimony); changing that requires a new AD.
-- **Scope**: cycle 2.4 `movement` Design (recipient policies for position streams),
-  `apps/server` Router, `packages/shared/src/protocol/registry.ts`, future
-  spectator/camera cycles.
+- **Scope**: server-side routing lands with the first cycle that must hide
+  positions on the wire (room interiors / evidence) — `apps/server` Router,
+  `packages/shared/src/protocol/registry.ts`, spectator/camera cycles.
+- **Amendment (2026-08-28, post-2.4 verifier Gap 1 ruling)**: cycle 2.4 shipped
+  global `'all'` position broadcasts; the client-visible half of this decision
+  (live players see their current floor only) is delivered by the WorldScene
+  view filter instead. The server-side per-recipient routing above is deferred
+  per the amended Scope — until it lands, a modded client could read cross-floor
+  positions from the wire; accepted for 2.4, not for any cycle that hides room
+  interiors.
+- **Date**: 2026-08-28
+- **Status**: active
+
+### AD-009
+- **Decision**: Movement verifier Gap 1 resolved in favor of AD-008 — the shipped
+  2.4 `'all'` routing of `player:moved` is amended, not descoped. Cycle 2.5
+  declares the `sameFloor` recipient policy: a live player receives position
+  streams for their own floor only; elevator riders receive no floor stream while
+  in a car (their arrival event arrives once they are on the arrival floor);
+  `movement:snapshot` content is filtered to the recipient's floor (cars stay
+  public — FR-6 panels). `elevator:called`/`elevator:moved` remain `'all'`.
+  The movement spec Goal 2 wording ("positions are public") is amended to
+  "positions are public within the viewer's floor" — recorded here rather than
+  left as two contradictory locked artifacts.
+- **Reason**: Verifier ruling requested in `.specs/features/movement/validation.md`
+  Gap 1; user directed autonomous run. AD-008's reasoning stands on the message-only
+  hard rule (cross-floor position streams are information a live player cannot
+  legitimately know); the registry/Router extension is exactly what cycle 2.5's
+  Design phase was scoped to declare, and no spectator class exists yet (fired
+  players arrive in 2.7 — the unfiltered spectator stream lands then).
+- **Trade-off**: Two 2.4 tests asserted global routing and are amended with the
+  registry change; client WorldScene already renders own-floor only, so no visual
+  behavior change for same-floor play.
+- **Scope**: `packages/shared/src/protocol/registry.ts`, `apps/server/src/rooms/router.ts`,
+  `TurnoverRoom.ts`, movement spec/design amendments, cycle 2.5 tasks.
+- **Date**: 2026-08-28
+- **Status**: active
+
+### AD-010
+- **Decision**: Room geometry concretized for cycle 2.5: the 8 rooms on each guest
+  floor are contiguous x-segments of width 3.5 tiles tiling `[1, 29]` of the
+  30-tile hall (1-tile open hall at each end, outside the elevator landings at
+  x=0/x=30). `ROOM_DEPTH_TILES` is re-derived 4 → 3.5 and gains placement
+  constants (`ROOM_HALL_START_TILES = 1`, rooms tile to `HALL_LENGTH_TILES − 1`).
+  Room index predicate: `x ∈ [start_i, end_i)`, last room inclusive. The grand
+  lobby floor has no rooms.
+- **Reason**: 2.4 recorded rooms-as-x-segments as an assumption default
+  (`ROOM_DEPTH_TILES = 4`) but 8×4 = 32 > 30 never fit the hall — the constant
+  was pinned by a literal test and never consumed by geometry. Cycle 2.5's
+  work channels are the first consumer, so the predicate must be exact. 8
+  rooms/floor (24 total) and "room ~4 tiles" (§7, approximate) are preserved as
+  closely as the locked 30-tile hall allows.
+- **Trade-off**: Room width 3.5 instead of 4 — travel-budget math (roadmap step 0)
+  used 8 rooms/floor which is kept; sweep-time estimates shift negligibly. A
+  new geometry predicate is a recorded decision per the tuning rule.
+- **Scope**: `packages/shared/src/layout.ts`, `packages/sim` (room-at predicate
+  consumers), cycle 2.5.
 - **Date**: 2026-08-28
 - **Status**: active
 
@@ -169,13 +223,14 @@
   (own-floor visibility routing) recorded. Commits `0ed741e..c11ad83`.
 - **In-progress** (file:line): none
 - **Next step**: cycle 2.5 work-channels (FR-7–FR-9, FR-16) — consumes positions via
-  `MovementSim.positionOf(playerId)` (AD-005 seam); AD-008 recipient policies
-  (`sameFloor`/`spectators`) land with their first consumers; door/room-interior cues
-  build on the landing positions (AD-007 scope note). Before that: rule on movement
-  verifier Gap 1 (AD-008 mandates per-floor routing; 2.4 shipped `'all'` broadcasts —
-  amend spec+design+registry or descope AD-008), then route Gaps 2–4 as fix tasks.
-  Earlier cycles' deferred verifier notes (room-shell, first-light, protocol-registry
-  N1–N3) fold in where those files are touched.
+  `MovementSim.positionOf(playerId)` (AD-005 seam); door/room-interior cues build on
+  the landing positions (AD-007 scope note). Movement verifier Gap 1 is RULED: AD-008
+  descoped to its first consumer — 2.4's global `'all'` broadcasts stand, AD-008's
+  server-side routing (`sameFloor`/`spectators`) lands with the first cycle that must
+  hide positions on the wire (amendment recorded in AD-008). Gaps 2–4 remain as small
+  fix tasks (decoy flash car assertion, pinned-with-intent silence, MOVE-06
+  positive-half leg). Earlier cycles' deferred verifier notes (room-shell,
+  first-light, protocol-registry N1–N3) fold in where those files are touched.
 - **Blockers**: none (Gate 4 human round for movement still pending — player-facing:
   `pnpm boot`, open 4 tabs, walk the lobby pre-round, start, ride both elevators,
   buzzer; first-light's human round also still open)
