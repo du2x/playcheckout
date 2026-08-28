@@ -38,18 +38,19 @@ Order is dependency-driven: each cycle's sim state machine extends the previous 
 | Cycle | Feature | Scope | New gates (named scenarios) |
 |---|---|---|---|
 | 2.1 | `room-shell` | Colyseus room hosting the headless sim, join by code, host start ≥4, role deal (FR-1, FR-2), round clock | `server:lobby_join`, `sim:role_deal` |
-| 2.2 | `movement` | Linear left/right, pass-through bodies, 6 tiles/s; deterministic elevator cycle, 2s/floor, one pending destination, position-only panels (FR-4–FR-6) | `sim:motion`, `sim:elevator` |
-| 2.3 | `work-channels` | Prep 5s from any non-prepped state, un-prep 3s, fake prep = animation only, clean cancel on walk-out (FR-7–FR-9, FR-16) | `sim:prep`, `sim:unprep`, `sim:fake_prep` |
-| 2.4 | `evidence` | Door cards (permanent, hallway-readable, no timestamp), freshness tiers, rustle 3 tiles through walls, door-open visible+audible from hallway (FR-10–FR-13) | `sim:door_card`, `sim:rustle`, `sim:door_open_cue` |
-| 2.5 | `justice` | Walk-in conviction, hidden grace, name-only firing toasts, accusation range 2 tiles same floor (FR-14–FR-19) | `sim:walkin_conviction`, `sim:accuse`, `sim:firing_toast` |
-| 2.6 | `round-end` | Win checks + results + recap timeline (FR-20–FR-22); disconnect/abort handling, 60s reconnection with role restore (FR-25) | `sim:win_checks`, `server:reconnect` |
-| 2.7 | `telemetry` | JSONL telemetry with 1/s coverage sampling (FR-23); **exit-criteria bot sims** (a) staff vs. AFK saboteur ≥80% pre-buzzer, (b) last-60s blitz defeats spread bots at plausible rates | `sim:telemetry`, `sim:exit_a`, `sim:exit_b` |
+| 2.2 | `first-light` | Minimal client slice (AD-003): join-by-code screen, roster, host-start, labeled rectangles + round clock after start — consumes only existing T3 catalog messages, roles never render. Proves the AD-001 Fastify+Colyseus wiring in a real browser and gives Gate 3 its first real scenarios | `client:lobby_join`, `client:round_start` |
+| 2.3 | `movement` | Linear left/right, pass-through bodies, 6 tiles/s; deterministic elevator cycle, 2s/floor, one pending destination, position-only panels (FR-4–FR-6) | `sim:motion`, `sim:elevator` |
+| 2.4 | `work-channels` | Prep 5s from any non-prepped state, un-prep 3s, fake prep = animation only, clean cancel on walk-out (FR-7–FR-9, FR-16) | `sim:prep`, `sim:unprep`, `sim:fake_prep` |
+| 2.5 | `evidence` | Door cards (permanent, hallway-readable, no timestamp), freshness tiers, rustle 3 tiles through walls, door-open visible+audible from hallway (FR-10–FR-13) | `sim:door_card`, `sim:rustle`, `sim:door_open_cue` |
+| 2.6 | `justice` | Walk-in conviction, hidden grace, name-only firing toasts, accusation range 2 tiles same floor (FR-14–FR-19) | `sim:walkin_conviction`, `sim:accuse`, `sim:firing_toast` |
+| 2.7 | `round-end` | Win checks + results + recap timeline (FR-20–FR-22); disconnect/abort handling, 60s reconnection with role restore (FR-25) | `sim:win_checks`, `server:reconnect` |
+| 2.8 | `telemetry` | JSONL telemetry with 1/s coverage sampling (FR-23); **exit-criteria bot sims** (a) staff vs. AFK saboteur ≥80% pre-buzzer, (b) last-60s blitz defeats spread bots at plausible rates | `sim:telemetry`, `sim:exit_a`, `sim:exit_b` |
 
 Cycle rules:
 - Visibility-sensitive content (roles, grace state, interiors) never enters a
   client-bound payload — checked per cycle at design review (turnover-protocol skill).
 - Every cycle ends with gates 1–3 green + STATE.md handoff; gate ladder per AGENTS.md.
-- Cycle 2.7 is the phase exit: both bot sims must pass before Phase 3 starts.
+- Cycle 2.8 is the phase exit: both bot sims must pass before Phase 3 starts.
 
 Build the full round as a headless state machine in `packages/sim` — pure TypeScript,
 inputs + time in / events out, 20 Hz tick — before any rendering, testable via scripted

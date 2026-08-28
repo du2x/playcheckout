@@ -18,6 +18,24 @@
 - **Date**: 2026-08-27
 - **Status**: active
 
+### AD-003
+- **Decision**: Insert cycle 2.2 `first-light` before `movement`: a minimal client
+  slice (join-by-code screen, roster, host-start, labeled rectangles + round clock
+  once the sim starts) consuming only messages already in the T3 catalog. Cycles
+  shift: movement → 2.3, work-channels → 2.4, evidence → 2.5, justice → 2.6,
+  round-end → 2.7, telemetry → 2.8.
+- **Reason**: Nothing is visually verifiable until Phase 3, so Gate 3 has nothing
+  honest to assert; more importantly the Fastify+Colyseus wiring (AD-001) has no
+  public reference and was only proven by a boot smoke test. A thin browser slice
+  proves the riskiest integration before six cycles pile onto it, and gives later
+  cycles real `client:*` gate scenarios.
+- **Trade-off**: Pulls ~15% of Phase 3 forward; Phase 3 proper (movement rendering,
+  work channels, evidence cues) stays put. Protocol risk is nil — only existing
+  catalog messages are consumed, roles never render (protocol rule enforced early).
+- **Scope**: `apps/client`, `.specs/features/first-light/`, roadmap.md cycle table.
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: room-shell (`.specs/features/room-shell/`) — all 7 tasks committed (T1-T7)
@@ -25,8 +43,8 @@
 - **Completed**: sim deal (T1), RoundSim + sim:role_deal (T2), message catalog (T3),
   lobby join (T4), start/sim/routing (T5), churn (T6), registration swap + full round (T7)
 - **In-progress** (file:line): none
-- **Next step**: cycle 2.2 `movement` — fresh Specify for `.specs/features/movement/`
-  (see roadmap Phase 2 table)
+- **Next step**: cycle 2.2 `first-light` — fresh Specify for
+  `.specs/features/first-light/` (AD-003)
 - **Blockers**: none
 - **Uncommitted files**: none
 - **Branch**: master
