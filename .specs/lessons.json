@@ -12,14 +12,10 @@
       "signal": "ac_gap",
       "scope": "tests",
       "status": "candidate",
-      "features": [
-        "skeleton"
-      ],
+      "features": ["skeleton"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"
-      ],
+      "evidence": ["packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"],
       "created": "2026-08-28T00:35:14Z",
       "last_seen": "2026-08-28T00:35:14Z"
     }

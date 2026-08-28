@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: activate it by name and 
 ---
 
 **Design**: `.specs/features/room-shell/design.md`
-**Status**: Approved
+**Status**: In Progress
 
 ---
 
@@ -71,9 +71,9 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] `Role` exported from shared; `dealRoles` returns a Map with exactly one `'saboteur'` for any seed and any 4–6 player ids
-- [ ] Fixed seed + fixed player-id list returns bit-identical deals across runs; different seeds vary assignments
-- [ ] Quick gate passes; test count: 6+ cases
+- [x] `Role` exported from shared; `dealRoles` returns a Map with exactly one `'saboteur'` for any seed and any 4–6 player ids
+- [x] Fixed seed + fixed player-id list returns bit-identical deals across runs; different seeds vary assignments
+- [x] Quick gate passes; test count: 6+ cases (6 added, 22 total)
 
 **Tests**: unit
 **Gate**: quick
