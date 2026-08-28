@@ -17,6 +17,8 @@ export interface ViewState {
   role: Role | null
   /** Wall-clock ms when round:started arrived; deadline = this + shift. */
   roundStartedAt: number | null
+  /** Ids from round:started, labeled by roster name in the round view. */
+  roundPlayerIds: readonly string[]
   /** Banner text (join rejections, intent errors). */
   error: string | null
   /** True while a join attempt is in flight (duplicate-submit guard). */
@@ -27,7 +29,7 @@ export type ViewAction =
   | { type: 'submit-join' }
   | { type: 'join-failed'; reason: string }
   | { type: 'snapshot'; snapshot: LobbySnapshot }
-  | { type: 'round-started'; atMs: number }
+  | { type: 'round-started'; playerIds: readonly string[] }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }
   | { type: 'intent-error'; message: string }
@@ -58,6 +60,7 @@ export function initialViewState(): ViewState {
     snapshot: null,
     role: null,
     roundStartedAt: null,
+    roundPlayerIds: [],
     error: null,
     joining: false,
   }
@@ -83,14 +86,16 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
       return {
         ...state,
         view: 'round',
-        roundStartedAt: action.atMs,
+        // The reducer stamps receipt time — the mapper stays pure (REG-11).
+        roundStartedAt: Date.now(),
+        roundPlayerIds: action.playerIds,
         error: null,
         joining: false,
       }
     case 'role-dealt':
       return { ...state, role: action.role }
     case 'buzzer':
-      return { ...state, view: 'lobby', role: null, roundStartedAt: null }
+      return { ...state, view: 'lobby', role: null, roundStartedAt: null, roundPlayerIds: [] }
     case 'intent-error':
       return { ...state, error: action.message }
     case 'connection-lost':

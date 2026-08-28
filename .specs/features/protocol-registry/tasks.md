@@ -119,7 +119,7 @@ T3 → T4 → T5 → T6
 
 ---
 
-### T3: Client reducer + mapper table
+### T3: Client reducer + mapper table ✅ Done
 
 **What**: Extend the view reducer (`roundPlayerIds` in `ViewState`; `round-started` action carries `playerIds`, reducer stamps `roundStartedAt: Date.now()` itself; `buzzer` clears them) and create the exhaustive mapper table `MAPPERS: { [K in RegistryKey]: (payload: RegistryPayload<K>) => ViewAction[] }` in `apps/client/src/net/mappers.ts`. Update `state.test.ts` to the new action shape.
 **Where**: `apps/client/src/net/mappers.ts` (new; edits in `state.ts`, `state.test.ts`)

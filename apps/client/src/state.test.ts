@@ -1,5 +1,5 @@
 import { type LobbySnapshot, type Role, TUNING } from '@turnover/shared'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { clockRemainingMs, initialViewState, reduce, roundPlayers } from './state'
 
 function snapshot(overrides: Partial<LobbySnapshot> = {}): LobbySnapshot {
@@ -19,8 +19,8 @@ function joinedLobby(): ReturnType<typeof initialViewState> {
   return reduce(initialViewState(), { type: 'snapshot', snapshot: snapshot() })
 }
 
-function inRound(atMs = 1000): ReturnType<typeof initialViewState> {
-  return reduce(reduce(joinedLobby(), { type: 'round-started', atMs }), {
+function inRound(): ReturnType<typeof initialViewState> {
+  return reduce(reduce(joinedLobby(), { type: 'round-started', playerIds: ['p1', 'p2'] }), {
     type: 'role-dealt',
     role: 'staff' as Role,
   })
@@ -81,15 +81,22 @@ describe('first-light view reducer', () => {
     expect(s.view).toBe('round')
   })
 
-  it('enters the round with the deadline at atMs + 300 s and clears errors (LIGHT-09)', () => {
-    const s = reduce(
-      { ...joinedLobby(), error: 'need more players' },
-      { type: 'round-started', atMs: 1000 },
-    )
-    expect(s.view).toBe('round')
-    expect(s.error).toBeNull()
-    expect(s.roundStartedAt).toBe(1000)
-    expect(clockRemainingMs(s, 1000)).toBe(TUNING.SHIFT_SECONDS * 1000)
+  it('enters the round, stamps the receipt clock, and clears errors (LIGHT-09)', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    try {
+      const s = reduce(
+        { ...joinedLobby(), error: 'need more players' },
+        { type: 'round-started', playerIds: ['p1', 'p2'] },
+      )
+      expect(s.view).toBe('round')
+      expect(s.error).toBeNull()
+      expect(s.roundStartedAt).toBe(1000)
+      expect(s.roundPlayerIds).toEqual(['p1', 'p2'])
+      expect(clockRemainingMs(s, 1000)).toBe(TUNING.SHIFT_SECONDS * 1000)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stores only the recipient’s own role (LIGHT-11)', () => {
@@ -99,9 +106,15 @@ describe('first-light view reducer', () => {
   })
 
   it('counts the clock down and clamps at zero without going negative (LIGHT-10)', () => {
-    const s = inRound(0)
-    expect(clockRemainingMs(s, 1500)).toBe((TUNING.SHIFT_SECONDS - 1.5) * 1000)
-    expect(clockRemainingMs(s, TUNING.SHIFT_SECONDS * 1000 * 10)).toBe(0)
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    try {
+      const s = inRound()
+      expect(clockRemainingMs(s, 1500)).toBe((TUNING.SHIFT_SECONDS - 1.5) * 1000)
+      expect(clockRemainingMs(s, TUNING.SHIFT_SECONDS * 1000 * 10)).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('returns to the lobby at the buzzer with role and clock cleared (LIGHT-13)', () => {
@@ -109,6 +122,7 @@ describe('first-light view reducer', () => {
     expect(s.view).toBe('lobby')
     expect(s.role).toBeNull()
     expect(s.roundStartedAt).toBeNull()
+    expect(s.roundPlayerIds).toEqual([])
     expect(s.snapshot).not.toBeNull() // roster survives for re-deal rendering
   })
 

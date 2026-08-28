@@ -97,8 +97,8 @@ export class App {
         this.dispatch({ type: 'snapshot', snapshot: message.snapshot })
         break
       case 'round:started': {
-        this.dispatch({ type: 'round-started', atMs: Date.now() })
-        const players = roundPlayers(message.message.playerIds, this.state.snapshot)
+        this.dispatch({ type: 'round-started', playerIds: message.message.playerIds })
+        const players = roundPlayers(this.state.roundPlayerIds, this.state.snapshot)
         this.game.scene.stop('Boot')
         this.game.scene.start('Round', { players })
         break

@@ -191,8 +191,8 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | REG-08 | P1: Router + envelope | T2 | Implemented |
 | REG-09 | P1: Router + envelope | T2 | Implemented |
 | REG-10 | P1: Router + envelope | T2 | Implemented |
-| REG-11 | P1: Client dispatch | - | Pending |
-| REG-12 | P1: Client dispatch | - | Pending |
+| REG-11 | P1: Client dispatch | T3/T4 | Implemented |
+| REG-12 | P1: Client dispatch | T3 | Implemented |
 | REG-13 | P1: Client dispatch | - | Pending |
 | REG-14 | P1: Client dispatch | - | Pending |
 | REG-15 | P1: Client dispatch | - | Pending |
