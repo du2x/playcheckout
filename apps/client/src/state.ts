@@ -5,6 +5,8 @@ import {
   type LobbySnapshot,
   type MovementSnapshot,
   type Role,
+  type RoomIndex,
+  type RoomState,
   TUNING,
 } from '@turnover/shared'
 
@@ -47,6 +49,20 @@ export type ViewAction =
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'player-left'; playerId: string }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
+  // Work render-state actions (cycle 2.5): the reducer no-ops all five —
+  // channel progress and room interiors are scene/DOM display state, and no
+  // payload names a role or a channel kind (FR-9).
+  | { type: 'work-started'; playerId: string; floor: FloorId; room: RoomIndex; seconds: number }
+  | {
+      type: 'work-ended'
+      playerId: string
+      floor: FloorId
+      room: RoomIndex
+      outcome: 'completed' | 'cancelled'
+    }
+  | { type: 'room-observed'; playerId: string; floor: FloorId; room: RoomIndex; state: RoomState }
+  | { type: 'room-prepped'; floor: FloorId; room: RoomIndex }
+  | { type: 'room-trashed'; floor: FloorId; room: RoomIndex }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }
   | { type: 'intent-error'; message: string }
@@ -129,5 +145,11 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
       return state
     case 'movement-snapshot':
       return { ...state, movementSnapshot: action.snapshot }
+    case 'work-started':
+    case 'work-ended':
+    case 'room-observed':
+    case 'room-prepped':
+    case 'room-trashed':
+      return state
   }
 }

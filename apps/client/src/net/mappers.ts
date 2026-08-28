@@ -23,4 +23,11 @@ export const MAPPERS: {
   'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
   'player:left': ({ playerId }) => [{ type: 'player-left', playerId }],
   'movement:snapshot': (snapshot) => [{ type: 'movement-snapshot', snapshot }],
+  // Work channels (cycle 2.5): scene-kind actions the App routes to the world
+  // scene (progress bar, room label); the reducer no-ops them.
+  'work:started': (p) => [{ type: 'work-started', ...p }],
+  'work:ended': (p) => [{ type: 'work-ended', ...p }],
+  'room:observed': (p) => [{ type: 'room-observed', ...p }],
+  'room:prepped': (p) => [{ type: 'room-prepped', ...p }],
+  'room:trashed': (p) => [{ type: 'room-trashed', ...p }],
 }

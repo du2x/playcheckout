@@ -1,13 +1,14 @@
 import { z } from 'zod'
-import { FLOOR_IDS } from '../layout.js'
+import { FLOOR_IDS, GUEST_FLOOR_IDS } from '../layout.js'
 
 /**
- * Client → server movement intents (cycle 2.4). Always routed through Colyseus
- * 0.18 zod `validate()` handlers — the server rejects, it never trusts.
- * Intents are NOT part of the protocol registry.
+ * Client → server intents (movement cycle 2.4, work channels cycle 2.5).
+ * Always routed through Colyseus 0.18 zod `validate()` handlers — the server
+ * rejects, it never trusts. Intents are NOT part of the protocol registry.
  */
 
 const FLOOR_ENUM = z.enum(FLOOR_IDS)
+const GUEST_FLOOR_ENUM = z.enum(GUEST_FLOOR_IDS)
 
 /** Hold-to-walk: sent on keydown; one intent per direction, idempotent. */
 export const moveStartIntentSchema = z
@@ -34,3 +35,17 @@ export const elevatorCallIntentSchema = z
   })
   .strict()
 export type ElevatorCallIntent = z.infer<typeof elevatorCallIntentSchema>
+
+/**
+ * Start a work channel inside the named room's segment (FR-7/8/9). The action
+ * (prep / un-prep / fake prep) is derived server-side from the caller's role
+ * and the room's state — the client never sends it.
+ */
+export const workStartIntentSchema = z
+  .object({
+    type: z.literal('work:start'),
+    floor: GUEST_FLOOR_ENUM,
+    room: z.number().int().min(1).max(8),
+  })
+  .strict()
+export type WorkStartIntent = z.infer<typeof workStartIntentSchema>

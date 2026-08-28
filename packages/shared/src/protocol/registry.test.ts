@@ -50,32 +50,48 @@ describe('protocol payloads', () => {
   })
 })
 
-// Spec REG-01/REG-03/REG-19: the registry is the single catalog and the audit
-// surface — five pre-existing types, one declaration each, valid policies.
+// Spec REG-01/REG-03/REG-19 + WORK-16/17: the registry is the single catalog
+// and the audit surface — every server→client type, one declaration each,
+// with its exact recipient policy. This walk is literal, not membership-based
+// (protocol-registry verifier note N2): a policy drift on any single key fails.
 describe('protocol registry', () => {
-  it('declares exactly the pre-existing five plus the five movement types (REG-03)', () => {
-    expect(Object.keys(PROTOCOL_REGISTRY).sort()).toEqual([
-      'elevator:called',
-      'elevator:moved',
-      'error',
-      'lobby:snapshot',
-      'movement:snapshot',
-      'player:left',
-      'player:moved',
-      'role:dealt',
-      'round:buzzer',
-      'round:started',
-    ])
+  const LITERAL_POLICIES = {
+    'lobby:snapshot': 'self',
+    'round:started': 'all',
+    'role:dealt': 'self',
+    'round:buzzer': 'all',
+    error: 'self',
+    'player:moved': 'sameFloor',
+    'elevator:called': 'all',
+    'elevator:moved': 'all',
+    'player:left': 'all',
+    'movement:snapshot': 'self',
+    'work:started': 'self',
+    'work:ended': 'self',
+    'room:observed': 'self',
+    'room:prepped': 'occupants',
+    'room:trashed': 'occupants',
+  } as const
+
+  it('declares exactly the five core, five movement, and five work types (REG-03)', () => {
+    expect(Object.keys(PROTOCOL_REGISTRY).sort()).toEqual(Object.keys(LITERAL_POLICIES).sort())
   })
 
-  it('keeps movement rows room-originated or all-policy per the spec (MOVE-17/18)', () => {
-    expect(PROTOCOL_REGISTRY['player:moved'].recipients).toBe('all')
-    expect(PROTOCOL_REGISTRY['elevator:called'].recipients).toBe('all')
-    expect(PROTOCOL_REGISTRY['elevator:moved'].recipients).toBe('all')
-    expect(PROTOCOL_REGISTRY['player:left'].recipients).toBe('all')
-    expect(PROTOCOL_REGISTRY['player:left'].fromSim).toBeUndefined()
-    expect(PROTOCOL_REGISTRY['movement:snapshot'].recipients).toBe('self')
-    expect(PROTOCOL_REGISTRY['movement:snapshot'].fromSim).toBeUndefined()
+  it('pins every key to its exact literal recipient policy (WORK-16/17, AD-009)', () => {
+    for (const [key, policy] of Object.entries(LITERAL_POLICIES)) {
+      expect(
+        PROTOCOL_REGISTRY[key as keyof typeof LITERAL_POLICIES].recipients,
+        `policy of ${key}`,
+      ).toBe(policy)
+    }
+  })
+
+  it('declares a valid recipient policy on every entry (REG-19)', () => {
+    for (const [key, entry] of Object.entries(PROTOCOL_REGISTRY)) {
+      expect(['all', 'self', 'sameFloor', 'occupants'], `policy of ${key}`).toContain(
+        entry.recipients,
+      )
+    }
   })
 
   it('projects movement events to payloads that never name elevator occupants (MOVE-17)', () => {
@@ -103,12 +119,6 @@ describe('protocol registry', () => {
     expect(Object.keys(called.payload).sort()).toEqual(['car', 'floor'])
   })
 
-  it('declares a valid recipient policy on every entry (REG-19)', () => {
-    for (const [key, entry] of Object.entries(PROTOCOL_REGISTRY)) {
-      expect(['all', 'self'], `policy of ${key}`).toContain(entry.recipients)
-    }
-  })
-
   it('keeps room-originated types out of the sim-event surface (fromSim undefined)', () => {
     expect(PROTOCOL_REGISTRY['lobby:snapshot'].fromSim).toBeUndefined()
     expect(PROTOCOL_REGISTRY.error.fromSim).toBeUndefined()
@@ -133,5 +143,80 @@ describe('protocol registry', () => {
     expect(projected.self).toBeUndefined()
     expect(projected.payload.playerIds).toEqual(['p1', 'p2', 'p3', 'p4'])
     expect(PROTOCOL_REGISTRY['round:started'].recipients).toBe('all')
+  })
+
+  it('projects player:moved with sameFloor visibility = the event floor (AD-009)', () => {
+    const projected = PROTOCOL_REGISTRY['player:moved'].fromSim({
+      type: 'player:moved',
+      playerId: 'p1',
+      floor: 'floor2',
+      x: 3.5,
+      facing: 'left',
+    })
+    expect(projected.self).toBeUndefined()
+    expect(projected.visibility).toEqual({ floor: 'floor2' })
+  })
+
+  it('projects work events to the actor only — no kind, no role in any payload (FR-9)', () => {
+    const started = PROTOCOL_REGISTRY['work:started'].fromSim({
+      type: 'work:started',
+      playerId: 'p1',
+      floor: 'floor1',
+      room: 3,
+      seconds: 5,
+    })
+    expect(started.self).toBe('p1')
+    expect(Object.keys(started.payload).sort()).toEqual(['floor', 'playerId', 'room', 'seconds'])
+    expect(started.payload).toEqual({ playerId: 'p1', floor: 'floor1', room: 3, seconds: 5 })
+
+    const ended = PROTOCOL_REGISTRY['work:ended'].fromSim({
+      type: 'work:ended',
+      playerId: 'p1',
+      floor: 'floor1',
+      room: 3,
+      outcome: 'cancelled',
+    })
+    expect(ended.self).toBe('p1')
+    expect(ended.payload).toEqual({
+      playerId: 'p1',
+      floor: 'floor1',
+      room: 3,
+      outcome: 'cancelled',
+    })
+  })
+
+  it('projects room transitions with occupants roomKey visibility (WORK-15)', () => {
+    const prepped = PROTOCOL_REGISTRY['room:prepped'].fromSim({
+      type: 'room:prepped',
+      floor: 'floor2',
+      room: 5,
+    })
+    expect(prepped.payload).toEqual({ floor: 'floor2', room: 5 })
+    expect(prepped.visibility).toEqual({ roomKey: 'floor2:5' })
+
+    const trashed = PROTOCOL_REGISTRY['room:trashed'].fromSim({
+      type: 'room:trashed',
+      floor: 'floor3',
+      room: 1,
+    })
+    expect(trashed.payload).toEqual({ floor: 'floor3', room: 1 })
+    expect(trashed.visibility).toEqual({ roomKey: 'floor3:1' })
+  })
+
+  it('projects room:observed to the entering player with the room state (FR-10)', () => {
+    const observed = PROTOCOL_REGISTRY['room:observed'].fromSim({
+      type: 'room:observed',
+      playerId: 'p2',
+      floor: 'floor1',
+      room: 2,
+      state: 'trashed',
+    })
+    expect(observed.self).toBe('p2')
+    expect(observed.payload).toEqual({
+      playerId: 'p2',
+      floor: 'floor1',
+      room: 2,
+      state: 'trashed',
+    })
   })
 })

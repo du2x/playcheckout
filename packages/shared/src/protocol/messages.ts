@@ -1,9 +1,15 @@
 import { z } from 'zod'
-import type { FLOOR_IDS } from '../layout.js'
+import type { FLOOR_IDS, GUEST_FLOOR_IDS } from '../layout.js'
 import type { Role } from '../roles.js'
+import type { RoomState } from '../roomState.js'
 
 /** Guest floors + grand lobby, indexed 0..3 (layout.ts is the source). */
 export type FloorId = (typeof FLOOR_IDS)[number]
+export type GuestFloorId = (typeof GUEST_FLOOR_IDS)[number]
+/** Room 1..8 on a guest floor (layout.ts is the source). */
+export type { RoomIndex } from '../layout.js'
+
+import type { RoomIndex } from '../layout.js'
 /** Car 1 = west landing, car 2 = east landing. */
 export type CarId = 1 | 2
 export type Facing = 'left' | 'right'
@@ -51,7 +57,15 @@ export type RoundBuzzer = Record<string, never>
 
 /** server → one player. Intent rejection reason (join errors use Colyseus join rejection). */
 export interface IntentError {
-  readonly code: 'need-more-players' | 'not-host' | 'round-already-active' | 'elevator-locked'
+  readonly code:
+    | 'need-more-players'
+    | 'not-host'
+    | 'round-already-active'
+    | 'elevator-locked'
+    | 'round-not-active'
+    | 'not-in-room'
+    | 'room-not-workable'
+    | 'channel-active'
   readonly message: string
 }
 
@@ -104,6 +118,48 @@ export interface MovementSnapshotCar {
 export interface MovementSnapshot {
   readonly players: readonly MovementSnapshotPlayer[]
   readonly cars: readonly MovementSnapshotCar[]
+}
+
+// ---------------------------------------------------------------------------
+// Work channels (cycle 2.5, FR-7/8/9/16). Interiors (room states) reach only
+// players inside the room's segment (FR-10); channel events are the actor's
+// own private view. No payload names a role, a channel kind, or a fake (FR-9).
+// ---------------------------------------------------------------------------
+
+/** server → the actor. Their channel began; `seconds` drives the own progress bar. */
+export interface WorkStarted {
+  readonly playerId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly seconds: number
+}
+
+/** server → the actor. Their channel ended (walk-out cancel or completion). */
+export interface WorkEnded {
+  readonly playerId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly outcome: 'completed' | 'cancelled'
+}
+
+/** server → one player. The state of the room they just entered (FR-10). */
+export interface RoomObserved {
+  readonly playerId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly state: RoomState
+}
+
+/** server → the room's occupants. A real prep transition completed (FR-7). */
+export interface RoomPrepped {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → the room's occupants. A real un-prep transition completed (FR-8). */
+export interface RoomTrashed {
+  readonly floor: FloorId
+  readonly room: RoomIndex
 }
 
 /**

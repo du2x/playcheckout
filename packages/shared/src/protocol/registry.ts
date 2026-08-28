@@ -1,14 +1,20 @@
 import type {
   ElevatorCalled,
   ElevatorMoved,
+  FloorId,
   IntentError,
   LobbySnapshot,
   MovementSnapshot,
   PlayerLeft,
   PlayerMoved,
   RoleDealt,
+  RoomObserved,
+  RoomPrepped,
+  RoomTrashed,
   RoundBuzzer,
   RoundStarted,
+  WorkEnded,
+  WorkStarted,
 } from './messages.js'
 import type { MovementEvent, SimEvent } from './simEvents.js'
 
@@ -24,8 +30,22 @@ import type { MovementEvent, SimEvent } from './simEvents.js'
  * unions were deleted in this cycle.
  */
 
-/** Closed recipient-policy enum. Extended deliberately, never speculatively. */
-export type RecipientPolicy = 'all' | 'self'
+/**
+ * Closed recipient-policy enum. Extended deliberately, never speculatively:
+ * `sameFloor` (AD-008/AD-009) delivers to live viewers on the event's floor;
+ * `occupants` (cycle 2.5) delivers to viewers inside the event's room segment.
+ */
+export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants'
+
+/**
+ * Positional selector a projection returns for the positional policies: the
+ * event's floor (`sameFloor`) or its room-segment key (`occupants`).
+ */
+export interface EventVisibility {
+  readonly floor?: FloorId
+  /** `\`${floor}:${room}\`` — the occupants key the Router matches against. */
+  readonly roomKey?: string
+}
 
 /**
  * The envelope the Router stamps on every server→client message. `seq` is
@@ -60,8 +80,9 @@ export interface Payloads {
   'round:buzzer': RoundBuzzer
   /** server → one player. Intent rejection reason (join errors use Colyseus join rejection). */
   error: IntentError
-  // --- Movement (cycle 2.4): positions are public (rule 2); cars never name occupants (FR-6) ---
-  /** server → all players. A player's position/floor/facing changed this tick. */
+  // --- Movement (cycle 2.4): own-floor visibility (AD-008/AD-009); cars never
+  // name occupants (FR-6); panels remain public ---
+  /** server → same-floor viewers. A player's position/floor/facing changed this tick. */
   'player:moved': PlayerMoved
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
@@ -69,8 +90,20 @@ export interface Payloads {
   'elevator:moved': ElevatorMoved
   /** server → all players. A player disconnected; remove their rectangle. */
   'player:left': PlayerLeft
-  /** server → one player. Public movement state on join and at the buzzer (MOVE-18). */
+  /** server → one player. Own-floor movement state on join and at the buzzer (MOVE-18). */
   'movement:snapshot': MovementSnapshot
+  // --- Work channels (cycle 2.5): interiors reach only people inside the
+  // segment (FR-10); channel events are the actor's private view (FR-9) ---
+  /** server → the actor. Their channel began (prep, un-prep, or fake — indistinguishable). */
+  'work:started': WorkStarted
+  /** server → the actor. Their channel ended (completed or cancelled). */
+  'work:ended': WorkEnded
+  /** server → one player. The state of a room they just entered (FR-10 read half). */
+  'room:observed': RoomObserved
+  /** server → the room's occupants. A prep transition completed (FR-7). */
+  'room:prepped': RoomPrepped
+  /** server → the room's occupants. An un-prep transition completed (FR-8). */
+  'room:trashed': RoomTrashed
 }
 
 export type RegistryKey = keyof Payloads
@@ -86,6 +119,7 @@ export type SimProjection<K extends SimEvent['type'] | MovementEvent['type']> = 
 ) => {
   payload: RegistryPayload<K>
   self?: string
+  visibility?: EventVisibility
 }
 
 type Entry<K extends RegistryKey> = {
@@ -138,7 +172,7 @@ export const PROTOCOL_REGISTRY = {
   },
   'player:moved': {
     payload: {} as PlayerMoved,
-    recipients: 'all',
+    recipients: 'sameFloor',
     fromSim: ((event) => ({
       payload: {
         playerId: event.playerId,
@@ -146,6 +180,7 @@ export const PROTOCOL_REGISTRY = {
         x: event.x,
         facing: event.facing,
       },
+      visibility: { floor: event.floor },
     })) as SimProjection<'player:moved'>,
   },
   'elevator:called': {
@@ -171,6 +206,61 @@ export const PROTOCOL_REGISTRY = {
     payload: {} as MovementSnapshot,
     recipients: 'self',
     fromSim: undefined,
+  },
+  'work:started': {
+    payload: {} as WorkStarted,
+    recipients: 'self',
+    fromSim: ((event) => ({
+      self: event.playerId,
+      payload: {
+        playerId: event.playerId,
+        floor: event.floor,
+        room: event.room,
+        seconds: event.seconds,
+      },
+    })) as SimProjection<'work:started'>,
+  },
+  'work:ended': {
+    payload: {} as WorkEnded,
+    recipients: 'self',
+    fromSim: ((event) => ({
+      self: event.playerId,
+      payload: {
+        playerId: event.playerId,
+        floor: event.floor,
+        room: event.room,
+        outcome: event.outcome,
+      },
+    })) as SimProjection<'work:ended'>,
+  },
+  'room:observed': {
+    payload: {} as RoomObserved,
+    recipients: 'self',
+    fromSim: ((event) => ({
+      self: event.playerId,
+      payload: {
+        playerId: event.playerId,
+        floor: event.floor,
+        room: event.room,
+        state: event.state,
+      },
+    })) as SimProjection<'room:observed'>,
+  },
+  'room:prepped': {
+    payload: {} as RoomPrepped,
+    recipients: 'occupants',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, room: event.room },
+      visibility: { roomKey: `${event.floor}:${event.room}` },
+    })) as SimProjection<'room:prepped'>,
+  },
+  'room:trashed': {
+    payload: {} as RoomTrashed,
+    recipients: 'occupants',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, room: event.room },
+      visibility: { roomKey: `${event.floor}:${event.room}` },
+    })) as SimProjection<'room:trashed'>,
   },
 } as const satisfies { [K in RegistryKey]: Entry<K> } & {
   [K in SimEvent['type'] | MovementEvent['type']]: unknown
