@@ -99,7 +99,7 @@ export class TurnoverRoom extends Room {
       if (this.movement.callElevator(client.sessionId, intent.target) === 'rejected') {
         this.router.toSelf('error', client.sessionId, {
           code: 'elevator-locked',
-          message: 'elevators are idle until the round starts',
+          message: 'you are already riding an elevator',
         })
       }
     })

@@ -351,6 +351,9 @@ export class WorldScene extends Phaser.Scene {
     for (const [, car] of this.cars) {
       car.ellipse.setVisible(car.floor === this.viewFloor)
     }
+    // The elevator panel is self-healing: view re-renders rebuild the DOM
+    // element, so refresh it every frame from scene state.
+    this.updatePanel()
     // Work-channel DOM state: bar fill follows elapsed time; the interior
     // label lives only while the own rectangle stands inside the segment.
     if (this.work !== null) {

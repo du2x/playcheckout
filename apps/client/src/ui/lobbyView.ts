@@ -47,6 +47,14 @@ export function renderLobby(
       roster,
       startButton,
       errorLine,
+      // Elevators run from room creation (AD-011): the position-only panel is
+      // visible pre-round too, so the machine is observable and testable.
+      el('div', { id: 'elevator-panel' }, [
+        'elevators  W: ',
+        el('span', { id: 'panel-west' }, ['lobby']),
+        ' · E: ',
+        el('span', { id: 'panel-east' }, ['lobby']),
+      ]),
     ]),
   )
 }

@@ -711,16 +711,31 @@ describe('server:movement', () => {
     }
   })
 
-  it('rejects elevator calls in lobby phase with an intent error (edge case)', async () => {
+  it('serves elevator calls pre-round and rejects only rider calls (EL-01, EL-03)', async () => {
     const host = await createRoom('ada')
-    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
-    const guestCollector = collectAll(guest)
-    guest.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
-    const err = await guestCollector.waitFor('error')
+    const hostCollector = collectAll(host)
+    const instance = TurnoverRoom.instances.at(-1)
+    // Pre-round: walk to the west landing and call — no round needed (AD-011).
+    host.send('move:start', { type: 'move:start', dir: 'left' })
+    await new Promise((r) => setTimeout(r, 50))
+    instance?.__driveTicks(60)
+    host.send('move:stop', { type: 'move:stop' })
+    await new Promise((r) => setTimeout(r, 50))
+    host.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
+    await new Promise((r) => setTimeout(r, 50))
+    instance?.__driveTicks(1)
+    const called = await hostCollector.waitFor('elevator:called')
+    expect(called.payload).toEqual({ floor: 'lobby', car: 1 })
+    // The caller boards at the landing when the car arrives (tick 60).
+    instance?.__driveTicks(60)
+    await hostCollector.waitFor('elevator:moved')
+    // Mid-ride, a call from inside the car is the one remaining rejection.
+    instance?.__driveTicks(20)
+    host.send('elevator:call', { type: 'elevator:call', target: 'floor2' })
+    const err = await hostCollector.waitFor('error')
     expect(err.payload.code).toBe('elevator-locked')
-    guestCollector.stop()
+    hostCollector.stop()
     host.leave()
-    guest.leave()
   })
 })
 

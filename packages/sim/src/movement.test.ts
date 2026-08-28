@@ -402,28 +402,46 @@ describe('sim:elevator', () => {
     expect(sim.positionOf('p1')?.x).toBe(0)
   })
 
-  it('rejects calls in lobby phase with no event and re-confines movement post-buzzer (edge, MOVE-08)', () => {
+  it('serves calls pre-round and keeps lobby-phase walking confined (EL-01, EL-04, MOVE-08)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // west landing
+    for (let i = 0; i < 50; i++) sim.tick() // west landing — no round started yet
     sim.stopMove('p1')
-    sim.unlock()
+    // AD-011: elevators run from room creation — the pre-round call dispatches.
     expect(ride(sim, 'p1', 'floor1')).toBe('dispatched')
     sim.tick() // flash
     for (let i = 0; i < 59 + 40; i++) sim.tick() // arrive at 60, ride to floor1 at 100
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    expect(sim.positionOf('p1')?.x).toBe(0)
 
-    sim.lock() // buzzer: positions persist...
-    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    // Lobby-phase walking confinement still applies on the guest floor.
     const xBefore = lastX(sim, 'p1')
-    sim.startMove('p1', 'right') // ...but non-lobby movement is refused
+    sim.startMove('p1', 'right')
     expect(sim.tick()).toEqual([])
     expect(lastX(sim, 'p1')).toBe(xBefore)
-    expect(ride(sim, 'p1', 'lobby')).toBe('rejected') // elevators idle in lobby phase
+
+    // The only way off is the elevator — which also runs pre-round (EL-04).
+    expect(ride(sim, 'p1', 'lobby')).toBe('dispatched')
+    sim.tick() // flash
+    for (let i = 0; i < 59 + 40; i++) sim.tick()
+    expect(sim.positionOf('p1')?.floor).toBe('lobby')
   })
 
-  it('drops queued calls at the buzzer: no lobby-phase dispatches (edge case + MOVE-08)', () => {
+  it('rejects a call from inside a car — the only remaining rejection (EL-03)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p1')
+    expect(ride(sim, 'p1', 'floor1')).toBe('dispatched')
+    sim.tick() // flash
+    for (let i = 0; i < 59; i++) sim.tick() // arrival + boarding at tick 60
+    expect(sim.positionOf('p1')?.floor).toBe('lobby') // boarded, floor still pickup
+    expect(ride(sim, 'p1', 'floor2')).toBe('rejected') // rider calls are refused
+  })
+
+  it('serves a call queued at the buzzer once a car frees (EL-02, AD-011)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.unlock()
@@ -433,16 +451,25 @@ describe('sim:elevator', () => {
     sim.tick() // both flashes announce
     sim.lock() // buzzer while all three calls are in flight or queued
 
-    // In-flight trips complete, but the queued call is dropped silently: no
-    // further elevator:called ever fires, and neither car re-dispatches.
+    // In-flight trips complete AND the queued call is served: car 2 frees at
+    // tick 100, dispatches the queued lobby pickup, and its flash fires.
     let flashes = 0
+    let queuedDispatchTick = -1
     for (let i = 0; i < 200; i++) {
-      flashes += sim.tick().filter((e) => e.type === 'elevator:called').length
+      const events = sim.tick()
+      flashes += events.filter((e) => e.type === 'elevator:called').length
+      if (queuedDispatchTick < 0 && events.some((e) => e.type === 'elevator:called')) {
+        queuedDispatchTick = i
+      }
     }
-    expect(flashes).toBe(0)
+    // Exactly one post-buzzer flash (the queued call's dispatch announcement).
+    // Car 2 frees at round tick 100 = loop index 98 (tick 1 ran pre-lock); the
+    // dispatch's flash announces the next tick, index 99.
+    expect(flashes).toBe(1)
+    expect(queuedDispatchTick).toBe(99)
     expect(sim.snapshot().cars).toEqual([
       { car: 1, floor: 'floor3' },
-      { car: 2, floor: 'floor1' },
+      { car: 2, floor: 'lobby' },
     ])
   })
 

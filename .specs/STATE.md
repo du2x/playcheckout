@@ -209,6 +209,27 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-011
+- **Decision**: Elevators operate in BOTH phases — from the moment the room
+  exists, not from round start. Pre-round `elevator:call` dispatches exactly as
+  mid-round (sooner car, tie → car 1, decoy flash, FIFO); the only remaining
+  rejection is a call from inside a car; the call FIFO is no longer cleared at
+  `lock()` (queued calls are served by the next car to free, across the buzzer).
+  The movement-spec assumption "elevators idle in lobby phase" and its
+  rejection edge case are amended accordingly.
+- **Reason**: User directive — the locked pre-round elevator made the machine
+  untestable with Playwright without a host start and dulled the AD-005
+  "alive from join" intent.
+- **Trade-off**: Players may stand on guest floors pre-round (positions persist
+  at round start, MOVE-07); pre-round lobby-phase walking confinement (MOVE-08)
+  is unchanged, so a pre-round rider off the lobby floor cannot walk until the
+  round starts and leaves only by elevator. Gather-up purity yields to
+  testability + liveliness; revisit via a new AD if playtests object.
+- **Scope**: `packages/sim/src/movement.ts`, `apps/server/src/rooms/TurnoverRoom.ts`,
+  movement spec/design amendments, `.specs/features/elevator-lobby/`.
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: work-channels (`.specs/features/work-channels/`) — cycle 2.5 ✅ COMPLETE

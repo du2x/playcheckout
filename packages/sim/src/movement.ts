@@ -135,13 +135,11 @@ export class MovementSim {
    * - 'dispatched': a car was dispatched (60-tick arrival begins now)
    * - 'ignored': decoy — some car already targets `target`; the panel still
    *   flashes (`elevator:called` is emitted either way, MOVE-12)
-   * - 'rejected': lobby phase (room sends the intent error) or caller in a car
+   * - 'rejected': caller in a car (AD-011: elevators run in BOTH phases)
    */
   callElevator(playerId: string, target: FloorId): 'dispatched' | 'ignored' | 'rejected' {
     const caller = this.players.get(playerId)
     if (caller === undefined || caller.inCar !== null) return 'rejected'
-    // Elevators idle in lobby phase (spec assumption): no dispatch, no flash.
-    if (this.phase === 'lobby') return 'rejected'
     const targeting = ([1, 2] as const).find((id) => this.cars[id].target === target)
     if (targeting !== undefined) {
       // Decoy: no dispatch, but the panel still flashes (FR-5 / MOVE-12).
@@ -186,10 +184,9 @@ export class MovementSim {
 
   lock(): void {
     this.phase = 'lobby'
-    // The buzzer ends the round: calls still waiting in the FIFO are dropped —
-    // elevators idle in lobby phase, so a queued dispatch would contradict the
-    // rejection of fresh lobby-phase calls. In-flight trips still complete.
-    this.callQueue = []
+    // AD-011: elevators run in both phases, so a call queued at the buzzer is
+    // NOT dropped — the next car to go idle serves it, pre-round included.
+    // In-flight trips still complete.
   }
 
   // --- queries --------------------------------------------------------------
