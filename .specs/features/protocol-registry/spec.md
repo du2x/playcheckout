@@ -199,7 +199,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | REG-16 | P2: Seq-gap recovery | T5 | Implemented |
 | REG-17 | P2: Seq-gap recovery | T5 | Implemented |
 | REG-18 | P2: Seq-gap recovery | T2 | Implemented |
-| REG-19 | P2: Structural audit | - | Pending |
+| REG-19 | P2: Structural audit | T6 | Implemented |
 | REG-20 | P2: Structural audit | T2 | Implemented |
 
 **Gate mapping:** REG-01..04 → `server:protocol_registry` + gate 1 typecheck ·

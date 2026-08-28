@@ -199,7 +199,7 @@ T3 → T4 → T5 → T6
 
 ---
 
-### T6: Retire the grep audit — protocol skill rule 5
+### T6: Retire the grep audit — protocol skill rule 5 ✅ Done
 
 **What**: Update the `turnover-protocol` skill: rule 5 now names `PROTOCOL_REGISTRY.recipients` in `packages/shared/src/protocol/registry.ts` as the audit surface and retires the grep convention (grep survives only as the Router bypass denylist test); conventions section notes the envelope `{ seq, time, payload }` and wire-name-as-type-tag.
 **Where**: `.opencode/skills/turnover-protocol/SKILL.md`
