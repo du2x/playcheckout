@@ -51,7 +51,7 @@ export type RoundBuzzer = Record<string, never>
 
 /** server → one player. Intent rejection reason (join errors use Colyseus join rejection). */
 export interface IntentError {
-  readonly code: 'need-more-players' | 'not-host' | 'round-already-active'
+  readonly code: 'need-more-players' | 'not-host' | 'round-already-active' | 'elevator-locked'
   readonly message: string
 }
 

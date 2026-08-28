@@ -1,3 +1,4 @@
+import type { MovementEvent } from '@turnover/shared'
 import {
   type Envelope,
   type KeysWith,
@@ -38,13 +39,13 @@ export class Router {
    * the registry row carries the projection and the policy; this method never
    * names a message type.
    */
-  route(event: SimEvent): void {
+  route(event: SimEvent | MovementEvent): void {
     const entry = PROTOCOL_REGISTRY[event.type]
     if (entry.fromSim === undefined) return
     // One contained cast: TS cannot apply a union of signatures to a union
     // argument. The registry's own satisfies typing guarantees the projection
     // matches the declared payload for exactly this event variant.
-    const project = entry.fromSim as (e: SimEvent) => Projection
+    const project = entry.fromSim as (e: SimEvent | MovementEvent) => Projection
     const { payload, self } = project(event)
     this.dispatch(event.type as RegistryKey, payload, entry.recipients, self)
   }

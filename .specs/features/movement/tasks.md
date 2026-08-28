@@ -142,7 +142,7 @@ T4 → T5 → T6
 
 ---
 
-### T4: Room wiring — movement in both phases
+### T4: Room wiring — movement in both phases ✅ Done
 
 **What**: Wire `MovementSim` into `TurnoverRoom`: create in `onCreate`, join/leave fan-out (`movement:snapshot` to joiner, `player:left` broadcast), intent handlers (`move:start`/`move:stop`/`elevator:call` zod; lobby-phase call → intent error), `advance()` ticks movement every interval in both phases (round sim unchanged), `unlock()` at start, `lock()` + fresh `movement:snapshot` to every connection at the buzzer. Add the `server:movement` describe: live envelope/policy assertions for the new types (snapshot self, moved/called/moved/left to all), snapshot contents on join and buzzer, in-car/pass-through behavior end-to-end, late-join rejection unchanged.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts` (edits) + `TurnoverRoom.test.ts` (new describe)

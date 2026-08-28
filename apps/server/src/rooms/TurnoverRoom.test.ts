@@ -428,9 +428,10 @@ describe('server:protocol_registry', () => {
   })
 
   it('stamps per-connection seqs that diverge when envelope histories differ (REG-07, absolute)', async () => {
-    // Host accrues 6 lobby envelopes (own join, 2 joins, a leave, 2 re-joins);
-    // the re-joiner accrues exactly 1. A counter shared across connections
-    // would stamp both round:started envelopes with the same seq.
+    // Host accrues 8 lobby envelopes (own join + movement snapshot, 2 joins, a
+    // leave, 2 re-joins, own movement snapshot); the re-joiner accrues 3. A
+    // counter shared across connections would stamp both round:started
+    // envelopes with the same seq.
     const host = await createRoom('ada')
     const a = await newClient().joinById(host.roomId, { name: 'bruno' })
     const leaver = await newClient().joinById(host.roomId, { name: 'caro' })
@@ -446,10 +447,11 @@ describe('server:protocol_registry', () => {
 
     const hostStarted = await hostCollector.waitFor('round:started')
     const elinStarted = await elinCollector.waitFor('round:started')
-    // 6 lobby envelopes: own join, bruno, caro, caro's leave, elin, dina.
-    expect(hostStarted.seq).toBe(7)
-    // 2 lobby envelopes for elin: own join + dina's join.
-    expect(elinStarted.seq).toBe(3)
+    // 8 lobby envelopes: own join, bruno, caro, caro's leave, elin, dina, plus
+    // ada's and elin's movement snapshots are self-only (host got its own).
+    expect(hostStarted.seq).toBe(9)
+    // 3 lobby envelopes for elin: own join, movement snapshot, dina's join.
+    expect(elinStarted.seq).toBe(4)
     hostCollector.stop()
     elinCollector.stop()
     host.leave()
@@ -477,7 +479,8 @@ describe('server:protocol_registry', () => {
     await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
     instance?.__driveTicks(1)
     const reStarted = await collector.waitFor('round:started')
-    expect(reStarted.seq).toBe(buzzer.seq + 1)
+    // Buzzer + buzzer-tick movement snapshot precede the re-deal's start.
+    expect(reStarted.seq).toBe(buzzer.seq + 2)
     const reDealt = await collector.waitFor('role:dealt')
     expect(reDealt.seq).toBe(reStarted.seq + 1)
     collector.stop()
@@ -577,5 +580,135 @@ describe('server:lobby_churn', () => {
     a.leave()
     b.leave()
     c.leave()
+  })
+})
+
+// Spec MOVE-03/18/19 + phase transitions (gate scenarios sim:motion/sim:elevator
+// server halves): movement events ride the Router in both phases, snapshots are
+// self-policy, and positions persist across start and buzzer.
+describe('server:movement', () => {
+  it('sends the joiner a personal movement snapshot and broadcasts moves', async () => {
+    const host = await createRoom('ada')
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const hostCollector = collectAll(host)
+    const guestCollector = collectAll(guest)
+
+    // Guest walks right; tickMs=0 so ticks advance via the test hook.
+    guest.send('move:start', { type: 'move:start', dir: 'right' })
+    await new Promise((r) => setTimeout(r, 30))
+    TurnoverRoom.instances.at(-1)?.__driveTicks(3)
+    guest.send('move:stop', { type: 'move:stop' })
+    await new Promise((r) => setTimeout(r, 30))
+    TurnoverRoom.instances.at(-1)?.__driveTicks(1)
+
+    const guestSnap = await guestCollector.waitFor('movement:snapshot')
+    const snapPlayers = guestSnap.payload.players as {
+      playerId: string
+      floor: string
+      x: number
+    }[]
+    expect(snapPlayers.some((p) => p.playerId === guest.sessionId)).toBe(true)
+    expect(guestSnap.payload.cars).toEqual([
+      { car: 1, floor: 'lobby' },
+      { car: 2, floor: 'lobby' },
+    ])
+
+    const guestMoves = hostCollector.waitFor('player:moved')
+    const moved = await guestMoves
+    expect(moved.payload.playerId).toBe(guest.sessionId)
+    expect(moved.payload.floor).toBe('lobby')
+    expect((moved.payload.x as number) > 15).toBe(true)
+    expect(moved.payload.facing).toBe('right')
+
+    guestCollector.stop()
+    hostCollector.stop()
+    host.leave()
+    guest.leave()
+  })
+
+  it('broadcasts player:left on disconnect so rectangles disappear (MOVE-19)', async () => {
+    const host = await createRoom('ada')
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const hostCollector = collectAll(host)
+    guest.leave()
+    const left = await hostCollector.waitFor('player:left')
+    expect(left.payload.playerId).toBe(guest.sessionId)
+    hostCollector.stop()
+    host.leave()
+  })
+
+  it('keeps positions across start and buzzer and re-confines post-buzzer movement (MOVE-07, MOVE-08)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '1')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const hostCollector = collectAll(host)
+      const instanceRef = TurnoverRoom.instances.at(-1)
+      host.send('move:start', { type: 'move:start', dir: 'right' })
+      await new Promise((r) => setTimeout(r, 30))
+      instanceRef?.__driveTicks(5)
+      host.send('move:stop', { type: 'move:stop' })
+      await new Promise((r) => setTimeout(r, 30))
+
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instanceRef?.__phase()).toBe('round'))
+      instanceRef?.__driveTicks(20) // 1 s test shift → buzzer at tick 20
+
+      // Buzzer: everyone gets a fresh movement snapshot; positions persist.
+      const snap = await hostCollector.waitFor('movement:snapshot')
+      const own = (snap.payload.players as { playerId: string; floor: string; x: number }[]).find(
+        (p) => p.playerId === host.sessionId,
+      )
+      expect(own?.floor).toBe('lobby')
+      expect(own?.x).toBeGreaterThan(15) // moved right pre-round, kept through the round
+
+      // Post-buzzer, a new snapshot is self-policy — the guest never sees one
+      // generated for the host's connection.
+      hostCollector.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('routes elevator flashes and arrivals through the Router (sim:elevator server half)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const hostCollector = collectAll(host)
+      const instanceRef = TurnoverRoom.instances.at(-1)
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instanceRef?.__phase()).toBe('round'))
+      host.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
+      await new Promise((r) => setTimeout(r, 30))
+      const calledPromise = hostCollector.waitFor('elevator:called')
+      instanceRef?.__driveTicks(1) // the flash announces on the next tick
+      const called = await calledPromise
+      expect(called.payload).toEqual({ floor: 'lobby', car: 1 })
+      instanceRef?.__driveTicks(59)
+      const arrival = await hostCollector.waitFor('elevator:moved')
+      expect(arrival.payload).toEqual({ car: 1, floor: 'lobby' })
+      hostCollector.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('rejects elevator calls in lobby phase with an intent error (edge case)', async () => {
+    const host = await createRoom('ada')
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const guestCollector = collectAll(guest)
+    guest.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
+    const err = await guestCollector.waitFor('error')
+    expect(err.payload.code).toBe('elevator-locked')
+    guestCollector.stop()
+    host.leave()
+    guest.leave()
   })
 })

@@ -1,6 +1,13 @@
 import { randomInt } from 'node:crypto'
-import { type LobbySnapshot, lobbyStartIntentSchema, TUNING } from '@turnover/shared'
-import { RoundSim, TICK_HZ } from '@turnover/sim'
+import {
+  elevatorCallIntentSchema,
+  type LobbySnapshot,
+  lobbyStartIntentSchema,
+  moveStartIntentSchema,
+  moveStopIntentSchema,
+  TUNING,
+} from '@turnover/shared'
+import { MovementSim, RoundSim, TICK_HZ } from '@turnover/sim'
 import { type Client, Room } from 'colyseus'
 import { Router } from './router'
 
@@ -10,7 +17,12 @@ import { Router } from './router'
  * the host start intent, owns the RoundSim lifecycle, and forwards every sim
  * event to the per-room Router (cycle 2.3, AD-006), which applies recipient
  * policies and stamps envelopes — role:dealt reaches ONLY the dealt player by
- * declared policy. Message-only — patchRate null, no Schema state.
+ * declared policy.
+ *
+ * Cycle 2.4 (AD-005): the room also owns a MovementSim that ticks in BOTH
+ * phases — players walk the grand lobby from the moment they join and keep
+ * their positions across lobby→round→lobby; the full building unlocks at
+ * round start. Message-only — patchRate null, no Schema state.
  */
 
 /** 24-letter read-aloud alphabet — no I/O (codes are spoken aloud, FR-1). */
@@ -51,10 +63,12 @@ export class TurnoverRoom extends Room {
   private joinedCounter = 0
   private sim: RoundSim | null = null
   private router!: Router
+  private movement!: MovementSim
 
   override onCreate() {
     this.patchRate = null
     this.router = new Router(this)
+    this.movement = new MovementSim()
     // Custom roomId = the shareable code (settable only during onCreate, verified
     // against installed 0.18.8 sources). Codes die with the room (FR-1: fresh
     // codes only for new groups).
@@ -68,6 +82,21 @@ export class TurnoverRoom extends Room {
     // StandardSchema validator — zod 4 implements Standard Schema V1.
     this.onMessage('lobby:start', lobbyStartIntentSchema, (client) => {
       this.handleStartIntent(client.sessionId)
+    })
+    // Movement intents (zod-validated, outside the registry — protocol rules).
+    this.onMessage('move:start', moveStartIntentSchema, (client, intent) => {
+      this.movement.startMove(client.sessionId, intent.dir)
+    })
+    this.onMessage('move:stop', moveStopIntentSchema, (client) => {
+      this.movement.stopMove(client.sessionId)
+    })
+    this.onMessage('elevator:call', elevatorCallIntentSchema, (client, intent) => {
+      if (this.movement.callElevator(client.sessionId, intent.target) === 'rejected') {
+        this.router.toSelf('error', client.sessionId, {
+          code: 'elevator-locked',
+          message: 'elevators are idle until the round starts',
+        })
+      }
     })
 
     if (TurnoverRoom.tickMs > 0) {
@@ -98,14 +127,20 @@ export class TurnoverRoom extends Room {
       name,
       joinedAt: this.joinedCounter++,
     })
+    // Fresh-joiner placement (FR-2 spawn): lobby center (MOVE-18 snapshot ride-along).
+    this.movement.join(client.sessionId)
     // Fresh snapshot to everyone so rosters stay consistent without a feed.
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
+    // Personal movement snapshot: every connected player's public position.
+    this.router.toSelf('movement:snapshot', client.sessionId, this.movement.snapshot())
   }
 
   override onLeave(client: Client) {
     this.players.delete(client.sessionId)
+    // Public knowledge: the rectangle disappears everywhere (MOVE-19).
+    this.router.toAll('player:left', { playerId: client.sessionId })
     // Counters are per-connection: a departed connection's counter dies with it.
     this.router.forget(client.sessionId)
     if (this.phase !== 'lobby') {
@@ -168,6 +203,8 @@ export class TurnoverRoom extends Room {
 
   private startRound() {
     this.phase = 'round'
+    // Full building unlocks at round start; positions persist (MOVE-07).
+    this.movement.unlock()
     const playerIds = [...this.players.values()]
       .sort((a, b) => a.joinedAt - b.joinedAt)
       .map((p) => p.sessionId)
@@ -182,6 +219,8 @@ export class TurnoverRoom extends Room {
 
   /** One fixed 0.05 s step; the production interval and the test hook share this path. */
   private advance() {
+    // Movement runs in BOTH phases (AD-005); the round sim only in round.
+    for (const event of this.movement.tick()) this.router.route(event)
     const sim = this.sim
     if (sim === null || this.phase !== 'round') return
     for (const event of sim.tick()) this.router.route(event)
@@ -189,6 +228,12 @@ export class TurnoverRoom extends Room {
       // Buzzer: roles were the sim's alone — dropping it wipes the deal (AD-002).
       this.sim = null
       this.phase = 'lobby'
+      // Re-confine walking to the grand lobby and refresh everyone's view of
+      // where players and cars now stand (MOVE-08 / MOVE-18).
+      this.movement.lock()
+      for (const sessionId of this.players.keys()) {
+        this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshot())
+      }
     }
   }
 
