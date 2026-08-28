@@ -16,7 +16,9 @@
 - **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
 - **Completed**: T1–T7 (commits 9d593b8..8eabc44)
 - **In-progress** (file:line): none
-- **Next step**: Phase 2 — authoritative server sim (headless-first); start with a fresh Specify for the sim feature
+- **Next step**: Phase 2 — authoritative server sim (headless-first), planned as 7 tlc
+  cycles (see `roadmap.md` Phase 2 table). Next: cycle 2.1 `room-shell` — fresh Specify
+  for `.specs/features/room-shell/`.
 - **Blockers**: none
 - **Uncommitted files**: none (after final .specs commit)
 - **Branch**: master (renamed from default; 7 commits, no remote)
