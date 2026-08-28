@@ -225,7 +225,7 @@ T6 → T7
 
 ---
 
-### T7: Build pipeline + prod hook strip + full ladder
+### T7: Build pipeline + prod hook strip + full ladder ✅ (commit: feat(client))
 
 **What**: Root `build` script (client `vite build`; server stays tsx-run per design); verification that the production bundle omits `window.__TURNOVER__` (SKEL-08) by grepping the built dist; full gate ladder green end-to-end.
 **Where**: `./ (root package.json build script)` + `apps/client/harness/` strip check
