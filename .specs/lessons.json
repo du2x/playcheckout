@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 6,
+  "next_id": 10,
   "lessons": [
     {
       "id": "L-001",
@@ -74,6 +74,62 @@
       "evidence": ["session: create-room dead click report (client)"],
       "created": "2026-08-28T11:57:37Z",
       "last_seen": "2026-08-28T11:57:37Z"
+    },
+    {
+      "id": "L-006",
+      "key": "surviving_mutant::assert the exact field values of every event emitted in a multi event tick not just the event count",
+      "text": "Assert the exact field values of every event emitted in a multi-event tick, not just the event count",
+      "signal": "surviving_mutant",
+      "scope": "sim",
+      "status": "candidate",
+      "features": ["movement"],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": ["M3 / packages/sim/src/movement.test.ts:255 (sim)"],
+      "created": "2026-08-28T15:56:44Z",
+      "last_seen": "2026-08-28T15:56:44Z"
+    },
+    {
+      "id": "L-007",
+      "key": "surviving_mutant::assert emission silence at clamp boundaries where an intent is active but the value cannot change not only for fully idle inputs",
+      "text": "Assert emission silence at clamp boundaries where an intent is active but the value cannot change, not only for fully idle inputs",
+      "signal": "surviving_mutant",
+      "scope": "sim",
+      "status": "candidate",
+      "features": ["movement"],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": ["M5b / packages/sim/src/movement.test.ts:87 (sim)"],
+      "created": "2026-08-28T15:56:44Z",
+      "last_seen": "2026-08-28T15:56:44Z"
+    },
+    {
+      "id": "L-008",
+      "key": "ac_gap::test the newly allowed behavior after a phase transition not only the confinement directions",
+      "text": "Test the newly-allowed behavior after a phase transition, not only the confinement directions",
+      "signal": "ac_gap",
+      "scope": "sim",
+      "status": "candidate",
+      "features": ["movement"],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": ["MOVE-06 (sim)"],
+      "created": "2026-08-28T15:56:44Z",
+      "last_seen": "2026-08-28T15:56:44Z"
+    },
+    {
+      "id": "L-009",
+      "key": "spec_precision_gap::reconcile a mid cycle state md decision that names the in flight feature into its spec and design before implementation continues",
+      "text": "Reconcile a mid-cycle STATE.md decision that names the in-flight feature into its spec and design before implementation continues",
+      "signal": "spec_precision_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": ["movement"],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": ["AD-008 / .specs/STATE.md (specs)"],
+      "created": "2026-08-28T15:56:44Z",
+      "last_seen": "2026-08-28T15:56:44Z"
     }
   ]
 }

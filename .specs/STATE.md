@@ -152,10 +152,12 @@
 ## Handoff
 
 - **Feature**: movement (`.specs/features/movement/`) — cycle 2.4 (AD-005) ✅ COMPLETE
-- **Phase / Task**: Specify → Design → Tasks (T1–T6) → Execute → Verifier **WAIVED by
-  explicit user decision** — no `validation.md`, no discrimination sensor,
-  `validate_state.py` intentionally not run. Gates 1–3 stand on runner exit 0 instead:
-  typecheck + lint clean, 123/123 sim+server tests, 18/18 client harness.
+- **Phase / Task**: Specify → Design → Tasks (T1–T6) → Execute → Verifier **PASS**
+  (`validation.md`: 19/19 MOVE ACs evidenced, gates 1–3 exit 0 — typecheck, lint,
+  123/123 sim+server, 18/18 client; sensor 9 injected / 7 killed / 2 survived →
+  Gaps 2–4; Gate 4 human round still open). Ranked gaps: (1) AD-008 vs shipped
+  `'all'` routing conflict — **needs user ruling**; (2) decoy flash car unasserted;
+  (3) pinned-with-intent emission unasserted; (4) MOVE-06 positive half untested.
 - **Completed**: pure `MovementSim` (`packages/sim/src/movement.ts` — integer
   millitiles, 20 Hz, phase confinement, deterministic two-car elevators with decoy
   calls; design revisions: joiner visibility via roster-sync + fixed spawn,
@@ -169,9 +171,11 @@
 - **Next step**: cycle 2.5 work-channels (FR-7–FR-9, FR-16) — consumes positions via
   `MovementSim.positionOf(playerId)` (AD-005 seam); AD-008 recipient policies
   (`sameFloor`/`spectators`) land with their first consumers; door/room-interior cues
-  build on the landing positions (AD-007 scope note). Earlier cycles' deferred
-  verifier notes (room-shell, first-light, protocol-registry N1–N3) fold in where
-  those files are touched.
+  build on the landing positions (AD-007 scope note). Before that: rule on movement
+  verifier Gap 1 (AD-008 mandates per-floor routing; 2.4 shipped `'all'` broadcasts —
+  amend spec+design+registry or descope AD-008), then route Gaps 2–4 as fix tasks.
+  Earlier cycles' deferred verifier notes (room-shell, first-light, protocol-registry
+  N1–N3) fold in where those files are touched.
 - **Blockers**: none (Gate 4 human round for movement still pending — player-facing:
   `pnpm boot`, open 4 tabs, walk the lobby pre-round, start, ride both elevators,
   buzzer; first-light's human round also still open)

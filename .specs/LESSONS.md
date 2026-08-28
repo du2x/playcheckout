@@ -44,6 +44,30 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: session: create-room dead click report (client)
 - last seen: 2026-08-28T11:57:37Z
 
+### L-006 - Assert the exact field values of every event emitted in a multi-event tick, not just the event count
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `sim` · harmful: 0
+- features: movement
+- evidence: M3 / packages/sim/src/movement.test.ts:255 (sim)
+- last seen: 2026-08-28T15:56:44Z
+
+### L-007 - Assert emission silence at clamp boundaries where an intent is active but the value cannot change, not only for fully idle inputs
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `sim` · harmful: 0
+- features: movement
+- evidence: M5b / packages/sim/src/movement.test.ts:87 (sim)
+- last seen: 2026-08-28T15:56:44Z
+
+### L-008 - Test the newly-allowed behavior after a phase transition, not only the confinement directions
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `sim` · harmful: 0
+- features: movement
+- evidence: MOVE-06 (sim)
+- last seen: 2026-08-28T15:56:44Z
+
+### L-009 - Reconcile a mid-cycle STATE.md decision that names the in-flight feature into its spec and design before implementation continues
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: movement
+- evidence: AD-008 / .specs/STATE.md (specs)
+- last seen: 2026-08-28T15:56:44Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
