@@ -145,7 +145,7 @@ T3 → T4 → T5 → T6
 
 ---
 
-### T4: Generic client dispatch + seq guardian (client wire flip)
+### T4: Generic client dispatch + seq guardian (client wire flip) ✅ Done
 
 **What**: Rewrite `connection.ts` around one `onMessage('*')` handler: unwrap the envelope, verify seq continuity (per-connection, expected from 0), record every message with `seq`/`time` in the dev hook, on gap record it and `room.leave()` (existing connection-loss path), else dispatch `MAPPERS[wireName]` actions via new `onActions` callback; delete the `ServerMessage` union and per-type handlers. Extend `debug.ts` (events carry `seq`/`time`; `gaps` array; `registerGapProbe`; dev-only `forceGap()`; prod paths stay no-op). Rewrite `app.ts`: dispatch actions from `onActions`, replace the message switch with view-transition scene sync (`syncScenes`: entering round view starts `Round` with roster-derived players, leaving stops it).
 **Where**: `apps/client/src/net/connection.ts` (edits in `app.ts`, `debug.ts`)
