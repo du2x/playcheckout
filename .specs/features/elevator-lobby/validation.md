@@ -59,3 +59,64 @@ Recommended fix task: one doc-only commit annotating movement spec assumption ro
 
 1. **(doc, low)** Movement spec/design stale elevator text — items 1–4 above. Not a code or test gap; all ACs hold. Suggested as a follow-up doc task.
 2. No other gaps found. Code, tests, and harness all match the spec's event/visibility semantics; no hidden-information leaks introduced.
+
+---
+
+# Re-verification — elevator-lobby AD-012 (2026-08-28)
+
+**Verdict: PASS (with 2 fix tasks)**
+
+**Result**: PASS — all gates green, fixes 1/3/4 behavior-evidenced and mutant-killed; 2 surviving mutants → fix tasks (fix 2's cross-floor duplicate predicate has no discriminating test; the client panel pulse has none). Doc gaps: movement spec/design MOVE-12/AC-1 text not amended for AD-012.
+
+- Diff range: `5d81084..HEAD` (single commit `9e256aa`, fix(sim): elevator dispatch responsiveness).
+- Verified by: independent Verifier (author ≠ verifier). All gates re-run by the Verifier on the real tree; sensor re-run from scratch.
+- Hygiene: sensor ran in `/tmp/opencode/el12-verify` (git clone at `9e256aa` + node_modules symlinks), deleted afterwards; `git status --porcelain` after the sensor matches the pre-sensor baseline exactly (` M package.json`, `?? .playwright-mcp/`, `?? scripts/`) plus this report edit only. No commits made.
+
+## Gate evidence (all re-run by Verifier, zero exit)
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| 1. typecheck | `pnpm typecheck` | OK — 4/4 workspace projects, no errors |
+| 1. lint | `pnpm lint` | OK — Biome checked 77 files, no issues |
+| 2. sim | `pnpm test:sim` | **166 passed / 166 (15 files)** — matches expectation (was 163 pre-AD-012) |
+| 3. client | `pnpm test:client` | **21 passed (58.1 s)** — port 2567 was free (no stale server); the `[WebServer] Error: room full` line is the expected LOBBY-03 assertion, not a failure |
+
+## Per-fix evidence (file:line → assertion)
+
+| Fix (AD-012) | Implementation | Test evidence | Status |
+| --- | --- | --- | --- |
+| (1) Landing-distance idle-car preference; tie → car 1 | `packages/sim/src/movement.ts:173-178` — `sort` by `|callerX − CAR_LANDING_MILLI[id]|`, tiebreak `a − b`; `CAR_LANDING_MILLI = {1: 0, 2: HALL_MAX_MILLI}` (`movement.ts:30`) | `packages/sim/src/movement.test.ts:336-356` — p2 at the east landing calls floor2 → `'dispatched'` and `elevator:called {floor:'lobby', car:2}` (old code: car 1); `movement.test.ts:358-383` — down-call from the east landing → `{floor:'floor2', car:2}`. Server choreography amended: `apps/server/src/rooms/TurnoverRoom.test.ts:819-851` (`rideToFloor1X(…, first)` walks left to car 1's landing, or right to car 2's east landing when `first=false`) — both consumers pass: "delivers room transitions only to segment occupants (WORK-15)" (outsider lands room 8 via car 2, `TurnoverRoom.test.ts:907`) and "runs the saboteur matrix" (`TurnoverRoom.test.ts:1000`, car 2 → room 1) | PASS |
+| (2) Duplicate predicate = pickup AND destination (arriving), or identical queued call | `packages/sim/src/movement.ts:144-159` — `phase==='arriving' && pickup===pickup && target===target` → flash + `'ignored'`; queued-duplicate check `movement.ts:160-164` | Same-pickup duplicate preserved: `movement.test.ts:410-433` (MOVE-12) — p1/p2 both at lobby, ride floor1 → `'dispatched'` + `'ignored'`, 2 flashes naming car 1, exactly 1 arrival. **BUT no test covers a call from a floor ≠ the arriving car's pickup whose destination matches — the "W intermittent" symptom (fix 2). The test titled "even when another car targets the same destination" (`movement.test.ts:358`) does not create that scenario (both cars are idle with `target === null` at the decisive call). See sensor M1 / Gap 1** | **PASS with test gap** |
+| (3) Boarding drops the boarding player's queued calls | `packages/sim/src/movement.ts:367-370` — `this.callQueue = this.callQueue.filter((q) => q.playerId !== pid)` inside `board()` | `packages/sim/src/movement.test.ts:385-408` — 3 calls (car 1 → floor3, car 2 → floor1, third queued), p1 boards car 2 at tick 60, rides to floor1; after 200 more ticks `snapshot().cars` = car 1 at floor3, car 2 at floor1 — no car ever serves the dropped lobby-pickup call | PASS |
+| (4) Client panel pulse on `elevator:called` | `apps/client/src/scenes/WorldScene.ts:185` (`case 'elevator-called'` → `this.flashPanel()`), `WorldScene.ts:317-325` — sets `#elevator-panel` background then clears after 700 ms | **No client harness test asserts the pulse** (grep over `apps/client/harness/`: no reference to flash/backgroundColor; `movement.spec.ts:159` reads panel `textContent` only). Client suite passes with the call deleted — see sensor M4 / Gap 2 | **PASS with test gap** |
+
+Leak check: diff touches `packages/sim/src/movement.ts`, `movement.test.ts`, `apps/client/src/scenes/WorldScene.ts`, `apps/server/src/rooms/TurnoverRoom.test.ts`, `.specs/STATE.md` — **0 files under `packages/shared`**, no registry/message change; the flash stays data-only on the wire (color is client-local); no hidden-info surface added.
+
+## Discrimination sensor (5 mutants, /tmp scratch)
+
+| # | Mutant (behavior-level) | Expected victim | Outcome |
+| --- | --- | --- | --- |
+| M1 | Restore destination-only decoy: `find(id => cars[id].target === target)` (drop `phase==='arriving'` + `pickup` match) | AD-012 fix 2 | **SURVIVED** — 166/166 still pass. A probe test (cross-floor caller on lobby while car 1 is *arriving at floor1* for floor2) fails against the mutant and passes against the real code — the discriminating scenario exists but is untested in the shipped suite |
+| M2 | Restore `idle[0]` dispatch | AD-012 fix 1 | **Killed** — 2 failed: both AD-012 preference tests (`movement.test.ts:336`, `:358`) |
+| M3 | Remove the queue-drop line in `board()` | AD-012 fix 3 | **Killed** — 1 failed: "drops a boarding player queued call" (`movement.test.ts:385`) |
+| M4 | Remove `this.flashPanel()` in `WorldScene.ts` | AD-012 fix 4 | **SURVIVED** — full `pnpm test:client` passes (21/21) with the pulse deleted; no harness assertion observes the panel flash |
+| M5 | Preference sort descending (farthest landing first) | AD-012 fix 1 | **Killed** — 15 failed, incl. both AD-012 preference tests, MOVE-11 timing, MOVE-13 boarding |
+
+Sensor tally: **5 injected / 3 killed / 2 surviving** (M1, M4). Survivors become fix tasks below; probe artifacts lived only in the scratch (deleted).
+
+## Consistency check — movement spec/design vs the narrowed predicate
+
+Not amended in this diff; now contradicts shipped behavior (same doc-gap class the AD-011 re-verification closed for the phase text):
+
+1. `.specs/features/movement/spec.md:114` (AC 3): "IF a call arrives for a floor a car is already heading to THEN the server SHALL ignore the call" — destination-only; AD-012 narrowed this to same pickup floor AND destination. AD-012's trade-off note calls the letter "preserved: same pickup floor", but the AC's letter names the destination floor. Stale.
+2. `.specs/features/movement/spec.md:112` (AC 1) and `:44` (assumption row): "the car that would serve the call sooner (tie → car 1)" — idle cars all tie at the fixed 3 s arrival, so the shipped landing-distance preference (AD-012 fix 1) contradicts "tie → car 1" whenever the caller stands nearer car 2. Stale.
+3. `.specs/features/movement/design.md:139` and `:247`: "pending target is ignored for dispatch (decoy — MOVE-12)" / "Call with target == a car's current target → No dispatch" — same stale destination-only wording.
+4. `.specs/features/movement/design.md:135`/`:273` (MOVE-13 boarding): does not record the AD-012 queue-drop exception to MOVE-15's "serves the oldest call when a car frees" — an addition, not a contradiction, but should be annotated in the same doc task.
+
+Recommended fix task: one doc-only commit annotating these as AD-012-superseded (mirroring the AD-011 annotations), plus the two sensor fix tasks.
+
+## Ranked gaps (fix tasks)
+
+1. **(test, major)** Fix 2 has no discriminating test: a call whose pickup floor differs from the arriving car's pickup but whose destination matches must still dispatch (`'dispatched'`, car 2/queued — never `'ignored'`). Mutant M1 survived the full shipped suite; probe (`PROBE: cross-floor same-destination call is not swallowed`) demonstrates the kill. Add to `sim:elevator` (note: the title of `movement.test.ts:358` over-claims coverage — retitle or supersede).
+2. **(test, minor)** Fix 4 unasserted: client harness never observes the panel pulse. Add to `client:elevator_lobby` (or `client:movement`): after an ArrowUp call, `#elevator-panel` background becomes `rgb(58, 90, 58)` / `#3a5a3a` and clears ≤ ~1 s. Mutant M4 survived.
+3. **(doc, low)** Movement spec/design stale AD-012 text — items 1–4 in the consistency check. All code behavior is correct; this is spec-precision debt only.

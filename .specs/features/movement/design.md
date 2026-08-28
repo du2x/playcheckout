@@ -134,8 +134,9 @@ graph TD
 - **Car state machine**: `idle(floor)` → `arriving(ticksLeft = ELEVATOR_ARRIVE_SECONDS×TICK_HZ = 60, pickup, target)` → board (instant, same tick) → `riding(ticksLeft = |pickup−target| × RIDE_SECONDS_PER_FLOOR×TICK_HZ = 40/floor, target)` → `idle(target)`. Arrival is a fixed 60 ticks from call regardless of distance — prd FR-5's abstraction, locked by MOVE-11.
 - **Boarding** (MOVE-13): on the arrival tick, candidates = connected players whose floor == pickup and |x − car landing x| ≤ `ELEVATOR_LANDING_TILES` (new tuning, AD-007: 1 tile); sorted by (distance to car x, then playerId); first `ELEVATOR_CAPACITY` (2) board, rest wait for the next arrival. Boarded players: floor tracks the car (player:moved per floor hop), x pinned to the car's landing x, move intents ignored. Riders keep riding to `target` even if the caller walked away (the trip completes — decoy rides exist).
 - **Dispatch** (MOVE-10): only **idle** cars are dispatched — with the fixed 3 s
-  arrival, all idle cars tie, so the tie rule (car 1, west) decides; car 2
-  serves whenever car 1 is busy. A call whose **target** equals a car's current
+  arrival, all idle cars tie; **AD-012** replaces the flat tie rule with
+  landing-distance preference (the car whose landing the caller can actually
+  board — boarding happens at the car's own landing), tie → car 1 (west). A call whose **target** equals a car's current
   pending target is ignored for dispatch (decoy — MOVE-12) but still flashes.
   If no car is idle, the call waits in a sim-level FIFO and is served **in FIFO
   order** by the next car to go idle. A car never holds two destinations

@@ -109,12 +109,12 @@ constraint (occupants never visible).
 
 **Acceptance Criteria**:
 
-1. WHEN a player sends an `elevator:call` intent for a floor THEN the server SHALL dispatch the car that would serve the call sooner (tie → car 1) and broadcast an `elevator:called` event (floor, car) — in both phases (AD-011 amends this cycle's "while a round is active").
+1. WHEN a player sends an `elevator:call` intent for a floor THEN the server SHALL dispatch an idle car — preferring the car whose landing is closest to the caller's x, tie → car 1 (AD-012 amends this cycle's flat "tie → car 1") — and broadcast an `elevator:called` event (floor, car), in both phases (AD-011).
 2. WHEN a call is dispatched THEN the car SHALL arrive at the calling floor after TUNING.ELEVATOR_ARRIVE_SECONDS (3 s) and ride at TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR (2 s per floor traveled).
-3. IF a call arrives for a floor a car is already heading to THEN the server SHALL ignore the call for dispatch purposes and the panel SHALL still flash (FR-5 decoy rule).
+3. IF a call duplicates one already in flight — a car arriving to pick up at the caller's floor for the same destination, or the identical queued call — THEN the server SHALL ignore it for dispatch purposes and the panel SHALL still flash (FR-5 decoy rule, narrowed to same-pickup duplicates by AD-012; destination-only matches dispatch normally).
 4. WHEN a car arrives at a landing THEN players on that floor and queued there SHALL board up to TUNING.ELEVATOR_CAPACITY (2); players beyond capacity SHALL remain queued for the car's next arrival.
 5. WHEN a car's destination is reached and boarding window closes THEN the car SHALL become idle at that floor until the next call.
-6. Each car SHALL hold at most one pending destination (FR-5); a new call while the car is busy SHALL queue on the other car or wait.
+6. Each car SHALL hold at most one pending destination (FR-5); a new call while the car is busy SHALL queue on the other car or wait — and a player boarding any car drops their own queued calls (AD-012: no car is summoned to a floor the rider has left).
 7. All elevator events and panel state SHALL include car floor/position ONLY — never occupant ids (FR-6, protocol rule 2).
 8. The elevator cycle SHALL be deterministic: for a fixed call sequence and tick schedule, car positions and events are identical across runs.
 

@@ -355,7 +355,7 @@ describe('sim:elevator', () => {
     expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 2 }])
   })
 
-  it('dispatches for a caller at a landing even when another car targets the same destination (AD-012)', () => {
+  it('dispatches for a caller at a landing when another car is idle (AD-012: landing distance decides)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
@@ -407,7 +407,35 @@ describe('sim:elevator', () => {
     ])
   })
 
-  it('ignores a call for a floor a car already targets but still flashes (MOVE-12)', () => {
+  it('dispatches across floors even when an in-flight car shares the destination (AD-012 kills the destination decoy)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    // p1 walks to the west landing ON floor1 (placed by an earlier ride) and
+    // calls up to floor2: car 1 arrives at floor1, boards p1, departs —
+    // ARRIVING with pickup floor1, target floor2.
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p1')
+    sim.unlock()
+    expect(ride(sim, 'p1', 'floor1')).toBe('dispatched')
+    sim.tick()
+    for (let i = 0; i < 99; i++) sim.tick() // p1 exits at floor1 west landing
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    expect(ride(sim, 'p1', 'floor2')).toBe('dispatched') // car 1: pickup floor1 → target floor2
+    sim.tick() // flash
+    for (let i = 0; i < 59; i++) sim.tick() // arrival + boarding at floor1
+    // p2 waits at the lobby EAST landing and calls floor2 — the destination
+    // matches in-flight car 1 but the pickup floor does not: the OLD
+    // destination-only decoy swallowed this call; it must dispatch car 2.
+    sim.startMove('p2', 'right')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p2')
+    expect(sim.callElevator('p2', 'floor2')).toBe('dispatched')
+    expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 2 }])
+  })
+
+  it('ignores a same-floor duplicate call but still flashes (MOVE-12, narrowed by AD-012)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
