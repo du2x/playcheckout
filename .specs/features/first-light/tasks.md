@@ -95,7 +95,7 @@ T6 → T7
 
 ---
 
-### T2: Client view reducer
+### T2: Client view reducer — ✅ done
 
 **What**: Pure `ViewState` reducer translating server messages and UI actions into view state (join / lobby / round / lost), with role card, error banner, and round-started timestamp.
 **Where**: `apps/client/src/state.ts` (new), `apps/client/src/state.test.ts` (new)
