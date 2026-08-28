@@ -115,7 +115,7 @@ T4 → T5 → T6
 
 ---
 
-### T3: MovementSim elevators — dispatch, cycle, snapshot
+### T3: MovementSim elevators — dispatch, cycle, snapshot ✅ Done
 
 **What**: Extend `MovementSim` with the two cars: call dispatch (score = busy-delay + ride; tie → car 1; no-idle → sim-level FIFO served on idle), decoy-ignore when target equals a car's pending target (event still emitted), fixed 60-tick arrival, instant boarding (candidates on floor within `ELEVATOR_LANDING_TILES`, sorted by distance then playerId, capacity 2, rest queued), ride at 40 ticks/floor with rider floor tracking, in-car intent rejection, idle-at-destination, one pending destination per car, lobby-phase call rejection, `elevator:moved` on floor changes, and `snapshot()`/`callElevator` phase guard. Write `sim:elevator`: arrive at exactly tick 60, 2 s/floor rides, capacity queuing, decoy flash with no dispatch, one-pending-destination, ≥100-tick cross-run bit-for-bit replay; extend `sim:motion` with snapshot content (MOVE-18).
 **Where**: `packages/sim/src/movement.ts` (edits) + `movement.test.ts` (edits)

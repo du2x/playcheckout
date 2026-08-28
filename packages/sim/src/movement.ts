@@ -1,5 +1,5 @@
 import type { MovementEvent } from '@turnover/shared'
-import { type FloorId, HALL_LENGTH_TILES, TUNING } from '@turnover/shared'
+import { FLOOR_IDS, type FloorId, HALL_LENGTH_TILES, TUNING } from '@turnover/shared'
 import { TICK_HZ } from './tick.js'
 
 /**
@@ -38,15 +38,37 @@ interface PlayerMoveState {
 interface CarState {
   floor: FloorId
   riders: string[]
+  phase: 'idle' | 'arriving' | 'riding'
+  ticksLeft: number
+  pickup: FloorId | null
+  target: FloorId | null
+}
+
+/**
+ * Queued call (sim-level FIFO): dispatched when a car next goes idle. A car
+ * never holds more than one pending destination (FR-5), so overflow calls wait.
+ */
+interface QueuedCall {
+  playerId: string
+  pickup: FloorId
+  target: FloorId
+}
+
+/** A call accepted since the last tick — announced on the next tick (MOVE-10). */
+interface PendingAnnounce {
+  floor: FloorId
+  car: 1 | 2
 }
 
 export class MovementSim {
   private phase: 'lobby' | 'round' = 'lobby'
   private readonly players = new Map<string, PlayerMoveState>()
   private readonly cars: Record<1 | 2, CarState> = {
-    1: { floor: 'lobby', riders: [] },
-    2: { floor: 'lobby', riders: [] },
+    1: { floor: 'lobby', riders: [], phase: 'idle', ticksLeft: 0, pickup: null, target: null },
+    2: { floor: 'lobby', riders: [], phase: 'idle', ticksLeft: 0, pickup: null, target: null },
   }
+  private callQueue: QueuedCall[] = []
+  private announced: PendingAnnounce[] = []
 
   // --- roster / lifecycle -------------------------------------------------
 
@@ -93,6 +115,56 @@ export class MovementSim {
     p.moving = null
   }
 
+  // --- elevator calls -------------------------------------------------------
+
+  /**
+   * Call a car to the caller's floor and ride to `target` (FR-5). Returns why
+   * the call ended as it did:
+   * - 'dispatched': a car was dispatched (60-tick arrival begins now)
+   * - 'ignored': decoy — some car already targets `target`; the panel still
+   *   flashes (`elevator:called` is emitted either way, MOVE-12)
+   * - 'rejected': lobby phase (room sends the intent error) or caller in a car
+   */
+  callElevator(playerId: string, target: FloorId): 'dispatched' | 'ignored' | 'rejected' {
+    const caller = this.players.get(playerId)
+    if (caller === undefined || caller.inCar !== null) return 'rejected'
+    // Elevators idle in lobby phase (spec assumption): no dispatch, no flash.
+    if (this.phase === 'lobby') return 'rejected'
+    const targeting = ([1, 2] as const).find((id) => this.cars[id].target === target)
+    if (targeting !== undefined) {
+      // Decoy: no dispatch, but the panel still flashes (FR-5 / MOVE-12).
+      this.announce(caller.floor, targeting)
+      return 'ignored'
+    }
+    const pickup = caller.floor
+    const idle = ([1, 2] as const).filter((id) => this.cars[id].phase === 'idle')
+    if (idle.length === 0) {
+      // Both cars busy: wait; served when a car next goes idle. The flash still
+      // happens now (FR-5 decoy rule).
+      this.callQueue.push({ playerId, pickup, target })
+      return 'dispatched'
+    }
+    // Fixed 3 s arrival makes idle cars tie → car 1 (west) by rule (design note).
+    const carId = idle[0]
+    if (carId === undefined) return 'ignored'
+    this.dispatch(carId, pickup, target)
+    this.announce(pickup, carId)
+    return 'dispatched'
+  }
+
+  /** Queue the panel flash for the next tick, naming the serving car. */
+  private announce(floor: FloorId, car: 1 | 2): void {
+    this.announced.push({ floor, car })
+  }
+
+  private dispatch(carId: 1 | 2, pickup: FloorId, target: FloorId): void {
+    const car = this.cars[carId]
+    car.phase = 'arriving'
+    car.ticksLeft = ARRIVE_TICKS
+    car.pickup = pickup
+    car.target = target
+  }
+
   // --- phase transitions (positions never change here: MOVE-07/08) ---------
 
   unlock(): void {
@@ -133,6 +205,9 @@ export class MovementSim {
   /** Advance one 0.05 s step; returns the events emitted this tick (may be []). */
   tick(): readonly MovementEvent[] {
     const events: MovementEvent[] = []
+    for (const a of this.announced.splice(0)) {
+      events.push({ type: 'elevator:called', floor: a.floor, car: a.car })
+    }
 
     for (const [playerId, p] of this.players) {
       if (p.inCar !== null || p.moving === null) {
@@ -151,7 +226,79 @@ export class MovementSim {
       }
     }
 
+    this.tickCars(events)
     return events
+  }
+
+  private tickCars(events: MovementEvent[]): void {
+    for (const id of [1, 2] as const) {
+      const car = this.cars[id]
+      if (car.phase === 'idle') continue
+      car.ticksLeft--
+      if (car.ticksLeft > 0) continue
+
+      if (car.phase === 'arriving') {
+        // Arrived at the pickup floor: board up to capacity, then the trip
+        // always completes — even empty (decoy rides are physical, FR-5).
+        car.floor = car.pickup as FloorId
+        car.phase = 'riding'
+        car.ticksLeft = this.rideTicks(car.pickup as FloorId, car.target as FloorId)
+        events.push({ type: 'elevator:moved', car: id, floor: car.pickup as FloorId })
+        this.board(id, car, events)
+      } else {
+        car.floor = car.target as FloorId
+        car.phase = 'idle'
+        car.pickup = null
+        car.target = null
+        events.push({ type: 'elevator:moved', car: id, floor: car.floor })
+        for (const rider of car.riders) {
+          const p = this.players.get(rider)
+          if (p === undefined) continue
+          p.floor = car.floor
+          p.inCar = null
+          p.x = CAR_LANDING_MILLI[id]
+          events.push(moved(rider, p))
+        }
+        car.riders = []
+        // A waiting call is served the moment a car frees up (MOVE-15 queue).
+        const next = this.callQueue.shift()
+        if (next !== undefined) {
+          this.dispatch(id, next.pickup, next.target)
+          this.announce(next.pickup, id)
+        }
+      }
+    }
+  }
+
+  private rideTicks(pickup: FloorId, target: FloorId): number {
+    const a = FLOOR_IDS.indexOf(pickup)
+    const b = FLOOR_IDS.indexOf(target)
+    return Math.abs(b - a) * RIDE_TICKS_PER_FLOOR
+  }
+
+  /** MOVE-13: board the waiting closest players, capacity 2, deterministic order. */
+  private board(carId: 1 | 2, car: CarState, events: MovementEvent[]): void {
+    const landing = CAR_LANDING_MILLI[carId]
+    const candidates = [...this.players.entries()]
+      .filter(
+        ([pid, p]) =>
+          p.inCar === null && p.floor === car.floor && car.riders.includes(pid) === false,
+      )
+      .filter(([, p]) => Math.abs(p.x - landing) <= TUNING.ELEVATOR_LANDING_TILES * MILLI)
+      .sort(([a, pa], [b, pb]) => {
+        const da = Math.abs(pa.x - landing)
+        const db = Math.abs(pb.x - landing)
+        return da !== db ? da - db : a < b ? -1 : a > b ? 1 : 0
+      })
+    for (const [pid, p] of candidates) {
+      if (car.riders.length >= TUNING.ELEVATOR_CAPACITY) break
+      p.inCar = carId
+      car.riders.push(pid)
+      if (p.x !== landing) {
+        p.x = landing
+        events.push(moved(pid, p))
+      }
+    }
   }
 }
 
