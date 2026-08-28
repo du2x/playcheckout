@@ -427,6 +427,36 @@ describe('server:protocol_registry', () => {
     c.leave()
   })
 
+  it('stamps per-connection seqs that diverge when envelope histories differ (REG-07, absolute)', async () => {
+    // Host accrues 6 lobby envelopes (own join, 2 joins, a leave, 2 re-joins);
+    // the re-joiner accrues exactly 1. A counter shared across connections
+    // would stamp both round:started envelopes with the same seq.
+    const host = await createRoom('ada')
+    const a = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const leaver = await newClient().joinById(host.roomId, { name: 'caro' })
+    leaver.leave()
+    const elin = await newClient().joinById(host.roomId, { name: 'elin' })
+    await newClient().joinById(host.roomId, { name: 'dina' })
+    const hostCollector = collectAll(host)
+    const elinCollector = collectAll(elin)
+    const instance = TurnoverRoom.instances.at(-1)
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(1)
+
+    const hostStarted = await hostCollector.waitFor('round:started')
+    const elinStarted = await elinCollector.waitFor('round:started')
+    // 6 lobby envelopes: own join, bruno, caro, caro's leave, elin, dina.
+    expect(hostStarted.seq).toBe(7)
+    // 2 lobby envelopes for elin: own join + dina's join.
+    expect(elinStarted.seq).toBe(3)
+    hostCollector.stop()
+    elinCollector.stop()
+    host.leave()
+    a.leave()
+    elin.leave()
+  })
+
   it('keeps seq continuity across the buzzer and a re-deal on the same connection (REG-18)', async () => {
     const [host, a, b, c] = await roomWithFour()
     const collector = collectAll(host)
