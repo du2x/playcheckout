@@ -151,25 +151,30 @@
 
 ## Handoff
 
-- **Feature**: protocol-registry (`.specs/features/protocol-registry/`) — cycle 2.3 (AD-006) ✅ COMPLETE
-- **Phase / Task**: Specify → Design → Tasks (T1–T6) → Execute → Verifier **PASS**
-  (validation.md: 20/20 REGs evidenced, gates 1–3 exit 0 — typecheck, lint, 94/94 sim,
-  16/16 client; discrimination sensor 8/8 mutants killed; Gate 4 N/A — behavior-preserving)
-- **Completed**: registry in `packages/shared/src/protocol/registry.ts` (SimEvent moved to
-  shared, sim re-exports; payload `type` literals dropped; envelope.ts + unions deleted);
-  per-room Router `apps/server/src/rooms/router.ts` (only sender, per-connection seq from 1,
-  `toSelf`/`toAll` policy-typed via `KeysWith`); client generic dispatch (`connection.ts`
-  `onMessage('*')` + seq guard + gap→leave, `mappers.ts` exhaustive table, `app.ts`
-  view-transition scene sync); harness `client:envelope_gap`; turnover-protocol rule 5
-  rewritten (registry = audit surface, grep retired)
+- **Feature**: movement (`.specs/features/movement/`) — cycle 2.4 (AD-005) ✅ COMPLETE
+- **Phase / Task**: Specify → Design → Tasks (T1–T6) → Execute → Verifier **WAIVED by
+  explicit user decision** — no `validation.md`, no discrimination sensor,
+  `validate_state.py` intentionally not run. Gates 1–3 stand on runner exit 0 instead:
+  typecheck + lint clean, 123/123 sim+server tests, 18/18 client harness.
+- **Completed**: pure `MovementSim` (`packages/sim/src/movement.ts` — integer
+  millitiles, 20 Hz, phase confinement, deterministic two-car elevators with decoy
+  calls; design revisions: joiner visibility via roster-sync + fixed spawn,
+  `lock()` clears the call FIFO, queued calls flash at dispatch time); five registry
+  rows + movement intents (`packages/shared/src/protocol/`); room wiring in both
+  phases (`TurnoverRoom`); persistent `WorldScene` (key `'Round'`, prediction + lerp,
+  DOM elevator panel, roster sync); harness `client:movement` (2 scenarios) +
+  LIGHT-10 clock flake fix. AD-007 (`ELEVATOR_LANDING_TILES = 1`) and AD-008
+  (own-floor visibility routing) recorded. Commits `0ed741e..c11ad83`.
 - **In-progress** (file:line): none
-- **Next step**: cycle 2.4 `movement` (`.specs/features/movement/spec.md` exists) — Design
-  must target the registry (declare new message types there; recipient-policy enum extends
-  deliberately, e.g. `nearby`/`roomOccupants` land with their first consumers; 20 Hz
-  position streams ride the envelope's seq/time). Position-stream routing follows AD-008:
-  live players receive own-floor positions only, riders none, spectators unfiltered.
-- **Blockers**: none (Gate 4 human rounds pending for first-light + protocol-registry is
-  N/A; run `pnpm boot`, open 4 tabs, create/join/start when convenient)
+- **Next step**: cycle 2.5 work-channels (FR-7–FR-9, FR-16) — consumes positions via
+  `MovementSim.positionOf(playerId)` (AD-005 seam); AD-008 recipient policies
+  (`sameFloor`/`spectators`) land with their first consumers; door/room-interior cues
+  build on the landing positions (AD-007 scope note). Earlier cycles' deferred
+  verifier notes (room-shell, first-light, protocol-registry N1–N3) fold in where
+  those files are touched.
+- **Blockers**: none (Gate 4 human round for movement still pending — player-facing:
+  `pnpm boot`, open 4 tabs, walk the lobby pre-round, start, ride both elevators,
+  buzzer; first-light's human round also still open)
 - **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script
   (not part of any feature); `.playwright-mcp/` gitignored session logs
 - **Branch**: master

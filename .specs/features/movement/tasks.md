@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/movement/design.md`
-**Status**: Approved
+**Status**: ✅ Complete
 
 **No wire-flip window this cycle:** all five new message types are additive — the old
 client ignores unknown wire names (defensive `mapper === undefined` return, cycle 2.3),
@@ -196,7 +196,7 @@ T4 → T5 → T6
 
 ---
 
-### T6: Harness scenario `client:movement`
+### T6: Harness scenario `client:movement` ✅ Done
 
 **What**: Add `apps/client/harness/movement.spec.ts`: 4 tabs join, ArrowRight hold displaces the own rectangle ≈ speed × elapsed and other tabs follow within 2 ticks; pre-round x clamps to lobby bounds; after host start, tabs ride an elevator between floors (panels show car floors, never occupants); post-buzzer a move intent on a non-lobby floor leaves the rectangle; a late tab cannot join mid-round (2.1 rule); a leaver's rectangle disappears on all tabs.
 **Where**: `apps/client/harness/movement.spec.ts` (new)

@@ -163,25 +163,25 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| MOVE-01 | P1: Lobby movement | - | Pending |
-| MOVE-02 | P1: Lobby movement | - | Pending |
-| MOVE-03 | P1: Lobby movement | - | Pending |
-| MOVE-04 | P1: Lobby movement | - | Pending |
-| MOVE-05 | P1: Lobby movement | - | Pending |
-| MOVE-06 | P1: Building unlock | - | Pending |
-| MOVE-07 | P1: Building unlock | - | Pending |
-| MOVE-08 | P1: Building unlock | - | Pending |
-| MOVE-09 | P1: Building unlock | - | Pending |
-| MOVE-10 | P1: Elevators | - | Pending |
-| MOVE-11 | P1: Elevators | - | Pending |
-| MOVE-12 | P1: Elevators | - | Pending |
-| MOVE-13 | P1: Elevators | - | Pending |
-| MOVE-14 | P1: Elevators | - | Pending |
-| MOVE-15 | P1: Elevators | - | Pending |
-| MOVE-16 | P1: Elevators | - | Pending |
-| MOVE-17 | P1: Elevators | - | Pending |
-| MOVE-18 | P2: Movement snapshot | - | Pending |
-| MOVE-19 | P2: Movement snapshot | - | Pending |
+| MOVE-01 | P1: Lobby movement | T2/T5 | Implemented |
+| MOVE-02 | P1: Lobby movement | T2/T5 | Implemented |
+| MOVE-03 | P1: Lobby movement | T2/T5 | Implemented |
+| MOVE-04 | P1: Lobby movement | T2/T5 | Implemented |
+| MOVE-05 | P1: Lobby movement | T2/T5 | Implemented |
+| MOVE-06 | P1: Building unlock | T2/T5 | Implemented |
+| MOVE-07 | P1: Building unlock | T2/T5 | Implemented |
+| MOVE-08 | P1: Building unlock | T2/T5 | Implemented |
+| MOVE-09 | P1: Building unlock | T2/T5 | Implemented |
+| MOVE-10 | P1: Elevators | T3 | Implemented |
+| MOVE-11 | P1: Elevators | T3 | Implemented |
+| MOVE-12 | P1: Elevators | T3 | Implemented |
+| MOVE-13 | P1: Elevators | T3 | Implemented |
+| MOVE-14 | P1: Elevators | T3 | Implemented |
+| MOVE-15 | P1: Elevators | T3 | Implemented |
+| MOVE-16 | P1: Elevators | T3/T5 | Implemented |
+| MOVE-17 | P1: Elevators | T3/T5 | Implemented |
+| MOVE-18 | P2: Movement snapshot | T3/T4 | Implemented |
+| MOVE-19 | P2: Movement snapshot | T4 | Implemented |
 
 **Gate mapping:** MOVE-01..05, 06..09 → `sim:motion` · MOVE-10..17 → `sim:elevator` · MOVE-18..19 → `sim:motion` + `client:movement` · all stories additionally exercised end-to-end by `client:movement` (gate 3).
 
