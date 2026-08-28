@@ -111,9 +111,9 @@ describe('router: positional policies', () => {
     const rider = fakeClient('rider')
     const router = newRouter(lobbyViewer, floor1Viewer, rider)
     router.setViewContext((sessionId) => {
-      if (sessionId === 'lobby') return { floor: 'lobby', roomKey: null }
-      if (sessionId === 'f1') return { floor: 'floor1', roomKey: 'floor1:3' }
-      return { floor: null, roomKey: null } // rider in a car
+      if (sessionId === 'lobby') return { floor: 'lobby', roomKey: null, car: null }
+      if (sessionId === 'f1') return { floor: 'floor1', roomKey: 'floor1:3', car: null }
+      return { floor: null, roomKey: null, car: 2 } // rider in car 2
     })
 
     router.route({
@@ -141,8 +141,8 @@ describe('router: positional policies', () => {
     const sameFloorOtherRoom = fakeClient('elsewhere')
     const router = newRouter(inside, sameFloorOtherRoom)
     router.setViewContext((sessionId) => {
-      if (sessionId === 'inside') return { floor: 'floor2', roomKey: 'floor2:5' }
-      return { floor: 'floor2', roomKey: null } // same floor, outside segments
+      if (sessionId === 'inside') return { floor: 'floor2', roomKey: 'floor2:5', car: null }
+      return { floor: 'floor2', roomKey: null, car: null } // same floor, outside segments
     })
 
     router.route({ type: 'room:prepped', floor: 'floor2', room: 5 })
@@ -158,7 +158,9 @@ describe('router: positional policies', () => {
     const b = fakeClient('b')
     const router = newRouter(a, b)
     router.setViewContext((sessionId) =>
-      sessionId === 'a' ? { floor: 'lobby', roomKey: null } : { floor: 'floor1', roomKey: null },
+      sessionId === 'a'
+        ? { floor: 'lobby', roomKey: null, car: null }
+        : { floor: 'floor1', roomKey: null, car: null },
     )
 
     router.route({ type: 'elevator:moved', car: 1, floor: 'floor1' })
@@ -166,6 +168,62 @@ describe('router: positional policies', () => {
 
     expect(a.sent.map((s) => s.type)).toEqual(['elevator:moved', 'player:left'])
     expect(b.sent.map((s) => s.type)).toEqual(['elevator:moved', 'player:left'])
+  })
+})
+
+// ELR-01..03/ELR-06 (AD-013): the riders policy delivers ONLY to viewers whose
+// view context car matches the event's car — occupancy and presses never reach
+// the floor, the other car, or anyone else.
+describe('router: riders policy', () => {
+  function ridersContext(sessionId: string) {
+    if (sessionId === 'r1a' || sessionId === 'r1b')
+      return { floor: null, roomKey: null, car: 1 as const }
+    if (sessionId === 'r2') return { floor: null, roomKey: null, car: 2 as const }
+    return { floor: 'lobby', roomKey: null, car: null } // a non-rider on the floor
+  }
+
+  it('delivers elevator:riders only to viewers riding that car (ELR-01..03)', () => {
+    const rider1a = fakeClient('r1a')
+    const rider1b = fakeClient('r1b')
+    const rider2 = fakeClient('r2')
+    const floorViewer = fakeClient('f')
+    const router = newRouter(rider1a, rider1b, rider2, floorViewer)
+    router.setViewContext(ridersContext)
+
+    router.route({ type: 'elevator:riders', car: 1, riders: ['r1a', 'r1b'], queue: ['floor2'] })
+
+    expect(rider1a.sent).toHaveLength(1)
+    expect(rider1a.sent[0]?.type).toBe('elevator:riders')
+    expect(rider1a.sent[0]?.message.payload).toEqual({
+      car: 1,
+      riders: ['r1a', 'r1b'],
+      queue: ['floor2'],
+    })
+    expect(rider1b.sent).toHaveLength(1)
+    expect(rider1b.sent[0]?.message.payload).toEqual({
+      car: 1,
+      riders: ['r1a', 'r1b'],
+      queue: ['floor2'],
+    })
+    // Non-riders: the other car's rider and every floor viewer get nothing.
+    expect(rider2.sent).toEqual([])
+    expect(floorViewer.sent).toEqual([])
+  })
+
+  it("delivers elevator:pressed only to the pressing car's riders with payload exactly {playerId, floor} (ELR-06)", () => {
+    const rider1a = fakeClient('r1a')
+    const rider2 = fakeClient('r2')
+    const floorViewer = fakeClient('f')
+    const router = newRouter(rider1a, rider2, floorViewer)
+    router.setViewContext(ridersContext)
+
+    router.route({ type: 'elevator:pressed', playerId: 'r1a', floor: 'floor2', car: 1 })
+
+    expect(rider1a.sent).toHaveLength(1)
+    expect(rider1a.sent[0]?.type).toBe('elevator:pressed')
+    expect(rider1a.sent[0]?.message.payload).toEqual({ playerId: 'r1a', floor: 'floor2' })
+    expect(rider2.sent).toEqual([])
+    expect(floorViewer.sent).toEqual([])
   })
 })
 

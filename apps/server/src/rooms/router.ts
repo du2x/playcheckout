@@ -1,4 +1,4 @@
-import type { EventVisibility, MovementEvent } from '@turnover/shared'
+import type { CarId, EventVisibility, MovementEvent } from '@turnover/shared'
 import {
   type Envelope,
   type KeysWith,
@@ -36,9 +36,11 @@ export interface ViewContext {
   readonly floor: string | null
   /** `\`${floor}:${room}\`` of the segment the viewer stands in, or null. */
   readonly roomKey: string | null
+  /** The car the viewer is riding, or null on any floor (AD-013). */
+  readonly car: CarId | null
 }
 
-const NO_VIEW: ViewContext = { floor: null, roomKey: null }
+const NO_VIEW: ViewContext = { floor: null, roomKey: null, car: null }
 
 interface Projection {
   payload: unknown
@@ -116,6 +118,16 @@ export class Router {
     if (recipients === 'occupants') {
       for (const client of this.liveClients()) {
         if (this.viewContext(client.sessionId).roomKey === visibility?.roomKey) {
+          this.deliver(client, key, payload, time)
+        }
+      }
+      return
+    }
+    if (recipients === 'riders') {
+      // AD-013: occupancy and press knowledge belongs to the people inside the
+      // car — deliver only to viewers riding the event's car.
+      for (const client of this.liveClients()) {
+        if (this.viewContext(client.sessionId).car === visibility?.car) {
           this.deliver(client, key, payload, time)
         }
       }

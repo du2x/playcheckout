@@ -226,7 +226,7 @@ describe('movement visibility (AD-008)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     // Lobby center is outside every segment (lobby floor has none).
-    expect(sim.viewOf('p1')).toEqual({ floor: 'lobby', roomKey: null })
+    expect(sim.viewOf('p1')).toEqual({ floor: 'lobby', roomKey: null, car: null })
 
     // Ride p1 to floor1: rider context loses its floor while in the car (AD-008).
     sim.startMove('p1', 'left')
@@ -235,13 +235,13 @@ describe('movement visibility (AD-008)', () => {
     expect(sim.callElevator('p1', 'floor1')).toBe('dispatched')
     sim.tick() // flash (tick 1)
     for (let i = 0; i < 59; i++) sim.tick() // ticks 2..60 — arrival + boarding on 60
-    expect(sim.viewOf('p1')).toEqual({ floor: null, roomKey: null }) // rider: no floor stream (AD-008)
+    expect(sim.viewOf('p1')).toEqual({ floor: null, roomKey: null, car: 1 }) // rider: no floor stream (AD-008), car names the ride (AD-013)
     for (let i = 0; i < 39; i++) sim.tick() // ride lobby → floor1 (40 ticks)
     sim.tick() // exit tick
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
 
     // Arrived riders stand at the landing x=0 — outside every segment (AD-010).
-    expect(sim.viewOf('p1')).toEqual({ floor: 'floor1', roomKey: null })
+    expect(sim.viewOf('p1')).toEqual({ floor: 'floor1', roomKey: null, car: null })
   })
 })
 

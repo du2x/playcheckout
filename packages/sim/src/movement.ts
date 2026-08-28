@@ -254,16 +254,23 @@ export class MovementSim {
   /**
    * AD-008 view context for the Router: a live player's own floor (riders get
    * none — no floor stream while in a car) plus the room-segment key they
-   * currently stand in (null outside every segment; AD-010 segments).
+   * currently stand in (null outside every segment; AD-010 segments), and the
+   * car they are riding — the riders-policy routing key (AD-013).
    */
-  viewOf(playerId: string): { floor: FloorId | null; roomKey: string | null } {
+  viewOf(playerId: string): {
+    floor: FloorId | null
+    roomKey: string | null
+    car: 1 | 2 | null
+  } {
     const p = this.players.get(playerId)
-    if (p === undefined || p.inCar !== null) return { floor: null, roomKey: null }
-    if (p.floor === 'lobby') return { floor: p.floor, roomKey: null }
+    if (p === undefined) return { floor: null, roomKey: null, car: null }
+    if (p.inCar !== null) return { floor: null, roomKey: null, car: p.inCar }
+    if (p.floor === 'lobby') return { floor: p.floor, roomKey: null, car: null }
     const room = roomIndexAtMilli(p.x)
     return {
       floor: p.floor,
       roomKey: room === 0 ? null : `${p.floor}:${room as RoomIndex}`,
+      car: null,
     }
   }
 

@@ -166,7 +166,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T5: Router riders branch and ViewContext car field
+#### T5: Router riders branch and ViewContext car field — ✅ Done
 
 **What**: Add the `riders` dispatch branch (deliver to clients whose `viewContext.car === visibility.car`), extend `ViewContext` with `car: 1|2|null`, and keep existing `sameFloor`/`occupants`/`all`/`self` semantics byte-identical.
 **Where**: `apps/server/src/rooms/router.ts`
@@ -179,9 +179,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-protocol`
 
 **Done when**:
-- [ ] `ViewContext` has `car`; `dispatch` handles `riders` by `car` match; other policies unchanged
-- [ ] `router.test.ts` asserts rider-exclusive delivery and non-rider exclusion for a synthetic riders event; `sameFloor` tests stay green
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `ViewContext` has `car`; `dispatch` handles `riders` by `car` match; other policies unchanged
+- [x] `router.test.ts` asserts rider-exclusive delivery and non-rider exclusion for a synthetic riders event; `sameFloor` tests stay green
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: unit
 **Gate**: quick
