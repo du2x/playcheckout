@@ -185,12 +185,12 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | REG-02 | P1: One declaration | T1 | Implemented |
 | REG-03 | P1: One declaration | T1 | Implemented |
 | REG-04 | P1: One declaration | T1 | Implemented |
-| REG-05 | P1: Router + envelope | - | Pending |
-| REG-06 | P1: Router + envelope | - | Pending |
-| REG-07 | P1: Router + envelope | - | Pending |
-| REG-08 | P1: Router + envelope | - | Pending |
-| REG-09 | P1: Router + envelope | - | Pending |
-| REG-10 | P1: Router + envelope | - | Pending |
+| REG-05 | P1: Router + envelope | T2 | Implemented |
+| REG-06 | P1: Router + envelope | T2 | Implemented |
+| REG-07 | P1: Router + envelope | T2 | Implemented |
+| REG-08 | P1: Router + envelope | T2 | Implemented |
+| REG-09 | P1: Router + envelope | T2 | Implemented |
+| REG-10 | P1: Router + envelope | T2 | Implemented |
 | REG-11 | P1: Client dispatch | - | Pending |
 | REG-12 | P1: Client dispatch | - | Pending |
 | REG-13 | P1: Client dispatch | - | Pending |
@@ -198,9 +198,9 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | REG-15 | P1: Client dispatch | - | Pending |
 | REG-16 | P2: Seq-gap recovery | - | Pending |
 | REG-17 | P2: Seq-gap recovery | - | Pending |
-| REG-18 | P2: Seq-gap recovery | - | Pending |
+| REG-18 | P2: Seq-gap recovery | T2 | Implemented |
 | REG-19 | P2: Structural audit | - | Pending |
-| REG-20 | P2: Structural audit | - | Pending |
+| REG-20 | P2: Structural audit | T2 | Implemented |
 
 **Gate mapping:** REG-01..04 → `server:protocol_registry` + gate 1 typecheck ·
 REG-05..10 → `server:protocol_registry` (+ unmodified `sim:role_deal`, `server:lobby_join`) ·

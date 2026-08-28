@@ -91,7 +91,7 @@ T3 → T4 → T5 → T6
 
 ---
 
-### T2: Per-room Router with envelope stamping (server wire flip)
+### T2: Per-room Router with envelope stamping (server wire flip) ✅ Done
 
 **What**: Implement the Router (`route`, policy-typed `toSelf`/`toAll`, `forget`) as the only module allowed to call `client.send`; rewire `TurnoverRoom` (join/leave snapshots, intent errors, `advance()` routing, `router.forget` on leave) and delete `route()`/`sendTo`. Add the `server:protocol_registry` describe: live-room envelope assertions (shape `{seq,time,payload}`, no in-payload `type`, per-connection monotonic seq from 1, own seq per recipient on broadcast, `role:dealt` reaches only the named player, seq continuity across buzzer + re-deal), a Router unit test with fake clients, and the bypass denylist test (no raw `.send(`/`.broadcast(` outside `router.ts` in `apps/server/src`). Mechanically update `TurnoverRoom.test.ts` wire decoding (unwrap envelopes; drop the `type`-key assertions) - scenario names and semantics unmodified.
 **Where**: `apps/server/src/rooms/router.ts` (new; edits in `TurnoverRoom.ts`, `TurnoverRoom.test.ts`, new `router.test.ts`)

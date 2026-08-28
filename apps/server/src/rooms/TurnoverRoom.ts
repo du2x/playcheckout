@@ -1,14 +1,16 @@
 import { randomInt } from 'node:crypto'
 import { type LobbySnapshot, lobbyStartIntentSchema, TUNING } from '@turnover/shared'
-import { RoundSim, type SimEvent, TICK_HZ } from '@turnover/sim'
+import { RoundSim, TICK_HZ } from '@turnover/sim'
 import { type Client, Room } from 'colyseus'
+import { Router } from './router'
 
 /**
  * The round container (cycle 2.1). Lobby half: join by 4-letter code with
  * validated display names, roster snapshots, host tracking. Round half: guards
- * the host start intent, owns the RoundSim lifecycle, routes sim events per the
- * turnover-protocol rules — role:dealt reaches ONLY the dealt player; no role
- * field ever rides a broadcast. Message-only — patchRate null, no Schema state.
+ * the host start intent, owns the RoundSim lifecycle, and forwards every sim
+ * event to the per-room Router (cycle 2.3, AD-006), which applies recipient
+ * policies and stamps envelopes — role:dealt reaches ONLY the dealt player by
+ * declared policy. Message-only — patchRate null, no Schema state.
  */
 
 /** 24-letter read-aloud alphabet — no I/O (codes are spoken aloud, FR-1). */
@@ -48,9 +50,11 @@ export class TurnoverRoom extends Room {
   private players = new Map<string, LobbyPlayer>()
   private joinedCounter = 0
   private sim: RoundSim | null = null
+  private router!: Router
 
   override onCreate() {
     this.patchRate = null
+    this.router = new Router(this)
     // Custom roomId = the shareable code (settable only during onCreate, verified
     // against installed 0.18.8 sources). Codes die with the room (FR-1: fresh
     // codes only for new groups).
@@ -96,12 +100,14 @@ export class TurnoverRoom extends Room {
     })
     // Fresh snapshot to everyone so rosters stay consistent without a feed.
     for (const sessionId of this.players.keys()) {
-      this.sendTo(sessionId, 'lobby:snapshot', this.buildSnapshot(sessionId))
+      this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
   }
 
   override onLeave(client: Client) {
     this.players.delete(client.sessionId)
+    // Counters are per-connection: a departed connection's counter dies with it.
+    this.router.forget(client.sessionId)
     if (this.phase !== 'lobby') {
       // Mid-round: the leaver's sim slot idles until the buzzer (full FR-25 ghost
       // machinery is a later cycle). No lobby snapshot — rosters are a lobby concept.
@@ -110,7 +116,7 @@ export class TurnoverRoom extends Room {
     // Host is whoever joined earliest among the remaining players, so migration
     // is implicit: the next snapshot simply flips isHost (CHURN-02).
     for (const sessionId of this.players.keys()) {
-      this.sendTo(sessionId, 'lobby:snapshot', this.buildSnapshot(sessionId))
+      this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
   }
 
@@ -136,8 +142,7 @@ export class TurnoverRoom extends Room {
 
   private handleStartIntent(sessionId: string) {
     if (this.phase !== 'lobby') {
-      this.sendTo(sessionId, 'error', {
-        type: 'error',
+      this.router.toSelf('error', sessionId, {
         code: 'round-already-active',
         message: 'a round is already running',
       })
@@ -145,16 +150,14 @@ export class TurnoverRoom extends Room {
     }
     const hostId = [...this.players.values()].sort((a, b) => a.joinedAt - b.joinedAt)[0]?.sessionId
     if (sessionId !== hostId) {
-      this.sendTo(sessionId, 'error', {
-        type: 'error',
+      this.router.toSelf('error', sessionId, {
         code: 'not-host',
         message: 'only the host can start the round',
       })
       return
     }
     if (this.players.size < TUNING.PLAYERS_MIN) {
-      this.sendTo(sessionId, 'error', {
-        type: 'error',
+      this.router.toSelf('error', sessionId, {
         code: 'need-more-players',
         message: `need at least ${TUNING.PLAYERS_MIN} players`,
       })
@@ -181,25 +184,11 @@ export class TurnoverRoom extends Room {
   private advance() {
     const sim = this.sim
     if (sim === null || this.phase !== 'round') return
-    for (const event of sim.tick()) this.route(event)
+    for (const event of sim.tick()) this.router.route(event)
     if (sim.clockTicksRemaining <= 0) {
       // Buzzer: roles were the sim's alone — dropping it wipes the deal (AD-002).
       this.sim = null
       this.phase = 'lobby'
-    }
-  }
-
-  private route(event: SimEvent) {
-    switch (event.type) {
-      case 'round:started':
-        this.broadcast('round:started', { type: event.type, playerIds: event.playerIds })
-        break
-      case 'role:dealt':
-        this.sendTo(event.playerId, 'role:dealt', { type: event.type, role: event.role })
-        break
-      case 'round:buzzer':
-        this.broadcast('round:buzzer', { type: event.type })
-        break
     }
   }
 
@@ -211,10 +200,5 @@ export class TurnoverRoom extends Room {
   /** Test hook: read the phase without poking private state from tests. */
   __phase(): 'lobby' | 'round' {
     return this.phase
-  }
-
-  private sendTo(sessionId: string, type: string, payload: unknown) {
-    const target = this.clients.find((c) => c.sessionId === sessionId)
-    target?.send(type, payload)
   }
 }

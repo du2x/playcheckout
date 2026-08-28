@@ -40,14 +40,17 @@ async function createRoom(name: string): Promise<ClientRoom> {
  * before its listener attaches but delivered after, so collectors may drain a
  * stale join-time snapshot first. `nextWhere` skips non-matching snapshots so
  * tests assert on the snapshot produced by the roster event they target.
+ * Wire note (cycle 2.3): payloads arrive envelope-wrapped — collectors unwrap
+ * and expose the inner payload.
  */
 function collect(room: ClientRoom) {
   const snaps: LobbySnapshot[] = []
   const waiters: ((s: LobbySnapshot) => void)[] = []
-  const off = room.onMessage('lobby:snapshot', (snapshot) => {
-    snaps.push(snapshot as LobbySnapshot)
+  const off = room.onMessage('lobby:snapshot', (envelope) => {
+    const snapshot = (envelope as { payload: LobbySnapshot }).payload
+    snaps.push(snapshot)
     const waiter = waiters.shift()
-    if (waiter) waiter(snapshot as LobbySnapshot)
+    if (waiter) waiter(snapshot)
   })
   async function nextWhere(pred: (s: LobbySnapshot) => boolean): Promise<LobbySnapshot> {
     for (;;) {
@@ -182,10 +185,17 @@ async function roomWithFour() {
 }
 
 function collectAll(room: ClientRoom) {
-  const snaps: { type: string; payload: Record<string, unknown> }[] = []
+  // Wire note (cycle 2.3): every message arrives as { seq, time, payload } —
+  // the collector unwraps and records the envelope fields alongside the payload.
+  const snaps: { type: string; seq: number; time: number; payload: Record<string, unknown> }[] = []
   const wake: (() => void)[] = []
-  const off = room.onMessage('*', (messageType, payload) => {
-    snaps.push({ type: String(messageType), payload: payload as Record<string, unknown> })
+  const off = room.onMessage('*', (messageType, envelope) => {
+    const { seq, time, payload } = envelope as {
+      seq: number
+      time: number
+      payload: Record<string, unknown>
+    }
+    snaps.push({ type: String(messageType), seq, time, payload })
     for (const w of wake.splice(0)) w()
   })
   return {
@@ -227,7 +237,7 @@ describe('sim:role_deal (server)', () => {
     const roles: string[] = []
     for (const collector of collectors) {
       const dealt = await collector.waitFor('role:dealt')
-      expect(Object.keys(dealt.payload).sort()).toEqual(['role', 'type'])
+      expect(Object.keys(dealt.payload).sort()).toEqual(['role'])
       roles.push(dealt.payload.role as string)
     }
     expect(roles.filter((r) => r === 'saboteur')).toHaveLength(1)
@@ -236,7 +246,7 @@ describe('sim:role_deal (server)', () => {
     for (const collector of collectors) {
       const started = await collector.waitFor('round:started')
       // Broadcast carries ids only — no role field (protocol rule 3).
-      expect(Object.keys(started.payload).sort()).toEqual(['playerIds', 'type'])
+      expect(Object.keys(started.payload).sort()).toEqual(['playerIds'])
       expect(started.payload.playerIds).toHaveLength(4)
       collector.stop()
     }
@@ -385,6 +395,69 @@ describe('sim:role_deal (server)', () => {
   })
 })
 
+// Spec REG-05..10, REG-18 (gate scenario server:protocol_registry, live half):
+// every server→client message rides the { seq, time, payload } envelope with a
+// per-connection monotonic seq — including across the buzzer's return to lobby.
+describe('server:protocol_registry', () => {
+  it('stamps every message with an envelope; payloads carry no type tag (REG-06, REG-08)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const collectors = [host, a, b, c].map((room) => collectAll(room))
+    const instance = TurnoverRoom.instances.at(-1)
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(1)
+
+    for (const collector of collectors) {
+      const started = await collector.waitFor('round:started')
+      // Colyseus 0.18 merges the wire name into the outgoing object as `type`
+      // at transport level; our envelope fields ride beside it and payloads
+      // themselves stay type-less.
+      expect(Object.keys(started).sort()).toEqual(['payload', 'seq', 'time', 'type'])
+      expect(started.seq).toBeGreaterThan(0)
+      expect(typeof started.time).toBe('number')
+      expect(Object.keys(started.payload).sort()).toEqual(['playerIds'])
+      const dealt = await collector.waitFor('role:dealt')
+      expect(Object.keys(dealt.payload).sort()).toEqual(['role'])
+      expect(dealt.seq).toBe(started.seq + 1)
+      collector.stop()
+    }
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
+
+  it('keeps seq continuity across the buzzer and a re-deal on the same connection (REG-18)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const collector = collectAll(host)
+    const instance = TurnoverRoom.instances.at(-1)
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(1)
+    // Consume the first deal so the collector holds nothing stale.
+    await collector.waitFor('round:started')
+    await collector.waitFor('role:dealt')
+    instance?.__driveTicks(5999) // rest of the shift: buzzer fires, room returns to lobby
+
+    const buzzer = await collector.waitFor('round:buzzer')
+    expect(Object.keys(buzzer.payload)).toEqual([])
+
+    // Counters live in the room-owned Router and survive sim disposal.
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(1)
+    const reStarted = await collector.waitFor('round:started')
+    expect(reStarted.seq).toBe(buzzer.seq + 1)
+    const reDealt = await collector.waitFor('role:dealt')
+    expect(reDealt.seq).toBe(reStarted.seq + 1)
+    collector.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
+})
+
 // Spec CHURN-01..03: roster broadcasts on leave, implicit host migration,
 // mid-round idle slots to the buzzer.
 describe('server:lobby_churn', () => {
@@ -450,7 +523,7 @@ describe('server:lobby_churn', () => {
       expect(started.payload.playerIds).toHaveLength(4)
       await collector.waitFor('round:buzzer')
       const dealt = await collector.waitFor('role:dealt')
-      expect(Object.keys(dealt.payload).sort()).toEqual(['role', 'type'])
+      expect(Object.keys(dealt.payload).sort()).toEqual(['role'])
       if (dealt.payload.role === 'saboteur') saboteurs++
     }
     expect(saboteurs).toBe(1)
