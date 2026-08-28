@@ -64,7 +64,7 @@ T3 → T4 → T5 → T6
 
 ## Task Breakdown
 
-### T1: Shared protocol registry + SimEvent relocation
+### T1: Shared protocol registry + SimEvent relocation ✅ Done
 
 **What**: Create `PROTOCOL_REGISTRY` (five rows: payload type token + recipient policy + `fromSim` projections for the three sim events), move the `SimEvent` union to `packages/shared/src/protocol/simEvents.ts` (sim re-exports), strip in-payload `type` literals from `RoundStarted`/`RoleDealt`/`RoundBuzzer`/`IntentError`, delete `envelope.ts`, `BroadcastGameEvent`/`PrivateGameEvent`, and update `messages.test.ts` to the type-less payload shapes. Add the registry unit walk test (five expected keys, valid policies, room-originated rows have `fromSim: undefined`).
 **Where**: `packages/shared/src/protocol/registry.ts` (new; edits in `messages.ts`, `protocol/index.ts`, `simEvents.ts`, `packages/sim/src/events.ts`, `messages.test.ts`)

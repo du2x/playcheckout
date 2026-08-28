@@ -181,10 +181,10 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| REG-01 | P1: One declaration | - | Pending |
-| REG-02 | P1: One declaration | - | Pending |
-| REG-03 | P1: One declaration | - | Pending |
-| REG-04 | P1: One declaration | - | Pending |
+| REG-01 | P1: One declaration | T1 | Implemented |
+| REG-02 | P1: One declaration | T1 | Implemented |
+| REG-03 | P1: One declaration | T1 | Implemented |
+| REG-04 | P1: One declaration | T1 | Implemented |
 | REG-05 | P1: Router + envelope | - | Pending |
 | REG-06 | P1: Router + envelope | - | Pending |
 | REG-07 | P1: Router + envelope | - | Pending |

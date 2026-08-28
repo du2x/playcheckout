@@ -1,3 +1,4 @@
-export * from './envelope'
 export * from './messages'
+export * from './registry'
+export * from './simEvents'
 export * from './telemetry'
