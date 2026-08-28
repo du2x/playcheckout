@@ -1,6 +1,6 @@
 import { type LobbySnapshot, type Role, TUNING } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
-import { clockRemainingMs, initialViewState, reduce } from './state'
+import { clockRemainingMs, initialViewState, reduce, roundPlayers } from './state'
 
 function snapshot(overrides: Partial<LobbySnapshot> = {}): LobbySnapshot {
   return {
@@ -133,5 +133,17 @@ describe('first-light view reducer', () => {
     expect(reduce(joinedLobby(), { type: 'connection-lost' }).view).toBe('lost')
     expect(reduce(inRound(), { type: 'connection-lost' }).view).toBe('lost')
     expect(reduce(initialViewState(), { type: 'connection-lost' }).view).toBe('join')
+  })
+
+  it('labels round players by roster name, falling back to the raw id (LIGHT-12)', () => {
+    expect(roundPlayers(['p1', 'p2'], snapshot())).toEqual([
+      { id: 'p1', name: 'ada' },
+      { id: 'p2', name: 'bruno' },
+    ])
+    expect(roundPlayers(['p1', 'ghost-id'], snapshot())).toEqual([
+      { id: 'p1', name: 'ada' },
+      { id: 'ghost-id', name: 'ghost-id' },
+    ])
+    expect(roundPlayers(['p1'], null)).toEqual([{ id: 'p1', name: 'p1' }])
   })
 })

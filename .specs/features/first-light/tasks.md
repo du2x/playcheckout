@@ -180,7 +180,7 @@ T6 → T7
 
 ---
 
-### T5: Round view — Phaser rectangles, round HUD, own role card
+### T5: Round view — Phaser rectangles, round HUD, own role card — ✅ done (scene/HUD shipped with T3's slice; T5 added round.spec.ts + the LIGHT-12 unit test)
 
 **What**: Add `RoundScene` (one labeled rectangle per playerId from the last snapshot, id fallback); render round HUD (own role card from private `role:dealt`, countdown from `roundStartedAt` deadline, clamped at 00:00); start/sleep the scene on round entry/exit; Playwright spec `round.spec.ts` for the round story.
 **Where**: `apps/client/src/scenes/RoundScene.ts` (new), `apps/client/src/ui/roundHud.ts` (new), `apps/client/src/main.ts` (modify), `apps/client/harness/round.spec.ts` (new)

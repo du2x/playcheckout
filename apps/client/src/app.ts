@@ -1,6 +1,6 @@
 import type Phaser from 'phaser'
 import { Connection, type ServerMessage } from './net/connection'
-import { initialViewState, reduce, type ViewAction, type ViewState } from './state'
+import { initialViewState, reduce, roundPlayers, type ViewAction, type ViewState } from './state'
 import { el } from './ui/dom'
 import { renderJoin } from './ui/joinView'
 import { renderLobby } from './ui/lobbyView'
@@ -98,11 +98,7 @@ export class App {
         break
       case 'round:started': {
         this.dispatch({ type: 'round-started', atMs: Date.now() })
-        const names = new Map(this.state.snapshot?.roster.map((e) => [e.id, e.name]) ?? [])
-        const players = message.message.playerIds.map((id) => ({
-          id,
-          name: names.get(id) ?? id, // LIGHT-12 fallback: raw id when unnamed
-        }))
+        const players = roundPlayers(message.message.playerIds, this.state.snapshot)
         this.game.scene.stop('Boot')
         this.game.scene.start('Round', { players })
         break

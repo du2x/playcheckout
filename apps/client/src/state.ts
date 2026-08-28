@@ -40,6 +40,18 @@ export function clockRemainingMs(state: ViewState, nowMs: number): number {
   return Math.max(0, state.roundStartedAt + TUNING.SHIFT_SECONDS * 1000 - nowMs)
 }
 
+/**
+ * Round-view players: roster names keyed by round:started ids; a playerId
+ * without a roster name falls back to the raw id (LIGHT-12).
+ */
+export function roundPlayers(
+  playerIds: readonly string[],
+  snapshot: LobbySnapshot | null,
+): { id: string; name: string }[] {
+  const names = new Map(snapshot?.roster.map((entry) => [entry.id, entry.name]) ?? [])
+  return playerIds.map((id) => ({ id, name: names.get(id) ?? id }))
+}
+
 export function initialViewState(): ViewState {
   return {
     view: 'join',
