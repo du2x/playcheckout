@@ -5,6 +5,7 @@ import fastifyStatic from '@fastify/static'
 import { createNodeMatchmakingMiddleware, matchMaker, Server, WebSocketTransport } from 'colyseus'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { PlaceholderRoom } from './rooms/PlaceholderRoom'
+import { TurnoverRoom } from './rooms/TurnoverRoom'
 
 const CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
 
@@ -28,8 +29,15 @@ export async function startServer(
 
   // Matchmake routes ride the Fastify request chain; when the middleware answers
   // (POST /matchmake/*), hijack the reply so Fastify does not double-respond.
+  // Room codes are case-insensitive on the wire: normalize the joinById path
+  // segment before matchmaking looks the room up (spec LOBBY-01 edge).
   const matchmaking = createNodeMatchmakingMiddleware()
   app.addHook('onRequest', (req, reply, done) => {
+    req.raw.url = req.raw.url?.replace(
+      /^(\/matchmake\/joinById\/)([a-z]{4})(\/.*)?$/,
+      (_, prefix: string, code: string, rest: string) =>
+        `${prefix}${code.toUpperCase()}${rest ?? ''}`,
+    )
     matchmaking(req.raw, reply.raw, () => {
       if (reply.raw.headersSent) {
         reply.hijack()
@@ -45,6 +53,7 @@ export async function startServer(
 
   const gameServer = new Server({ transport })
   gameServer.define('placeholder', PlaceholderRoom)
+  gameServer.define('turnover', TurnoverRoom)
   await matchMaker.accept()
 
   await app.listen({ port, host: '0.0.0.0' })

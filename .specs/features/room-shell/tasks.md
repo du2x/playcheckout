@@ -151,11 +151,11 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] Room registers as `'turnover'`; `roomId` matches `/^[A-HJ-KM-NP-Z]{4}$/` (24-letter alphabet, no O/I); join by generated code succeeds via real Colyseus client
-- [ ] `LobbySnapshot` (own id, name, isHost, roster ids+names) received by each joiner; roster updates broadcast on change
-- [ ] All rejection paths return specific errors: unknown code, 7th player (`TUNING.PLAYERS_MAX`), mid-round join, empty/16+-char/duplicate name
-- [ ] Lowercase code normalized; joins serialized (same-name race accepts exactly one)
-- [ ] Full gate passes; test count: 10+ cases
+- [x] Room registers as `'turnover'`; `roomId` matches `/^[A-HJ-NP-Z]{4}$/` (24-letter alphabet, no O/I); join by generated code succeeds via real Colyseus client
+- [x] `LobbySnapshot` (own id, name, isHost, roster ids+names) received by each joiner; roster updates broadcast on change
+- [x] All rejection paths return specific errors: unknown code, 7th player (`TUNING.PLAYERS_MAX`), empty/16+-char/duplicate name (mid-round join lands with the round phase in T5)
+- [x] Lowercase code normalized (matchmake hook); joins serialized (same-name race accepts exactly one)
+- [x] Full gate passes; test count: 10+ cases (10 added, 45 total)
 
 **Tests**: integration
 **Gate**: full

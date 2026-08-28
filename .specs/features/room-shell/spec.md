@@ -145,11 +145,11 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| LOBBY-01 | P1: Join by code | Design | Pending |
-| LOBBY-02 | P1: Join by code | Design | Pending |
-| LOBBY-03 | P1: Join by code | Design | Pending |
+| LOBBY-01 | P1: Join by code | T4 | Verified |
+| LOBBY-02 | P1: Join by code | T4 | Verified |
+| LOBBY-03 | P1: Join by code | T4 | Verified |
 | LOBBY-04 | P1: Join by code | Design | Pending |
-| LOBBY-05 | P1: Join by code | Design | Pending |
+| LOBBY-05 | P1: Join by code | T4 | Verified |
 | DEAL-01 | P1: Role deal | T1 | Verified |
 | DEAL-02 | P1: Role deal | Design | Pending |
 | DEAL-03 | P1: Role deal | Design | Pending |
@@ -166,7 +166,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 **Gate mapping:** LOBBY-01..05, CHURN-01..02 → `server:lobby_join` · DEAL-01..06, CLK-01..04, CHURN-03 → `sim:role_deal` · CHURN-03 server-side idle-slot behavior → `server:lobby_join`.
 
-**Coverage:** 18 total, 7 mapped to tasks, 11 unmapped (Tasks phase in progress).
+**Coverage:** 18 total, 12 mapped to tasks, 6 unmapped (Tasks phase in progress).
 
 ---
 
