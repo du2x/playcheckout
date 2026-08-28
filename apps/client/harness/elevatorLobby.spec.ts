@@ -48,15 +48,15 @@ test.describe('client:elevator_lobby', () => {
     // AD-012: the call is acknowledged visually — the panel pulses, then clears.
     await host.waitForFunction(
       () =>
-        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style
-          .backgroundColor === 'rgb(58, 90, 58)',
+        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style.backgroundColor ===
+        'rgb(58, 90, 58)',
       undefined,
       { timeout: 3000 },
     )
     await host.waitForFunction(
       () =>
-        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style
-          .backgroundColor === '',
+        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style.backgroundColor ===
+        '',
       undefined,
       { timeout: 3000 },
     )

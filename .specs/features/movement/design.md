@@ -105,16 +105,18 @@ graph TD
   - `stopMove(playerId)` — no-op if not moving
   - `callElevator(playerId, target: FloorId): 'dispatched' | 'ignored' | 'rejected'` —
     `'rejected'` when in lobby phase (the room maps this to the `elevator-locked`
-    intent error) or the caller is in a car; `'ignored'` is the decoy path
+    intent error) or the caller is in a car; `'ignored'` is the duplicate-call
+    path (AD-012: same pickup floor arriving + same destination, or queued)
     (MOVE-12); `'dispatched'` covers immediate dispatch AND queuing. The
     `elevator:called` flash announces on the **next tick** after acceptance,
-    naming the serving car (decoys name the targeting car); queued calls flash
+    naming the serving car (duplicates name that car); queued calls flash
     at dispatch time, not at call
   - `unlock() / lock()` — room start / buzzer transitions; **no position changes**
     (MOVE-07, MOVE-08: positions persist; lobby phase re-confines *future*
     movement to the `lobby` floor). `lock()` additionally **clears the call
-    FIFO**: elevators idle in lobby phase, so a queued dispatch would contradict
-    the rejection of fresh lobby-phase calls. In-flight trips still complete
+    FIFO**~~ (AD-011 superseded): the queue survives the buzzer and is served
+    by the next car to free — elevators run in both phases. In-flight trips
+    still complete
   - `tick(): readonly MovementEvent[]` — one 0.05 s step; integrates moving players, advances cars, emits events; idle ticks emit `[]`
   - `snapshot(): MovementSnapshot` — current public movement state (MOVE-18)
   - `positionOf(playerId)` — room reads for later cycles (AD-005 seam)
@@ -124,7 +126,7 @@ graph TD
   (carries the authoritative rest x so the moving client reconciles prediction
   overshoot — post-Execute fix; amends MOVE-03's letter: an intent-ending tick
   emits even without a position change, truly idle ticks still emit nothing);
-  `elevator:called` for immediate dispatches and decoys (announced
+  `elevator:called` for immediate dispatches and duplicates (announced
   the tick after acceptance; queued calls announce at dispatch); `elevator:moved`
   whenever a car's floor changes.
 
@@ -132,7 +134,7 @@ graph TD
 
 - **Levels**: `FLOOR_IDS` = lobby, floor1..3 (4 levels). Landings: car 1 at x=0, car 2 at x=`HALL_LENGTH_TILES` — same on every level.
 - **Car state machine**: `idle(floor)` → `arriving(ticksLeft = ELEVATOR_ARRIVE_SECONDS×TICK_HZ = 60, pickup, target)` → board (instant, same tick) → `riding(ticksLeft = |pickup−target| × RIDE_SECONDS_PER_FLOOR×TICK_HZ = 40/floor, target)` → `idle(target)`. Arrival is a fixed 60 ticks from call regardless of distance — prd FR-5's abstraction, locked by MOVE-11.
-- **Boarding** (MOVE-13): on the arrival tick, candidates = connected players whose floor == pickup and |x − car landing x| ≤ `ELEVATOR_LANDING_TILES` (new tuning, AD-007: 1 tile); sorted by (distance to car x, then playerId); first `ELEVATOR_CAPACITY` (2) board, rest wait for the next arrival. Boarded players: floor tracks the car (player:moved per floor hop), x pinned to the car's landing x, move intents ignored. Riders keep riding to `target` even if the caller walked away (the trip completes — decoy rides exist).
+- **Boarding** (MOVE-13): on the arrival tick, candidates = connected players whose floor == pickup and |x − car landing x| ≤ `ELEVATOR_LANDING_TILES` (new tuning, AD-007: 1 tile); sorted by (distance to car x, then playerId); first `ELEVATOR_CAPACITY` (2) board, rest wait for the next arrival. Boarded players: floor tracks the car (player:moved per floor hop), x pinned to the car's landing x, move intents ignored. Riders keep riding to `target` even if the caller walked away (the trip completes — decoy rides exist). Boarding drops the boarding player's queued calls (AD-012).
 - **Dispatch** (MOVE-10): only **idle** cars are dispatched — with the fixed 3 s
   arrival, all idle cars tie; **AD-012** replaces the flat tie rule with
   landing-distance preference (the car whose landing the caller can actually
@@ -144,7 +146,7 @@ graph TD
   If no car is idle, the call waits in a sim-level FIFO and is served **in FIFO
   order** by the next car to go idle. A car never holds two destinations
   (MOVE-15). `elevator:called` announces on the next tick after acceptance —
-  for immediate dispatches and decoys; queued calls announce when dispatched.
+  for immediate dispatches and duplicates; queued calls announce when dispatched.
 - **In lobby phase**: ~~calls rejected with an intent error, no event, no flash (edge case).~~ **Superseded by AD-011**: the FIFO is no longer cleared at `lock()` and calls dispatch in both phases; see `.specs/features/elevator-lobby/`.
 
 ### Registry extensions — `packages/shared/src/protocol/`
@@ -261,7 +263,7 @@ interface CarState {
 | --- | --- | --- | --- |
 | LIGHT-09 harness contract (exactly 4 `Rectangle`s, labels == 4 names) constrains the scene | `apps/client/harness/round.spec.ts:34-74` | Extra scene children break gate 3 | Design locks scene contents: player Rectangles + car Ellipses only; panel/hall in DOM. Verified by running the suite in T6. |
 | Local prediction vs 50 ms server reconcile can jitter the own rectangle | `WorldScene` | Feel quality | Adopt server x on each own `player:moved` (20 Hz) and continue integrating; prediction polish is explicitly out of scope (spec) |
-| Fixed 3 s arrival makes both-idle dispatch always tie → car 1 | `movement.ts` | Car 2 underused | Documented consequence of prd's locked fixed-arrival abstraction; dispatch still prefers car 2 when car 1 is busy. Recorded as a design note, not a tuning change |
+| Fixed 3 s arrival makes both-idle dispatch always tie → car 1 | `movement.ts` | Car 2 underused | ~~Documented consequence…~~ **Superseded by AD-012**: landing-distance preference — the car whose landing the caller can board is dispatched, so both cars get used |
 | 20 Hz `player:moved` at 6 players through the registry/Router | server hot path | CPU trivial (≤6 sends/tick), but seq counters grow fast | Counter is a Map number increment; envelopes are tiny. Rejoin-resync already exists (2.3) — the path 2.4 needs is already load-bearing |
 | Instant boarding can strand a player one tile short | `movement.ts` | Gameplay fairness | Landing range 1 tile + deterministic ordering documented; playtests (Gate 4) may revisit — via AD, not silently |
 | `client:round_start`'s clock still asserts 05:00 display (AD-004 divergence) | harness | Pre-existing accepted divergence, unchanged | None needed |
@@ -274,7 +276,7 @@ interface CarState {
 | --- | --- | --- |
 | Position representation | Integer millitiles in the sim; tiles on the wire | Bit-for-bit determinism (spec: bit-for-bit replay); no float accumulation drift |
 | Call semantics | `elevator:call {target}` = pickup at caller's floor + ride to target | The only reading under which FR-5's "ride 2 s per floor traveled" and MOVE-11's "arrive at the calling floor" compose into actual traversal |
-| Boarding | Instant on the arrival tick; candidates = on-floor within `ELEVATOR_LANDING_TILES`, sorted (distance, playerId), capacity 2; trip always completes (empty rides possible) | MOVE-13's letter; deterministic without a new timer; decoy trips become physical |
+| Boarding | Instant on the arrival tick; candidates = on-floor within `ELEVATOR_LANDING_TILES`, sorted (distance, playerId), capacity 2; trip always completes (empty rides possible); boarding drops the boarding player's queued calls (AD-012) | MOVE-13's letter; deterministic without a new timer; decoy trips become physical |
 | High-frequency payloads vs view state | Positions bypass the reducer; scene-local display state; reducer no-ops movement actions | 20 Hz DOM churn unacceptable; spec's own prediction/lerp model is scene state |
 | Facing broadcast | `player:moved` emits on x, floor, **or** facing change | Other clients must see flips; idle ticks still emit nothing (MOVE-03) |
 | AD-005 seam | `MovementSim.positionOf(playerId)` exposed for 2.5; RoundSim untouched | Room consumes positions in the work-channel cycle without re-plumbing |
