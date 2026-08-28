@@ -816,17 +816,29 @@ describe('server:work_channels', () => {
     return { instance, staff, saboteur }
   }
 
-  /** Ride a player to floor1 and walk them to x tiles (guest-floor segment land). */
-  async function rideToFloor1X(instance: TurnoverRoom, player: ClientRoom, xTiles: number) {
-    player.send('move:start', { type: 'move:start', dir: 'left' })
+  /**
+   * Ride a player to floor1 and walk them to x tiles. AD-012 dispatch
+   * preference: the first rider gets car 1 (west landing x=0); once car 1
+   * parks on floor1, the next call from the lobby is served by car 2 (east
+   * landing x=30) — so the second rider walks right and lands further left.
+   */
+  async function rideToFloor1X(
+    instance: TurnoverRoom,
+    player: ClientRoom,
+    xTiles: number,
+    first = true,
+  ) {
+    const toLanding = first ? 'left' : 'right'
+    const awayFromLanding = first ? 'right' : 'left'
+    player.send('move:start', { type: 'move:start', dir: toLanding })
     await sleep(50)
-    instance.__driveTicks(60) // 15 tiles to the west landing + margin
+    instance.__driveTicks(60) // 15 tiles to the landing + margin
     player.send('move:stop', { type: 'move:stop' })
     await sleep(50)
     player.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
     await sleep(50)
     instance.__driveTicks(100) // flash + 60-tick arrival + 40-tick ride
-    player.send('move:start', { type: 'move:start', dir: 'right' })
+    player.send('move:start', { type: 'move:start', dir: awayFromLanding })
     await sleep(50)
     instance.__driveTicks(Math.round((xTiles * 10) / 3)) // 300 millitiles/tile
     player.send('move:stop', { type: 'move:stop' })
@@ -892,7 +904,7 @@ describe('server:work_channels', () => {
       const outsiderFeed = record(outsider)
 
       await rideToFloor1X(instance, worker, 3) // room 1
-      await rideToFloor1X(instance, outsider, 9.5) // x=9500 → room 3 — same floor, other segment
+      await rideToFloor1X(instance, outsider, 2.5, false) // car 2 east: walk left 2.4 tiles → x≈27.6 → room 8
 
       worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
       const workerCollector = collectors[clients_index([host, a, b, c], worker)]
@@ -907,7 +919,7 @@ describe('server:work_channels', () => {
       expect(observed?.payload).toEqual({
         playerId: outsider.sessionId,
         floor: 'floor1',
-        room: 3,
+        room: 8,
         state: 'fresh',
       })
       // …but none of the worker's channel facts or room transition.
@@ -985,8 +997,8 @@ describe('server:work_channels', () => {
       await driveUntil(workerCollector, 'work:ended', instance)
       await workerCollector.waitFor('room:prepped')
 
-      // Saboteur walks into room 1 and un-preps it: 3 s channel, trashed.
-      await rideToFloor1X(instance, saboteur, 3)
+      // Saboteur rides car 2 (east landing) and walks left to room 1 (x≈3).
+      await rideToFloor1X(instance, saboteur, 27.6, false) // car 2 east: walk left to x≈2.4 → room 1
       saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
       const started = await driveUntil(sabCollector, 'work:started', instance)
       expect(started.payload).toEqual({
@@ -1005,7 +1017,7 @@ describe('server:work_channels', () => {
       // Fake prep on a fresh room: identical confirmation, no transition ever.
       saboteur.send('move:start', { type: 'move:start', dir: 'right' })
       await sleep(50)
-      instance.__driveTicks(9) // x = 5700 → room 2 (fresh)
+      instance.__driveTicks(9) // x ≈ 5700 → room 2 (fresh)
       saboteur.send('move:stop', { type: 'move:stop' })
       await sleep(50)
       instance.__driveTicks(1)

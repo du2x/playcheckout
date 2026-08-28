@@ -230,6 +230,33 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-012
+- **Decision**: Elevator dispatch responsiveness fix (user playtest: "E doesn't
+  respond, W intermittent, got stuck riding W"). Three changes in
+  `MovementSim.callElevator`/`board` + one client: (1) the duplicate-call
+  predicate compares pickup floor AND destination — a car *arriving* to pick up
+  at the caller's floor for the same destination (or the identical queued call)
+  is ignored with a flash; destination-only matches no longer swallow calls
+  from other floors. (2) Idle-car choice prefers the car whose LANDING is
+  closest to the caller's x (boarding happens at the car's own landing), tie →
+  car 1 — both cars now get used; a caller at the east landing summons car 2.
+  (3) Boarding a car drops that player's queued calls (no car is later
+  summoned to a floor the rider has left). (4) The client pulses the elevator
+  panel on `elevator:called` so every accepted call is visible (the wire flash
+  is data-only).
+- **Reason**: Playtest reports; the old tie→car-1 rule starved car 2, the
+  destination-only decoy check silently ate valid calls, and nothing visibly
+  acknowledged a call until a trip completed.
+- **Trade-off**: MOVE-12's decoy narrows to true duplicates (its letter — "a
+  call for the floor a car is already heading to" — is preserved: same pickup
+  floor); the wrong-way carry remains possible when a rider changes intention
+  mid-wait (riders ride the car's target; deeper changes touch the locked
+  boarding model — revisit via playtests).
+- **Scope**: `packages/sim/src/movement.ts`, `apps/client/src/scenes/WorldScene.ts`,
+  movement tests, future elevator-touching cycles.
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: elevator-lobby (`.specs/features/elevator-lobby/`) — AD-011 fix ✅ COMPLETE

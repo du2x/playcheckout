@@ -333,6 +333,80 @@ describe('sim:elevator', () => {
     expect(sim.positionOf('p2')?.floor).toBe('lobby') // still waiting
   })
 
+  it('prefers the idle car whose landing the caller stands at (AD-012: east calls use car 2)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    // p1 rides car 1 (west landing) to floor1; car 1 parks there.
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p1')
+    sim.unlock()
+    expect(ride(sim, 'p1', 'floor1')).toBe('dispatched')
+    sim.tick()
+    for (let i = 0; i < 99; i++) sim.tick()
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    // p2 waits at the EAST landing — car 2's landing is 0 tiles away, car 1's
+    // is unreachable (floor1): the call must dispatch car 2, not the tie car 1.
+    sim.startMove('p2', 'right')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p2')
+    expect(sim.callElevator('p2', 'floor2')).toBe('dispatched')
+    expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 2 }])
+  })
+
+  it('dispatches for a caller at a landing even when another car targets the same destination (AD-012)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    // p1 walks to the west landing and rides to floor1 (car 1).
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p1')
+    sim.unlock()
+    expect(ride(sim, 'p1', 'floor1')).toBe('dispatched')
+    sim.tick()
+    // p2 walks to the EAST landing and rides to floor2 (car 2, 2-floor ride).
+    sim.startMove('p2', 'right')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p2')
+    expect(ride(sim, 'p2', 'floor2')).toBe('dispatched')
+    sim.tick()
+    for (let i = 0; i < 189; i++) sim.tick() // both rides complete (p2 lands at 190)
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    expect(sim.positionOf('p2')?.floor).toBe('floor2')
+    // p2 calls down to floor1 from the east landing: car 2's landing is right
+    // there — car 2 must serve, not the farther idle car 1 (old code: car 1,
+    // whose west-landing arrival on floor2 picked nobody up).
+    expect(sim.callElevator('p2', 'floor1')).toBe('dispatched')
+    expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'floor2', car: 2 }])
+  })
+
+  it('drops a boarding player queued call (AD-012: no car to an abandoned floor)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.unlock()
+    expect(ride(sim, 'p1', 'floor3')).toBe('dispatched') // car 1 busy 60+120
+    expect(ride(sim, 'p1', 'floor1')).toBe('dispatched') // car 2 busy 60+40
+    expect(ride(sim, 'p1', 'lobby')).toBe('dispatched') // queued (both busy)
+    // p1 walks to the EAST landing (car 2's pickup landing) and boards at
+    // tick 60; the queued lobby-pickup call must be dropped with them.
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p1')
+    for (let i = 0; i < 10; i++) sim.tick() // tick 60: car 2 arrival + boarding
+    expect(sim.positionOf('p1')?.floor).toBe('lobby') // boarded, floor tracks car
+    for (let i = 0; i < 40; i++) sim.tick() // ride to floor1
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    // No car ever serves the dropped call: after car 1's long trip ends, both
+    // cars idle without dispatching to the lobby.
+    for (let i = 0; i < 200; i++) sim.tick()
+    expect(sim.snapshot().cars).toEqual([
+      { car: 1, floor: 'floor3' },
+      { car: 2, floor: 'floor1' },
+    ])
+  })
+
   it('ignores a call for a floor a car already targets but still flashes (MOVE-12)', () => {
     const sim = new MovementSim()
     sim.join('p1')

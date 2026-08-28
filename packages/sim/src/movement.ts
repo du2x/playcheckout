@@ -133,30 +133,49 @@ export class MovementSim {
    * Call a car to the caller's floor and ride to `target` (FR-5). Returns why
    * the call ended as it did:
    * - 'dispatched': a car was dispatched (60-tick arrival begins now)
-   * - 'ignored': decoy — some car already targets `target`; the panel still
-   *   flashes (`elevator:called` is emitted either way, MOVE-12)
+   * - 'ignored': duplicate call (AD-012) — a car is already arriving to pick
+   *   up at the caller's floor for the same destination, or the identical call
+   *   is queued; the panel still flashes (`elevator:called` either way, MOVE-12)
    * - 'rejected': caller in a car (AD-011: elevators run in BOTH phases)
    */
   callElevator(playerId: string, target: FloorId): 'dispatched' | 'ignored' | 'rejected' {
     const caller = this.players.get(playerId)
     if (caller === undefined || caller.inCar !== null) return 'rejected'
-    const targeting = ([1, 2] as const).find((id) => this.cars[id].target === target)
-    if (targeting !== undefined) {
-      // Decoy: no dispatch, but the panel still flashes (FR-5 / MOVE-12).
-      this.announce(caller.floor, targeting)
+    const pickup = caller.floor
+    // Duplicate, not decoy-by-destination (AD-012): only a call that adds
+    // nothing — same pickup floor AND same destination, already arriving or
+    // queued — is ignored; the panel still flashes (FR-5 / MOVE-12).
+    const duplicating = ([1, 2] as const).find(
+      (id) =>
+        this.cars[id].phase === 'arriving' &&
+        this.cars[id].pickup === pickup &&
+        this.cars[id].target === target,
+    )
+    if (duplicating !== undefined) {
+      this.announce(pickup, duplicating)
       return 'ignored'
     }
-    const pickup = caller.floor
+    if (this.callQueue.some((q) => q.pickup === pickup && q.target === target)) {
+      this.announce(pickup, 1)
+      return 'ignored'
+    }
     const idle = ([1, 2] as const).filter((id) => this.cars[id].phase === 'idle')
     if (idle.length === 0) {
       // Both cars busy: the call waits in the FIFO and is served by the next
       // car to go idle. Its panel flash happens at dispatch time, not now —
-      // only immediate dispatches and decoys flash on the tick after the call.
+      // only immediate dispatches and duplicates flash on the tick after the call.
       this.callQueue.push({ playerId, pickup, target })
       return 'dispatched'
     }
-    // Fixed 3 s arrival makes idle cars tie → car 1 (west) by rule (design note).
-    const carId = idle[0]
+    // AD-012: among idle cars (all tie at the fixed 3 s arrival), prefer the
+    // car whose landing the caller can actually board — the one closest to the
+    // caller's x — so BOTH cars get used; tie → car 1 (west) by rule.
+    const callerX = caller.x
+    const carId = [...idle].sort(
+      (a, b) =>
+        Math.abs(callerX - CAR_LANDING_MILLI[a]) - Math.abs(callerX - CAR_LANDING_MILLI[b]) ||
+        a - b,
+    )[0]
     if (carId === undefined) return 'ignored'
     this.dispatch(carId, pickup, target)
     this.announce(pickup, carId)
@@ -345,6 +364,10 @@ export class MovementSim {
       if (car.riders.length >= TUNING.ELEVATOR_CAPACITY) break
       p.inCar = carId
       car.riders.push(pid)
+      // AD-012: boarding satisfies the rider's transport need — a queued call
+      // for a pickup floor they are leaving would later summon a car to a
+      // floor nobody stands on (the "stuck on a wrong-way ride" complaint).
+      this.callQueue = this.callQueue.filter((q) => q.playerId !== pid)
       if (p.x !== landing) {
         p.x = landing
         events.push(moved(pid, p))

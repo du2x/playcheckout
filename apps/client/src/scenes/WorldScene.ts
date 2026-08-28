@@ -182,6 +182,7 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'elevator-called':
         this.updatePanel()
+        this.flashPanel()
         break
       case 'player-left': {
         const display = this.players.get(action.playerId)
@@ -307,6 +308,19 @@ export class WorldScene extends Phaser.Scene {
     const e = panel.querySelector('#panel-east')
     if (w !== null) w.textContent = west
     if (e !== null) e.textContent = east
+  }
+
+  /**
+   * Visible call acknowledgment (AD-012): the flash is data-only on the wire,
+   * so the panel pulses here — a call always looks registered (FR-5).
+   */
+  private flashPanel(): void {
+    const panel = document.querySelector('#elevator-panel')
+    if (panel === null || !(panel instanceof HTMLElement)) return
+    panel.style.backgroundColor = '#3a5a3a'
+    window.setTimeout(() => {
+      panel.style.backgroundColor = ''
+    }, 700)
   }
 
   /** Progress bar is DOM: fill width from the own channel's elapsed time. */
