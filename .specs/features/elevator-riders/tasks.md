@@ -93,7 +93,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T2: Elevator event and payload types
+#### T2: Elevator event and payload types — ✅ Done
 
 **What**: Extend the shared wire types: `ElevatorPressed {playerId, floor}`, `ElevatorRiders {car, riders, queue}`, `MovementSnapshot.carOccupants?: {car, riders, queue}`, and `MovementEvent` union cases `elevator:pressed` and `elevator:riders`.
 **Where**: `packages/shared/src/protocol/messages.ts`
@@ -106,9 +106,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-protocol`
 
 **Done when**:
-- [ ] `ElevatorPressed`/`ElevatorRiders` payloads exported with correct keys; `MovementEvent` includes the two new cases and compiles
-- [ ] `MovementSnapshot` gains optional `carOccupants` with `queue: FloorId[]`
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint`
+- [x] `ElevatorPressed`/`ElevatorRiders` payloads exported with correct keys; `MovementEvent` includes the two new cases and compiles
+- [x] `MovementSnapshot` gains optional `carOccupants` with `queue: FloorId[]`
+- [x] Gate check passes: `pnpm typecheck && pnpm lint`
 
 **Tests**: none
 **Gate**: build

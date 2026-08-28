@@ -96,6 +96,27 @@ export interface ElevatorMoved {
   readonly floor: FloorId
 }
 
+/**
+ * server → the riders of the named car ONLY (AD-013 riders policy). A rider
+ * pressed a floor inside the car; attribution testimony for co-riders.
+ * Panels never carry this — the public target would make tailing trivial.
+ */
+export interface ElevatorPressed {
+  readonly playerId: string
+  readonly floor: FloorId
+}
+
+/**
+ * server → the riders of the named car ONLY (AD-013). The car's full current
+ * occupant list and its FIFO press queue — the real-elevator "lit buttons are
+ * visible from inside" model (late boarders and rejoiners included).
+ */
+export interface ElevatorRiders {
+  readonly car: CarId
+  readonly riders: readonly string[]
+  readonly queue: readonly FloorId[]
+}
+
 /** server → all players. A player disconnected; remove their rectangle. */
 export interface PlayerLeft {
   readonly playerId: string
@@ -123,10 +144,20 @@ export interface MovementSnapshotCar {
   readonly floor: FloorId
 }
 
-/** server → one player. Public movement state on join and at the buzzer (MOVE-18). */
+/**
+ * server → one player. Public movement state on join and at the buzzer (MOVE-18).
+ * `carOccupants` is present ONLY in a rider's personal snapshot (AD-013):
+ * viewers standing on a floor get the byte-identical public shape — occupancy
+ * and queue knowledge belongs exclusively to the people inside the car.
+ */
 export interface MovementSnapshot {
   readonly players: readonly MovementSnapshotPlayer[]
   readonly cars: readonly MovementSnapshotCar[]
+  readonly carOccupants?: {
+    readonly car: CarId
+    readonly riders: readonly string[]
+    readonly queue: readonly FloorId[]
+  }
 }
 
 // ---------------------------------------------------------------------------
