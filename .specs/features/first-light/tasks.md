@@ -122,7 +122,7 @@ T6 → T7
 
 ---
 
-### T3: Join vertical slice — connection wrapper, join view, harness `client:lobby_join`
+### T3: Join vertical slice — connection wrapper, join view, harness `client:lobby_join` — ✅ done (includes SPEC_DEVIATION: room-creation UI, recorded in spec Assumptions)
 
 **What**: Add `@colyseus/sdk` dep; implement the connection wrapper (join by code+name, typed message dispatch, start intent, disconnect callback, dev-only `__TURNOVER__` record/setLocal); render the join screen; wire `main.ts` to reducer+overlay; Playwright spec `lobby.spec.ts` covering the join story.
 **Where**: `apps/client/package.json`, `apps/client/vite.config.ts` (dev proxy: `/matchmake` + ws upgrade → :2567 so `pnpm boot` works for the human check), `apps/client/src/net/connection.ts` (new), `apps/client/src/ui/joinView.ts` (new), `apps/client/src/ui/dom.ts` (new), `apps/client/src/debug.ts` (modify), `apps/client/src/main.ts` (modify), `apps/client/harness/lobby.spec.ts` (new)

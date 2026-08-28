@@ -44,6 +44,7 @@ Every ambiguity is resolved or recorded here — nothing is left silently unclea
 | Player id → name mapping in round view | Round view labels rectangles using the roster from the last `lobby:snapshot`, keyed by `round:started` playerIds | Client already holds the roster; ids alone are not human-readable | y (default) |
 | Disconnect handling | Static "connection lost" notice; no retry, no reconnection | FR-25 reconnection machinery is the round-end cycle; first-light is a visibility slice | y (default) |
 | Room code input | Client uppercases the entered code before joining | Server already normalizes; doing it client-side keeps join failures message-accurate | y (default) |
+| Room creation UI (spec deviation, added during T3) | The join screen also offers "Create room" for the first player | The approved spec covered joining only — join-by-code alone leaves the human flow unreachable (nobody could ever create a room). Uses the existing server matchmaking (`client.create`), zero server/protocol changes | y (agent, flagged for review) |
 
 **Open questions:** none — all resolved or logged above.
 

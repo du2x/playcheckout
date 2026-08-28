@@ -10,6 +10,7 @@
     "build:harness": "vite build --mode harness"
   },
   "dependencies": {
+    "@colyseus/sdk": "^0.18.2",
     "@turnover/shared": "workspace:*",
     "phaser": "^4.2.1"
   },
