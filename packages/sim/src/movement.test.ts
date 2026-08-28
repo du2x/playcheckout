@@ -423,16 +423,21 @@ describe('sim:elevator', () => {
     for (let i = 0; i < 99; i++) sim.tick() // p1 exits at floor1 west landing
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
     expect(ride(sim, 'p1', 'floor2')).toBe('dispatched') // car 1: pickup floor1 → target floor2
-    sim.tick() // flash
-    for (let i = 0; i < 59; i++) sim.tick() // arrival + boarding at floor1
-    // p2 waits at the lobby EAST landing and calls floor2 — the destination
-    // matches in-flight car 1 but the pickup floor does not: the OLD
-    // destination-only decoy swallowed this call; it must dispatch car 2.
+    // p2 already stands at the lobby EAST landing (walked there during trip A)
+    // and calls floor2 while car 1 is still ARRIVING (pickup floor1, target
+    // floor2) — the destination matches in-flight car 1 but the pickup floor
+    // does not: the OLD destination-only decoy swallowed this call; it must
+    // dispatch car 2. The call lands at tick 101+51 = inside the 60-tick
+    // arriving window (ticks 101..160).
     sim.startMove('p2', 'right')
     for (let i = 0; i < 50; i++) sim.tick()
     sim.stopMove('p2')
     expect(sim.callElevator('p2', 'floor2')).toBe('dispatched')
     expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 2 }])
+    // Car 1 was mid-trip and completes it regardless: p1 still reaches floor2
+    // (trip B completes at tick 200: 100 dispatch + 60 arrive + 40 ride).
+    for (let i = 0; i < 60; i++) sim.tick()
+    expect(sim.positionOf('p1')?.floor).toBe('floor2')
   })
 
   it('ignores a same-floor duplicate call but still flashes (MOVE-12, narrowed by AD-012)', () => {

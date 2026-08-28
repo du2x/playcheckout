@@ -136,8 +136,11 @@ graph TD
 - **Dispatch** (MOVE-10): only **idle** cars are dispatched — with the fixed 3 s
   arrival, all idle cars tie; **AD-012** replaces the flat tie rule with
   landing-distance preference (the car whose landing the caller can actually
-  board — boarding happens at the car's own landing), tie → car 1 (west). A call whose **target** equals a car's current
-  pending target is ignored for dispatch (decoy — MOVE-12) but still flashes.
+  board — boarding happens at the car's own landing), tie → car 1 (west). A
+  **duplicate** call — AD-012: a car arriving to pick up at the caller's floor
+  for the same destination, or the identical queued call — is ignored for
+  dispatch (MOVE-12, narrowed) but still flashes; destination-only matches
+  dispatch normally.
   If no car is idle, the call waits in a sim-level FIFO and is served **in FIFO
   order** by the next car to go idle. A car never holds two destinations
   (MOVE-15). `elevator:called` announces on the next tick after acceptance —
@@ -243,9 +246,9 @@ interface CarState {
 | `move:start` for in-car player | Ignored (MOVE-09) | Rectangle moves only with the car |
 | `move:start` on non-lobby floor in lobby phase (post-buzzer) | Ignored (MOVE-08) | Rectangle stays |
 | Duplicate `move:start` / stray `move:stop` | No-ops (spec edges) | None |
-| `elevator:call` in lobby phase | Intent error via `router.toSelf('error', …)`; no flash | Banner shows reason |
-| Call queued (both cars busy) when the buzzer fires | `lock()` clears the FIFO — dropped silently, no dispatch, no flash; in-flight trips complete | None (the round is over) |
-| Call with target == a car's current target | No dispatch; `elevator:called` still emitted (decoy flash, MOVE-12) | Panel flashes, no car change |
+| `elevator:call` in lobby phase | ~~Intent error~~ **AD-011**: dispatches normally (see `.specs/features/elevator-lobby/`) | — |
+| Call queued (both cars busy) when the buzzer fires | ~~`lock()` clears the FIFO~~ **AD-011**: the queue survives the buzzer and is served by the next car to free | Queued call's flash fires post-buzzer |
+| Duplicate call (same pickup floor arriving + same destination, or already queued) | No dispatch; `elevator:called` still emitted (flash, MOVE-12 narrowed by AD-012) | Panel pulses, no car change |
 | Player leaves mid-walk / in-car | `movement.leave` removes them (car riders list pruned); `player:left` broadcast | Rectangle disappears everywhere |
 | Round starts mid-walk | Intents continue uninterrupted (spec edge) | None |
 | 3rd player at landing on arrival | Stays queued; boards at the car's next arrival (MOVE-13) | Waits at landing |

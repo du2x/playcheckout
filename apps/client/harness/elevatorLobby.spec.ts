@@ -45,6 +45,21 @@ test.describe('client:elevator_lobby', () => {
     // Call: ArrowUp from the lobby targets floor1. The car arrives (3 s),
     // boards the caller at the landing, and rides (2 s/floor).
     await host.keyboard.press('ArrowUp')
+    // AD-012: the call is acknowledged visually — the panel pulses, then clears.
+    await host.waitForFunction(
+      () =>
+        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style
+          .backgroundColor === 'rgb(58, 90, 58)',
+      undefined,
+      { timeout: 3000 },
+    )
+    await host.waitForFunction(
+      () =>
+        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style
+          .backgroundColor === '',
+      undefined,
+      { timeout: 3000 },
+    )
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'floor1',
       undefined,

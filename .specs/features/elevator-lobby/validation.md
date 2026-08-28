@@ -120,3 +120,66 @@ Recommended fix task: one doc-only commit annotating these as AD-012-superseded 
 1. **(test, major)** Fix 2 has no discriminating test: a call whose pickup floor differs from the arriving car's pickup but whose destination matches must still dispatch (`'dispatched'`, car 2/queued — never `'ignored'`). Mutant M1 survived the full shipped suite; probe (`PROBE: cross-floor same-destination call is not swallowed`) demonstrates the kill. Add to `sim:elevator` (note: the title of `movement.test.ts:358` over-claims coverage — retitle or supersede).
 2. **(test, minor)** Fix 4 unasserted: client harness never observes the panel pulse. Add to `client:elevator_lobby` (or `client:movement`): after an ArrowUp call, `#elevator-panel` background becomes `rgb(58, 90, 58)` / `#3a5a3a` and clears ≤ ~1 s. Mutant M4 survived.
 3. **(doc, low)** Movement spec/design stale AD-012 text — items 1–4 in the consistency check. All code behavior is correct; this is spec-precision debt only.
+
+---
+
+# Re-verification #2 — gap-closure check of c5e9999 (2026-08-28)
+
+**Verdict: FAIL (gap closure incomplete — 1 of 3 gaps closed, 1 partial, 1 not attempted)**
+
+**Result**: All gates green, but the fix commit c5e9999 does not close the gaps it claims. Gap 1's new test **passes but does not discriminate** — the destination-only mutant survives the full 167-test sim suite because the test's decisive call lands after car 1's trip has already ended. Gap 2 was not addressed at all: no harness pulse assertion exists anywhere. Gap 3 (docs) is ~half amended.
+
+- Diff range: `9e256aa..c5e9999` (test(sim): discriminate the AD-012 duplicates and pulse; annotate movement docs). Touches `movement.test.ts`, `movement/spec.md`, `movement/design.md`, this report — **no harness file, no src file**.
+- Verified by: independent re-Verifier (author ≠ verifier). All gates re-run on the real tree; sensor re-run from a fresh scratch.
+- Hygiene: sensor ran in `/tmp/opencode/el12-reverify` (git clone at c5e9999 + node_modules symlinks), deleted afterwards. `git status --porcelain` after the sensor = pre-sensor baseline exactly (` M package.json`, `?? .playwright-mcp/`, `?? scripts/`) plus this report edit. No commits made.
+
+## Gate evidence (all re-run by re-Verifier, zero exit)
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| 1. typecheck | `pnpm typecheck` | OK — 4/4 workspace projects, no errors |
+| 1. lint | `pnpm lint` | OK — Biome checked 77 files, no issues |
+| 2. sim | `pnpm test:sim` | **167 passed / 167 (15 files)** — matches expectation (166 + 1 new test) |
+| 3. client | `pnpm test:client` | **21 passed (58.4 s)** — port 2567 verified free beforehand (no stale tsx server); the `[WebServer] Error: room full` line is the expected LOBBY-03 assertion |
+
+## Gap-by-gap re-check
+
+### Gap 1 (major) — destination-only decoy mutant: **NOT CLOSED** (test exists, passes, does not kill)
+
+- The test exists: `packages/sim/src/movement.test.ts:410-436` ("dispatches across floors even when an in-flight car shares the destination (AD-012 kills the destination decoy)") and passes on real code. The retitled test at `movement.test.ts:358` ("…when another car is idle (AD-012: landing distance decides)") no longer over-claims — at its decisive call both cars are genuinely idle. That sub-item is closed.
+- **But the new test is a false discriminator.** Timing (all ticks derived from the test's own loop counts; `ride()` is a bare `callElevator` — `movement.test.ts:251-257`): p1's floor2 call is at tick T; `sim.tick()` + 59 ticks ends at T+60 (arrival + boarding); p2 then walks 50 ticks, calling at ~T+111. Car 1's floor1→floor2 ride is 40 ticks and completes at T+100, where `car.target = null` (`packages/sim/src/movement.ts:317-320`). **At the decisive call car 1 is idle at floor2 with target `null`** — probe evidence (scratch instrumentation of the exact test sequence, both real and mutant code): `cars = [{car:1, floor:'floor2'}, {car:2, floor:'lobby'}]`. The test's comment "the destination matches in-flight car 1" (`movement.test.ts:428-430`) is factually wrong; the "old destination-only decoy swallowed this call" claim is unexercised.
+- **Empirical mutant run (scratch, faithful injection)**: restored the exact pre-fix predicate `find((id) => this.cars[id].target === target)` (byte-identical to `git show 9e256aa~1:packages/sim/src/movement.ts:143`) in place of the narrowed one (`movement.ts:148-153`). Result: `movement.test.ts` **29/29 pass**, and the **full sim suite 167/167 pass** — the mutant survives Gate 2 entirely. Under the mutant the `find` matches nothing at the decisive call (both cars' targets are `null`) and dispatch proceeds identically.
+- To actually kill it, the decisive call must land inside car 1's in-flight window (within 100 ticks of p1's floor2 call, e.g. walking p2 during the 60-tick arrival instead of after it). A scratch probe confirms such a scenario fails under the mutant (`'ignored'`) and dispatches car 2 under real code — the discriminating scenario is constructible, just not shipped.
+
+### Gap 2 (minor) — client panel pulse assertion: **NOT CLOSED** (not attempted)
+
+- `git log` for `apps/client/harness/elevatorLobby.spec.ts`: last touched in `5d81084` — **c5e9999 changed no harness file**. Grep across `apps/client/harness/` for `flash|pulse|backgroundColor|rgb(58|3a5a3a`: zero hits (only unrelated `work.spec.ts:153` `style.width`). The pulse (`WorldScene.ts:185,317-325`) remains unasserted; `pnpm test:client` passing 21/21 says nothing about it. No client injection was performed — there is no assertion to kill, making the mutant vacuous by construction (analytic confirmation; same result as prior session's M4).
+
+### Gap 3 (doc) — movement spec/design AD-012 amendments: **PARTIALLY CLOSED**
+
+Amended (verified in c5e9999 diff):
+- `spec.md:112` AC 1 — landing-distance preference, "AD-012 amends this cycle's flat 'tie → car 1'" ✓
+- `spec.md:114` AC 3 — same-pickup duplicate predicate, "destination-only matches dispatch normally" ✓
+- `spec.md:117` AC 6 — boarding drops the rider's queued calls ✓
+- `design.md:136-139` dispatch rationale — landing-distance preference ✓
+
+Still stale / contradicting shipped behavior (not amended):
+- `spec.md:44` assumption row: "the car that would serve it sooner is dispatched; exact tie → car 1 (west). A call for a floor a car already heads to is ignored" — **both halves** contradicted (landing-distance preference; destination-only matches dispatch). This row was explicitly part of prior gap item 2.
+- `design.md:139-140`: "A call whose **target** equals a car's current pending target is ignored for dispatch (decoy — MOVE-12) but still flashes" — contradicted by the narrowed predicate (`movement.ts:148-153`) and by any cross-floor same-destination dispatch.
+- `design.md:248` error row: "Call with target == a car's current target | No dispatch … (decoy flash, MOVE-12)" — same contradiction.
+- `design.md:135` / `:274` (MOVE-13 boarding rows) still lack the AD-012 queue-drop annotation (prior item 4; spec AC 6 has it, design does not).
+
+## Discrimination sensor (this session: 1 injected / 0 killed / 1 surviving)
+
+| # | Mutant (behavior-level) | Expected victim | Outcome |
+| --- | --- | --- | --- |
+| M1′ | Restore destination-only decoy: `find(id => cars[id].target === target)` (exact pre-fix code) | the new gap-1 test | **SURVIVED** — movement.test.ts 29/29 and full suite 167/167 pass; probe shows the test's decisive call occurs with car 1 idle, target nulled |
+| M4′ | (client pulse) | — | not injectable — no harness assertion exists to kill (see Gap 2) |
+
+Sensor tally across all sessions: **6 injected / 3 killed / 3 surviving** (prior: 5/3/2; this session adds 1/0/1). Surviving: destination-only decoy (M1/M1′, re-confirmed) and client pulse (M4, unkillable until an assertion ships). Parse-error kills excluded per prior methodology; all scratch artifacts deleted.
+
+## Updated ranked gaps (fix tasks, superseding the prior list)
+
+1. **(test, major)** Rewrite `movement.test.ts:410-436` so the cross-floor same-destination call lands **while car 1 is still arriving/riding** (decisive call < 100 ticks after p1's floor2 dispatch — e.g. walk p2 during car 1's 60-tick arrival), fix the comment at :428-430, and re-verify the mutant dies. Current test is a false discriminator.
+2. **(test, minor)** The claimed gap-2 fix does not exist: add the panel-pulse assertion to `client:elevator_lobby` (ArrowUp call → `#elevator-panel` background `rgb(58, 90, 58)`, cleared ≤ ~1 s), then re-inject the `flashPanel`-removal mutant and confirm the kill.
+3. **(doc, low)** Finish the AD-012 doc task: `spec.md:44` assumption row, `design.md:139-140` decoy sentence, `design.md:248` error row, and the MOVE-13 queue-drop note (`design.md:135`/`:274`).
