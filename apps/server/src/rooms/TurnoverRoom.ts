@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto'
 import type { FloorId, RoomIndex } from '@turnover/shared'
 import {
-  elevatorCallIntentSchema,
+  elevatorCallLegacyIntentSchema,
   type LobbySnapshot,
   lobbyStartIntentSchema,
   moveStartIntentSchema,
@@ -95,7 +95,11 @@ export class TurnoverRoom extends Room {
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {
       this.movement.stopMove(client.sessionId)
     })
-    this.onMessage('elevator:call', elevatorCallIntentSchema, (client, intent) => {
+    // SPEC_DEVIATION (transitional, removed with the T6 sim rework): the wire
+    // here still validates the legacy destination-carrying call so the
+    // cycle-2.4 sim keeps routing trips; the exported protocol contract is
+    // already the final destination-free `elevatorCallIntentSchema` (ELR-06).
+    this.onMessage('elevator:call', elevatorCallLegacyIntentSchema, (client, intent) => {
       if (this.movement.callElevator(client.sessionId, intent.target) === 'rejected') {
         this.router.toSelf('error', client.sessionId, {
           code: 'elevator-locked',

@@ -27,14 +27,39 @@ export const moveStopIntentSchema = z
   .strict()
 export type MoveStopIntent = z.infer<typeof moveStopIntentSchema>
 
-/** Call a car to the caller's floor and ride to `target` (design: call semantics). */
+/**
+ * Call a car to the caller's floor — destination-free (ELR-06/AD-014): the
+ * destination is chosen INSIDE the car via `elevator:press`, never at call
+ * time. A call from the floor where a car idles open-doors is a decoy flash.
+ */
 export const elevatorCallIntentSchema = z
+  .object({
+    type: z.literal('elevator:call'),
+  })
+  .strict()
+export type ElevatorCallIntent = z.infer<typeof elevatorCallIntentSchema>
+
+/**
+ * TRANSITIONAL (removed with the T6 sim rework): the cycle-2.4 MovementSim
+ * still routes destination-carrying trips, so the room keeps accepting the
+ * legacy optional `target` until the press-queue machine replaces it. The
+ * exported contract above is already the final destination-free shape.
+ */
+export const elevatorCallLegacyIntentSchema = z
   .object({
     type: z.literal('elevator:call'),
     target: FLOOR_ENUM,
   })
   .strict()
-export type ElevatorCallIntent = z.infer<typeof elevatorCallIntentSchema>
+
+/** Press a floor inside the car the sender is riding (ELR-06/ELR-08). */
+export const elevatorPressIntentSchema = z
+  .object({
+    type: z.literal('elevator:press'),
+    floor: FLOOR_ENUM,
+  })
+  .strict()
+export type ElevatorPressIntent = z.infer<typeof elevatorPressIntentSchema>
 
 /**
  * Start a work channel inside the named room's segment (FR-7/8/9). The action

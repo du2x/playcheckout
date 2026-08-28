@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { FLOOR_IDS } from '../layout.js'
 import { ROLES } from '../roles.js'
+import { elevatorCallIntentSchema, elevatorPressIntentSchema } from './intents.js'
 import {
   type LobbySnapshot,
   lobbyStartIntentSchema,
@@ -47,6 +49,36 @@ describe('protocol payloads', () => {
     expect(() => lobbyStartIntentSchema.parse({ type: 'lobby:start', seed: 1234 })).toThrow()
     expect(() => lobbyStartIntentSchema.parse({ type: 'move' })).toThrow()
     expect(() => lobbyStartIntentSchema.parse({})).toThrow()
+  })
+
+  // ELR-06/ELR-07: the call carries NO destination — it only summons a car to
+  // the caller's floor; the destination is chosen in-car via elevator:press.
+  it('elevator:call intent is destination-free: accepts only the type literal (ELR-06)', () => {
+    const parsed = elevatorCallIntentSchema.parse({ type: 'elevator:call' })
+    expect(parsed).toEqual({ type: 'elevator:call' })
+    expect(() =>
+      elevatorCallIntentSchema.parse({ type: 'elevator:call', target: 'floor1' }),
+    ).toThrow()
+    expect(() =>
+      elevatorCallIntentSchema.parse({ type: 'elevator:call', floor: 'lobby' }),
+    ).toThrow()
+    expect(() => elevatorCallIntentSchema.parse({})).toThrow()
+  })
+
+  it('elevator:press intent accepts exactly a FLOOR_IDS floor and rejects the rest (ELR-08)', () => {
+    for (const floor of FLOOR_IDS) {
+      expect(elevatorPressIntentSchema.parse({ type: 'elevator:press', floor })).toEqual({
+        type: 'elevator:press',
+        floor,
+      })
+    }
+    expect(() => elevatorPressIntentSchema.parse({ type: 'elevator:press' })).toThrow()
+    expect(() =>
+      elevatorPressIntentSchema.parse({ type: 'elevator:press', floor: 'floor9' }),
+    ).toThrow()
+    expect(() =>
+      elevatorPressIntentSchema.parse({ type: 'elevator:press', floor: 'lobby', extra: 1 }),
+    ).toThrow()
   })
 })
 

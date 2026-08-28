@@ -117,7 +117,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T3: Elevator intent schemas
+#### T3: Elevator intent schemas — ✅ Done
 
 **What**: Make `elevator:call` destination-free (`{type:'elevator:call'}` strict, no `target`) and add `elevator:press {floor}` (strict, `FLOOR_ENUM`).
 **Where**: `packages/shared/src/protocol/intents.ts`
@@ -130,9 +130,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-protocol`
 
 **Done when**:
-- [ ] `elevatorCallIntentSchema` accepts only `type` and rejects `target`/extra keys; `elevatorPressIntentSchema` accepts `floor` in `FLOOR_IDS`
-- [ ] Intent tests pin strict rejection
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `elevatorCallIntentSchema` accepts only `type` and rejects `target`/extra keys; `elevatorPressIntentSchema` accepts `floor` in `FLOOR_IDS`
+- [x] Intent tests pin strict rejection
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: unit
 **Gate**: quick
