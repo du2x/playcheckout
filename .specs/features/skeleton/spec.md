@@ -160,19 +160,17 @@ the Phase 2 sim's event surface and a protocol-skill review.
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| SKEL-01 | P1: Workspace + gate tooling | Design | Pending |
-| SKEL-02 | P1: Workspace + gate tooling | Design | Pending |
-| SKEL-03 | P1: Workspace + gate tooling | Design | Pending |
-| SKEL-04 | P1: Shared package | Tasks | Implementing |
-| SKEL-05 | P1: Shared package | Tasks | Implementing |
-| SKEL-06 | P1: Server transport shell | Design | Pending |
-| SKEL-07 | P1: Client shell | Design | Pending |
-| SKEL-08 | P1: Client shell (prod hook strip) | Design | Pending |
-| SKEL-09 | P2: Wire envelope + telemetry schema | Tasks | Implementing |
+| SKEL-01 | P1: Workspace + gate tooling | Verified | ✅ Verified |
+| SKEL-02 | P1: Workspace + gate tooling | Verified | ✅ Verified |
+| SKEL-03 | P1: Workspace + gate tooling | Verified | ✅ Verified |
+| SKEL-04 | P1: Shared package | Verified | ✅ Verified |
+| SKEL-05 | P1: Shared package | Verified | ✅ Verified |
+| SKEL-06 | P1: Server transport shell | Verified | ✅ Verified |
+| SKEL-07 | P1: Client shell | Verified | ✅ Verified |
+| SKEL-08 | P1: Client shell (prod hook strip) | Verified | ✅ Verified |
+| SKEL-09 | P2: Wire envelope + telemetry schema | Verified | ✅ Verified |
 
-**ID format:** `SKEL-[NUMBER]`
-
-**Coverage:** 9 total, 0 mapped to tasks yet, 9 unmapped (Tasks phase maps them)
+**Coverage:** 9 total, 9 mapped to tasks, 0 unmapped
 
 ---
 

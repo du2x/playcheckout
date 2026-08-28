@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "promote_threshold": 2,
+  "window_days": 45,
+  "quarantine_threshold": 2,
+  "next_id": 2,
+  "lessons": [
+    {
+      "id": "L-001",
+      "key": "ac_gap::denylist scan tests must be discrimination tested in the same task the t4 literal guard initially scanned wrong relative paths and passed vacuously inject a violation and confirm the scan finds it before committing any file walking assertion",
+      "text": "Denylist/scan tests must be discrimination-tested in the same task: the T4 literal guard initially scanned wrong relative paths and passed vacuously; inject a violation and confirm the scan finds it before committing any file-walking assertion.",
+      "signal": "ac_gap",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "skeleton"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"
+      ],
+      "created": "2026-08-28T00:35:14Z",
+      "last_seen": "2026-08-28T00:35:14Z"
+    }
+  ]
+}

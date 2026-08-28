@@ -12,11 +12,13 @@
 
 ## Handoff
 
-- **Feature**: skeleton (`.specs/features/skeleton/`)
-- **Phase / Task**: Design complete, awaiting user approval → Tasks
-- **Completed**: none
+- **Feature**: skeleton (`.specs/features/skeleton/`) — COMPLETE
+- **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
+- **Completed**: T1–T7 (commits 9d593b8..8eabc44)
 - **In-progress** (file:line): none
-- **Next step**: Present design.md for approval, then run validate_tasks.py on the drafted tasks.md
+- **Next step**: Phase 2 — authoritative server sim (headless-first); start with a fresh Specify for the sim feature
 - **Blockers**: none
-- **Uncommitted files**: `.specs/` (spec.md, design.md, STATE.md)
-- **Branch**: main
+- **Uncommitted files**: none (after final .specs commit)
+- **Branch**: master (renamed from default; 7 commits, no remote)
+
+Deferred notes from validation: (1) tuning-literal denylist test is the sole guard against literal duplication — review-enforced complement; (2) spec.md coverage header was stale, fixed post-validation.
