@@ -14,9 +14,10 @@ export default defineConfig({
     // Prod strip check (SKEL-08), then build the harness bundle (dev-only
     // __TURNOVER__ hook kept) and boot the real server — the harness always
     // runs against a dev-mode bundle served by the actual transport shell (AD-001).
-    // The 5 s test shift (AD-004 seam, non-production only) lets round.spec
-    // reach a real buzzer without waiting the §7 300 s.
-    command: `pnpm --filter @turnover/client build && node ${stripCheck} --expect-absent && pnpm --filter @turnover/client build:harness && node ${stripCheck} --expect-present && TURNOVER_TEST_SHIFT_SECONDS=5 pnpm exec tsx apps/server/src/index.ts`,
+    // The 8 s test shift (AD-004 seam, non-production only) lets round.spec
+    // reach a real buzzer in seconds while leaving room for the LIGHT-09
+    // clock sampling that must finish before the buzzer.
+    command: `pnpm --filter @turnover/client build && node ${stripCheck} --expect-absent && pnpm --filter @turnover/client build:harness && node ${stripCheck} --expect-present && TURNOVER_TEST_SHIFT_SECONDS=8 pnpm exec tsx apps/server/src/index.ts`,
     url: 'http://localhost:2567',
     cwd: repoRoot,
     reuseExistingServer: false,

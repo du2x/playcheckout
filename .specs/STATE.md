@@ -57,18 +57,21 @@
 
 ## Handoff
 
-- **Feature**: room-shell (`.specs/features/room-shell/`) — all 7 tasks committed (T1-T7)
-- **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
-- **Completed**: sim deal (T1), RoundSim + sim:role_deal (T2), message catalog (T3),
-  lobby join (T4), start/sim/routing (T5), churn (T6), registration swap + full round (T7)
+- **Feature**: first-light (`.specs/features/first-light/`) — all 7 tasks committed
+- **Phase / Task**: Awaiting verifier validation (validation.md to be written by the Verifier)
+- **Completed**: sim shift seam + AD-004 (T1), view reducer (T2), join slice + harness
+  client:lobby_join (T3), lobby coverage (T4), round view + client:round_start (T5),
+  buzzer re-deal (T6), close-out sweep + room-full surfacing (T7)
 - **In-progress** (file:line): none
-- **Next step**: cycle 2.2 `first-light` — fresh Specify for
-  `.specs/features/first-light/` (AD-003)
-- **Blockers**: none
-- **Uncommitted files**: none
+- **Next step**: verifier dispatch for first-light; then cycle 2.3 `movement` —
+  fresh Specify for `.specs/features/movement/`
+- **Blockers**: none (Gate 4 human 5-min round pending — run `pnpm boot` or
+  `pnpm build && node apps/server/dist/index.js`, open 4 tabs, create/join/start)
+- **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script
+  (not part of this feature; dev-boot formatted for lint)
 - **Branch**: master
 
-Deferred notes from Verifier (PASS, low-severity spec-precision gaps): (1) LOBBY-02
-"create no room" clause unasserted; (2) rejected start intent lacks a lobby-phase
-re-assertion (reject-then-start mutant); (3) LOBBY-05 "roster unchanged" after name
-rejection unasserted — fold into the next cycle touching TurnoverRoom.
+Deferred notes from Verifier (room-shell PASS, low-severity spec-precision gaps):
+(1) LOBBY-02 "create no room" clause unasserted; (2) rejected start intent lacks a
+lobby-phase re-assertion (reject-then-start mutant); (3) LOBBY-05 "roster unchanged"
+after name rejection unasserted — fold into the next cycle touching TurnoverRoom.

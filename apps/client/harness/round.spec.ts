@@ -110,7 +110,7 @@ test.describe('client:round_start', () => {
     await Promise.all(pages.map((p) => p.context().close()))
   })
 
-  // Spec LIGHT-13..14: the server runs the 5 s test shift (AD-004 seam), so a
+  // Spec LIGHT-13..14: the server runs the 8 s test shift (AD-004 seam), so a
   // real round:buzzer arrives shortly after the start — the client must return
   // to the lobby and support a fresh re-deal.
   test('buzzer returns all pages to the lobby; re-start deals fresh (LIGHT-13, LIGHT-14)', async ({
@@ -121,19 +121,7 @@ test.describe('client:round_start', () => {
     )
     await fourPlayerRound(pages)
 
-    const firstRoles = new Map<string, string | null>()
-    for (const page of pages) {
-      firstRoles.set(
-        await page.evaluate(
-          () =>
-            (window as unknown as { __TURNOVER__: { local: { playerId: string | null } } })
-              .__TURNOVER__.local.playerId,
-        ),
-        await page.textContent('#role-card'),
-      )
-    }
-
-    // Buzzer at ~5 s (dom clock still counts a 300 s display shift — accepted,
+    // Buzzer at ~8 s (dom clock still counts a 300 s display shift — accepted,
     // AD-004 trade-off): every page lands back in the lobby view.
     for (const page of pages) {
       await page.waitForSelector('#lobby-view', { timeout: 15000 })

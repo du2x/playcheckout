@@ -152,24 +152,24 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| LIGHT-01 | P1: Join from browser | - | Pending |
-| LIGHT-02 | P1: Join from browser | - | Pending |
-| LIGHT-03 | P1: Join from browser | - | Pending |
-| LIGHT-04 | P1: Join from browser | - | Pending |
-| LIGHT-05 | P1: Lobby view and host start | - | Pending |
-| LIGHT-06 | P1: Lobby view and host start | - | Pending |
-| LIGHT-07 | P1: Lobby view and host start | - | Pending |
-| LIGHT-08 | P1: Lobby view and host start | - | Pending |
-| LIGHT-09 | P1: Round view | - | Pending |
-| LIGHT-10 | P1: Round view | - | Pending |
-| LIGHT-11 | P1: Round view | - | Pending |
-| LIGHT-12 | P1: Round view | - | Pending |
-| LIGHT-13 | P2: Buzzer returns to lobby | - | Pending |
-| LIGHT-14 | P2: Buzzer returns to lobby | - | Pending |
+| LIGHT-01 | P1: Join from browser | T1-T7 | Verified |
+| LIGHT-02 | P1: Join from browser | T1-T7 | Verified |
+| LIGHT-03 | P1: Join from browser | T1-T7 | Verified |
+| LIGHT-04 | P1: Join from browser | T1-T7 | Verified |
+| LIGHT-05 | P1: Lobby view and host start | T1-T7 | Verified |
+| LIGHT-06 | P1: Lobby view and host start | T1-T7 | Verified |
+| LIGHT-07 | P1: Lobby view and host start | T1-T7 | Verified |
+| LIGHT-08 | P1: Lobby view and host start | T1-T7 | Verified |
+| LIGHT-09 | P1: Round view | T1-T7 | Verified |
+| LIGHT-10 | P1: Round view | T1-T7 | Verified |
+| LIGHT-11 | P1: Round view | T1-T7 | Verified |
+| LIGHT-12 | P1: Round view | T1-T7 | Verified |
+| LIGHT-13 | P2: Buzzer returns to lobby | T1-T7 | Verified |
+| LIGHT-14 | P2: Buzzer returns to lobby | T1-T7 | Verified |
 
 **Gate mapping:** LIGHT-01..04, LIGHT-05..08 → `client:lobby_join` · LIGHT-09..14 → `client:round_start`. All scenarios run Gate 3 (real server + headless Chromium via `window.__TURNOVER__`); Gates 1–2 stay green throughout.
 
-**Coverage:** 14 total, 14 mapped to tasks (at Tasks phase), 0 unmapped.
+**Coverage:** 14 total, 14 mapped to tasks, 0 unmapped.
 
 ---
 

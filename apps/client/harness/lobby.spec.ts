@@ -140,6 +140,28 @@ test.describe('client:lobby_join', () => {
     await host.context().close()
   })
 
+  test('the 7th join attempt surfaces the room-full rejection (edge case)', async ({ browser }) => {
+    const host = await browser.newContext().then((c) => c.newPage())
+    const code = await createRoom(host, 'p1')
+    const guests = []
+    for (let i = 2; i <= 6; i++) {
+      const page = await browser.newContext().then((c) => c.newPage())
+      await join(page, code, `p${i}`)
+      guests.push(page)
+    }
+    await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 6)
+
+    const seventh = await browser.newContext().then((c) => c.newPage())
+    await join(seventh, code, 'p7')
+    await seventh.waitForSelector('#join-error:not([hidden])')
+    expect(await seventh.textContent('#join-error')).toMatch(/room full/i)
+    expect(await seventh.$('#lobby-view')).toBeNull()
+
+    await seventh.context().close()
+    for (const page of guests) await page.context().close()
+    await host.context().close()
+  })
+
   // Spec LIGHT-05..08 (gate scenario client:lobby_join, lobby story):
   // roster updates without reload, host-only start control, start rejection.
   test.describe('client:lobby_join — lobby view and host start', () => {

@@ -234,7 +234,7 @@ T6 → T7
 
 ---
 
-### T7: Close-out — lost-connection notice, edge-case wiring, feature gates
+### T7: Close-out — lost-connection notice, edge-case wiring, feature gates — ✅ done
 
 **What**: Wire `connection-lost` (leave/close) to the static "connection lost" notice; sweep remaining edge cases (mid-lobby join/leave updates all pages, 7th-player room-full surfacing); run the full build gate; update STATE.md handoff.
 **Where**: `apps/client/src/main.ts` (modify), `apps/client/src/ui/dom.ts` (extend), `apps/client/harness/lobby.spec.ts` (extend), `.specs/STATE.md`
