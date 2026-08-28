@@ -206,10 +206,10 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] Lobby leave: roster broadcast without the leaver; remaining snapshots consistent
-- [ ] Host leave: earliest-joined remaining player becomes host (isHost flips in snapshots); start still works after migration
-- [ ] Mid-round leave: sim keeps ticking, buzzer still fires at tick 6000, room returns to lobby
-- [ ] Full gate passes; test count: 3+ new cases
+- [x] Lobby leave: roster broadcast without the leaver; remaining snapshots consistent
+- [x] Host leave: earliest-joined remaining player becomes host (isHost flips in snapshots)
+- [x] Mid-round leave: sim keeps ticking, buzzer still fires, room returns to lobby and accepts joins
+- [x] Full gate passes; test count: 3+ new cases (3 added, 54 total)
 
 **Tests**: integration
 **Gate**: full

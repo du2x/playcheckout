@@ -160,9 +160,9 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | CLK-02 | P1: Round clock | T2 | Verified |
 | CLK-03 | P1: Round clock | T2 | Verified |
 | CLK-04 | P1: Round clock | T2 | Verified |
-| CHURN-01 | P2: Membership churn | Design | Pending |
-| CHURN-02 | P2: Membership churn | Design | Pending |
-| CHURN-03 | P2: Membership churn | Design | Pending |
+| CHURN-01 | P2: Membership churn | T6 | Verified |
+| CHURN-02 | P2: Membership churn | T6 | Verified |
+| CHURN-03 | P2: Membership churn | T6 | Verified |
 
 **Gate mapping:** LOBBY-01..05, CHURN-01..02 → `server:lobby_join` · DEAL-01..06, CLK-01..04, CHURN-03 → `sim:role_deal` · CHURN-03 server-side idle-slot behavior → `server:lobby_join`.
 

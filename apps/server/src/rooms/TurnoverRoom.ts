@@ -88,6 +88,13 @@ export class TurnoverRoom extends Room {
 
   override onLeave(client: Client) {
     this.players.delete(client.sessionId)
+    if (this.phase !== 'lobby') {
+      // Mid-round: the leaver's sim slot idles until the buzzer (full FR-25 ghost
+      // machinery is a later cycle). No lobby snapshot — rosters are a lobby concept.
+      return
+    }
+    // Host is whoever joined earliest among the remaining players, so migration
+    // is implicit: the next snapshot simply flips isHost (CHURN-02).
     for (const sessionId of this.players.keys()) {
       this.sendTo(sessionId, 'lobby:snapshot', this.buildSnapshot(sessionId))
     }

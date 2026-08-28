@@ -168,54 +168,54 @@ describe('server:lobby_join', () => {
   })
 })
 
+async function roomWithFour() {
+  const host = await createRoom('ada')
+  const clients: ClientRoom[] = [host]
+  for (const name of ['bruno', 'caro', 'dina']) {
+    clients.push(await newClient().joinById(host.roomId, { name }))
+  }
+  const [h, a, b, c] = clients
+  if (h === undefined || a === undefined || b === undefined || c === undefined) {
+    throw new Error('failed to gather 4 clients')
+  }
+  return [h, a, b, c] as const
+}
+
+function collectAll(room: ClientRoom) {
+  const snaps: { type: string; payload: Record<string, unknown> }[] = []
+  const wake: (() => void)[] = []
+  const off = room.onMessage('*', (messageType, payload) => {
+    snaps.push({ type: String(messageType), payload: payload as Record<string, unknown> })
+    for (const w of wake.splice(0)) w()
+  })
+  return {
+    async waitFor(type: string, timeoutMs = 2000) {
+      const deadline = Date.now() + timeoutMs
+      for (;;) {
+        const found = snaps.find((m) => m.type === type)
+        if (found !== undefined) {
+          snaps.splice(snaps.indexOf(found), 1)
+          return found
+        }
+        const remaining = deadline - Date.now()
+        if (remaining <= 0) throw new Error(`timeout waiting for ${type}`)
+        await Promise.race([
+          new Promise<void>((resolve) => wake.push(resolve)),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`timeout waiting for ${type}`)), remaining),
+          ),
+        ])
+      }
+    },
+    stop() {
+      off()
+    },
+  }
+}
+
 // Spec DEAL-01..05, CLK-03/CLK-04 (gate scenario sim:role_deal, server half):
 // host start guards, private role routing, buzzer → lobby, re-deal.
 describe('sim:role_deal (server)', () => {
-  async function roomWithFour() {
-    const host = await createRoom('ada')
-    const clients: ClientRoom[] = [host]
-    for (const name of ['bruno', 'caro', 'dina']) {
-      clients.push(await newClient().joinById(host.roomId, { name }))
-    }
-    const [h, a, b, c] = clients
-    if (h === undefined || a === undefined || b === undefined || c === undefined) {
-      throw new Error('failed to gather 4 clients')
-    }
-    return [h, a, b, c] as const
-  }
-
-  function collectAll(room: ClientRoom) {
-    const snaps: { type: string; payload: Record<string, unknown> }[] = []
-    const wake: (() => void)[] = []
-    const off = room.onMessage('*', (messageType, payload) => {
-      snaps.push({ type: String(messageType), payload: payload as Record<string, unknown> })
-      for (const w of wake.splice(0)) w()
-    })
-    return {
-      async waitFor(type: string, timeoutMs = 2000) {
-        const deadline = Date.now() + timeoutMs
-        for (;;) {
-          const found = snaps.find((m) => m.type === type)
-          if (found !== undefined) {
-            snaps.splice(snaps.indexOf(found), 1)
-            return found
-          }
-          const remaining = deadline - Date.now()
-          if (remaining <= 0) throw new Error(`timeout waiting for ${type}`)
-          await Promise.race([
-            new Promise<void>((resolve) => wake.push(resolve)),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`timeout waiting for ${type}`)), remaining),
-            ),
-          ])
-        }
-      },
-      stop() {
-        off()
-      },
-    }
-  }
-
   it('deals exactly one saboteur via private role payloads, never in broadcasts (DEAL-01, DEAL-02)', async () => {
     const [host, a, b, c] = await roomWithFour()
     const collectors = [host, a, b, c].map((room) => collectAll(room))
@@ -339,5 +339,56 @@ describe('sim:role_deal (server)', () => {
     b.leave()
     c.leave()
     late.leave()
+  })
+})
+
+// Spec CHURN-01..03: roster broadcasts on leave, implicit host migration,
+// mid-round idle slots to the buzzer.
+describe('server:lobby_churn', () => {
+  it('broadcasts the roster without the leaver (CHURN-01)', async () => {
+    const host = await createRoom('ada')
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const hostSnaps = collect(host)
+
+    guest.leave()
+    const after = await hostSnaps.nextWhere((s) => s.roster.length === 1)
+    expect(after.roster.map((p) => p.name)).toEqual(['ada'])
+    hostSnaps.stop()
+    host.leave()
+  })
+
+  it('migrates the host to the earliest remaining player (CHURN-02)', async () => {
+    const host = await createRoom('ada')
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const guestSnaps = collect(guest)
+
+    host.leave()
+    const migrated = await guestSnaps.nextWhere((s) => s.isHost)
+    expect(migrated.ownName).toBe('bruno')
+    expect(migrated.isHost).toBe(true)
+    guestSnaps.stop()
+    guest.leave()
+  })
+
+  it('keeps the round running with an idle slot after a mid-round leave (CHURN-03)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const hostCollector = collectAll(host)
+    const instance = TurnoverRoom.instances.at(-1)
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+
+    c.leave()
+    instance?.__driveTicks(6000)
+    await hostCollector.waitFor('round:buzzer')
+
+    // Back in lobby after the buzzer, with the leaver gone.
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('lobby'))
+    const joiner = await newClient().joinById(host.roomId, { name: 'elin' })
+    expect(joiner.sessionId).toBeTruthy()
+    hostCollector.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    joiner.leave()
   })
 })
