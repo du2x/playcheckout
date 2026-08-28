@@ -153,6 +153,12 @@
   per the amended Scope — until it lands, a modded client could read cross-floor
   positions from the wire; accepted for 2.4, not for any cycle that hides room
   interiors.
+- **Landed (2026-08-28, cycle 2.5)**: 2.5 became the first cycle that hides
+  content on the wire (`room:prepped`/`room:trashed` carry the `occupants`
+  policy; `room:observed`/work events are `self`), so the deferred routing
+  landed there per AD-009: `sameFloor` policy for `player:moved` +
+  `player:left-floor`, `occupants` for room transitions, floor-filtered
+  `movement:snapshot`. The WorldScene view filter remains as defense in depth.
 - **Date**: 2026-08-28
 - **Status**: active
 

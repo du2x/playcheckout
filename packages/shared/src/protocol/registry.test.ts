@@ -186,6 +186,17 @@ describe('protocol registry', () => {
     })
   })
 
+  it('projects player:left-floor to the departed floor with sameFloor visibility (WORK-19)', () => {
+    const projected = PROTOCOL_REGISTRY['player:left-floor'].fromSim({
+      type: 'player:left-floor',
+      playerId: 'p1',
+      floor: 'lobby',
+    })
+    expect(projected.self).toBeUndefined()
+    expect(projected.payload).toEqual({ playerId: 'p1', floor: 'lobby' })
+    expect(projected.visibility).toEqual({ floor: 'lobby' })
+  })
+
   it('projects room transitions with occupants roomKey visibility (WORK-15)', () => {
     const prepped = PROTOCOL_REGISTRY['room:prepped'].fromSim({
       type: 'room:prepped',

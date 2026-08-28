@@ -487,3 +487,29 @@ describe('sim:elevator', () => {
     expect(sim.snapshot().players).toEqual([{ playerId: 'p2', floor: 'lobby', x: 15 }])
   })
 })
+
+// WORK-19 AC4 (cycle 2.5 verifier fix): the departure event that lets the old
+// floor's viewers drop a rider's rectangle is emitted exactly once per rider,
+// naming the floor LEFT (never the destination).
+describe('departure left-floor event (WORK-19)', () => {
+  it('emits player:left-floor for each rider when the car departs the pickup floor', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick() // stand at the west landing
+    sim.stopMove('p1')
+    sim.unlock()
+    expect(sim.callElevator('p1', 'floor1')).toBe('dispatched')
+    sim.tick() // flash (tick 1)
+    for (let i = 0; i < 58; i++) sim.tick() // ticks 2..59
+    const departure = sim.tick() // tick 60: arrival + boarding + departure
+    const leftFloor = departure.filter((e) => e.type === 'player:left-floor')
+    expect(leftFloor).toEqual([{ type: 'player:left-floor', playerId: 'p1', floor: 'lobby' }])
+    // The departure tick names the PICKUP floor only — no destination anywhere.
+    expect(JSON.stringify(leftFloor)).not.toContain('floor1')
+    // Exactly once: the following ride ticks emit no further left-floor events.
+    for (let i = 0; i < 40; i++) {
+      expect(sim.tick().filter((e) => e.type === 'player:left-floor')).toEqual([])
+    }
+  })
+})

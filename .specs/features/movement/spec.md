@@ -65,7 +65,7 @@ host start.
 
 1. WHEN a connected player holds a move direction THEN the client SHALL send a `move:start` intent, and the server SHALL integrate that player's x position at TUNING.PLAYER_SPEED_TILES_PER_SEC (6 tiles/s) at 20 Hz while the intent persists.
 2. WHEN the player releases the direction THEN the client SHALL send `move:stop` and the server SHALL stop that player's x at its current value.
-3. WHEN a player's position changes THEN the server SHALL broadcast a `player:moved` event (playerId, floor, x, facing) to all players; WHEN a move intent ends THEN the server SHALL emit one terminal `player:moved` carrying the authoritative rest x (client prediction reconciliation); WHEN no position changed during a tick AND no move intent ended THEN the server SHALL broadcast nothing.
+3. WHEN a player's position changes THEN the server SHALL emit a `player:moved` event (playerId, floor, x, facing) delivered per recipient policy — same-floor viewers only from cycle 2.5 (AD-008/AD-009, which amend this cycle's original "broadcast to all players"); WHEN a move intent ends THEN the server SHALL emit one terminal `player:moved` carrying the authoritative rest x (client prediction reconciliation); WHEN no position changed during a tick AND no move intent ended THEN the server SHALL emit nothing.
 4. WHILE the room is in lobby state THEN every player's floor SHALL remain `lobby` and x SHALL be clamped to the grand lobby bounds (0 to HALL_LENGTH_TILES).
 5. WHEN a player's move intent would move them through another player THEN both SHALL pass through each other (no collision) and both positions SHALL be broadcast.
 
@@ -136,7 +136,7 @@ nothing until someone moves.
 
 **Acceptance Criteria**:
 
-1. WHEN a player joins (or the room returns to lobby at the buzzer) THEN the server SHALL send them a `movement:snapshot` containing every connected player's (playerId, floor, x) and each car's (carId, floor) — all public data (protocol rule 2).
+1. WHEN a player joins (or the room returns to lobby at the buzzer) THEN the server SHALL send them a `movement:snapshot` containing players' (playerId, floor, x) and each car's (carId, floor) — from cycle 2.5 (AD-008/AD-009) the player rows are filtered to the recipient's own floor; the car rows remain public for every recipient (protocol rule 2).
 2. WHEN a player leaves THEN the server SHALL broadcast a `player:left` movement event and all clients SHALL remove that rectangle.
 
 **Independent Test**: `sim:motion` extension — snapshot content equals the sim's
