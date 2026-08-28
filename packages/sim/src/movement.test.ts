@@ -104,6 +104,39 @@ describe('sim:motion', () => {
     expect(SPEED_MILLI_PER_TICK).toBe(300)
   })
 
+  it('emits nothing while a player is pinned at a wall with the intent held (WORK-21, M5b)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 100; i++) sim.tick()
+    expect(lastX(sim, 'p1')).toBe(0)
+    // Intent still held, facing already 'left', x cannot change: the sim must
+    // stay silent — a pinned player emits no player:moved (MOVE-03's letter).
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 5; i++) expect(sim.tick()).toEqual([])
+    expect(lastX(sim, 'p1')).toBe(0)
+  })
+
+  it('lets a player walk on floor1 during an active round (MOVE-06 positive half, WORK-22)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick() // stand at the west landing
+    sim.stopMove('p1')
+    sim.unlock()
+    expect(sim.callElevator('p1', 'floor1')).toBe('dispatched')
+    sim.tick() // flash
+    for (let i = 0; i < 59; i++) sim.tick() // arrival + boarding at tick 60
+    for (let i = 0; i < 40; i++) sim.tick() // ride lobby → floor1
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    // Round-phase walking on a guest floor: x integrates unclamped (MOVE-06).
+    sim.startMove('p1', 'right')
+    const events = movedEvents(sim.tick())
+    expect(events.some((e) => e.type === 'player:moved' && e.playerId === 'p1')).toBe(true)
+    for (let i = 0; i < 9; i++) sim.tick()
+    expect(lastX(sim, 'p1')).toBe(3) // 10 ticks × 300 millitiles = 3.0 tiles
+  })
+
   it('lets two players pass through each other and broadcasts both (MOVE-05)', () => {
     const sim = new MovementSim()
     sim.join('p1')
@@ -311,6 +344,10 @@ describe('sim:elevator', () => {
     // Two flashes announce on the next tick (both calls), one dispatch only.
     const called = events.filter((e) => e.type === 'elevator:called')
     expect(called).toHaveLength(2)
+    // Both flashes name the targeting car (car 1, the only car heading to
+    // floor1) — the decoy does NOT name the other car (WORK-20, M3).
+    expect(called[0]).toEqual({ type: 'elevator:called', floor: 'lobby', car: 1 })
+    expect(called[1]).toEqual({ type: 'elevator:called', floor: 'lobby', car: 1 })
     const movedCar = events.filter((e) => e.type === 'elevator:moved')
     expect(movedCar).toHaveLength(0)
     // Only one car is in flight: exactly one arrival exists.

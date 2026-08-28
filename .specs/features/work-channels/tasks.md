@@ -111,7 +111,7 @@ T5 → T6 → T7
 
 ---
 
-### T3: Movement verifier gap hardening (Gaps 2–4)
+### T3: Movement verifier gap hardening (Gaps 2–4) ✅ Done
 
 **What**: Three direct assertions in the movement suites: (Gap 2 / WORK-20) the decoy-flash `elevator:called` payload equals `{floor, car}` with the targeting car literally asserted; (Gap 3 / WORK-21) a player pinned at a wall with the intent still held emits `[]` until the position can change; (Gap 4 / WORK-22) a player walks on floor1 during an active round and displaces x (MOVE-06 positive half). Re-derives the M3/M5b sensor mutants as killed.
 **Where**: `packages/sim/src/movement.test.ts` (edits only)
