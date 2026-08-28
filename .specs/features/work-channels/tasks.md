@@ -189,7 +189,7 @@ T5 → T6 → T7
 
 ---
 
-### T6: Client — Space-to-work, progress bar, room label
+### T6: Client — Space-to-work, progress bar, room label ✅ Done
 
 **What**: Extend `MAPPERS` with the five new messages as scene-kind actions (reducer identity — documented render-state decision) routed to `WorldScene`; add `Connection.sendWorkStart(floor, room)`. `WorldScene`: Space keydown derives the own segment via `roomIndexAtMilli` from predicted x + floor and sends `work:start`; `work:started` shows the DOM progress bar (`#work-progress`) filling over `seconds`; `work:ended` clears it; `room:observed`/`room:prepped`/`room:trashed` update the `#room-state` label while the own rectangle is inside that segment, hidden on segment exit — identical visuals for every channel kind (FR-9). Mapper/reducer unit tests pin the new actions.
 **Where**: `apps/client/src/scenes/WorldScene.ts`, `net/mappers.ts`, `net/connection.ts`, `app.ts`, `state.ts` (edits) + `state.test.ts`/mappers tests

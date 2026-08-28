@@ -1,6 +1,6 @@
 import type { Room } from '@colyseus/sdk'
 import { Client } from '@colyseus/sdk'
-import type { Envelope, RegistryKey } from '@turnover/shared'
+import type { Envelope, GuestFloorId, RegistryKey, RoomIndex } from '@turnover/shared'
 import { recordGap, recordServerMessage, registerGapProbe, setLocalIdentity } from '../debug'
 import type { ViewAction } from '../state'
 import { MAPPERS } from './mappers'
@@ -103,6 +103,11 @@ export class Connection {
 
   sendElevatorCall(target: string): void {
     this.room.send('elevator:call', { type: 'elevator:call', target })
+  }
+
+  /** Start a work channel inside the room's segment the player stands in (FR-7). */
+  sendWorkStart(floor: GuestFloorId, room: RoomIndex): void {
+    this.room.send('work:start', { type: 'work:start', floor, room })
   }
 
   leave(): void {

@@ -1,4 +1,13 @@
-import { FLOOR_IDS, type FloorId, type MovementSnapshot, TUNING } from '@turnover/shared'
+import {
+  FLOOR_IDS,
+  type FloorId,
+  type GuestFloorId,
+  type MovementSnapshot,
+  type RoomIndex,
+  type RoomState,
+  roomIndexAtMilli,
+  TUNING,
+} from '@turnover/shared'
 import Phaser from 'phaser'
 
 /**
@@ -28,6 +37,7 @@ export interface WorldStartData {
   sendMoveStart: (dir: 'left' | 'right') => void
   sendMoveStop: () => void
   sendElevatorCall: (target: FloorId) => void
+  sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
 }
 
 type MovementAction =
@@ -36,6 +46,19 @@ type MovementAction =
   | { type: 'elevator-moved'; car: 1 | 2; floor: string }
   | { type: 'player-left'; playerId: string }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
+  // Work channels (cycle 2.5): the actor's own channel view + the interior of
+  // the room they stand in. No payload names a role or a channel kind (FR-9).
+  | { type: 'work-started'; playerId: string; floor: string; room: number; seconds: number }
+  | {
+      type: 'work-ended'
+      playerId: string
+      floor: string
+      room: number
+      outcome: 'completed' | 'cancelled'
+    }
+  | { type: 'room-observed'; playerId: string; floor: string; room: number; state: RoomState }
+  | { type: 'room-prepped'; floor: string; room: number }
+  | { type: 'room-trashed'; floor: string; room: number }
 
 interface PlayerDisplay {
   rect: Phaser.GameObjects.Rectangle
@@ -50,10 +73,15 @@ export class WorldScene extends Phaser.Scene {
   private sendMoveStart: (dir: 'left' | 'right') => void = () => {}
   private sendMoveStop: () => void = () => {}
   private sendElevatorCall: (target: FloorId) => void = () => {}
+  private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
+  /** The actor's own running channel: DOM progress bar state (never a kind). */
+  private work: { startedAt: number; seconds: number } | null = null
+  /** The interior last observed for the own segment (FR-10 read half). */
+  private interior: { floor: string; room: number; state: RoomState } | null = null
 
   constructor() {
     super('Round')
@@ -64,10 +92,13 @@ export class WorldScene extends Phaser.Scene {
     this.sendMoveStart = data.sendMoveStart
     this.sendMoveStop = data.sendMoveStop
     this.sendElevatorCall = data.sendElevatorCall
+    this.sendWorkStart = data.sendWorkStart
     this.players.clear()
     this.cars.clear()
     this.ownMoving = null
     this.viewFloor = 'lobby'
+    this.work = null
+    this.interior = null
 
     // Hall line (Graphics — deliberately not a Rectangle/Text: harness contract).
     this.add
@@ -94,7 +125,21 @@ export class WorldScene extends Phaser.Scene {
       // level in that direction (gray-box input; richer destination UI later).
       keyboard.on('keydown-UP', () => this.callElevator(1))
       keyboard.on('keydown-DOWN', () => this.callElevator(-1))
+      // Work: Space starts a channel inside the room segment the own
+      // rectangle stands in; the server validates role and room state (FR-7).
+      keyboard.on('keydown-SPACE', () => this.startWorkHere())
     }
+  }
+
+  /** Send work:start when the own predicted position is inside a segment. */
+  private startWorkHere(): void {
+    const own = this.players.get(this.ownId)
+    if (own === undefined) return
+    const floor = own.floor as FloorId
+    if (floor === 'lobby') return
+    const room = roomIndexAtMilli(Math.round(own.x * 1000))
+    if (room === 0) return
+    this.sendWorkStart(floor as GuestFloorId, room as RoomIndex)
   }
 
   /** Movement-kind ViewActions are routed here by the App (render state). */
@@ -134,6 +179,30 @@ export class WorldScene extends Phaser.Scene {
       case 'movement-snapshot':
         this.applySnapshot(action.snapshot)
         break
+      case 'work-started':
+        if (action.playerId !== this.ownId) return
+        this.work = { startedAt: Date.now(), seconds: action.seconds }
+        this.updateWorkBar()
+        break
+      case 'work-ended':
+        if (action.playerId !== this.ownId) return
+        this.work = null
+        this.updateWorkBar()
+        break
+      case 'room-observed':
+        if (action.playerId !== this.ownId) return
+        this.interior = { floor: action.floor, room: action.room, state: action.state }
+        break
+      case 'room-prepped':
+      case 'room-trashed': {
+        // Only the room we are inside exists in our view (FR-10); a matching
+        // transition updates it, everything else is not for us.
+        const interior = this.interior
+        if (interior === undefined || interior === null) return
+        if (interior.floor !== action.floor || interior.room !== action.room) return
+        interior.state = action.type === 'room-prepped' ? 'prepped' : 'trashed'
+        break
+      }
     }
   }
 
@@ -216,6 +285,38 @@ export class WorldScene extends Phaser.Scene {
     if (e !== null) e.textContent = east
   }
 
+  /** Progress bar is DOM: fill width from the own channel's elapsed time. */
+  private updateWorkBar(): void {
+    const bar = document.querySelector('#work-progress')
+    if (bar === null) return
+    if (this.work === null) {
+      bar.setAttribute('hidden', '')
+      return
+    }
+    bar.removeAttribute('hidden')
+    const fill = bar.querySelector('#work-progress-fill')
+    if (fill instanceof HTMLElement) fill.style.width = '0%'
+  }
+
+  /** Room-state label: visible only while the own rectangle is inside that segment. */
+  private updateRoomLabel(): void {
+    const label = document.querySelector('#room-state')
+    if (label === null) return
+    const interior = this.interior
+    const own = this.players.get(this.ownId)
+    const inside =
+      interior !== null &&
+      own !== undefined &&
+      own.floor === interior.floor &&
+      roomIndexAtMilli(Math.round(own.x * 1000)) === interior.room
+    if (!inside) {
+      label.setAttribute('hidden', '')
+      return
+    }
+    label.removeAttribute('hidden')
+    label.textContent = `room ${interior.room}: ${interior.state}`
+  }
+
   override update(_time: number, delta: number): void {
     const dt = delta / 1000
     // Local prediction for the own rectangle; server positions reconcile it.
@@ -238,5 +339,15 @@ export class WorldScene extends Phaser.Scene {
     for (const [, car] of this.cars) {
       car.ellipse.setVisible(car.floor === this.viewFloor)
     }
+    // Work-channel DOM state: bar fill follows elapsed time; the interior
+    // label lives only while the own rectangle stands inside the segment.
+    if (this.work !== null) {
+      const fill = document.querySelector('#work-progress-fill')
+      if (fill instanceof HTMLElement) {
+        const elapsed = (Date.now() - this.work.startedAt) / 1000
+        fill.style.width = `${Math.min(100, (elapsed / this.work.seconds) * 100)}%`
+      }
+    }
+    this.updateRoomLabel()
   }
 }

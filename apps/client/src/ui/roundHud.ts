@@ -38,6 +38,10 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
         ' · E: ',
         el('span', { id: 'panel-east' }, ['lobby']),
       ]),
+      // Work channels (cycle 2.5): the own progress bar (world scene drives
+      // the fill) and the interior label of the room currently stood in.
+      el('div', { id: 'work-progress', hidden: '' }, [el('span', { id: 'work-progress-fill' })]),
+      el('div', { id: 'room-state', hidden: '' }, []),
     ]),
   )
 

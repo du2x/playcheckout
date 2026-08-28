@@ -1,4 +1,11 @@
-import type { CarId, FloorId, MovementSnapshot } from '@turnover/shared'
+import type {
+  CarId,
+  FloorId,
+  GuestFloorId,
+  MovementSnapshot,
+  RoomIndex,
+  RoomState,
+} from '@turnover/shared'
 import type Phaser from 'phaser'
 import { Connection } from './net/connection'
 import type { WorldScene } from './scenes/WorldScene'
@@ -149,6 +156,8 @@ export class App {
       sendMoveStart: (dir: 'left' | 'right') => this.connection?.sendMoveStart(dir),
       sendMoveStop: () => this.connection?.sendMoveStop(),
       sendElevatorCall: (target: FloorId) => this.connection?.sendElevatorCall(target),
+      sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
+        this.connection?.sendWorkStart(floor, room),
     })
   }
 
@@ -181,20 +190,34 @@ export class App {
   }
 }
 
-/** Movement actions are render state (design: movement data-flow split). */
-function isMovementRenderAction(
-  action: ViewAction,
-): action is
+/** Movement/work actions are render state (design: movement data-flow split). */
+function isMovementRenderAction(action: ViewAction): action is
   | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: 'left' | 'right' }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'player-left'; playerId: string }
-  | { type: 'movement-snapshot'; snapshot: MovementSnapshot } {
+  | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
+  | { type: 'work-started'; playerId: string; floor: FloorId; room: RoomIndex; seconds: number }
+  | {
+      type: 'work-ended'
+      playerId: string
+      floor: FloorId
+      room: RoomIndex
+      outcome: 'completed' | 'cancelled'
+    }
+  | { type: 'room-observed'; playerId: string; floor: FloorId; room: RoomIndex; state: RoomState }
+  | { type: 'room-prepped'; floor: FloorId; room: RoomIndex }
+  | { type: 'room-trashed'; floor: FloorId; room: RoomIndex } {
   return (
     action.type === 'player-moved' ||
     action.type === 'elevator-called' ||
     action.type === 'elevator-moved' ||
     action.type === 'player-left' ||
-    action.type === 'movement-snapshot'
+    action.type === 'movement-snapshot' ||
+    action.type === 'work-started' ||
+    action.type === 'work-ended' ||
+    action.type === 'room-observed' ||
+    action.type === 'room-prepped' ||
+    action.type === 'room-trashed'
   )
 }

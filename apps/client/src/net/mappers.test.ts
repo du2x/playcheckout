@@ -96,3 +96,74 @@ describe('protocol mappers', () => {
     expect(s.movementSnapshot).toEqual(snap)
   })
 })
+
+// Spec WORK-10/14/16 + FR-9: work events map to scene-kind actions the reducer
+// no-ops; no payload names a role or a channel kind, so no mapper can leak one.
+describe('work mappers (cycle 2.5)', () => {
+  const before = initialViewState()
+
+  it('maps work:started to the own channel action with its seconds (WORK-01)', () => {
+    const started = first(
+      MAPPERS['work:started']({ playerId: 'p1', floor: 'floor1', room: 3, seconds: 5 }),
+    )
+    expect(started).toEqual({
+      type: 'work-started',
+      playerId: 'p1',
+      floor: 'floor1',
+      room: 3,
+      seconds: 5,
+    })
+    expect(reduce(before, started)).toBe(before) // identity: render state
+  })
+
+  it('maps work:ended with its outcome and no-ops in the reducer (WORK-11)', () => {
+    const ended = first(
+      MAPPERS['work:ended']({
+        playerId: 'p1',
+        floor: 'floor1',
+        room: 3,
+        outcome: 'cancelled',
+      }),
+    )
+    expect(ended).toEqual({
+      type: 'work-ended',
+      playerId: 'p1',
+      floor: 'floor1',
+      room: 3,
+      outcome: 'cancelled',
+    })
+    expect(reduce(before, ended)).toBe(before)
+  })
+
+  it('maps room:observed/prepped/trashed to scene-kind actions; reducer no-ops (WORK-14/15)', () => {
+    const observed = first(
+      MAPPERS['room:observed']({ playerId: 'p1', floor: 'floor2', room: 5, state: 'trashed' }),
+    )
+    expect(observed).toEqual({
+      type: 'room-observed',
+      playerId: 'p1',
+      floor: 'floor2',
+      room: 5,
+      state: 'trashed',
+    })
+    expect(reduce(before, observed)).toBe(before)
+    const prepped = first(MAPPERS['room:prepped']({ floor: 'floor2', room: 5 }))
+    expect(prepped).toEqual({ type: 'room-prepped', floor: 'floor2', room: 5 })
+    expect(reduce(before, prepped)).toBe(before)
+    const trashed = first(MAPPERS['room:trashed']({ floor: 'floor2', room: 5 }))
+    expect(trashed).toEqual({ type: 'room-trashed', floor: 'floor2', room: 5 })
+    expect(reduce(before, trashed)).toBe(before)
+  })
+
+  it('carries no role or channel-kind field in any work payload (FR-9, WORK-10)', () => {
+    const started = MAPPERS['work:started']({
+      playerId: 'p1',
+      floor: 'floor1',
+      room: 1,
+      seconds: 5,
+    })[0] as Record<string, unknown>
+    // The action's `type` tag is the mapper's own; the payload contributes no
+    // role or channel-kind field (FR-9).
+    expect(Object.keys(started).sort()).toEqual(['floor', 'playerId', 'room', 'seconds', 'type'])
+  })
+})
