@@ -1,6 +1,6 @@
 # Validation — elevator-lobby (AD-011)
 
-**Verdict: PASS**
+**Verdict**: PASS
 
 **Result**: PASS
 
