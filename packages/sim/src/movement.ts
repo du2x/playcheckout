@@ -1,5 +1,11 @@
-import type { MovementEvent } from '@turnover/shared'
-import { FLOOR_IDS, type FloorId, HALL_LENGTH_TILES, TUNING } from '@turnover/shared'
+import type { MovementEvent, RoomIndex } from '@turnover/shared'
+import {
+  FLOOR_IDS,
+  type FloorId,
+  HALL_LENGTH_TILES,
+  roomIndexAtMilli,
+  TUNING,
+} from '@turnover/shared'
 import { TICK_HZ } from './tick.js'
 
 /**
@@ -208,6 +214,38 @@ export class MovementSim {
         { car: 1 as const, floor: this.cars[1].floor },
         { car: 2 as const, floor: this.cars[2].floor },
       ],
+    }
+  }
+
+  /**
+   * AD-008 snapshot contract: a live viewer sees the players on their own
+   * floor only (the viewer included), plus both cars' public floors — the
+   * panels requirement keeps car positions public everywhere.
+   */
+  snapshotForFloor(floor: FloorId): {
+    players: { playerId: string; floor: FloorId; x: number }[]
+    cars: { car: 1 | 2; floor: FloorId }[]
+  } {
+    const full = this.snapshot()
+    return {
+      players: full.players.filter((p) => p.floor === floor),
+      cars: full.cars,
+    }
+  }
+
+  /**
+   * AD-008 view context for the Router: a live player's own floor (riders get
+   * none — no floor stream while in a car) plus the room-segment key they
+   * currently stand in (null outside every segment; AD-010 segments).
+   */
+  viewOf(playerId: string): { floor: FloorId | null; roomKey: string | null } {
+    const p = this.players.get(playerId)
+    if (p === undefined || p.inCar !== null) return { floor: null, roomKey: null }
+    if (p.floor === 'lobby') return { floor: p.floor, roomKey: null }
+    const room = roomIndexAtMilli(p.x)
+    return {
+      floor: p.floor,
+      roomKey: room === 0 ? null : `${p.floor}:${room as RoomIndex}`,
     }
   }
 

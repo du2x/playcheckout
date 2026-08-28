@@ -58,16 +58,6 @@ export interface Envelope<P = unknown> {
   readonly payload: P
 }
 
-/**
- * One registry row. `payload` is a type token (never read at runtime — only
- * through `RegistryPayload<K>`); `fromSim` projects a sim event into its wire
- * payload and, for self-policy events, the private recipient.
- */
-export interface RegistryEntry<P = unknown> {
-  readonly payload: P
-  readonly recipients: RecipientPolicy
-}
-
 /** Wire payload type per registry key. */
 export interface Payloads {
   /** server → one player. Personal snapshot on join and every roster change. */

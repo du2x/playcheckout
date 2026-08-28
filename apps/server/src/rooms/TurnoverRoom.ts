@@ -69,6 +69,9 @@ export class TurnoverRoom extends Room {
     this.patchRate = null
     this.router = new Router(this)
     this.movement = new MovementSim()
+    // AD-008: the Router resolves positional policies (sameFloor/occupants)
+    // against each viewer's legitimate view, derived from the movement sim.
+    this.router.setViewContext((sessionId) => this.movement.viewOf(sessionId))
     // Custom roomId = the shareable code (settable only during onCreate, verified
     // against installed 0.18.8 sources). Codes die with the room (FR-1: fresh
     // codes only for new groups).
@@ -133,8 +136,14 @@ export class TurnoverRoom extends Room {
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
-    // Personal movement snapshot: every connected player's public position.
-    this.router.toSelf('movement:snapshot', client.sessionId, this.movement.snapshot())
+    // Personal movement snapshot: players on the joiner's own floor + both
+    // cars' public floors (AD-008/AD-009; fresh joiners always stand in the
+    // lobby, so this is the full lobby view).
+    this.router.toSelf(
+      'movement:snapshot',
+      client.sessionId,
+      this.movement.snapshotForFloor('lobby'),
+    )
   }
 
   override onLeave(client: Client) {
@@ -232,7 +241,14 @@ export class TurnoverRoom extends Room {
       // where players and cars now stand (MOVE-08 / MOVE-18).
       this.movement.lock()
       for (const sessionId of this.players.keys()) {
-        this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshot())
+        // Own-floor snapshot per AD-008 (a rider's floor tracks their car);
+        // a snapshot generated for one connection is never visible to another.
+        const own = this.movement.positionOf(sessionId)
+        this.router.toSelf(
+          'movement:snapshot',
+          sessionId,
+          this.movement.snapshotForFloor(own?.floor ?? 'lobby'),
+        )
       }
     }
   }

@@ -162,6 +162,56 @@ describe('sim:motion', () => {
   })
 })
 
+// WORK-18 (AD-008/AD-009): snapshots are filtered to the viewer's floor; the
+// Router view context puts riders outside any floor stream (WORK-17).
+describe('movement visibility (AD-008)', () => {
+  it('snapshotForFloor keeps only the viewer-floor players and both cars (WORK-18)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    sim.unlock()
+    // Put p2 on floor1 without an elevator: impossible — use the ride helper
+    // instead. p1 stays in the lobby, so the floor1 view must exclude p1.
+    expect(
+      sim
+        .snapshotForFloor('lobby')
+        .players.map((p) => p.playerId)
+        .sort(),
+    ).toEqual(['p1', 'p2'])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
+      { car: 1, floor: 'lobby' },
+      { car: 2, floor: 'lobby' },
+    ])
+    expect(sim.snapshotForFloor('floor1').players).toEqual([])
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([
+      { car: 1, floor: 'lobby' },
+      { car: 2, floor: 'lobby' },
+    ])
+  })
+
+  it('viewOf: lobby player gets no roomKey, riders get no floor, segments map to keys', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    // Lobby center is outside every segment (lobby floor has none).
+    expect(sim.viewOf('p1')).toEqual({ floor: 'lobby', roomKey: null })
+
+    // Ride p1 to floor1: rider context loses its floor while in the car (AD-008).
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50; i++) sim.tick() // walk to the west landing
+    sim.unlock()
+    expect(sim.callElevator('p1', 'floor1')).toBe('dispatched')
+    sim.tick() // flash (tick 1)
+    for (let i = 0; i < 59; i++) sim.tick() // ticks 2..60 — arrival + boarding on 60
+    expect(sim.viewOf('p1')).toEqual({ floor: null, roomKey: null }) // rider: no floor stream (AD-008)
+    for (let i = 0; i < 39; i++) sim.tick() // ride lobby → floor1 (40 ticks)
+    sim.tick() // exit tick
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+
+    // Arrived riders stand at the landing x=0 — outside every segment (AD-010).
+    expect(sim.viewOf('p1')).toEqual({ floor: 'floor1', roomKey: null })
+  })
+})
+
 // Spec MOVE-09..18 (gate scenario sim:elevator): scripted call sequences over
 // the pure sim. Ticks are the only clock: arrival = 60 ticks, ride = 40/floor.
 describe('sim:elevator', () => {

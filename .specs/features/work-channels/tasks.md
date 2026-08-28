@@ -84,7 +84,7 @@ T5 → T6 → T7
 
 ---
 
-### T2: Router positional policies + sameFloor routing (AD-009 lands)
+### T2: Router positional policies + sameFloor routing (AD-009 lands) ✅ Done
 
 **What**: Extend `Router` with `setViewContext` (per-connection `{floor, roomKey}` provider) and the `sameFloor`/`occupants` dispatch branches; keep the Router type-agnostic (policy + visibility come from registry rows). Add `MovementSim.snapshotForFloor(floor)` (WORK-18) and switch the room's join/buzzer snapshot sends to it. Wire `TurnoverRoom.setViewContext` from the movement sim (riders ⇒ floor null). Amend the 2.4 tests that pinned global delivery (server `player:moved` broadcast assertions; `registry.test.ts` policy pins) to the AD-009 contract; add Router tests: cross-floor `player:moved` not delivered, rider receives none while in car, snapshot filtered to own floor, occupants-only room events. Fold in protocol-registry N1 (fix the TurnoverRoom.test.ts:412-415 comment misattribution) and N3 (remove unused `RegistryEntry` export).
 **Where**: `apps/server/src/rooms/router.ts`, `router.test.ts`, `TurnoverRoom.ts`, `TurnoverRoom.test.ts`, `packages/sim/src/movement.ts` + `movement.test.ts` (snapshotForFloor), `packages/shared/src/protocol/registry.ts` (N3)

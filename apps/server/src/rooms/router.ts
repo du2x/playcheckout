@@ -1,4 +1,4 @@
-import type { MovementEvent } from '@turnover/shared'
+import type { EventVisibility, MovementEvent } from '@turnover/shared'
 import {
   type Envelope,
   type KeysWith,
@@ -22,17 +22,44 @@ import type { Client, Room } from 'colyseus'
  * `router.test.ts`). Recipient policies are declared per message type in
  * `PROTOCOL_REGISTRY` and applied structurally — a self-policy event cannot be
  * broadcast by this code, and an all-policy event cannot be sent to one player.
+ *
+ * Positional policies (cycle 2.5): `sameFloor` (AD-008/AD-009) delivers only to
+ * live viewers whose view context floor matches the event's; `occupants` only
+ * to viewers inside the event's room segment. The room supplies per-connection
+ * view contexts via `setViewContext`; the Router never derives visibility
+ * itself and never names a message type.
  */
+
+/** What a connection may currently see — supplied by the room, never derived here. */
+export interface ViewContext {
+  /** The viewer's floor, or null for riders (no floor stream in a car, AD-008). */
+  readonly floor: string | null
+  /** `\`${floor}:${room}\`` of the segment the viewer stands in, or null. */
+  readonly roomKey: string | null
+}
+
+const NO_VIEW: ViewContext = { floor: null, roomKey: null }
 
 interface Projection {
   payload: unknown
   self?: string
+  visibility?: EventVisibility
 }
 
 export class Router {
   private seqByConnection = new Map<string, number>()
+  private viewContext: (sessionId: string) => ViewContext = () => NO_VIEW
 
   constructor(private readonly room: Room) {}
+
+  /**
+   * Register the per-connection visibility provider. The room derives contexts
+   * from its movement sim (own floor + current segment); the Router only
+   * matches them against the registry row's declared visibility.
+   */
+  setViewContext(fn: (sessionId: string) => ViewContext): void {
+    this.viewContext = fn
+  }
 
   /**
    * Route a sim event per its declared recipient policy. No per-type switch:
@@ -46,8 +73,8 @@ export class Router {
     // argument. The registry's own satisfies typing guarantees the projection
     // matches the declared payload for exactly this event variant.
     const project = entry.fromSim as (e: SimEvent | MovementEvent) => Projection
-    const { payload, self } = project(event)
-    this.dispatch(event.type as RegistryKey, payload, entry.recipients, self)
+    const { payload, self, visibility } = project(event)
+    this.dispatch(event.type as RegistryKey, payload, entry.recipients, self, visibility)
   }
 
   /** Room-originated send to one player — only for keys whose policy is `self`. */
@@ -70,11 +97,28 @@ export class Router {
     payload: unknown,
     recipients: RecipientPolicy,
     self?: string,
+    visibility?: EventVisibility,
   ): void {
     const time = Date.now()
     if (recipients === 'self') {
       const target = this.liveClient(self)
       if (target !== undefined) this.deliver(target, key, payload, time)
+      return
+    }
+    if (recipients === 'sameFloor') {
+      for (const client of this.liveClients()) {
+        if (this.viewContext(client.sessionId).floor === visibility?.floor) {
+          this.deliver(client, key, payload, time)
+        }
+      }
+      return
+    }
+    if (recipients === 'occupants') {
+      for (const client of this.liveClients()) {
+        if (this.viewContext(client.sessionId).roomKey === visibility?.roomKey) {
+          this.deliver(client, key, payload, time)
+        }
+      }
       return
     }
     // Broadcast: each connection receives its own next seq (spec REG-07).

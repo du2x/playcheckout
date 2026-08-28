@@ -409,9 +409,9 @@ describe('server:protocol_registry', () => {
 
     for (const collector of collectors) {
       const started = await collector.waitFor('round:started')
-      // Colyseus 0.18 merges the wire name into the outgoing object as `type`
-      // at transport level; our envelope fields ride beside it and payloads
-      // themselves stay type-less.
+      // The test collector re-attaches the wire name as `type` when it records
+      // the message; our envelope fields ride beside it and payloads themselves
+      // stay type-less.
       expect(Object.keys(started).sort()).toEqual(['payload', 'seq', 'time', 'type'])
       expect(started.seq).toBeGreaterThan(0)
       expect(typeof started.time).toBe('number')
@@ -587,7 +587,7 @@ describe('server:lobby_churn', () => {
 // server halves): movement events ride the Router in both phases, snapshots are
 // self-policy, and positions persist across start and buzzer.
 describe('server:movement', () => {
-  it('sends the joiner a personal movement snapshot and broadcasts moves', async () => {
+  it('sends the joiner an own-floor movement snapshot and delivers moves to same-floor viewers (WORK-17/18)', async () => {
     const host = await createRoom('ada')
     const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
     const hostCollector = collectAll(host)
