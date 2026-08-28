@@ -179,10 +179,10 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] Host start with ≥4 (`TUNING.PLAYERS_MIN`) enters round phase; each client receives exactly one private `role:dealt`; collected across 4 clients, exactly one saboteur; broadcasts contain no role fields
-- [ ] Rejections: <4 players → `need-more-players`; non-host → `not-host`; double start → `round-already-active`
-- [ ] Sim ticks only during round phase (clock assertions via room's tick driver hook); buzzer transitions room to lobby, roles wiped, second start deals fresh roles
-- [ ] Full gate passes; test count: 6+ new cases
+- [x] Host start with ≥4 (`TUNING.PLAYERS_MIN`) enters round phase; each client receives exactly one private `role:dealt`; collected across 4 clients, exactly one saboteur; broadcasts contain no role fields
+- [x] Rejections: <4 players → `need-more-players`; non-host → `not-host`; double start → `round-already-active`
+- [x] Sim ticks only during round phase (clock assertions via room's tick driver hook); buzzer transitions room to lobby, roles wiped, second start deals fresh roles
+- [x] Full gate passes; test count: 6+ new cases (6 added, 51 total)
 
 **Tests**: integration
 **Gate**: full
