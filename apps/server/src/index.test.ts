@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { Client } from '@colyseus/sdk'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startServer } from './index'
-import { PlaceholderRoom } from './rooms/PlaceholderRoom'
+import { TurnoverRoom } from './rooms/TurnoverRoom'
 
 let port: number
 let app: Awaited<ReturnType<typeof startServer>>['app']
@@ -28,14 +28,14 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  PlaceholderRoom.instances = []
+  TurnoverRoom.instances = []
   await gameServer.gracefullyShutdown(false)
   await app.close()
   rmSync(distDir, { recursive: true, force: true })
 })
 
-// Spec SKEL-06 AC1/AC2: single port serves static + WS (AD-001); message-only
-// placeholder room joins with patchRate null (no Schema state sync).
+// Spec SKEL-06 AC1/AC2 carried forward: single port serves static + WS (AD-001);
+// the turnover room joins message-only (patchRate null, no Schema state sync).
 describe('server transport shell', () => {
   it('serves static assets and accepts a Colyseus join on the same port', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/`)
@@ -43,15 +43,15 @@ describe('server transport shell', () => {
     expect(await res.text()).toContain('placeholder-dist')
 
     const client = new Client(`ws://127.0.0.1:${port}`)
-    const room = await client.joinOrCreate('placeholder')
+    const room = await client.create('turnover', { name: 'ada' })
     expect(room.sessionId).toBeTruthy()
     room.leave()
   })
 
-  it('creates the placeholder room message-only: patchRate null, no state sync', async () => {
+  it('runs the turnover room message-only: patchRate null, no state sync', async () => {
     const client = new Client(`ws://127.0.0.1:${port}`)
-    const room = await client.joinOrCreate('placeholder')
-    const instance = PlaceholderRoom.instances.at(-1)
+    const room = await client.create('turnover', { name: 'bruno' })
+    const instance = TurnoverRoom.instances.at(-1)
     expect(instance).toBeDefined()
     expect(instance?.patchRate).toBeNull()
     room.leave()

@@ -20,15 +20,12 @@
 
 ## Handoff
 
-- **Feature**: skeleton (`.specs/features/skeleton/`) — COMPLETE
-- **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
-- **Completed**: T1–T7 (commits 9d593b8..8eabc44)
+- **Feature**: room-shell (`.specs/features/room-shell/`) — all 7 tasks committed (T1-T7)
+- **Phase / Task**: Awaiting Verifier (validation.md pending)
+- **Completed**: sim deal (T1), RoundSim + sim:role_deal (T2), message catalog (T3),
+  lobby join (T4), start/sim/routing (T5), churn (T6), registration swap + full round (T7)
 - **In-progress** (file:line): none
-- **Next step**: Phase 2 — authoritative server sim (headless-first), planned as 7 tlc
-  cycles (see `roadmap.md` Phase 2 table). Next: cycle 2.1 `room-shell` — fresh Specify
-  for `.specs/features/room-shell/`.
+- **Next step**: Verifier pass, then cycle 2.2 `movement` (see roadmap Phase 2 table)
 - **Blockers**: none
-- **Uncommitted files**: none (after final .specs commit)
-- **Branch**: master (renamed from default; 7 commits, no remote)
-
-Deferred notes from validation: (1) tuning-literal denylist test is the sole guard against literal duplication — review-enforced complement; (2) spec.md coverage header was stale, fixed post-validation.
+- **Uncommitted files**: none
+- **Branch**: master

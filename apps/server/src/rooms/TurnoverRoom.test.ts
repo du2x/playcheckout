@@ -391,4 +391,45 @@ describe('server:lobby_churn', () => {
     b.leave()
     joiner.leave()
   })
+
+  it('full headless round: join ×4, deal, shift, buzzer, re-deal (integration sweep)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const collectors = [host, a, b, c].map((room) => collectAll(room))
+    const instance = TurnoverRoom.instances.at(-1)
+
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(6000)
+
+    let saboteurs = 0
+    for (const collector of collectors) {
+      const started = await collector.waitFor('round:started')
+      expect(started.payload.playerIds).toHaveLength(4)
+      await collector.waitFor('round:buzzer')
+      const dealt = await collector.waitFor('role:dealt')
+      expect(Object.keys(dealt.payload).sort()).toEqual(['role', 'type'])
+      if (dealt.payload.role === 'saboteur') saboteurs++
+    }
+    expect(saboteurs).toBe(1)
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('lobby'))
+
+    // Second round on the same room code: fresh deal, no memory of the first.
+    const second = new Map(collectors.map((c2) => [c2, false]))
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(1)
+    let saboteurs2 = 0
+    for (const collector of collectors) {
+      const dealt = await collector.waitFor('role:dealt')
+      if (dealt.payload.role === 'saboteur') saboteurs2++
+      second.set(collector, true)
+    }
+    expect(saboteurs2).toBe(1)
+    expect([...second.values()].every((v) => v)).toBe(true)
+    for (const collector of collectors) collector.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
 })

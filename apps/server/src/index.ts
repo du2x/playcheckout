@@ -4,7 +4,6 @@ import { setTransport } from '@colyseus/core/Transport'
 import fastifyStatic from '@fastify/static'
 import { createNodeMatchmakingMiddleware, matchMaker, Server, WebSocketTransport } from 'colyseus'
 import Fastify, { type FastifyInstance } from 'fastify'
-import { PlaceholderRoom } from './rooms/PlaceholderRoom'
 import { TurnoverRoom } from './rooms/TurnoverRoom'
 
 const CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
@@ -52,7 +51,6 @@ export async function startServer(
   setTransport(transport)
 
   const gameServer = new Server({ transport })
-  gameServer.define('placeholder', PlaceholderRoom)
   gameServer.define('turnover', TurnoverRoom)
   await matchMaker.accept()
 

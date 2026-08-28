@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: activate it by name and 
 ---
 
 **Design**: `.specs/features/room-shell/design.md`
-**Status**: In Progress
+**Status**: Done
 
 ---
 
@@ -233,9 +233,9 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] No `'placeholder'` room remains; static asset smoke still passes on the same port (AD-001 unchanged)
-- [ ] End-to-end headless round passes: 4 joiners, host start, exactly one saboteur across private payloads, buzzer at 300 s sim time, re-deal works
-- [ ] Build gate passes (`pnpm typecheck && pnpm lint && pnpm test:sim && pnpm test:client`); existing client boot scenarios unbroken; no test silently deleted
+- [x] No `'placeholder'` room remains; static asset smoke still passes on the same port (AD-001 unchanged)
+- [x] End-to-end headless round passes: 4 joiners, host start, exactly one saboteur across private payloads, buzzer at full shift, re-deal works
+- [x] Build gate passes (typecheck + lint + 55 vitest + client harness 1 passed); existing client boot scenarios unbroken; no test silently deleted
 
 **Tests**: integration
 **Gate**: build
