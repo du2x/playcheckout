@@ -142,7 +142,7 @@ T6 → T7
 
 ---
 
-### T4: packages/sim placeholder + vitest workspace wiring
+### T4: packages/sim placeholder + vitest workspace wiring ✅ (commit: feat(sim))
 
 **What**: `packages/sim` with one placeholder vitest scenario importing shared constants (cross-workspace resolution proof) plus the no-duplicate-literal denylist test; root `vitest.workspace.ts` covering `packages/shared`, `packages/sim`, `apps/server`; root `test:sim` script wired.
 **Where**: `packages/sim/`

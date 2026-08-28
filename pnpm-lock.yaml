@@ -23,6 +23,12 @@ importers:
 
   packages/shared: {}
 
+  packages/sim:
+    dependencies:
+      '@turnover/shared':
+        specifier: workspace:*
+        version: link:../shared
+
 packages:
 
   '@biomejs/biome@2.2.4':
