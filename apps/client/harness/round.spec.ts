@@ -65,10 +65,17 @@ test.describe('client:round_start', () => {
       expect(clockStart).toBe('05:00')
     }
 
-    // LIGHT-10: decreases by ~1 s per wall-clock second.
-    await pages[0]?.waitForTimeout(1500)
+    // LIGHT-10: decreases by ~1 s per wall-clock second. Wait for the clock to
+    // ENTER 04:59 (its display window is exactly 1 s wide), then sample again
+    // one second later — deterministic regardless of mount latency.
+    await pages[0]?.waitForFunction(
+      () => document.querySelector('#clock')?.textContent === '04:59',
+      undefined,
+      { timeout: 5000 },
+    )
+    await pages[0]?.waitForTimeout(1000)
     const clockLater = await pages[0]?.textContent('#clock')
-    expect(clockLater).toBe('04:59')
+    expect(clockLater).toBe('04:58')
 
     await Promise.all(pages.map((p) => p.context().close()))
   })

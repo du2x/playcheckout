@@ -38,6 +38,22 @@ async function readScene(page: Page): Promise<SceneRead> {
   })
 }
 
+function onLanding(): boolean {
+  const t = (
+    window as unknown as {
+      __TURNOVER__: {
+        scene: (
+          n: string,
+        ) => { children: { list: { type: string; text?: string; x: number }[] } } | null
+      }
+    }
+  ).__TURNOVER__
+  const scene = t.scene('Round')
+  if (scene === null) return false
+  const ada = scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')
+  return ada !== undefined && ada.x <= 832 / 30
+}
+
 function labelX(scene: SceneRead, name: string): number {
   const label = scene.labels.find((l) => l.text === name)
   if (label === undefined) throw new Error(`no label for ${name}`)
@@ -120,14 +136,18 @@ test.describe('client:movement', () => {
       await join(pages[index + 1] as Page, code, name)
     }
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
-    await host.click('#start-button')
-    for (const page of pages) await page.waitForSelector('#round-hud')
 
-    // Host walks to the west landing, then calls the elevator up (ArrowUp).
+    // Walk to the west landing PRE-ROUND (AD-005: lobby walking + position
+    // persistence) so the whole elevator cycle fits inside the 8 s test shift.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
-    await host.keyboard.press('ArrowUp')
+    await host.waitForTimeout(300)
+    expect(await host.evaluate(onLanding)).toBe(true)
+
+    await host.click('#start-button')
+    for (const page of pages) await page.waitForSelector('#round-hud')
+    await host.keyboard.press('ArrowUp') // call: pickup here, target floor1
 
     // The car arrives (3 s), boards, and rides to floor1 (2 s): panels update.
     await host.waitForFunction(
