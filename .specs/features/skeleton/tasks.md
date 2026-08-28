@@ -197,7 +197,7 @@ T6 → T7
 
 ---
 
-### T6: apps/client — Phaser 4 shell + gate-3 boot-check harness
+### T6: apps/client — Phaser 4 shell + gate-3 boot-check harness ✅ (commit: feat(client))
 
 **What**: Vite + Phaser 4 client booting a placeholder scene with DOM-overlay root; `window.__TURNOVER__` injected only in dev/harness builds; Playwright harness (`apps/client/harness/`) booting the real server + served client in headless Chromium and asserting Phaser boot + hook; root `test:client` script wired.
 **Where**: `apps/client/`

@@ -1,0 +1,19 @@
+{
+  "name": "@turnover/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "vite",
+    "build": "vite build",
+    "build:harness": "vite build --mode harness"
+  },
+  "dependencies": {
+    "@turnover/shared": "workspace:*",
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "vite": "^8.2.2"
+  }
+}
