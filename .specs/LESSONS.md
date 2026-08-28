@@ -20,6 +20,24 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)
 - last seen: 2026-08-28T00:35:14Z
 
+### L-002 - When an implementation value drifts from a recorded AD decision (5s -> 8s test shift), update the AD record in the same commit that changes the value so the decision log never disagrees with the code.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `specs/decision-log` · harmful: 0
+- features: first-light
+- evidence: AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)
+- last seen: 2026-08-28T11:43:49Z
+
+### L-003 - When a spec AC requires displaying the server's rejection reason, assert a value matcher on the reason text (e.g. /room not found/), not merely that some error text is visible.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `apps/client/harness` · harmful: 0
+- features: first-light
+- evidence: LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)
+- last seen: 2026-08-28T11:43:49Z
+
+### L-004 - An AC listing multiple rejection causes needs one test path per cause - 'need more players' and 'round already active' are separate scenarios, not one.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `apps/client/harness` · harmful: 0
+- features: first-light
+- evidence: LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)
+- last seen: 2026-08-28T11:43:49Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

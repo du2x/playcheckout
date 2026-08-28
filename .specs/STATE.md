@@ -41,8 +41,9 @@
   `totalTicks` config (default unchanged: `TUNING.SHIFT_SECONDS × TICK_HZ`); the
   TurnoverRoom passes `TURNOVER_TEST_SHIFT_SECONDS` (seconds → ticks at 20 Hz)
   only when `NODE_ENV !== 'production'`. The gate-3 webServer boots the real
-  server with `TURNOVER_TEST_SHIFT_SECONDS=5` so client scenarios reach a real
-  buzzer in seconds.
+  server with `TURNOVER_TEST_SHIFT_SECONDS=8` so client scenarios reach a real
+  buzzer in seconds (8 s leaves margin for the LIGHT-09 clock sampling that
+  must finish before the buzzer; originally 5 s, widened for flake margin).
 - **Reason**: LIGHT-13/14 (buzzer → lobby, re-deal) are untestable in a real
   browser against a 300 s wall-clock shift; every later Phase 2 cycle's
   `client:*` scenarios need fast rounds too.
@@ -58,13 +59,14 @@
 ## Handoff
 
 - **Feature**: first-light (`.specs/features/first-light/`) — all 7 tasks committed
-- **Phase / Task**: Awaiting verifier validation (validation.md to be written by the Verifier)
+- **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
 - **Completed**: sim shift seam + AD-004 (T1), view reducer (T2), join slice + harness
   client:lobby_join (T3), lobby coverage (T4), round view + client:round_start (T5),
   buzzer re-deal (T6), close-out sweep + room-full surfacing (T7)
 - **In-progress** (file:line): none
-- **Next step**: verifier dispatch for first-light; then cycle 2.3 `movement` —
-  fresh Specify for `.specs/features/movement/`
+- **Next step**: cycle 2.3 `movement` — fresh Specify for `.specs/features/movement/`;
+  fold verifier gaps 2–4 (LIGHT-02 unknown-code message, LIGHT-08 "round already
+  active", LIGHT-04 1-char name minimum) into the next client-touching cycle
 - **Blockers**: none (Gate 4 human 5-min round pending — run `pnpm boot` or
   `pnpm build && node apps/server/dist/index.js`, open 4 tabs, create/join/start)
 - **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script
