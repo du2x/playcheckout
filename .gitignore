@@ -3,4 +3,4 @@ dist/
 *.tsbuildinfo
 .vite/
 test-results/
-playwright-report/
+playwright-report/.playwright-mcp/
