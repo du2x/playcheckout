@@ -208,7 +208,7 @@ T6 → T7
 
 ---
 
-### T6: Buzzer — return to lobby and fresh re-start
+### T6: Buzzer — return to lobby and fresh re-start — ✅ done
 
 **What**: Wire `round:buzzer` → lobby view (role card and clock cleared, scene slept); verify the post-buzzer re-start renders a fresh round view; extend `round.spec.ts` using the T1 5-second test shift.
 **Where**: `apps/client/src/main.ts` (modify), `apps/client/harness/round.spec.ts` (extend), `apps/client/harness/playwright.config.ts` (add `TURNOVER_TEST_SHIFT_SECONDS=5` to webServer command)
