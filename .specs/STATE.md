@@ -10,6 +10,14 @@
 - **Date**: 2026-08-27
 - **Status**: active
 
+### AD-002
+- **Decision**: Room owns the lobby, sim owns the round. The Colyseus room (`TurnoverRoom`) manages roster, names, host, join/reject rules, and phase transitions; the pure sim (`RoundSim`) is created fresh at host-start with `(seed, playerIds)`, ticks 20 Hz, and dies at the buzzer. Lobby churn never enters the sim.
+- **Reason**: Join/leave/name validation is transport-shaped; keeping it out of `packages/sim` keeps the deterministic core minimal, and every later Phase 2 cycle (2.2–2.6) extends only `RoundSim`.
+- **Trade-off**: Two state homes (room phase + sim clock) with a sync point at start/buzzer — accepted; the seam is exactly two transitions, both gate-tested.
+- **Scope**: All Phase 2 cycles, `packages/sim`, `apps/server/src/rooms`.
+- **Date**: 2026-08-27
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: skeleton (`.specs/features/skeleton/`) — COMPLETE
