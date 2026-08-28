@@ -108,22 +108,26 @@
 
 ## Handoff
 
-- **Feature**: protocol-registry (`.specs/features/protocol-registry/`) — cycle 2.3 (AD-006)
-- **Phase / Task**: Specify complete (spec.md written from the accepted grilling decisions);
-  Design not started
-- **Completed**: architecture review report (6 candidates, C1 chosen) → 3 grilling rounds
-  (all recommendations user-accepted) → `CONTEXT.md` created (protocol registry, recipient
-  policy, envelope, router) → AD-006 recorded → roadmap cycle table renumbered (movement →
-  2.4, …, telemetry → 2.9) → movement spec cycle refs updated → spec.md written
+- **Feature**: protocol-registry (`.specs/features/protocol-registry/`) — cycle 2.3 (AD-006) ✅ COMPLETE
+- **Phase / Task**: Specify → Design → Tasks (T1–T6) → Execute → Verifier **PASS**
+  (validation.md: 20/20 REGs evidenced, gates 1–3 exit 0 — typecheck, lint, 94/94 sim,
+  16/16 client; discrimination sensor 8/8 mutants killed; Gate 4 N/A — behavior-preserving)
+- **Completed**: registry in `packages/shared/src/protocol/registry.ts` (SimEvent moved to
+  shared, sim re-exports; payload `type` literals dropped; envelope.ts + unions deleted);
+  per-room Router `apps/server/src/rooms/router.ts` (only sender, per-connection seq from 1,
+  `toSelf`/`toAll` policy-typed via `KeysWith`); client generic dispatch (`connection.ts`
+  `onMessage('*')` + seq guard + gap→leave, `mappers.ts` exhaustive table, `app.ts`
+  view-transition scene sync); harness `client:envelope_gap`; turnover-protocol rule 5
+  rewritten (registry = audit surface, grep retired)
 - **In-progress** (file:line): none
-- **Next step**: Design phase for `.specs/features/protocol-registry/` (registry entry
-  shape, Router module interface, client mapper table, envelope stamping points), then
-  Tasks → Execute. Movement Design must target the registry, not the old pipeline.
-- **Blockers**: none (first-light Gate 4 human 5-min round still pending — run `pnpm boot`,
-  open 4 tabs, create/join/start)
+- **Next step**: cycle 2.4 `movement` (`.specs/features/movement/spec.md` exists) — Design
+  must target the registry (declare new message types there; recipient-policy enum extends
+  deliberately, e.g. `nearby`/`roomOccupants` land with their first consumers; 20 Hz
+  position streams ride the envelope's seq/time)
+- **Blockers**: none (Gate 4 human rounds pending for first-light + protocol-registry is
+  N/A; run `pnpm boot`, open 4 tabs, create/join/start when convenient)
 - **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script
-  (not part of any feature); spec-phase artifacts from this cycle: `CONTEXT.md`,
-  `.specs/features/protocol-registry/spec.md`, STATE.md/roadmap.md/movement-spec edits
+  (not part of any feature); `.playwright-mcp/` gitignored session logs
 - **Branch**: master
 
 Deferred notes from Verifier (room-shell PASS, low-severity spec-precision gaps):
@@ -134,3 +138,9 @@ after name rejection unasserted — fold into the next cycle touching TurnoverRo
 Deferred notes from Verifier (first-light PASS): (2) LIGHT-02 unknown-code message,
 (3) LIGHT-08 "round already active", (4) LIGHT-04 1-char name minimum — fold into the
 next client-touching cycle.
+
+Deferred notes from Verifier (protocol-registry PASS, low severity, fold into the next
+cycle touching these files): (N1) TurnoverRoom.test.ts:412-415 comment misattributes the
+collector-added `type` key to Colyseus transport; (N2) registry.test.ts:66-70 pins policy
+membership, not literal per-key values — a literal per-key policy walk would be direct;
+(N3) `RegistryEntry<P>` (registry.ts:41-44) exported but unused — dead declaration.
