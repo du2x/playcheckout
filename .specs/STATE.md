@@ -36,6 +36,25 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-004
+- **Decision**: Test-only shift-length seam. `RoundSim` accepts an optional
+  `totalTicks` config (default unchanged: `TUNING.SHIFT_SECONDS × TICK_HZ`); the
+  TurnoverRoom passes `TURNOVER_TEST_SHIFT_SECONDS` (seconds → ticks at 20 Hz)
+  only when `NODE_ENV !== 'production'`. The gate-3 webServer boots the real
+  server with `TURNOVER_TEST_SHIFT_SECONDS=5` so client scenarios reach a real
+  buzzer in seconds.
+- **Reason**: LIGHT-13/14 (buzzer → lobby, re-deal) are untestable in a real
+  browser against a 300 s wall-clock shift; every later Phase 2 cycle's
+  `client:*` scenarios need fast rounds too.
+- **Trade-off**: One optional sim parameter and two env reads — production code
+  path is byte-identical to the §7 default; harness DOM clock (300 s) disagrees
+  with the shortened server round, accepted as display-only until cycle 2.3
+  introduces server time fields.
+- **Scope**: `packages/sim/src/roundSim.ts`, `apps/server/src/rooms/TurnoverRoom.ts`,
+  `apps/client/harness/playwright.config.ts`.
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: room-shell (`.specs/features/room-shell/`) — all 7 tasks committed (T1-T7)
