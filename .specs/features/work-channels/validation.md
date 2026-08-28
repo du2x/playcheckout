@@ -1,10 +1,11 @@
 # Work Channels (cycle 2.5) — Validation Report
 
 **Verifier**: independent (author ≠ verifier; all evidence re-derived from the tree).
-**Diff range**: `530ea86..HEAD` (6169498, 69c20b3, 6809073, 9e21451, e03c013, 94621ae, f30e563).
-**Date**: 2026-08-28.
+**Diff range**: `530ea86..HEAD` (6169498, 69c20b3, 6809073, 9e21451, e03c013, 94621ae, f30e563, plus fix commit `87d4155`).
+**Date**: 2026-08-28 (original verification); re-verified 2026-08-28 after `87d4155` — both gaps closed, verdict stands.
 
-## Verdict: **PASS** (with 2 low/medium-severity gaps listed below; no fix required to pass)
+## Verdict: **PASS** (originally with 2 low/medium-severity gaps; **both closed in `87d4155`** — see Ranked gaps and Re-verification)
+**Result**: PASS
 
 ---
 
@@ -17,6 +18,8 @@
 | 2 | `pnpm test:sim` | exit 0 — **160 tests / 15 files passed** (11.4 s) |
 | 3 | `pnpm test:client` | exit 0 — **20 passed** (59 s); the `name taken`/`room full` server logs are expected negative-path fixtures |
 | 4 | human 5-min round | **open** (player-facing change) — owner's responsibility, not verifier-runnable |
+
+**Re-verification (2026-08-28, after fix commit `87d4155`)**: gates 1a/1b/2 re-run by the re-verifier, all exit 0 — typecheck 4 projects, Biome 76 files, `pnpm test:sim` **162 tests / 15 files passed** (11.5 s, +2 = the two new WORK-19 tests). Gates 3/4 not re-run (no client-facing diff in `87d4155` — tests + spec docs only). Tree at re-verification: `HEAD` = `87d4155`, `git status --porcelain` = `M package.json` (user's `boot` script), `?? .playwright-mcp/`, `?? scripts/` (user files) — the previously-dirty `.specs/STATE.md` amendment was committed in `87d4155`.
 
 **Test-count delta vs pre-feature baseline (123 tests / 14 files): +37 tests, +1 file** — the +1 file is `packages/sim/src/work.test.ts` (12 tests); the rest are additions to `registry.test.ts`, `router.test.ts`, `TurnoverRoom.test.ts`, `movement.test.ts`, `roundSim.test.ts`, `layout.test.ts`, `mappers.test.ts`, and `apps/client/harness/work.spec.ts`.
 
@@ -44,7 +47,7 @@
 | WORK-16 | No interior for non-occupied rooms, no roles/cross-floor | `registry.test.ts:58-88` literal per-key policy walk (16 keys, exact policies incl. `sameFloor`/`occupants`); `:78` keys(pins) === keys(REGISTRY); harness `work.spec.ts:209-214` (guest tab: no interior/channel types, `#room-state` hidden) |
 | WORK-17 | `player:moved` sameFloor only; rider silence in-car | `router.test.ts:127-128` `expect(lobbyViewer.sent).toEqual([])`, `expect(rider.sent).toEqual([])`; `:129-136` floor1 viewer gets the full payload; in-vivo `TurnoverRoom.test.ts:601-638`; harness `work.spec.ts:111-117` (lobby tab's ada-move count frozen while ada walks floor1) |
 | WORK-18 | Snapshot contains only own-floor players + both cars | `packages/sim/src/movement.test.ts:218` `expect(sim.snapshotForFloor('floor1').players).toEqual([])` (lobby-only players), `:214/:219` both cars always present; server `TurnoverRoom.test.ts:615-625` |
-| WORK-19 | AC3: `elevator:called`/`moved`/`player:left` stay `all` — **covered**: `router.test.ts:156-169` (both viewers receive both). AC4: `player:left-floor` to departed-floor viewers — **PARTIAL, see Gap 1**: policy pinned `registry.test.ts:68` (`'player:left-floor': 'sameFloor'`), payload type `{playerId, floor}` with no destination (`messages.ts:108-111`), emission exists (`movement.ts:300`) — but no behavioral test asserts emission/routing/payload |
+| WORK-19 | AC3: `elevator:called`/`moved`/`player:left` stay `all` — **covered**: `router.test.ts:156-169` (both viewers receive both). AC4: `player:left-floor` to departed-floor viewers — **covered (Gap 1 closed in `87d4155`)**: emission pinned `movement.test.ts:507` `toEqual([{ type: 'player:left-floor', playerId: 'p1', floor: 'lobby' }])` (exact array ⇒ deletion/duplication/payload drift all fail), pickup-floor-only `:509` `not.toContain('floor1')`, exactly-once silence for 40 ride ticks `:511-513`; routing/payload projection pinned `registry.test.ts:189-199` (`visibility` `toEqual({ floor: 'lobby' })` = departed floor, payload exactly `{playerId, floor}`, no destination); policy pin `registry.test.ts:68` (`'sameFloor'`) |
 | WORK-20 | Decoy-flash `car` value literal | `movement.test.ts:349-350` `expect(called[1]).toEqual({ type: 'elevator:called', floor: 'lobby', car: 1 })` — both flashes name the targeting car |
 | WORK-21 | Pinned-at-wall + intent ⇒ silence | `movement.test.ts:116` `for (let i = 0; i < 5; i++) expect(sim.tick()).toEqual([])` with intent still held |
 | WORK-22 | MOVE-06 positive half: walking on floor1 displaces x | `movement.test.ts:134-137` — `player:moved` emitted on floor1, `lastX` = 3.0 tiles after 10 ticks |
@@ -75,19 +78,21 @@ Scratch: rsync of the tree to `/tmp/verifier-work` (excl. node_modules/.git/.pla
 | M10 | Client room index off-by-one (`startWorkHere` +1) | `WorldScene.ts:143` | `pnpm playwright test work` in scratch: server rejects the intent → progress bar never appears → `work.spec.ts:126` timeout (**1 failed / 19 passed** — the failure is the mutant) | KILLED |
 
 **Sensor result: 12 injected / 12 killed / 0 confirmed survivors.**
-Analytical survivor (not injected, derived from grep evidence): deleting the `player:left-floor` emission at `movement.ts:300` would survive the entire suite — no test references that event outside the registry policy pin. That is Gap 1 below.
+Analytical survivor (not injected, derived from grep evidence): deleting the `player:left-floor` emission at `movement.ts:300` would survive the entire suite — no test references that event outside the registry policy pin. That was Gap 1 below.
+
+**Re-verification sensor (2026-08-28)**: the former analytical survivor was injected in a fresh `/tmp/opencode/wc-reverify` scratch (rsync of `87d4155` tree, `movement.ts:300` emission replaced with `void rider`, confirmed applied by grep before the run). Result: **KILLED** — exactly 1 test failed (`movement.test.ts:507`, the new WORK-19 exact-array assertion; 161/162 passed, so the new test is the sole killer). Scratch deleted; real tree re-checked clean afterwards.
 
 ---
 
 ## Ranked gaps
 
-1. **Gap 1 — MEDIUM. WORK-19 AC4 (`player:left-floor`) has no behavioral assertion.** The registry pins its policy (`registry.test.ts:68`) and the payload type carries no destination (`messages.ts:108-111`), but nothing asserts that departure by elevator actually *emits* the event, that it reaches the departed floor's viewers, or that the payload stays `{playerId, floor}`. A mutant removing the emission (`movement.ts:300`) or corrupting the payload would pass the whole suite. Suggested fix task: one movement-sim test (rider departs floor X ⇒ exactly one `player:left-floor` with `floor: X`) + a registry projection test mirroring the `player:moved` visibility test (`registry.test.ts:149-159`).
-2. **Gap 2 — LOW (spec precision, doc-only). Movement spec not amended for AD-009.** `.specs/features/movement/spec.md:68` (MOVE-03 AC3) still reads "the server SHALL broadcast a `player:moved` event … **to all players**" and `:139` (MOVE-18) still says the snapshot contains "every connected player's" positions — both superseded by AD-009's `sameFloor`/own-floor routing (`.specs/STATE.md` AD-009). The shipped code and its tests are correct; the stale AC text now contradicts them. A one-line amendment to the movement spec (citing AD-009) closes it; Goal 2's "positions are public" wording (line 16) is data-classification language and can stand, but the "to all players" delivery clause cannot.
+1. **Gap 1 — MEDIUM — CLOSED in `87d4155`.** WORK-19 AC4 (`player:left-floor`) now has behavioral assertions. Emission: `packages/sim/src/movement.test.ts:507` pins the departure tick's `player:left-floor` event as an exact one-element array (`toEqual` — a deleted, duplicated, or payload-corrupted emission all fail), `:509` asserts the pickup floor only (`not.toContain('floor1')`), and `:511-513` asserts exactly-once (40 subsequent ride ticks emit none). Projection/visibility: `packages/shared/src/protocol/registry.test.ts:189-199` pins `visibility` as `toEqual({ floor: 'lobby' })` — the departed floor per AD-009 — with `self` undefined and payload exactly `{playerId, floor}`. Discrimination confirmed by re-verifier sensor (2026-08-28): deleting the `movement.ts:300` emission in a /tmp scratch kills exactly the new test (`movement.test.ts:507`); 161/162 others pass.
+2. **Gap 2 — LOW (spec precision, doc-only) — CLOSED in `87d4155`.** `.specs/features/movement/spec.md:68` (MOVE-03 AC3) now reads "delivered per recipient policy — same-floor viewers only from cycle 2.5 (AD-008/AD-009, which amend this cycle's original 'broadcast to all players')" — no longer contradicts the shipped `recipients: 'sameFloor'` routing (`registry.ts:168`). `.specs/features/movement/spec.md:139` (MOVE-18 AC1) now reads "the player rows are filtered to the recipient's own floor; the car rows remain public for every recipient" — matches `snapshotForFloor` behavior (`movement.test.ts:218`/`TurnoverRoom.test.ts:615-625`). Amendment is also recorded in `.specs/STATE.md` (AD-009, committed in `87d4155`).
 3. **Gap 3 — INFO.** Harness assertion `work.spec.ts:177` `expect(observed?.room).toBeGreaterThanOrEqual(1)` is looser than the server-side exact pins (room 1); acceptable since the server tests and shared geometry pin the value exactly.
 
 ## Code-quality observations
 
 - **Minimum code / deep modules**: `Router.route()` never names a message type — policy + projection + visibility all come from the registry row (`router.ts:69-78`); adding a message type cannot add a send path. `WorkChannels` takes positions as *input* per tick (no I/O, no clocks) and stays deterministic (bit-for-bit replay test, `work.test.ts:293-318`).
 - **Protocol hygiene (turnover-protocol)**: registry is the single audit surface; the literal per-key policy walk (`registry.test.ts:81-88`) fails on any single-key drift, and undeclared sim events are compile errors (`registry.ts:266-268`). `ChannelKind` never leaves `work.ts`. Bypass denylist (`router.test.ts:175-187`) confirms the Router is the only sender. No leak found in any payload: no roles, no grace, no "fake", no cross-floor positions, no non-occupied interiors.
-- **Amendments judged legitimate**: AD-009 is recorded in `.specs/STATE.md:159-189` with reasoning; the 2.4-era test amendments (registry pins → `sameFloor`, snapshot wording) are deliberate and consistent. The only unamended artifact is the movement spec text itself (Gap 2).
+- **Amendments judged legitimate**: AD-009 is recorded in `.specs/STATE.md:159-189` with reasoning; the 2.4-era test amendments (registry pins → `sameFloor`, snapshot wording) are deliberate and consistent. The movement spec text was the last unamended artifact (Gap 2) and is now amended in `87d4155`.
 - Concurrent same-tick completions apply in channel-start order deterministically (`work.test.ts:133-154`, `work.ts:139-165`).

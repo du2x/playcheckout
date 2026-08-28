@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 10,
+  "next_id": 12,
   "lessons": [
     {
       "id": "L-001",
@@ -12,10 +12,14 @@
       "signal": "ac_gap",
       "scope": "tests",
       "status": "candidate",
-      "features": ["skeleton"],
+      "features": [
+        "skeleton"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"],
+      "evidence": [
+        "packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"
+      ],
       "created": "2026-08-28T00:35:14Z",
       "last_seen": "2026-08-28T00:35:14Z"
     },
@@ -26,10 +30,14 @@
       "signal": "spec_precision_gap",
       "scope": "specs/decision-log",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)"],
+      "evidence": [
+        "AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)"
+      ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -40,10 +48,14 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client/harness",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)"],
+      "evidence": [
+        "LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)"
+      ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -54,10 +66,14 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client/harness",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)"],
+      "evidence": [
+        "LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)"
+      ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -68,10 +84,14 @@
       "signal": "gate_fail",
       "scope": "client",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["session: create-room dead click report (client)"],
+      "evidence": [
+        "session: create-room dead click report (client)"
+      ],
       "created": "2026-08-28T11:57:37Z",
       "last_seen": "2026-08-28T11:57:37Z"
     },
@@ -82,10 +102,14 @@
       "signal": "surviving_mutant",
       "scope": "sim",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["M3 / packages/sim/src/movement.test.ts:255 (sim)"],
+      "evidence": [
+        "M3 / packages/sim/src/movement.test.ts:255 (sim)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -96,10 +120,14 @@
       "signal": "surviving_mutant",
       "scope": "sim",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["M5b / packages/sim/src/movement.test.ts:87 (sim)"],
+      "evidence": [
+        "M5b / packages/sim/src/movement.test.ts:87 (sim)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -110,10 +138,14 @@
       "signal": "ac_gap",
       "scope": "sim",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["MOVE-06 (sim)"],
+      "evidence": [
+        "MOVE-06 (sim)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -124,12 +156,52 @@
       "signal": "spec_precision_gap",
       "scope": "specs",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["AD-008 / .specs/STATE.md (specs)"],
+      "evidence": [
+        "AD-008 / .specs/STATE.md (specs)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
+    },
+    {
+      "id": "L-010",
+      "key": "spec_deviation::narrowing a broadcast policy mid game requires a matching departure event player left floor or stale rectangles persist on departed floors routing changes must be client coherence audited",
+      "text": "Narrowing a broadcast policy mid-game requires a matching departure event (player:left-floor) or stale rectangles persist on departed floors — routing changes must be client-coherence audited.",
+      "signal": "spec_deviation",
+      "scope": "protocol/routing",
+      "status": "candidate",
+      "features": [
+        "work-channels"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "WORK-17/AD-009, movement.spec.ts:173 ghost rectangle (protocol/routing)"
+      ],
+      "created": "2026-08-28T17:56:28Z",
+      "last_seen": "2026-08-28T17:56:28Z"
+    },
+    {
+      "id": "L-011",
+      "key": "ac_gap::in server tests intent ws arrival races fixed driveticks counts await events with a drive until event loop and never assume a fixed tick offset lands inside a segment",
+      "text": "In server tests, intent WS arrival races fixed __driveTicks counts — await events with a drive-until-event loop and never assume a fixed tick offset lands inside a segment.",
+      "signal": "ac_gap",
+      "scope": "server/tests",
+      "status": "candidate",
+      "features": [
+        "work-channels"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "TurnoverRoom.test.ts server:work_channels choreography (server/tests)"
+      ],
+      "created": "2026-08-28T17:56:28Z",
+      "last_seen": "2026-08-28T17:56:28Z"
     }
   ]
 }

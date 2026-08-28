@@ -68,6 +68,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: AD-008 / .specs/STATE.md (specs)
 - last seen: 2026-08-28T15:56:44Z
 
+### L-010 - Narrowing a broadcast policy mid-game requires a matching departure event (player:left-floor) or stale rectangles persist on departed floors — routing changes must be client-coherence audited.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `protocol/routing` · harmful: 0
+- features: work-channels
+- evidence: WORK-17/AD-009, movement.spec.ts:173 ghost rectangle (protocol/routing)
+- last seen: 2026-08-28T17:56:28Z
+
+### L-011 - In server tests, intent WS arrival races fixed __driveTicks counts — await events with a drive-until-event loop and never assume a fixed tick offset lands inside a segment.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `server/tests` · harmful: 0
+- features: work-channels
+- evidence: TurnoverRoom.test.ts server:work_channels choreography (server/tests)
+- last seen: 2026-08-28T17:56:28Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
