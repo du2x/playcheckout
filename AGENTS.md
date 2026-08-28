@@ -51,3 +51,13 @@ gates 1–3 on every push via the same root scripts; keep script names stable.
   surface. Production builds ship no `window.__TURNOVER__`.
 - **Blast radius:** local commits only unless the user explicitly approves
   push/deploy/force operations.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as GitHub issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
