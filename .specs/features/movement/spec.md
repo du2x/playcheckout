@@ -40,7 +40,7 @@ Every ambiguity is resolved or recorded here — nothing is left silently unclea
 | Round start repositioning | Positions persist — no teleport at host start | User left the question open; agent default. Continuity, less machinery; FR-2 "spawn" reads as initial placement for fresh joiners | n (agent default, flagged) |
 | Room geometry | A room is an x-segment on its floor's hall line; "inside" = x within the segment; depth (ROOM_DEPTH_TILES = 4) is the segment width | prd mandates strictly linear left/right movement (FR-4); nothing else is representable. Door/entry cues arrive in 2.5 | y (default) |
 | Pre-round walking area | Grand lobby floor only; x clamped to lobby bounds, floor fixed to `lobby` until round start | User-confirmed | y (user) |
-| Elevator pre-round | Elevators idle in lobby phase; calls accepted only while a round is active | Nobody can leave the lobby pre-round; a call would be a no-op | y (default) |
+| Elevator pre-round | ~~Elevators idle in lobby phase; calls accepted only while a round is active~~ **Superseded by AD-011 (cycle 2.5 fix, `.specs/features/elevator-lobby/`)**: elevators run from room creation; only in-car callers are rejected | Original default flagged for user review; the user ruled for always-on elevators (testability + liveliness) | y (user, AD-011) |
 | Car selection on call | Call targets a floor; the car that would serve it sooner is dispatched; exact tie → car 1 (west). A call for a floor a car already heads to is ignored, but the panel still flashes (FR-5 decoy rule) | Deterministic and testable; prd leaves the assignment rule open | y (default) |
 | Boarding when full | Capacity 2 per car (TUNING.ELEVATOR_CAPACITY): a 3rd player at the landing waits for the car's next arrival; the car departs on schedule | FR-5 locks capacity but not overflow behavior; waiting is the least-machinery option | y (default) |
 | Input model | Client sends `move:start {dir}` / `move:stop` intents; server integrates at 6 tiles/s (20 Hz) and broadcasts `player:moved` while positions change | Continuous key-hold maps to one intent; server-authoritative (protocol conventions); no per-tick client spam | y (default) |
@@ -109,7 +109,7 @@ constraint (occupants never visible).
 
 **Acceptance Criteria**:
 
-1. WHEN a player sends an `elevator:call` intent for a floor WHILE a round is active THEN the server SHALL dispatch the car that would serve the call sooner (tie → car 1) and broadcast an `elevator:called` event (floor, car).
+1. WHEN a player sends an `elevator:call` intent for a floor THEN the server SHALL dispatch the car that would serve the call sooner (tie → car 1) and broadcast an `elevator:called` event (floor, car) — in both phases (AD-011 amends this cycle's "while a round is active").
 2. WHEN a call is dispatched THEN the car SHALL arrive at the calling floor after TUNING.ELEVATOR_ARRIVE_SECONDS (3 s) and ride at TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR (2 s per floor traveled).
 3. IF a call arrives for a floor a car is already heading to THEN the server SHALL ignore the call for dispatch purposes and the panel SHALL still flash (FR-5 decoy rule).
 4. WHEN a car arrives at a landing THEN players on that floor and queued there SHALL board up to TUNING.ELEVATOR_CAPACITY (2); players beyond capacity SHALL remain queued for the car's next arrival.
@@ -153,7 +153,7 @@ all tabs.
 - WHEN two players occupy the same x on the same floor THEN both SHALL render (pass-through); render order is client-local and may overlap.
 - WHEN a player joins WHILE a round is active THEN the join is rejected (2.1 rule unchanged) — no movement snapshot is sent to them.
 - WHEN the host starts the round WHILE players are mid-walk THEN their `move` intents SHALL continue uninterrupted (transition does not reset movement state).
-- IF an `elevator:call` arrives in lobby state THEN the server SHALL reject it with an intent error and the panel SHALL NOT flash.
+- ~~IF an `elevator:call` arrives in lobby state THEN the server SHALL reject it with an intent error and the panel SHALL NOT flash.~~ **Superseded by AD-011**: pre-round calls dispatch normally; the only rejection is a call from inside a car.
 
 ---
 

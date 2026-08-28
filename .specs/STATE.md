@@ -232,40 +232,28 @@
 
 ## Handoff
 
-- **Feature**: work-channels (`.specs/features/work-channels/`) — cycle 2.5 ✅ COMPLETE
-- **Phase / Task**: Specify → Design (AD-009/AD-010 recorded pre-design) → Tasks (T1–T7)
-  → Execute → Verifier **PASS** (`validation.md`: 21/22 ACs evidenced first pass, the
-  22nd (WORK-19 AC4) closed in `87d4155`; sensor 13 injected / 13 killed / 0 surviving;
-  gates 1–3 exit 0 — typecheck, lint, 162/162 sim+server, 20/20 client; Gate 4 human
-  round still open). Note: the user's own Gap-1 ruling commit `530ea86` descoped AD-008
-  wire routing from 2.4 to "the first wire-hiding cycle" — that cycle turned out to be
-  2.5 (occupants-only interiors), where the routing landed per AD-009; AD-008's
-  amendment note records the reconciliation.
-- **Completed**: shared room geometry + work protocol (T1: AD-010 segments,
-  5 work events, `sameFloor`/`occupants` policies, literal registry policy walk —
-  fold-in of protocol-registry N2); Router positional policies + sameFloor routing
-  (T2: view context, `snapshotForFloor`, `player:left-floor`, folds N1/N3); movement
-  gap hardening (T3: kills M3/M5b, MOVE-06 positive half); pure `WorkChannels` in
-  `packages/sim/src/work.ts` (T4: prep/unprep/fake matrix, walk-out cancel,
-  `room:observed`, `sim:prep`/`sim:unprep`/`sim:fake_prep` suites, RoundSim
-  `tick(positions?)` seam); room wiring (T5: `work:start` intents, positions feed,
-  folds of room-shell LOBBY-05/reject-then-start); client (T6: Space-to-work,
-  `#work-progress` bar, `#room-state` label); harness `client:work_channels` +
-  first-light folds LIGHT-02/LIGHT-04 (T7; LIGHT-08 'round-already-active' remains
-  server-covered — no client UI path can trigger it). Harness test shift widened
-  8 s → 30 s per AD-004 seam (buzzer tests' timeouts raised to 45 s, per-test
-  timeouts to 60 s). Commits `6169498..87d4155`.
+- **Feature**: elevator-lobby (`.specs/features/elevator-lobby/`) — AD-011 fix ✅ COMPLETE
+- **Phase / Task**: Specify → Execute (small scope, inline) → Verifier **PASS**
+  (`validation.md`: 4/4 EL ACs evidenced; sensor 5 injected / 5 killed / 0 surviving;
+  gates 1–3 exit 0 — 163/163 sim+server, 21/21 client; doc-only gap closed in the
+  same session: movement spec/design stale elevator text now annotated as
+  AD-011-superseded). Gate 4 human round still open.
+- **Completed**: `MovementSim.callElevator` phase guard removed (only in-car callers
+  rejected, `movement.ts:142`); `lock()` no longer clears the call FIFO (queued calls
+  served across the buzzer, EL-02); intent-error message updated; elevator panel added
+  to the lobby view (`lobbyView.ts`) and made self-healing in `WorldScene.update()`;
+  amended sim tests (pre-round ride, post-buzzer queued dispatch at exact tick 99,
+  in-car rejection, confinement interplay) + server test + new harness scenario
+  `client:elevator_lobby` (ride floor1 and back with zero host starts — the fast
+  Playwright elevator-debug entry point). Commit `63fd475`.
 - **In-progress** (file:line): none
-- **Next step**: cycle 2.6 `evidence` (FR-10–FR-13: door cards, freshness tiers/settled,
-  rustle 3 tiles through walls, door-open visible+audible cues) — consumes AD-010
-  segments and the `occupants`/`sameFloor` policies; door-open cues make walk-through
-  crossings audible (2.5 already emits `room:observed` on pass-through — reconcile).
-  Earlier deferred notes: room-shell LOBBY-02 create-no-room (already covered by
-  join-rejection test) and LIGHT-08 client half (no UI path — consider closing as
-  wontfix with an AD).
-- **Blockers**: none (Gate 4 human rounds pending for movement AND work-channels —
-  player-facing: `pnpm boot`, 4 tabs, walk lobby, start, ride, walk into a room,
-  Space to prep, walk out mid-channel, observe room label/progress bar)
+- **Next step**: cycle 2.6 `evidence` (FR-10–FR-13) per the previous handoff. Note for
+  its Design: pass-through room crossings already emit `room:observed` (2.5) and
+  elevators now run pre-round — decide whether door-open cues apply pre-round (likely
+  no: work channels are round-scoped, so pre-round door traffic is elevator-only).
+- **Blockers**: none (Gate 4 human rounds pending: movement, work-channels,
+  elevator-lobby — the elevator one is quick now: `pnpm boot`, one tab, walk to a
+  landing, ArrowUp/ArrowDown with no round started)
 - **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script;
   `.playwright-mcp/` gitignored session logs
 - **Branch**: master

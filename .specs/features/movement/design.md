@@ -141,7 +141,7 @@ graph TD
   order** by the next car to go idle. A car never holds two destinations
   (MOVE-15). `elevator:called` announces on the next tick after acceptance —
   for immediate dispatches and decoys; queued calls announce when dispatched.
-- **In lobby phase**: calls rejected with an intent error, no event, no flash (edge case).
+- **In lobby phase**: ~~calls rejected with an intent error, no event, no flash (edge case).~~ **Superseded by AD-011**: the FIFO is no longer cleared at `lock()` and calls dispatch in both phases; see `.specs/features/elevator-lobby/`.
 
 ### Registry extensions — `packages/shared/src/protocol/`
 
