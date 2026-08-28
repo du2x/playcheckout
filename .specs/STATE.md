@@ -56,24 +56,81 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-005
+- **Decision**: Cycle 2.3 `movement` builds a persistent movement layer owned by the
+  room that runs in BOTH phases: players can walk (linear, 6 tiles/s, pass-through)
+  from the moment they join, pre-round confined to the grand lobby; the full building
+  unlocks at round start. Positions persist across the lobby→round→lobby transitions
+  (no re-spawn on host start; FR-2's "spawn" = initial placement for fresh joiners).
+  This amends AD-002: the RoundSim stays round-scoped (roles, work channels, evidence,
+  justice, clock) and consumes positions from the room's movement layer; movement
+  itself is no longer gated on sim existence.
+- **Reason**: User request — something visible/playable immediately after room
+  creation, not only after host-start; also makes the pre-round gather-up tangible.
+- **Trade-off**: Two state homes for movement vs round logic with a defined seam
+  (movement layer in the room, round mechanics in the sim); prd §6.1 flow wording
+  "Lobby gather-up → secret roles → SHIFT" gains movement during gather-up — recorded
+  here rather than editing the locked prd.
+- **Scope**: cycle 2.3 `movement` and all later cycles; `apps/server`, `packages/sim`,
+  `packages/shared`, `apps/client`.
+- **Date**: 2026-08-28
+- **Status**: active
+
+### AD-006
+- **Decision**: Insert cycle 2.3 `protocol-registry` before `movement` (cycles shift:
+  movement → 2.4, …, telemetry → 2.9; precedent AD-003). One protocol registry in
+  `packages/shared` declares every server→client message exactly once: payload type +
+  recipient policy from a closed enum (`'all' | 'self'`; extended deliberately per
+  cycle). A per-room `Router` in `apps/server` applies policies generically and stamps
+  every send with an envelope `{ seq, time, payload }` — per-connection monotonic
+  `seq`, server `time` in ms. A client observing a seq gap rejoins via the existing
+  connection-loss path. The client dispatches generically over registry keys to pure
+  `payload → ViewAction` mappers, exhaustive via `Record<RegistryKey, Mapper>`.
+  Deleted in the same cycle: `route()` switch, per-type `connection.ts` handlers,
+  `ServerMessage` union, `app.ts` message switch, `BroadcastGameEvent`/
+  `PrivateGameEvent` unions, and the dead `envelope.ts`. Registry is typed
+  `satisfies Record<SimEvent['type'], …>` — an undeclared sim event fails compilation.
+- **Reason**: Architecture review (`/improve-codebase-architecture`, three grilling
+  rounds, all recommendations user-accepted): one protocol fact was hand-maintained
+  across six stations and the recipient policy — the security core of the game — was
+  enforced by a grep audit, not structure. Migrating at five message types is the
+  cheap moment; cycles 2.4+ add ~15 more, and 2.4's 20 Hz position streams need the
+  envelope's seq/time fields that only the dead `envelope.ts` draft had.
+- **Trade-off**: Delays movement by one cycle; movement spec's rule-5 success
+  criterion ("recipient comments") is reinterpreted as registry declarations when its
+  Design phase runs. The reducer still derives the round clock from tuning this cycle
+  (envelope `time` is stamped, not yet consumed) — AD-004's divergence note extends
+  until a later cycle consumes server time. Client→server intents untouched.
+- **Scope**: `packages/shared`, `apps/server`, `apps/client`,
+  `.opencode/skills/turnover-protocol`, `CONTEXT.md`, roadmap.md cycle table.
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: first-light (`.specs/features/first-light/`) — all 7 tasks committed
-- **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
-- **Completed**: sim shift seam + AD-004 (T1), view reducer (T2), join slice + harness
-  client:lobby_join (T3), lobby coverage (T4), round view + client:round_start (T5),
-  buzzer re-deal (T6), close-out sweep + room-full surfacing (T7)
+- **Feature**: protocol-registry (`.specs/features/protocol-registry/`) — cycle 2.3 (AD-006)
+- **Phase / Task**: Specify complete (spec.md written from the accepted grilling decisions);
+  Design not started
+- **Completed**: architecture review report (6 candidates, C1 chosen) → 3 grilling rounds
+  (all recommendations user-accepted) → `CONTEXT.md` created (protocol registry, recipient
+  policy, envelope, router) → AD-006 recorded → roadmap cycle table renumbered (movement →
+  2.4, …, telemetry → 2.9) → movement spec cycle refs updated → spec.md written
 - **In-progress** (file:line): none
-- **Next step**: cycle 2.3 `movement` — fresh Specify for `.specs/features/movement/`;
-  fold verifier gaps 2–4 (LIGHT-02 unknown-code message, LIGHT-08 "round already
-  active", LIGHT-04 1-char name minimum) into the next client-touching cycle
-- **Blockers**: none (Gate 4 human 5-min round pending — run `pnpm boot` or
-  `pnpm build && node apps/server/dist/index.js`, open 4 tabs, create/join/start)
+- **Next step**: Design phase for `.specs/features/protocol-registry/` (registry entry
+  shape, Router module interface, client mapper table, envelope stamping points), then
+  Tasks → Execute. Movement Design must target the registry, not the old pipeline.
+- **Blockers**: none (first-light Gate 4 human 5-min round still pending — run `pnpm boot`,
+  open 4 tabs, create/join/start)
 - **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script
-  (not part of this feature; dev-boot formatted for lint)
+  (not part of any feature); spec-phase artifacts from this cycle: `CONTEXT.md`,
+  `.specs/features/protocol-registry/spec.md`, STATE.md/roadmap.md/movement-spec edits
 - **Branch**: master
 
 Deferred notes from Verifier (room-shell PASS, low-severity spec-precision gaps):
 (1) LOBBY-02 "create no room" clause unasserted; (2) rejected start intent lacks a
 lobby-phase re-assertion (reject-then-start mutant); (3) LOBBY-05 "roster unchanged"
 after name rejection unasserted — fold into the next cycle touching TurnoverRoom.
+
+Deferred notes from Verifier (first-light PASS): (2) LIGHT-02 unknown-code message,
+(3) LIGHT-08 "round already active", (4) LIGHT-04 1-char name minimum — fold into the
+next client-touching cycle.
