@@ -15,3 +15,11 @@ export {
 } from './movement.js'
 export { createRoundSim, RoundSim, type RoundSimConfig } from './roundSim.js'
 export { TICK_HZ } from './tick.js'
+export {
+  type PositionSample,
+  PREP_TICKS,
+  type RoundPositions,
+  type StartWorkResult,
+  UNPREP_TICKS,
+  WorkChannels,
+} from './work.js'

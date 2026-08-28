@@ -104,3 +104,27 @@ describe('sim:shift_override (AD-004 test seam)', () => {
     expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: 2.5 })).toThrow()
   })
 })
+
+// Spec WORK-13 (work channels cycle 2.5): channels are round-scoped — a
+// channel dying with the sim emits no work:ended at the buzzer, and post-buzzer
+// ticks are silent even with positions still flowing in.
+describe('sim:work buzzer', () => {
+  it('dies with the round: no work:ended at the buzzer and silence after it', () => {
+    const sim = new RoundSim({ seed: 42, playerIds: IDS, totalTicks: 12 })
+    const first = sim.tick(new Map(IDS.map((id) => [id, { floor: 'floor1' as const, x: 2750 }])))
+    const saboteur = first.find((e) => e.type === 'role:dealt' && e.role === 'saboteur')
+    if (saboteur?.type !== 'role:dealt') throw new Error('no saboteur dealt')
+    const staffId = IDS.find((id) => id !== saboteur.playerId)
+    if (staffId === undefined) throw new Error('no staff player')
+    // Staff stands inside room 1 on floor1 and starts a 100-tick prep the
+    // shift cannot outlast (totalTicks = 12).
+    expect(sim.startWork(staffId, 'floor1', 1)).toBe('accepted')
+    const positions_ = new Map(IDS.map((id) => [id, { floor: 'floor1' as const, x: 2750 }]))
+    const buzzerEvents: SimEvent[] = []
+    for (let t = 1; t <= 12; t++) buzzerEvents.push(...sim.tick(positions_))
+    expect(buzzerEvents.some((e) => e.type === 'round:buzzer')).toBe(true)
+    expect(buzzerEvents.some((e) => e.type === 'work:ended')).toBe(false)
+    // Post-buzzer: ticks past the buzzer emit nothing, positions or not.
+    expect(sim.tick(positions_)).toEqual([])
+  })
+})

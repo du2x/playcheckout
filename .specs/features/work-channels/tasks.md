@@ -136,7 +136,7 @@ T5 → T6 → T7
 
 ---
 
-### T4: WorkChannels — pure work sim inside RoundSim
+### T4: WorkChannels — pure work sim inside RoundSim ✅ Done
 
 **What**: Implement `packages/sim/src/work.ts`: 24 rooms init fresh (AD-010 segments), channel start matrix (staff prep 100 ticks on fresh|trashed; saboteur unprep 60 on prepped / fake 100 on fresh|trashed), rejection reasons, walk-out cancel detection against the per-tick positions map (exactly one `work:ended`), completion transitions in channel-start order, fake prep with no transition, silent `leave`, segment-crossing `room:observed`, idle ticks silent, bit-for-bit replay. Integrate into `RoundSim` (own a WorkChannels from the deal; `tick(positions?)` optional map; delegate `startWork`/`leave`; work events join the tick array; buzzer-tick completions allowed, post-buzzer silence). Write `sim:prep`, `sim:unprep`, `sim:fake_prep` describes: exact 100/60-tick durations, transitions + occupant-addressed events, fresh→ and trashed→prepped, re-trash loop, every rejection, concurrent same-room channels, walk-out/leave/buzzer cancel legs, fake indistinguishability (event shape identical to prep minus the transition), ≥100-tick deterministic replay.
 **Where**: `packages/sim/src/work.ts` (new), `work.test.ts` (new), `roundSim.ts` + `roundSim.test.ts` (edits), `packages/sim/src/index.ts` (export)

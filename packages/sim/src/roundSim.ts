@@ -2,6 +2,7 @@ import { type Role, TUNING } from '@turnover/shared'
 import { dealRoles } from './deal.js'
 import type { SimEvent } from './events.js'
 import { TICK_HZ } from './tick.js'
+import { type RoundPositions, WorkChannels } from './work.js'
 
 export interface RoundSimConfig {
   readonly seed: number
@@ -26,6 +27,7 @@ export class RoundSim {
 
   readonly playerIds: readonly string[]
   private readonly deal: Map<string, Role>
+  private readonly work: WorkChannels
   private started = false
   private ticksLeft: number
 
@@ -38,6 +40,7 @@ export class RoundSim {
     }
     this.playerIds = [...config.playerIds]
     this.deal = dealRoles(config.seed, this.playerIds)
+    this.work = new WorkChannels(this.deal)
     const totalTicks = config.totalTicks ?? RoundSim.TOTAL_TICKS
     if (!Number.isInteger(totalTicks) || totalTicks < 1) {
       throw new Error(`totalTicks must be a positive integer, got ${config.totalTicks}`)
@@ -54,8 +57,12 @@ export class RoundSim {
    * Advance the sim by one 0.05 s step and return the events emitted this tick.
    * The first tick deals (round:started + one private role:dealt per player);
    * the final tick fires the buzzer; ticks past the buzzer emit nothing.
+   *
+   * Cycle 2.5: the room also passes the movement layer's positions each tick
+   * (AD-005 seam, integer millitiles) — the work channels consume them for
+   * inside-segment validation, walk-out cancels, and room observation.
    */
-  tick(): readonly SimEvent[] {
+  tick(positions?: RoundPositions): readonly SimEvent[] {
     if (this.ticksLeft <= 0) return []
     const events: SimEvent[] = []
     if (!this.started) {
@@ -65,9 +72,29 @@ export class RoundSim {
         events.push({ type: 'role:dealt', playerId, role })
       }
     }
+    for (const workEvent of this.work.tick(positions ?? new Map())) {
+      events.push(workEvent)
+    }
     this.ticksLeft--
     if (this.ticksLeft === 0) events.push({ type: 'round:buzzer' })
     return events
+  }
+
+  /**
+   * Validate a `work:start` intent (FR-7/8/9). Rejections map 1:1 to intent
+   * errors in the room; the channel itself announces on the next tick.
+   */
+  startWork(
+    playerId: string,
+    floor: Parameters<WorkChannels['startWork']>[1],
+    room: Parameters<WorkChannels['startWork']>[2],
+  ): ReturnType<WorkChannels['startWork']> {
+    return this.work.startWork(playerId, floor, room)
+  }
+
+  /** Drop a departing player's channel silently (WORK-12). */
+  leave(playerId: string): void {
+    this.work.leave(playerId)
   }
 }
 
