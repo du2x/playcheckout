@@ -172,7 +172,7 @@ T3 → T4 → T5 → T6
 
 ---
 
-### T5: Harness scenario `client:envelope_gap`
+### T5: Harness scenario `client:envelope_gap` ✅ Done
 
 **What**: Add `apps/client/harness/envelope.spec.ts`: force a gap via `__TURNOVER__.forceGap()` on a joined guest page, trigger a server message (third player joins), assert the gap is recorded in the hook and the page reaches the connection-lost view; then rejoin fresh and assert the first snapshot of the new connection arrives with `seq: 1`.
 **Where**: `apps/client/harness/envelope.spec.ts` (new)
