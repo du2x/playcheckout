@@ -16,4 +16,11 @@ export const MAPPERS: {
   'role:dealt': ({ role }) => [{ type: 'role-dealt', role }],
   'round:buzzer': () => [{ type: 'buzzer' }],
   error: ({ message }) => [{ type: 'intent-error', message }],
+  // Movement (cycle 2.4): the high-frequency events map to actions the App
+  // routes to the world scene (render state); the reducer no-ops them.
+  'player:moved': (p) => [{ type: 'player-moved', ...p }],
+  'elevator:called': (p) => [{ type: 'elevator-called', ...p }],
+  'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
+  'player:left': ({ playerId }) => [{ type: 'player-left', playerId }],
+  'movement:snapshot': (snapshot) => [{ type: 'movement-snapshot', snapshot }],
 }

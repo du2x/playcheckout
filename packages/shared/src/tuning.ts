@@ -22,6 +22,8 @@ export const TUNING = {
   ELEVATOR_RIDE_SECONDS_PER_FLOOR: 2,
   ELEVATOR_CAPACITY: 2,
   PLAYER_SPEED_TILES_PER_SEC: 6,
+  /** Boarding range around a car's landing x (cycle 2.4, AD-007 — new constant, not in prd §7). */
+  ELEVATOR_LANDING_TILES: 1,
   /** ~2 tiles, same floor; card-read range later */
   ACCUSATION_RANGE_TILES: 2,
 } as const

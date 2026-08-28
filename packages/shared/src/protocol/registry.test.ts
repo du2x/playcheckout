@@ -53,14 +53,54 @@ describe('protocol payloads', () => {
 // Spec REG-01/REG-03/REG-19: the registry is the single catalog and the audit
 // surface — five pre-existing types, one declaration each, valid policies.
 describe('protocol registry', () => {
-  it('declares exactly the five pre-existing message types (REG-03)', () => {
+  it('declares exactly the pre-existing five plus the five movement types (REG-03)', () => {
     expect(Object.keys(PROTOCOL_REGISTRY).sort()).toEqual([
+      'elevator:called',
+      'elevator:moved',
       'error',
       'lobby:snapshot',
+      'movement:snapshot',
+      'player:left',
+      'player:moved',
       'role:dealt',
       'round:buzzer',
       'round:started',
     ])
+  })
+
+  it('keeps movement rows room-originated or all-policy per the spec (MOVE-17/18)', () => {
+    expect(PROTOCOL_REGISTRY['player:moved'].recipients).toBe('all')
+    expect(PROTOCOL_REGISTRY['elevator:called'].recipients).toBe('all')
+    expect(PROTOCOL_REGISTRY['elevator:moved'].recipients).toBe('all')
+    expect(PROTOCOL_REGISTRY['player:left'].recipients).toBe('all')
+    expect(PROTOCOL_REGISTRY['player:left'].fromSim).toBeUndefined()
+    expect(PROTOCOL_REGISTRY['movement:snapshot'].recipients).toBe('self')
+    expect(PROTOCOL_REGISTRY['movement:snapshot'].fromSim).toBeUndefined()
+  })
+
+  it('projects movement events to payloads that never name elevator occupants (MOVE-17)', () => {
+    const moved = PROTOCOL_REGISTRY['player:moved'].fromSim({
+      type: 'player:moved',
+      playerId: 'p1',
+      floor: 'lobby',
+      x: 1.5,
+      facing: 'left',
+    })
+    expect(moved.self).toBeUndefined()
+    expect(moved.payload).toEqual({ playerId: 'p1', floor: 'lobby', x: 1.5, facing: 'left' })
+
+    const carMoved = PROTOCOL_REGISTRY['elevator:moved'].fromSim({
+      type: 'elevator:moved',
+      car: 2,
+      floor: 'floor2',
+    })
+    expect(Object.keys(carMoved.payload).sort()).toEqual(['car', 'floor'])
+    const called = PROTOCOL_REGISTRY['elevator:called'].fromSim({
+      type: 'elevator:called',
+      floor: 'lobby',
+      car: 1,
+    })
+    expect(Object.keys(called.payload).sort()).toEqual(['car', 'floor'])
   })
 
   it('declares a valid recipient policy on every entry (REG-19)', () => {

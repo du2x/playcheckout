@@ -1,11 +1,16 @@
 import type {
+  ElevatorCalled,
+  ElevatorMoved,
   IntentError,
   LobbySnapshot,
+  MovementSnapshot,
+  PlayerLeft,
+  PlayerMoved,
   RoleDealt,
   RoundBuzzer,
   RoundStarted,
 } from './messages.js'
-import type { SimEvent } from './simEvents.js'
+import type { MovementEvent, SimEvent } from './simEvents.js'
 
 /**
  * The protocol registry (cycle 2.3, AD-006): every server→client message type is
@@ -55,6 +60,17 @@ export interface Payloads {
   'round:buzzer': RoundBuzzer
   /** server → one player. Intent rejection reason (join errors use Colyseus join rejection). */
   error: IntentError
+  // --- Movement (cycle 2.4): positions are public (rule 2); cars never name occupants (FR-6) ---
+  /** server → all players. A player's position/floor/facing changed this tick. */
+  'player:moved': PlayerMoved
+  /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
+  'elevator:called': ElevatorCalled
+  /** server → all players. A car's floor changed. */
+  'elevator:moved': ElevatorMoved
+  /** server → all players. A player disconnected; remove their rectangle. */
+  'player:left': PlayerLeft
+  /** server → one player. Public movement state on join and at the buzzer (MOVE-18). */
+  'movement:snapshot': MovementSnapshot
 }
 
 export type RegistryKey = keyof Payloads
@@ -65,7 +81,9 @@ export type RegistryPayload<K extends RegistryKey> = Payloads[K]
  * private recipient). Typed per key so a projection returning the wrong payload
  * shape fails to compile.
  */
-export type SimProjection<K extends SimEvent['type']> = (event: Extract<SimEvent, { type: K }>) => {
+export type SimProjection<K extends SimEvent['type'] | MovementEvent['type']> = (
+  event: Extract<SimEvent | MovementEvent, { type: K }>,
+) => {
   payload: RegistryPayload<K>
   self?: string
 }
@@ -73,7 +91,9 @@ export type SimProjection<K extends SimEvent['type']> = (event: Extract<SimEvent
 type Entry<K extends RegistryKey> = {
   readonly payload: RegistryPayload<K>
   readonly recipients: RecipientPolicy
-  readonly fromSim: K extends SimEvent['type'] ? SimProjection<K> : undefined
+  readonly fromSim: K extends SimEvent['type'] | MovementEvent['type']
+    ? SimProjection<K>
+    : undefined
 }
 
 /**
@@ -116,7 +136,45 @@ export const PROTOCOL_REGISTRY = {
     recipients: 'self',
     fromSim: undefined,
   },
-} as const satisfies { [K in RegistryKey]: Entry<K> } & { [K in SimEvent['type']]: unknown }
+  'player:moved': {
+    payload: {} as PlayerMoved,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: {
+        playerId: event.playerId,
+        floor: event.floor,
+        x: event.x,
+        facing: event.facing,
+      },
+    })) as SimProjection<'player:moved'>,
+  },
+  'elevator:called': {
+    payload: {} as ElevatorCalled,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, car: event.car },
+    })) as SimProjection<'elevator:called'>,
+  },
+  'elevator:moved': {
+    payload: {} as ElevatorMoved,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { car: event.car, floor: event.floor },
+    })) as SimProjection<'elevator:moved'>,
+  },
+  'player:left': {
+    payload: {} as PlayerLeft,
+    recipients: 'all',
+    fromSim: undefined,
+  },
+  'movement:snapshot': {
+    payload: {} as MovementSnapshot,
+    recipients: 'self',
+    fromSim: undefined,
+  },
+} as const satisfies { [K in RegistryKey]: Entry<K> } & {
+  [K in SimEvent['type'] | MovementEvent['type']]: unknown
+}
 
 export type RegistryRecipients<K extends RegistryKey> = (typeof PROTOCOL_REGISTRY)[K]['recipients']
 

@@ -1,3 +1,4 @@
+export * from './intents'
 export * from './messages'
 export * from './registry'
 export * from './simEvents'

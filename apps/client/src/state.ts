@@ -1,4 +1,12 @@
-import { type LobbySnapshot, type Role, TUNING } from '@turnover/shared'
+import {
+  type CarId,
+  type Facing,
+  type FloorId,
+  type LobbySnapshot,
+  type MovementSnapshot,
+  type Role,
+  TUNING,
+} from '@turnover/shared'
 
 /**
  * First-light view state (cycle 2.2): a pure reducer over the T3 message
@@ -19,6 +27,8 @@ export interface ViewState {
   roundStartedAt: number | null
   /** Ids from round:started, labeled by roster name in the round view. */
   roundPlayerIds: readonly string[]
+  /** Latest public movement snapshot (join / buzzer); positions live in the scene. */
+  movementSnapshot: MovementSnapshot | null
   /** Banner text (join rejections, intent errors). */
   error: string | null
   /** True while a join attempt is in flight (duplicate-submit guard). */
@@ -30,6 +40,13 @@ export type ViewAction =
   | { type: 'join-failed'; reason: string }
   | { type: 'snapshot'; snapshot: LobbySnapshot }
   | { type: 'round-started'; playerIds: readonly string[] }
+  // Movement render-state actions (cycle 2.4): the reducer no-ops the four
+  // high-frequency events — continuous positions live in the world scene.
+  | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: Facing }
+  | { type: 'elevator-called'; floor: FloorId; car: CarId }
+  | { type: 'elevator-moved'; car: CarId; floor: FloorId }
+  | { type: 'player-left'; playerId: string }
+  | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }
   | { type: 'intent-error'; message: string }
@@ -61,6 +78,7 @@ export function initialViewState(): ViewState {
     role: null,
     roundStartedAt: null,
     roundPlayerIds: [],
+    movementSnapshot: null,
     error: null,
     joining: false,
   }
@@ -103,5 +121,13 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
       return state.view === 'join' ? state : { ...state, view: 'lost' }
     case 'clear-error':
       return { ...state, error: null }
+    // Render state, not view state: identity return keeps 20 Hz out of the DOM.
+    case 'player-moved':
+    case 'elevator-called':
+    case 'elevator-moved':
+    case 'player-left':
+      return state
+    case 'movement-snapshot':
+      return { ...state, movementSnapshot: action.snapshot }
   }
 }

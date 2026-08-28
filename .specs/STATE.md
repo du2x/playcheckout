@@ -106,6 +106,21 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-007
+- **Decision**: Add `TUNING.ELEVATOR_LANDING_TILES = 1` — the boarding predicate for
+  elevators ("a 3rd player at the landing waits", cycle 2.4 MOVE-13). Candidates board
+  when on the car's floor within 1 tile of the car's landing x.
+- **Reason**: prd §7 does not define a boarding range; FR-5 locks capacity and timing but
+  not the "at the landing" predicate. The spec's assumptions table leaves boarding
+  behavior to the design. 1 tile keeps a single landing snap deterministic and fair.
+- **Trade-off**: First tuning constant beyond the locked prd §7 list — recorded here
+  rather than silently added; playtests (Gate 4) may revisit via a new AD, never an
+  incidental edit.
+- **Scope**: `packages/shared/src/tuning.ts`, `packages/sim/src/movement.ts`, all future
+  elevator interactions (2.5+ door cues reference landing positions).
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: protocol-registry (`.specs/features/protocol-registry/`) — cycle 2.3 (AD-006) ✅ COMPLETE

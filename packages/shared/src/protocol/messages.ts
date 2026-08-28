@@ -1,5 +1,12 @@
 import { z } from 'zod'
+import type { FLOOR_IDS } from '../layout.js'
 import type { Role } from '../roles.js'
+
+/** Guest floors + grand lobby, indexed 0..3 (layout.ts is the source). */
+export type FloorId = (typeof FLOOR_IDS)[number]
+/** Car 1 = west landing, car 2 = east landing. */
+export type CarId = 1 | 2
+export type Facing = 'left' | 'right'
 
 /**
  * Server→client payload shapes (protocol registry payloads — see registry.ts).
@@ -46,6 +53,57 @@ export type RoundBuzzer = Record<string, never>
 export interface IntentError {
   readonly code: 'need-more-players' | 'not-host' | 'round-already-active'
   readonly message: string
+}
+
+// ---------------------------------------------------------------------------
+// Movement (cycle 2.4). Positions are public (protocol rule 2); elevator
+// payloads carry car floors only — never occupant ids (FR-6).
+// ---------------------------------------------------------------------------
+
+/** server → all players. A player's position/floor/facing changed this tick. */
+export interface PlayerMoved {
+  readonly playerId: string
+  readonly floor: FloorId
+  /** Tiles; the sim integrates in integer millitiles for determinism. */
+  readonly x: number
+  readonly facing: Facing
+}
+
+/** server → all players. A call was registered (incl. decoy flashes, FR-5). */
+export interface ElevatorCalled {
+  /** Floor the car was called to (the caller's pickup floor). */
+  readonly floor: FloorId
+  readonly car: CarId
+}
+
+/** server → all players. A car's floor changed (arrival, ride hop). */
+export interface ElevatorMoved {
+  readonly car: CarId
+  readonly floor: FloorId
+}
+
+/** server → all players. A player disconnected; remove their rectangle. */
+export interface PlayerLeft {
+  readonly playerId: string
+}
+
+/** Movement snapshot row for one player — public position data only. */
+export interface MovementSnapshotPlayer {
+  readonly playerId: string
+  readonly floor: FloorId
+  readonly x: number
+}
+
+/** Movement snapshot row for one car — floor only, never occupants (FR-6). */
+export interface MovementSnapshotCar {
+  readonly car: CarId
+  readonly floor: FloorId
+}
+
+/** server → one player. Public movement state on join and at the buzzer (MOVE-18). */
+export interface MovementSnapshot {
+  readonly players: readonly MovementSnapshotPlayer[]
+  readonly cars: readonly MovementSnapshotCar[]
 }
 
 /**
