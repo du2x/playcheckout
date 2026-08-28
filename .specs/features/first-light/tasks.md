@@ -152,7 +152,7 @@ T6 → T7
 
 ---
 
-### T4: Lobby view — roster, host-only start, rejection banner
+### T4: Lobby view — roster, host-only start, rejection banner — ✅ done (view shipped with T3's slice; T4 added the multi-tab coverage)
 
 **What**: Render the lobby view (roster names, own-name highlight, host marker, start control for host only, error banner for rejected intents); dispatch `lobby:start` on click; extend `lobby.spec.ts` with the multi-tab lobby story.
 **Where**: `apps/client/src/ui/lobbyView.ts` (new), `apps/client/harness/lobby.spec.ts` (extend)

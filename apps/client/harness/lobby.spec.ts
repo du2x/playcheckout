@@ -139,4 +139,103 @@ test.describe('client:lobby_join', () => {
     await guest.context().close()
     await host.context().close()
   })
+
+  // Spec LIGHT-05..08 (gate scenario client:lobby_join, lobby story):
+  // roster updates without reload, host-only start control, start rejection.
+  test.describe('client:lobby_join — lobby view and host start', () => {
+    test('start control is visible only on the host page (LIGHT-06)', async ({ browser }) => {
+      const host = await browser.newContext().then((c) => c.newPage())
+      const code = await createRoom(host, 'ada')
+      const guest = await browser.newContext().then((c) => c.newPage())
+      await join(guest, code, 'bruno')
+      await guest.waitForSelector('#lobby-view')
+
+      expect(await host.isVisible('#start-button')).toBe(true)
+      expect(await guest.isVisible('#start-button')).toBe(false)
+
+      await guest.context().close()
+      await host.context().close()
+    })
+
+    test('rosters update on every page as players join and leave (LIGHT-05)', async ({
+      browser,
+    }) => {
+      const host = await browser.newContext().then((c) => c.newPage())
+      const code = await createRoom(host, 'ada')
+      const guest = await browser.newContext().then((c) => c.newPage())
+      await join(guest, code, 'bruno')
+      await guest.waitForSelector('#lobby-view')
+
+      const third = await browser.newContext().then((c) => c.newPage())
+      await join(third, code, 'caro')
+      await host.waitForFunction(
+        () => document.querySelectorAll('#roster li').length === 3,
+        undefined,
+        { timeout: 5000 },
+      )
+      const names = await host.$$eval('#roster li', (items) => items.map((li) => li.textContent))
+      expect(names).toEqual(['ada (host)', 'bruno', 'caro'])
+
+      // Leave without reload: remaining rosters shrink everywhere (edge case).
+      await third.close()
+      await host.waitForFunction(
+        () => document.querySelectorAll('#roster li').length === 2,
+        undefined,
+        { timeout: 5000 },
+      )
+      await guest.waitForFunction(
+        () => document.querySelectorAll('#roster li').length === 2,
+        undefined,
+        { timeout: 5000 },
+      )
+
+      await guest.context().close()
+      await host.context().close()
+    })
+
+    test('starting with only 3 players shows the rejection and stays in lobby (LIGHT-08)', async ({
+      browser,
+    }) => {
+      const host = await browser.newContext().then((c) => c.newPage())
+      const code = await createRoom(host, 'ada')
+      const guest = await browser.newContext().then((c) => c.newPage())
+      await join(guest, code, 'bruno')
+      const third = await browser.newContext().then((c) => c.newPage())
+      await join(third, code, 'caro')
+      await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 3)
+
+      await host.click('#start-button')
+      await host.waitForSelector('#lobby-error:not([hidden])')
+      expect(await host.textContent('#lobby-error')).toMatch(/need at least 4/i)
+      expect(await host.isVisible('#lobby-view')).toBe(true)
+      expect(await guest.isVisible('#lobby-view')).toBe(true)
+      expect(await third.isVisible('#lobby-view')).toBe(true)
+
+      await third.context().close()
+      await guest.context().close()
+      await host.context().close()
+    })
+
+    test('with 4 players the host starts and all pages enter the round view (LIGHT-07 smoke)', async ({
+      browser,
+    }) => {
+      const host = await browser.newContext().then((c) => c.newPage())
+      const code = await createRoom(host, 'ada')
+      const pages = [host]
+      for (const name of ['bruno', 'caro', 'dina']) {
+        const p = await browser.newContext().then((c) => c.newPage())
+        await join(p, code, name)
+        pages.push(p)
+      }
+      await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
+
+      await host.click('#start-button')
+      for (const page of pages) {
+        await page.waitForSelector('#round-hud', { timeout: 5000 })
+      }
+
+      for (const page of pages.slice(1).reverse()) await page.context().close()
+      await host.context().close()
+    })
+  })
 })
