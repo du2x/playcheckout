@@ -124,10 +124,10 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] `LobbySnapshot`, `round:started`, `role:dealt`, `round:buzzer`, `error`, `lobby:start` types exported; every type carries its recipient comment (protocol rule 5)
-- [ ] No type exposes any player's role except the recipient's own in `role:dealt`; seed appears nowhere
-- [ ] zod schema rejects any `lobby:start` payload with extra fields
-- [ ] Quick gate passes; test count: 4+ cases
+- [x] `LobbySnapshot`, `round:started`, `role:dealt`, `round:buzzer`, `error`, `lobby:start` types exported; every type carries its recipient comment (protocol rule 5)
+- [x] No type exposes any player's role except the recipient's own in `role:dealt`; seed appears nowhere
+- [x] zod schema rejects any `lobby:start` payload with extra fields (`.strict()`)
+- [x] Quick gate passes; test count: 4+ cases (5 added, 35 total)
 
 **Tests**: unit
 **Gate**: quick
