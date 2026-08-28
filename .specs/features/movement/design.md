@@ -103,20 +103,40 @@ graph TD
   - `leave(playerId: string): void` — remove (mid-round: rectangle disappears; car riders: removed from car)
   - `startMove(playerId, dir: 'left' | 'right')` — idempotent; ignored in lobby phase if the player's floor ≠ `lobby` (MOVE-08) or if in a car (MOVE-09); sets facing immediately
   - `stopMove(playerId)` — no-op if not moving
-  - `callElevator(playerId, target: FloorId)` — validated for phase (lobby → rejected) and caller not in a car; dispatch logic below; emits `elevator:called` even when the dispatch is a decoy-ignore (MOVE-12)
-  - `unlock() / lock()` — room start / buzzer transitions; **no position changes** (MOVE-07, MOVE-08: positions persist; lobby phase re-confines *future* movement to the `lobby` floor)
+  - `callElevator(playerId, target: FloorId): 'dispatched' | 'ignored' | 'rejected'` —
+    `'rejected'` when in lobby phase (the room maps this to the `elevator-locked`
+    intent error) or the caller is in a car; `'ignored'` is the decoy path
+    (MOVE-12); `'dispatched'` covers immediate dispatch AND queuing. The
+    `elevator:called` flash announces on the **next tick** after acceptance,
+    naming the serving car (decoys name the targeting car); queued calls flash
+    at dispatch time, not at call
+  - `unlock() / lock()` — room start / buzzer transitions; **no position changes**
+    (MOVE-07, MOVE-08: positions persist; lobby phase re-confines *future*
+    movement to the `lobby` floor). `lock()` additionally **clears the call
+    FIFO**: elevators idle in lobby phase, so a queued dispatch would contradict
+    the rejection of fresh lobby-phase calls. In-flight trips still complete
   - `tick(): readonly MovementEvent[]` — one 0.05 s step; integrates moving players, advances cars, emits events; idle ticks emit `[]`
   - `snapshot(): MovementSnapshot` — current public movement state (MOVE-18)
   - `positionOf(playerId)` — room reads for later cycles (AD-005 seam)
 - **Determinism**: positions are **integer millitiles** (x × 1000). Per-tick dx = `PLAYER_SPEED_TILES_PER_SEC × 1000 / TICK_HZ` = 300 exactly — bit-for-bit replay (spec success criterion). Wire x = `xMillis / 1000` (e.g. `12.3`).
-- **Events emitted**: `player:moved` when a player's x, floor, or facing changed this tick; `elevator:called` on every accepted call (incl. decoys); `elevator:moved` whenever a car's floor changes. Nothing on idle ticks (MOVE-03).
+- **Events emitted**: `player:moved` when a player's x, floor, or facing changed
+  this tick; `elevator:called` for immediate dispatches and decoys (announced
+  the tick after acceptance; queued calls announce at dispatch); `elevator:moved`
+  whenever a car's floor changes. Nothing on idle ticks (MOVE-03).
 
 ### Elevator model (inside `movement.ts`, pure — one file, one concept pair)
 
 - **Levels**: `FLOOR_IDS` = lobby, floor1..3 (4 levels). Landings: car 1 at x=0, car 2 at x=`HALL_LENGTH_TILES` — same on every level.
 - **Car state machine**: `idle(floor)` → `arriving(ticksLeft = ELEVATOR_ARRIVE_SECONDS×TICK_HZ = 60, pickup, target)` → board (instant, same tick) → `riding(ticksLeft = |pickup−target| × RIDE_SECONDS_PER_FLOOR×TICK_HZ = 40/floor, target)` → `idle(target)`. Arrival is a fixed 60 ticks from call regardless of distance — prd FR-5's abstraction, locked by MOVE-11.
 - **Boarding** (MOVE-13): on the arrival tick, candidates = connected players whose floor == pickup and |x − car landing x| ≤ `ELEVATOR_LANDING_TILES` (new tuning, AD-007: 1 tile); sorted by (distance to car x, then playerId); first `ELEVATOR_CAPACITY` (2) board, rest wait for the next arrival. Boarded players: floor tracks the car (player:moved per floor hop), x pinned to the car's landing x, move intents ignored. Riders keep riding to `target` even if the caller walked away (the trip completes — decoy rides exist).
-- **Dispatch** (MOVE-10): score(car) = ticks until this call's ride completes = (60 if idle, else remaining busy ticks + 60) + ride ticks. Min score; tie → car 1. A call whose **target** equals a car's current pending target is ignored for dispatch (decoy — MOVE-12) but `elevator:called` still fires. If no car is idle, the call waits in a sim-level FIFO; when a car goes idle it serves the oldest queued call (same scoring). A car never holds two destinations (MOVE-15).
+- **Dispatch** (MOVE-10): only **idle** cars are dispatched — with the fixed 3 s
+  arrival, all idle cars tie, so the tie rule (car 1, west) decides; car 2
+  serves whenever car 1 is busy. A call whose **target** equals a car's current
+  pending target is ignored for dispatch (decoy — MOVE-12) but still flashes.
+  If no car is idle, the call waits in a sim-level FIFO and is served **in FIFO
+  order** by the next car to go idle. A car never holds two destinations
+  (MOVE-15). `elevator:called` announces on the next tick after acceptance —
+  for immediate dispatches and decoys; queued calls announce when dispatched.
 - **In lobby phase**: calls rejected with an intent error, no event, no flash (edge case).
 
 ### Registry extensions — `packages/shared/src/protocol/`
@@ -213,6 +233,7 @@ interface CarState {
 | `move:start` on non-lobby floor in lobby phase (post-buzzer) | Ignored (MOVE-08) | Rectangle stays |
 | Duplicate `move:start` / stray `move:stop` | No-ops (spec edges) | None |
 | `elevator:call` in lobby phase | Intent error via `router.toSelf('error', …)`; no flash | Banner shows reason |
+| Call queued (both cars busy) when the buzzer fires | `lock()` clears the FIFO — dropped silently, no dispatch, no flash; in-flight trips complete | None (the round is over) |
 | Call with target == a car's current target | No dispatch; `elevator:called` still emitted (decoy flash, MOVE-12) | Panel flashes, no car change |
 | Player leaves mid-walk / in-car | `movement.leave` removes them (car riders list pruned); `player:left` broadcast | Rectangle disappears everywhere |
 | Round starts mid-walk | Intents continue uninterrupted (spec edge) | None |

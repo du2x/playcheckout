@@ -139,8 +139,9 @@ export class MovementSim {
     const pickup = caller.floor
     const idle = ([1, 2] as const).filter((id) => this.cars[id].phase === 'idle')
     if (idle.length === 0) {
-      // Both cars busy: wait; served when a car next goes idle. The flash still
-      // happens now (FR-5 decoy rule).
+      // Both cars busy: the call waits in the FIFO and is served by the next
+      // car to go idle. Its panel flash happens at dispatch time, not now —
+      // only immediate dispatches and decoys flash on the tick after the call.
       this.callQueue.push({ playerId, pickup, target })
       return 'dispatched'
     }
@@ -173,6 +174,10 @@ export class MovementSim {
 
   lock(): void {
     this.phase = 'lobby'
+    // The buzzer ends the round: calls still waiting in the FIFO are dropped —
+    // elevators idle in lobby phase, so a queued dispatch would contradict the
+    // rejection of fresh lobby-phase calls. In-flight trips still complete.
+    this.callQueue = []
   }
 
   // --- queries --------------------------------------------------------------

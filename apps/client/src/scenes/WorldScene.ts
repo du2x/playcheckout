@@ -1,5 +1,4 @@
-import type { MovementSnapshot } from '@turnover/shared'
-import { TUNING } from '@turnover/shared'
+import { FLOOR_IDS, type FloorId, type MovementSnapshot, TUNING } from '@turnover/shared'
 import Phaser from 'phaser'
 
 /**
@@ -28,6 +27,7 @@ export interface WorldStartData {
   ownId: string
   sendMoveStart: (dir: 'left' | 'right') => void
   sendMoveStop: () => void
+  sendElevatorCall: (target: FloorId) => void
 }
 
 type MovementAction =
@@ -49,6 +49,7 @@ export class WorldScene extends Phaser.Scene {
   private ownId = ''
   private sendMoveStart: (dir: 'left' | 'right') => void = () => {}
   private sendMoveStop: () => void = () => {}
+  private sendElevatorCall: (target: FloorId) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
   private ownMoving: 'left' | 'right' | null = null
@@ -62,6 +63,7 @@ export class WorldScene extends Phaser.Scene {
     this.ownId = data.ownId
     this.sendMoveStart = data.sendMoveStart
     this.sendMoveStop = data.sendMoveStop
+    this.sendElevatorCall = data.sendElevatorCall
     this.players.clear()
     this.cars.clear()
     this.ownMoving = null
@@ -88,6 +90,10 @@ export class WorldScene extends Phaser.Scene {
       keyboard.on('keydown-RIGHT', () => this.beginMove('right'))
       keyboard.on('keyup-LEFT', () => this.endMove('left'))
       keyboard.on('keyup-RIGHT', () => this.endMove('right'))
+      // Elevator calls: up/down summons a car to this floor and rides one
+      // level in that direction (gray-box input; richer destination UI later).
+      keyboard.on('keydown-UP', () => this.callElevator(1))
+      keyboard.on('keydown-DOWN', () => this.callElevator(-1))
     }
   }
 
@@ -184,6 +190,15 @@ export class WorldScene extends Phaser.Scene {
     if (this.ownMoving !== dir) return
     this.ownMoving = null
     this.sendMoveStop()
+  }
+
+  private callElevator(direction: 1 | -1): void {
+    const own = this.players.get(this.ownId)
+    if (own === undefined) return
+    const idx = FLOOR_IDS.indexOf(own.floor as FloorId)
+    const target = FLOOR_IDS[Math.min(FLOOR_IDS.length - 1, Math.max(0, idx + direction))]
+    if (target === undefined || target === own.floor) return
+    this.sendElevatorCall(target)
   }
 
   private carPx(car: 1 | 2): number {

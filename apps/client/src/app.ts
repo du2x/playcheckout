@@ -148,6 +148,7 @@ export class App {
       ownId: snapshot.ownId,
       sendMoveStart: (dir: 'left' | 'right') => this.connection?.sendMoveStart(dir),
       sendMoveStop: () => this.connection?.sendMoveStop(),
+      sendElevatorCall: (target: FloorId) => this.connection?.sendElevatorCall(target),
     })
   }
 

@@ -329,6 +329,29 @@ describe('sim:elevator', () => {
     expect(ride(sim, 'p1', 'lobby')).toBe('rejected') // elevators idle in lobby phase
   })
 
+  it('drops queued calls at the buzzer: no lobby-phase dispatches (edge case + MOVE-08)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.unlock()
+    expect(ride(sim, 'p1', 'floor3')).toBe('dispatched') // car 1 busy 60+120
+    expect(ride(sim, 'p1', 'floor1')).toBe('dispatched') // car 2 busy 60+40
+    expect(ride(sim, 'p1', 'lobby')).toBe('dispatched') // queued (both busy)
+    sim.tick() // both flashes announce
+    sim.lock() // buzzer while all three calls are in flight or queued
+
+    // In-flight trips complete, but the queued call is dropped silently: no
+    // further elevator:called ever fires, and neither car re-dispatches.
+    let flashes = 0
+    for (let i = 0; i < 200; i++) {
+      flashes += sim.tick().filter((e) => e.type === 'elevator:called').length
+    }
+    expect(flashes).toBe(0)
+    expect(sim.snapshot().cars).toEqual([
+      { car: 1, floor: 'floor3' },
+      { car: 2, floor: 'floor1' },
+    ])
+  })
+
   it('replays a 200-tick mixed sequence bit-for-bit across two runs (MOVE-17 determinism)', () => {
     const run = () => {
       const sim = new MovementSim()
