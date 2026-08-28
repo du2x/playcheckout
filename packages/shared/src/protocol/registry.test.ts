@@ -96,6 +96,8 @@ describe('protocol registry', () => {
     'player:moved': 'sameFloor',
     'elevator:called': 'all',
     'elevator:moved': 'all',
+    'elevator:pressed': 'riders',
+    'elevator:riders': 'riders',
     'player:left': 'all',
     'player:left-floor': 'sameFloor',
     'movement:snapshot': 'self',
@@ -106,11 +108,11 @@ describe('protocol registry', () => {
     'room:trashed': 'occupants',
   } as const
 
-  it('declares exactly the five core, five movement, and five work types (REG-03)', () => {
+  it('declares exactly the core, movement, and work types — riders rows included (REG-03, AD-013)', () => {
     expect(Object.keys(PROTOCOL_REGISTRY).sort()).toEqual(Object.keys(LITERAL_POLICIES).sort())
   })
 
-  it('pins every key to its exact literal recipient policy (WORK-16/17, AD-009)', () => {
+  it('pins every key to its exact literal recipient policy (WORK-16/17, AD-009, AD-013)', () => {
     for (const [key, policy] of Object.entries(LITERAL_POLICIES)) {
       expect(
         PROTOCOL_REGISTRY[key as keyof typeof LITERAL_POLICIES].recipients,
@@ -121,7 +123,7 @@ describe('protocol registry', () => {
 
   it('declares a valid recipient policy on every entry (REG-19)', () => {
     for (const [key, entry] of Object.entries(PROTOCOL_REGISTRY)) {
-      expect(['all', 'self', 'sameFloor', 'occupants'], `policy of ${key}`).toContain(
+      expect(['all', 'self', 'sameFloor', 'occupants', 'riders'], `policy of ${key}`).toContain(
         entry.recipients,
       )
     }
@@ -150,6 +152,45 @@ describe('protocol registry', () => {
       car: 1,
     })
     expect(Object.keys(called.payload).sort()).toEqual(['car', 'floor'])
+    // ELR P2 AC9 (MOVE-16 carryover): the public elevator payloads never grow
+    // queue contents, occupancy, or press targets — riders-only knowledge
+    // travels exclusively on the riders-policy rows.
+    for (const publicPayload of [carMoved.payload, called.payload] as const) {
+      const keys = Object.keys(publicPayload)
+      expect(keys).not.toContain('queue')
+      expect(keys).not.toContain('occupants')
+      expect(keys).not.toContain('riders')
+    }
+  })
+
+  it('projects elevator:pressed with riders policy and car-only visibility (AD-013, ELR-06)', () => {
+    const row = PROTOCOL_REGISTRY['elevator:pressed']
+    expect(row.recipients).toBe('riders')
+    const projected = row.fromSim({
+      type: 'elevator:pressed',
+      playerId: 'p1',
+      floor: 'floor2',
+      car: 2,
+    })
+    // Payload is EXACTLY {playerId, floor} — the car travels as visibility only.
+    expect(projected.payload).toEqual({ playerId: 'p1', floor: 'floor2' })
+    expect(Object.keys(projected.payload).sort()).toEqual(['floor', 'playerId'])
+    expect(projected.visibility).toEqual({ car: 2 })
+    expect(projected.self).toBeUndefined()
+  })
+
+  it('projects elevator:riders with the full occupant + queue payload to riders only (ELR-01..03)', () => {
+    const row = PROTOCOL_REGISTRY['elevator:riders']
+    expect(row.recipients).toBe('riders')
+    const projected = row.fromSim({
+      type: 'elevator:riders',
+      car: 1,
+      riders: ['p1', 'p2'],
+      queue: ['floor2'],
+    })
+    expect(projected.payload).toEqual({ car: 1, riders: ['p1', 'p2'], queue: ['floor2'] })
+    expect(Object.keys(projected.payload).sort()).toEqual(['car', 'queue', 'riders'])
+    expect(projected.visibility).toEqual({ car: 1 })
   })
 
   it('keeps room-originated types out of the sim-event surface (fromSim undefined)', () => {

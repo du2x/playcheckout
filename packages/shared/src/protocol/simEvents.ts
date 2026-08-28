@@ -59,3 +59,18 @@ export type MovementEvent =
   // ONLY that she left — never the destination (cross-floor sightings stay
   // impossible for live players).
   | { readonly type: 'player:left-floor'; readonly playerId: string; readonly floor: FloorId }
+  // --- Rider-exclusive knowledge (cycle 2.6, AD-013): occupancy and presses
+  // are legitimate knowledge of the people inside the box — and only of them.
+  // The event carries `car` for routing; the wire payload never names it.
+  | {
+      readonly type: 'elevator:pressed'
+      readonly playerId: string
+      readonly floor: FloorId
+      readonly car: CarId
+    }
+  | {
+      readonly type: 'elevator:riders'
+      readonly car: CarId
+      readonly riders: readonly string[]
+      readonly queue: readonly FloorId[]
+    }

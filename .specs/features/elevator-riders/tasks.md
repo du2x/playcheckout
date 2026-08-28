@@ -141,7 +141,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T4: Registry riders policy and rows
+#### T4: Registry riders policy and rows — ✅ Done
 
 **What**: Extend `RecipientPolicy` with `'riders'`, extend `EventVisibility` with `car?: 1|2`, and add registry rows `elevator:pressed` (payload `ElevatorPressed`, `riders`, visibility `{car}`) and `elevator:riders` (payload `ElevatorRiders`, `riders`, visibility `{car}`). Update registry walk test to pin the new keys and policies.
 **Where**: `packages/shared/src/protocol/registry.ts`
@@ -154,10 +154,10 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-protocol`
 
 **Done when**:
-- [ ] `RecipientPolicy` includes `'riders'`; `EventVisibility` includes `car`
-- [ ] Two new rows declared once with `riders` policy and `fromSim` projections; adding an undeclared sim event is still a compile error
-- [ ] `registry.test.ts` pins payload keys not to include `queue`/`occupants` on `elevator:called`/`elevator:moved` and pins `riders` rows' policies
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `RecipientPolicy` includes `'riders'`; `EventVisibility` includes `car`
+- [x] Two new rows declared once with `riders` policy and `fromSim` projections; adding an undeclared sim event is still a compile error
+- [x] `registry.test.ts` pins payload keys not to include `queue`/`occupants` on `elevator:called`/`elevator:moved` and pins `riders` rows' policies
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: unit
 **Gate**: quick

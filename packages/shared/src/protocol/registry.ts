@@ -1,6 +1,9 @@
 import type {
+  CarId,
   ElevatorCalled,
   ElevatorMoved,
+  ElevatorPressed,
+  ElevatorRiders,
   FloorId,
   IntentError,
   LobbySnapshot,
@@ -34,18 +37,23 @@ import type { MovementEvent, SimEvent } from './simEvents.js'
 /**
  * Closed recipient-policy enum. Extended deliberately, never speculatively:
  * `sameFloor` (AD-008/AD-009) delivers to live viewers on the event's floor;
- * `occupants` (cycle 2.5) delivers to viewers inside the event's room segment.
+ * `occupants` (cycle 2.5) delivers to viewers inside the event's room segment;
+ * `riders` (cycle 2.6, AD-013) delivers ONLY to viewers riding the event's car
+ * — occupancy and press knowledge belongs exclusively to the people inside.
  */
-export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants'
+export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants' | 'riders'
 
 /**
  * Positional selector a projection returns for the positional policies: the
- * event's floor (`sameFloor`) or its room-segment key (`occupants`).
+ * event's floor (`sameFloor`), its room-segment key (`occupants`), or the car
+ * it happened in (`riders`).
  */
 export interface EventVisibility {
   readonly floor?: FloorId
   /** `\`${floor}:${room}\`` — the occupants key the Router matches against. */
   readonly roomKey?: string
+  /** Which car the event concerns — the riders key the Router matches against. */
+  readonly car?: CarId
 }
 
 /**
@@ -79,6 +87,10 @@ export interface Payloads {
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
   'elevator:moved': ElevatorMoved
+  /** server → the car's riders ONLY. A rider pressed a floor in-car (AD-013). */
+  'elevator:pressed': ElevatorPressed
+  /** server → the car's riders ONLY. The car's occupants + press queue (AD-013). */
+  'elevator:riders': ElevatorRiders
   /** server → all players. A player disconnected; remove their rectangle. */
   'player:left': PlayerLeft
   /** server → the departed floor's viewers: drop the rectangle (AD-009). */
@@ -189,6 +201,22 @@ export const PROTOCOL_REGISTRY = {
     fromSim: ((event) => ({
       payload: { car: event.car, floor: event.floor },
     })) as SimProjection<'elevator:moved'>,
+  },
+  'elevator:pressed': {
+    payload: {} as ElevatorPressed,
+    recipients: 'riders',
+    fromSim: ((event) => ({
+      payload: { playerId: event.playerId, floor: event.floor },
+      visibility: { car: event.car },
+    })) as SimProjection<'elevator:pressed'>,
+  },
+  'elevator:riders': {
+    payload: {} as ElevatorRiders,
+    recipients: 'riders',
+    fromSim: ((event) => ({
+      payload: { car: event.car, riders: event.riders, queue: event.queue },
+      visibility: { car: event.car },
+    })) as SimProjection<'elevator:riders'>,
   },
   'player:left': {
     payload: {} as PlayerLeft,
