@@ -6,6 +6,12 @@ import { TICK_HZ } from './tick.js'
 export interface RoundSimConfig {
   readonly seed: number
   readonly playerIds: readonly string[]
+  /**
+   * Test-only shift-length override (AD-004): lets harness rounds reach a real
+   * buzzer without waiting the §7 shift. Production never passes it; omitted,
+   * the shift is TUNING.SHIFT_SECONDS × TICK_HZ exactly as prd §7 locks it.
+   */
+  readonly totalTicks?: number
 }
 
 /**
@@ -32,7 +38,11 @@ export class RoundSim {
     }
     this.playerIds = [...config.playerIds]
     this.deal = dealRoles(config.seed, this.playerIds)
-    this.ticksLeft = RoundSim.TOTAL_TICKS
+    const totalTicks = config.totalTicks ?? RoundSim.TOTAL_TICKS
+    if (!Number.isInteger(totalTicks) || totalTicks < 1) {
+      throw new Error(`totalTicks must be a positive integer, got ${config.totalTicks}`)
+    }
+    this.ticksLeft = totalTicks
   }
 
   /** Shift ticks remaining; a full shift starts at TUNING.SHIFT_SECONDS × TICK_HZ. */

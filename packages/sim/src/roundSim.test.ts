@@ -78,3 +78,29 @@ describe('sim:role_deal', () => {
     ).toThrow()
   })
 })
+
+// AD-004 test seam: an optional shift-length override exists ONLY so gate-3
+// harness rounds can reach a real buzzer quickly. The §7 default is unchanged
+// (asserted by the CLK tests above); production never passes the override.
+describe('sim:shift_override (AD-004 test seam)', () => {
+  it('fires the buzzer at exactly the overridden tick count and never before', () => {
+    const sim = createRoundSim({ seed: 42, playerIds: IDS, totalTicks: 100 })
+    for (let t = 1; t < 100; t++) {
+      expect(sim.tick().filter((e) => e.type === 'round:buzzer')).toHaveLength(0)
+    }
+    expect(sim.tick()).toEqual([{ type: 'round:buzzer' }])
+    expect(sim.clockTicksRemaining).toBe(0)
+    expect(sim.tick()).toEqual([])
+  })
+
+  it('maps a 1-second override to 20 ticks (TICK_HZ)', () => {
+    const sim = createRoundSim({ seed: 1, playerIds: IDS, totalTicks: TICK_HZ })
+    expect(sim.clockTicksRemaining).toBe(TICK_HZ)
+  })
+
+  it('rejects non-positive or non-integer overrides', () => {
+    expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: 0 })).toThrow()
+    expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: -5 })).toThrow()
+    expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: 2.5 })).toThrow()
+  })
+})

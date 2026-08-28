@@ -67,7 +67,7 @@ T6 → T7
 
 ## Task Breakdown
 
-### T1: Sim shift-length override + server test seam (AD-004)
+### T1: Sim shift-length override + server test seam (AD-004) — ✅ done
 
 **What**: Give `RoundSim` an optional `totalTicks` constructor override (default stays `TUNING.SHIFT_SECONDS × TICK_HZ`); TurnoverRoom passes `TURNOVER_TEST_SHIFT_SECONDS` to the sim only when `NODE_ENV !== 'production'`.
 **Where**: `packages/sim/src/roundSim.ts`, `packages/sim/src/roundSim.test.ts`, `apps/server/src/rooms/TurnoverRoom.ts`, `apps/server/src/rooms/TurnoverRoom.test.ts`

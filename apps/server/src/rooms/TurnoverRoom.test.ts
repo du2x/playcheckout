@@ -308,6 +308,49 @@ describe('sim:role_deal (server)', () => {
     c.leave()
   })
 
+  // AD-004 test seam: outside production TURNOVER_TEST_SHIFT_SECONDS shortens
+  // the shift; in production it is ignored and the §7 shift always runs.
+  describe('TURNOVER_TEST_SHIFT_SECONDS seam (AD-004)', () => {
+    it('shortens the shift outside production (1 s override → buzzer at tick 20)', async () => {
+      vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '1')
+      try {
+        const [host, a, b, c] = await roomWithFour()
+        const instance = TurnoverRoom.instances.at(-1)
+        host.send('lobby:start', { type: 'lobby:start' })
+        await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+        instance?.__driveTicks(19)
+        expect(instance?.__phase()).toBe('round')
+        instance?.__driveTicks(1)
+        await vi.waitFor(() => expect(instance?.__phase()).toBe('lobby'))
+        host.leave()
+        a.leave()
+        b.leave()
+        c.leave()
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
+
+    it('ignores the env var in production (§7 shift unchanged)', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '1')
+      try {
+        const [host, a, b, c] = await roomWithFour()
+        const instance = TurnoverRoom.instances.at(-1)
+        host.send('lobby:start', { type: 'lobby:start' })
+        await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+        instance?.__driveTicks(20)
+        expect(instance?.__phase()).toBe('round') // a 1 s shift would have buzzed
+        host.leave()
+        a.leave()
+        b.leave()
+        c.leave()
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
+  })
+
   it('fires the buzzer, returns to lobby, and re-deals fresh roles (CLK-03, CLK-04)', async () => {
     const [host, a, b, c] = await roomWithFour()
     const collectors = [host, a, b, c].map((room) => collectAll(room))

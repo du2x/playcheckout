@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto'
 import { type LobbySnapshot, lobbyStartIntentSchema, TUNING } from '@turnover/shared'
-import { RoundSim, type SimEvent } from '@turnover/sim'
+import { RoundSim, type SimEvent, TICK_HZ } from '@turnover/sim'
 import { type Client, Room } from 'colyseus'
 
 /**
@@ -16,6 +16,20 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
 
 /** Process-local set of live room codes (AD-001: single-process deploy). */
 const activeCodes = new Set<string>()
+
+/**
+ * AD-004 test seam: outside production, TURNOVER_TEST_SHIFT_SECONDS shortens the
+ * shift so gate-3 harness rounds reach a real buzzer. Production ignores the
+ * variable entirely and always runs the prd §7 shift (TUNING.SHIFT_SECONDS).
+ */
+function testShiftTicks(): number | undefined {
+  if (process.env.NODE_ENV === 'production') return undefined
+  const raw = process.env.TURNOVER_TEST_SHIFT_SECONDS
+  if (raw === undefined) return undefined
+  const seconds = Number(raw)
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined
+  return Math.round(seconds * TICK_HZ)
+}
 
 interface LobbyPlayer {
   sessionId: string
@@ -155,7 +169,12 @@ export class TurnoverRoom extends Room {
       .sort((a, b) => a.joinedAt - b.joinedAt)
       .map((p) => p.sessionId)
     // Seed never leaves the server: it appears in no event and no payload.
-    this.sim = new RoundSim({ seed: randomInt(2 ** 31), playerIds })
+    const shiftTicks = testShiftTicks()
+    this.sim = new RoundSim({
+      seed: randomInt(2 ** 31),
+      playerIds,
+      ...(shiftTicks === undefined ? {} : { totalTicks: shiftTicks }),
+    })
   }
 
   /** One fixed 0.05 s step; the production interval and the test hook share this path. */
