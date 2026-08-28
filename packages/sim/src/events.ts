@@ -1,1 +1,1 @@
-export type { SimEvent } from '@turnover/shared'
+export type { MovementEvent, SimEvent } from '@turnover/shared'

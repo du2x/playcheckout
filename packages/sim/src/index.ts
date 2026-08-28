@@ -4,6 +4,14 @@
  */
 
 export { dealRoles, mulberry32 } from './deal.js'
-export type { SimEvent } from './events.js'
+export type { MovementEvent, SimEvent } from './events.js'
+export {
+  ARRIVE_TICKS,
+  CAR_LANDING_MILLI,
+  type MoveDir,
+  MovementSim,
+  RIDE_TICKS_PER_FLOOR,
+  SPEED_MILLI_PER_TICK,
+} from './movement.js'
 export { createRoundSim, RoundSim, type RoundSimConfig } from './roundSim.js'
 export { TICK_HZ } from './tick.js'

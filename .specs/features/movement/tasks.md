@@ -87,7 +87,7 @@ T4 → T5 → T6
 
 ---
 
-### T2: MovementSim core — players, integration, confinement
+### T2: MovementSim core — players, integration, confinement ✅ Done
 
 **What**: Implement the pure `MovementSim` in `packages/sim/src/movement.ts`: integer-millitile positions, `join`/`leave`, `startMove`/`stopMove` (idempotent, in-car and post-buzzer non-lobby-floor ignored), 20 Hz integration at exactly 300 millitiles/tick, pass-through bodies, facing flips, lobby clamping (0..HALL_LENGTH_TILES) and phase confinement (`unlock`/`lock` persist positions and re-confine future movement), `player:moved` emission on x/floor/facing change only, idle ticks silent. Write the `sim:motion` describe: scripted intents assert exact integration (20 ticks = 6.0 tiles), stop-on-release, facing, clamp bounds, pass-through, no idle events, lock/unlock transitions.
 **Where**: `packages/sim/src/movement.ts` (new) + `movement.test.ts` (new)
