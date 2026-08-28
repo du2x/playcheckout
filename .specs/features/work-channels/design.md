@@ -174,7 +174,7 @@ same returned event array.
 | `room:prepped` | `{ floor, room }` | `occupants` | WorkChannels |
 | `room:trashed` | `{ floor, room }` | `occupants` | WorkChannels |
 
-Amended row: `player:moved` `{ playerId, floor, x, facing }` → `'sameFloor'`.
+Amended rows: `player:moved` `{ playerId, floor, x, facing }` → `'sameFloor'` (visibility = the event floor), and the new `player:left-floor` `{ playerId, floor }` → `'sameFloor'` (visibility = the DEPARTED floor) — emitted by MovementSim when a rider departs, so the old floor's viewers drop the rectangle without learning the destination (AD-009 client coherence).
 
 ### Intents (zod, outside the registry)
 

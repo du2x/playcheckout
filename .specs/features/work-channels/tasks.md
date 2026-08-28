@@ -215,7 +215,7 @@ T5 → T6 → T7
 
 ---
 
-### T7: Harness scenario `client:work_channels` + first-light folds
+### T7: Harness scenario `client:work_channels` + first-light folds ✅ Done
 
 **What**: Raise the harness webServer env to `TURNOVER_TEST_SHIFT_SECONDS=30` (AD-004 seam; buzzer scenarios poll, so only wall time grows) and add `apps/client/harness/work.spec.ts`: tabs join, host starts, one tab rides an elevator to a guest floor, walks into a room segment, presses Space — progress bar appears and completes within `seconds` + margin, room label shows the observed state; a tab still in the lobby receives no room-state DOM updates. Fold in first-light client notes: LIGHT-02 unknown-code message, LIGHT-08 "round already active", LIGHT-04 1-char name minimum assertions in the lobby/first-light specs.
 **Where**: `apps/client/harness/playwright.config.ts`, `work.spec.ts` (new), `lobby.spec.ts`/`round.spec.ts` (folds)

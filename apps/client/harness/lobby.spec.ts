@@ -73,7 +73,7 @@ test.describe('client:lobby_join', () => {
     await join(page, 'ZZZZ', 'ada')
     await page.waitForSelector('#join-error:not([hidden])')
     const error = await page.textContent('#join-error')
-    expect(error?.length ?? 0).toBeGreaterThan(0)
+    expect(error).toMatch(/not found/i)
     expect(await page.$('#join-view')).not.toBeNull()
     expect(await page.$('#lobby-view')).toBeNull()
   })
@@ -116,6 +116,21 @@ test.describe('client:lobby_join', () => {
     await page.click('#join-name')
     await page.keyboard.type('0123456789abcdefghij')
     expect(await page.inputValue('#join-name')).toBe('0123456789abcdef')
+  })
+
+  test('a 1-character name is the accepted minimum (LIGHT-04 fold)', async ({ browser }) => {
+    const host = await browser.newContext().then((c) => c.newPage())
+    const code = await createRoom(host, 'ada')
+
+    const guest = await browser.newContext().then((c) => c.newPage())
+    await join(guest, code, 'b')
+    await guest.waitForSelector('#roster li')
+    const roster = await guest.$$eval('#roster li', (items) => items.map((li) => li.textContent))
+    // Guest view: plain names — the host marker is self-only (LIGHT-01).
+    expect(roster).toEqual(['ada', 'b'])
+
+    await guest.context().close()
+    await host.context().close()
   })
 
   test('a rapid duplicate submit connects exactly once (edge case)', async ({ browser }) => {

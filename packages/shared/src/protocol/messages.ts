@@ -101,6 +101,15 @@ export interface PlayerLeft {
   readonly playerId: string
 }
 
+/**
+ * server → the floor's viewers (AD-009 coherence): a player departed this
+ * floor by elevator — drop their rectangle. The destination is NOT conveyed.
+ */
+export interface PlayerLeftFloor {
+  readonly playerId: string
+  readonly floor: FloorId
+}
+
 /** Movement snapshot row for one player — public position data only. */
 export interface MovementSnapshotPlayer {
   readonly playerId: string

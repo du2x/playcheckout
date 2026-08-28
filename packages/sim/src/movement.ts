@@ -294,6 +294,11 @@ export class MovementSim {
         car.ticksLeft = this.rideTicks(car.pickup as FloorId, car.target as FloorId)
         events.push({ type: 'elevator:moved', car: id, floor: car.pickup as FloorId })
         this.board(id, car, events)
+        // Departure: the pickup floor's viewers lose the riders' rectangles —
+        // AD-009 coherence, destination not conveyed (WORK-17).
+        for (const rider of car.riders) {
+          events.push({ type: 'player:left-floor', playerId: rider, floor: car.pickup as FloorId })
+        }
       } else {
         car.floor = car.target as FloorId
         car.phase = 'idle'

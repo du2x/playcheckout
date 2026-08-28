@@ -127,6 +127,7 @@ test.describe('client:movement', () => {
   test('round: building unlocks, elevator rides, panels stay position-only (MOVE-10..17)', async ({
     browser,
   }) => {
+    test.setTimeout(60_000) // the test shift (30 s, AD-004) plus choreography
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -172,8 +173,9 @@ test.describe('client:movement', () => {
     const adaOnGuest = guestScene.labels.find((l) => l.text === 'ada')
     expect(adaOnGuest?.visible).toBe(false)
 
-    // Buzzer (8 s test shift): view returns to lobby; the rider keeps floor1.
-    for (const page of pages) await page.waitForSelector('#lobby-view', { timeout: 15000 })
+    // Buzzer (30 s test shift, AD-004 seam widened for the work-channel cycle):
+    // view returns to lobby; the rider keeps floor1.
+    for (const page of pages) await page.waitForSelector('#lobby-view', { timeout: 45_000 })
 
     // Post-buzzer re-confinement (MOVE-08): ada is on floor1; the server refuses
     // her move intent — the OTHER tabs' view of ada stays put.

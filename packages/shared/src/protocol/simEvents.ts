@@ -55,3 +55,7 @@ export type MovementEvent =
     }
   | { readonly type: 'elevator:called'; readonly floor: FloorId; readonly car: CarId }
   | { readonly type: 'elevator:moved'; readonly car: CarId; readonly floor: FloorId }
+  // AD-009 coherence: when a rider departs a floor, that floor's viewers learn
+  // ONLY that she left — never the destination (cross-floor sightings stay
+  // impossible for live players).
+  | { readonly type: 'player:left-floor'; readonly playerId: string; readonly floor: FloorId }

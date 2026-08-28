@@ -117,12 +117,14 @@ test.describe('client:round_start', () => {
     await Promise.all(pages.map((p) => p.context().close()))
   })
 
-  // Spec LIGHT-13..14: the server runs the 8 s test shift (AD-004 seam), so a
-  // real round:buzzer arrives shortly after the start — the client must return
-  // to the lobby and support a fresh re-deal.
+  // Spec LIGHT-13..14: the server runs the 30 s test shift (AD-004 seam,
+  // widened in cycle 2.5 for the work-channel choreography), so a real
+  // round:buzzer arrives after the start — the client must return to the lobby
+  // and support a fresh re-deal.
   test('buzzer returns all pages to the lobby; re-start deals fresh (LIGHT-13, LIGHT-14)', async ({
     browser,
   }) => {
+    test.setTimeout(60_000) // the test shift (30 s, AD-004) plus the re-deal
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -131,7 +133,7 @@ test.describe('client:round_start', () => {
     // Buzzer at ~8 s (dom clock still counts a 300 s display shift — accepted,
     // AD-004 trade-off): every page lands back in the lobby view.
     for (const page of pages) {
-      await page.waitForSelector('#lobby-view', { timeout: 15000 })
+      await page.waitForSelector('#lobby-view', { timeout: 45_000 })
       expect(await page.$('#round-hud')).toBeNull()
       expect(await page.$('#role-card')).toBeNull()
     }

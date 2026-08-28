@@ -169,6 +169,7 @@ first positional consumers.
 1. WHEN a player's position changes THEN `player:moved` SHALL be delivered only to connected live players on the same floor; a player inside an elevator car SHALL receive no `player:moved` while in the car (their arrival event arrives once they stand on the arrival floor).
 2. WHEN a movement snapshot is built for a player THEN it SHALL contain only players on the recipient's floor (the recipient included) plus both cars' public floors.
 3. WHEN an elevator call or car movement occurs THEN `elevator:called`/`elevator:moved` SHALL remain broadcast to all (FR-6 panels are public), and `player:left` SHALL remain broadcast to all (roster/disconnect facts are not floor-hidden).
+4. WHEN a player departs the viewer's floor by elevator THEN the viewers of the departed floor SHALL receive `player:left-floor` (playerId, floor — the floor left) so their view can drop the rectangle; the destination is NOT conveyed (cross-floor sightings stay impossible, AD-008).
 
 **Independent Test**: server Router tests — cross-floor `player:moved` not
 delivered, rider silence in-car, snapshot filtering; the amended 2.4
@@ -207,28 +208,28 @@ assertions; re-run of the movement discrimination mutants M3/M5b kills both.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| WORK-01 | Staff prep | T4/T5 | Planned |
-| WORK-02 | Staff prep | T4/T5 | Planned |
-| WORK-03 | Staff prep | T5 | Planned |
-| WORK-04 | Saboteur un-prep | T4/T5 | Planned |
-| WORK-05 | Saboteur un-prep | T4/T5 | Planned |
-| WORK-06 | Saboteur un-prep | T4 | Planned |
-| WORK-07 | Saboteur un-prep | T4/T5 | Planned |
-| WORK-08 | Fake prep | T4/T5 | Planned |
-| WORK-09 | Fake prep | T4/T5 | Planned |
-| WORK-10 | Fake prep | T4/T6 | Planned |
-| WORK-11 | Walk-out cancel | T4/T5 | Planned |
-| WORK-12 | Walk-out cancel | T5 | Planned |
-| WORK-13 | Walk-out cancel | T4 | Planned |
-| WORK-14 | Interiors inside-only | T4/T5 | Planned |
-| WORK-15 | Interiors inside-only | T4/T5 | Planned |
-| WORK-16 | Interiors inside-only | T5/T6 | Planned |
-| WORK-17 | Own-floor routing | T2/T5 | Planned |
-| WORK-18 | Own-floor routing | T2/T5 | Planned |
-| WORK-19 | Own-floor routing | T2 | Planned |
-| WORK-20 | Gap hardening | T3 | Planned |
-| WORK-21 | Gap hardening | T3 | Planned |
-| WORK-22 | Gap hardening | T3 | Planned |
+| WORK-01 | Staff prep | T4/T5 | Implemented |
+| WORK-02 | Staff prep | T4/T5 | Implemented |
+| WORK-03 | Staff prep | T5 | Implemented |
+| WORK-04 | Saboteur un-prep | T4/T5 | Implemented |
+| WORK-05 | Saboteur un-prep | T4/T5 | Implemented |
+| WORK-06 | Saboteur un-prep | T4 | Implemented |
+| WORK-07 | Saboteur un-prep | T4/T5 | Implemented |
+| WORK-08 | Fake prep | T4/T5 | Implemented |
+| WORK-09 | Fake prep | T4/T5 | Implemented |
+| WORK-10 | Fake prep | T4/T6 | Implemented |
+| WORK-11 | Walk-out cancel | T4/T5 | Implemented |
+| WORK-12 | Walk-out cancel | T5 | Implemented |
+| WORK-13 | Walk-out cancel | T4 | Implemented |
+| WORK-14 | Interiors inside-only | T4/T5 | Implemented |
+| WORK-15 | Interiors inside-only | T4/T5 | Implemented |
+| WORK-16 | Interiors inside-only | T5/T6 | Implemented |
+| WORK-17 | Own-floor routing | T2/T5 | Implemented |
+| WORK-18 | Own-floor routing | T2/T5 | Implemented |
+| WORK-19 | Own-floor routing | T2/T6 | Implemented |
+| WORK-20 | Gap hardening | T3 | Implemented |
+| WORK-21 | Gap hardening | T3 | Implemented |
+| WORK-22 | Gap hardening | T3 | Implemented |
 
 **Gate mapping:** WORK-01..06, 08..09, 11, 13..15 → `sim:prep` + `sim:unprep` +
 `sim:fake_prep` · WORK-03, 07, 10, 12, 16 → server Router/room legs of the same

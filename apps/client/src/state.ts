@@ -48,6 +48,7 @@ export type ViewAction =
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'player-left'; playerId: string }
+  | { type: 'player-left-floor'; playerId: string; floor: FloorId }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
   // Work render-state actions (cycle 2.5): the reducer no-ops all five —
   // channel progress and room interiors are scene/DOM display state, and no
@@ -142,6 +143,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'elevator-called':
     case 'elevator-moved':
     case 'player-left':
+    case 'player-left-floor':
       return state
     case 'movement-snapshot':
       return { ...state, movementSnapshot: action.snapshot }

@@ -6,6 +6,7 @@ import type {
   LobbySnapshot,
   MovementSnapshot,
   PlayerLeft,
+  PlayerLeftFloor,
   PlayerMoved,
   RoleDealt,
   RoomObserved,
@@ -80,6 +81,8 @@ export interface Payloads {
   'elevator:moved': ElevatorMoved
   /** server → all players. A player disconnected; remove their rectangle. */
   'player:left': PlayerLeft
+  /** server → the departed floor's viewers: drop the rectangle (AD-009). */
+  'player:left-floor': PlayerLeftFloor
   /** server → one player. Own-floor movement state on join and at the buzzer (MOVE-18). */
   'movement:snapshot': MovementSnapshot
   // --- Work channels (cycle 2.5): interiors reach only people inside the
@@ -191,6 +194,14 @@ export const PROTOCOL_REGISTRY = {
     payload: {} as PlayerLeft,
     recipients: 'all',
     fromSim: undefined,
+  },
+  'player:left-floor': {
+    payload: {} as PlayerLeftFloor,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { playerId: event.playerId, floor: event.floor },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'player:left-floor'>,
   },
   'movement:snapshot': {
     payload: {} as MovementSnapshot,

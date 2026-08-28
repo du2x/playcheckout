@@ -45,6 +45,7 @@ type MovementAction =
   | { type: 'elevator-called'; floor: string; car: 1 | 2 }
   | { type: 'elevator-moved'; car: 1 | 2; floor: string }
   | { type: 'player-left'; playerId: string }
+  | { type: 'player-left-floor'; playerId: string; floor: string }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
   // Work channels (cycle 2.5): the actor's own channel view + the interior of
   // the room they stand in. No payload names a role or a channel kind (FR-9).
@@ -66,6 +67,8 @@ interface PlayerDisplay {
   x: number
   floor: string
   targetX: number | null
+  /** True once the player departed our floor by elevator (AD-009). */
+  left: boolean
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -150,6 +153,7 @@ export class WorldScene extends Phaser.Scene {
         if (display === undefined) return
         display.floor = action.floor
         display.x = action.x
+        display.left = false
         if (action.playerId === this.ownId) {
           display.targetX = null
           this.viewFloor = action.floor
@@ -174,6 +178,13 @@ export class WorldScene extends Phaser.Scene {
           display.label.destroy()
           this.players.delete(action.playerId)
         }
+        break
+      }
+      case 'player-left-floor': {
+        // The player departed OUR floor by elevator: drop the rectangle. The
+        // payload names no destination (AD-009 coherence).
+        const display = this.players.get(action.playerId)
+        if (display !== undefined && display.floor === action.floor) display.left = true
         break
       }
       case 'movement-snapshot':
@@ -230,6 +241,7 @@ export class WorldScene extends Phaser.Scene {
       display.x = p.x
       display.floor = p.floor
       display.targetX = null
+      display.left = false
       if (p.playerId === this.ownId) this.viewFloor = p.floor
     }
     for (const c of snapshot.cars) {
@@ -246,7 +258,7 @@ export class WorldScene extends Phaser.Scene {
       color: '#ffffff',
     })
     label.setOrigin(0.5, 0.5)
-    this.players.set(id, { rect, label, x, floor: 'lobby', targetX: null })
+    this.players.set(id, { rect, label, x, floor: 'lobby', targetX: null, left: false })
   }
 
   private beginMove(dir: 'left' | 'right'): void {
@@ -330,7 +342,7 @@ export class WorldScene extends Phaser.Scene {
         // Others follow server positions within ~2 ticks (exponential approach).
         display.x += (display.targetX - display.x) * Math.min(1, dt * 12)
       }
-      const visible = display.floor === this.viewFloor
+      const visible = display.floor === this.viewFloor && !display.left
       display.rect.setVisible(visible)
       display.label.setVisible(visible)
       display.rect.x = display.x * TILE_PX

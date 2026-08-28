@@ -196,6 +196,7 @@ function isMovementRenderAction(action: ViewAction): action is
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'player-left'; playerId: string }
+  | { type: 'player-left-floor'; playerId: string; floor: FloorId }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
   | { type: 'work-started'; playerId: string; floor: FloorId; room: RoomIndex; seconds: number }
   | {
@@ -213,6 +214,7 @@ function isMovementRenderAction(action: ViewAction): action is
     action.type === 'elevator-called' ||
     action.type === 'elevator-moved' ||
     action.type === 'player-left' ||
+    action.type === 'player-left-floor' ||
     action.type === 'movement-snapshot' ||
     action.type === 'work-started' ||
     action.type === 'work-ended' ||

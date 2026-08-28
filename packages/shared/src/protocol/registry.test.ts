@@ -65,6 +65,7 @@ describe('protocol registry', () => {
     'elevator:called': 'all',
     'elevator:moved': 'all',
     'player:left': 'all',
+    'player:left-floor': 'sameFloor',
     'movement:snapshot': 'self',
     'work:started': 'self',
     'work:ended': 'self',
