@@ -156,17 +156,17 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | DEAL-04 | P1: Role deal | Design | Pending |
 | DEAL-05 | P1: Role deal | Design | Pending |
 | DEAL-06 | P1: Role deal | T1 | Verified |
-| CLK-01 | P1: Round clock | Design | Pending |
-| CLK-02 | P1: Round clock | Design | Pending |
-| CLK-03 | P1: Round clock | Design | Pending |
-| CLK-04 | P1: Round clock | Design | Pending |
+| CLK-01 | P1: Round clock | T2 | Verified |
+| CLK-02 | P1: Round clock | T2 | Verified |
+| CLK-03 | P1: Round clock | T2 | Verified |
+| CLK-04 | P1: Round clock | T2 | Verified |
 | CHURN-01 | P2: Membership churn | Design | Pending |
 | CHURN-02 | P2: Membership churn | Design | Pending |
 | CHURN-03 | P2: Membership churn | Design | Pending |
 
 **Gate mapping:** LOBBY-01..05, CHURN-01..02 → `server:lobby_join` · DEAL-01..06, CLK-01..04, CHURN-03 → `sim:role_deal` · CHURN-03 server-side idle-slot behavior → `server:lobby_join`.
 
-**Coverage:** 18 total, 2 mapped to tasks, 16 unmapped (Tasks phase in progress).
+**Coverage:** 18 total, 7 mapped to tasks, 11 unmapped (Tasks phase in progress).
 
 ---
 

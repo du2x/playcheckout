@@ -97,10 +97,10 @@ T3 → T4 → T5 → T6 → T7
 
 **Done when**:
 
-- [ ] `tick()` returns events; first tick emits `round:started` + one private `role:dealt` per player; tick 6000 emits `round:buzzer` and no ticks remain meaningful after
-- [ ] Clock starts at 6000 (300 s at 20 Hz — cite `TUNING.SHIFT_SECONDS`) and decrements exactly 1 per tick
-- [ ] Named scenario `sim:role_deal`: ≥1000 seeds each yield exactly one saboteur; fixed seed reproduces identical event sequences
-- [ ] Quick gate passes; test count: 8+ cases
+- [x] `tick()` returns events; first tick emits `round:started` + one private `role:dealt` per player; tick 6000 emits `round:buzzer` and no ticks remain meaningful after
+- [x] Clock starts at 6000 (300 s at 20 Hz — cite `TUNING.SHIFT_SECONDS`) and decrements exactly 1 per tick
+- [x] Named scenario `sim:role_deal`: ≥1000 seeds each yield exactly one saboteur; fixed seed reproduces identical event sequences
+- [x] Quick gate passes; test count: 8+ cases (8 added, 30 total)
 
 **Tests**: unit
 **Gate**: quick
