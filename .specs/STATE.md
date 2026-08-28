@@ -21,11 +21,17 @@
 ## Handoff
 
 - **Feature**: room-shell (`.specs/features/room-shell/`) — all 7 tasks committed (T1-T7)
-- **Phase / Task**: Awaiting Verifier (validation.md pending)
+- **Phase / Task**: Validated (validation.md PASS, validate_state exit 0); all 7 tasks committed
 - **Completed**: sim deal (T1), RoundSim + sim:role_deal (T2), message catalog (T3),
   lobby join (T4), start/sim/routing (T5), churn (T6), registration swap + full round (T7)
 - **In-progress** (file:line): none
-- **Next step**: Verifier pass, then cycle 2.2 `movement` (see roadmap Phase 2 table)
+- **Next step**: cycle 2.2 `movement` — fresh Specify for `.specs/features/movement/`
+  (see roadmap Phase 2 table)
 - **Blockers**: none
 - **Uncommitted files**: none
 - **Branch**: master
+
+Deferred notes from Verifier (PASS, low-severity spec-precision gaps): (1) LOBBY-02
+"create no room" clause unasserted; (2) rejected start intent lacks a lobby-phase
+re-assertion (reject-then-start mutant); (3) LOBBY-05 "roster unchanged" after name
+rejection unasserted — fold into the next cycle touching TurnoverRoom.
