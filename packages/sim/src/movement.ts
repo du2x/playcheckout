@@ -108,10 +108,14 @@ export class MovementSim {
     p.moving = dir
   }
 
-  /** Release-to-stop; a no-op when no move is active (spec edge). */
+  /** Release-to-stop; a no-op when no move is active (spec edge). Emits one
+   *  terminal `player:moved` on the next tick so clients reconcile the own
+   *  rectangle to the authoritative rest x (prediction overshoot is never
+   *  corrected otherwise — stop ends the move-stream). */
   stopMove(playerId: string): void {
     const p = this.players.get(playerId)
     if (p === undefined) return
+    if (p.moving !== null) p.facingDirty = true
     p.moving = null
   }
 

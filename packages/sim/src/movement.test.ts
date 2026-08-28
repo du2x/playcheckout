@@ -50,13 +50,19 @@ describe('sim:motion', () => {
     expect(run()).toBe(run())
   })
 
-  it('stops on release at the current x and emits nothing afterwards (MOVE-02, MOVE-03)', () => {
+  it('stops on release at the current x and emits a terminal event (MOVE-02, MOVE-03)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.startMove('p1', 'right')
     for (let i = 0; i < 10; i++) sim.tick()
     const xAtStop = lastX(sim, 'p1')
     sim.stopMove('p1')
+    // Terminal event carries the authoritative rest x so the moving client
+    // reconciles its local prediction (which overshoots past the last stream
+    // event by up to a frame+latency of uncorrected drift).
+    expect(sim.tick()).toEqual([
+      expect.objectContaining({ type: 'player:moved', playerId: 'p1', x: xAtStop }),
+    ])
     for (let i = 0; i < 5; i++) expect(sim.tick()).toEqual([])
     expect(lastX(sim, 'p1')).toBe(xAtStop)
   })
@@ -151,7 +157,8 @@ describe('sim:motion', () => {
     expect(movedEvents(sim.tick())).toHaveLength(1)
     sim.stopMove('p1')
     sim.stopMove('p1')
-    expect(sim.tick()).toEqual([])
+    // Stray stop is a no-op: exactly one terminal event, not two.
+    expect(sim.tick()).toEqual([expect.objectContaining({ type: 'player:moved', playerId: 'p1' })])
   })
 })
 
