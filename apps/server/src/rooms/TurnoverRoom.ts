@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto'
+import type { FloorId, RoomIndex } from '@turnover/shared'
 import {
   elevatorCallIntentSchema,
   type LobbySnapshot,
@@ -6,6 +7,7 @@ import {
   moveStartIntentSchema,
   moveStopIntentSchema,
   TUNING,
+  workStartIntentSchema,
 } from '@turnover/shared'
 import { MovementSim, RoundSim, TICK_HZ } from '@turnover/sim'
 import { type Client, Room } from 'colyseus'
@@ -101,6 +103,27 @@ export class TurnoverRoom extends Room {
         })
       }
     })
+    // Work intents (cycle 2.5, FR-7/8/9): the action matrix lives in the sim —
+    // the room validates the phase and maps rejection reasons 1:1 to errors.
+    this.onMessage('work:start', workStartIntentSchema, (client, intent) => {
+      const sim = this.sim
+      if (this.phase !== 'round' || sim === null) {
+        this.router.toSelf('error', client.sessionId, {
+          code: 'round-not-active',
+          message: 'work is only possible during a round',
+        })
+        return
+      }
+      const result = sim.startWork(client.sessionId, intent.floor, intent.room as RoomIndex)
+      if (result !== 'accepted') {
+        const messages: Record<typeof result, string> = {
+          'not-in-room': 'you are not inside that room',
+          'room-not-workable': 'that room offers you no work',
+          'channel-active': 'you are already working',
+        }
+        this.router.toSelf('error', client.sessionId, { code: result, message: messages[result] })
+      }
+    })
 
     if (TurnoverRoom.tickMs > 0) {
       this.setSimulationInterval(() => this.advance(), TurnoverRoom.tickMs)
@@ -148,6 +171,8 @@ export class TurnoverRoom extends Room {
 
   override onLeave(client: Client) {
     this.players.delete(client.sessionId)
+    // A leaver's channel dies silently — no work:ended, no trace (WORK-12).
+    this.sim?.leave(client.sessionId)
     // Public knowledge: the rectangle disappears everywhere (MOVE-19).
     this.router.toAll('player:left', { playerId: client.sessionId })
     // Counters are per-connection: a departed connection's counter dies with it.
@@ -232,7 +257,17 @@ export class TurnoverRoom extends Room {
     for (const event of this.movement.tick()) this.router.route(event)
     const sim = this.sim
     if (sim === null || this.phase !== 'round') return
-    for (const event of sim.tick()) this.router.route(event)
+    // AD-005 seam: the work channels consume the movement layer's positions
+    // (integer millitiles) — inside-segment validation, walk-out cancels,
+    // and room observation all derive from them.
+    const positions = new Map<string, { floor: FloorId; x: number }>()
+    for (const sessionId of this.players.keys()) {
+      const p = this.movement.positionOf(sessionId)
+      if (p !== undefined) {
+        positions.set(sessionId, { floor: p.floor, x: Math.round(p.x * 1000) })
+      }
+    }
+    for (const event of sim.tick(positions)) this.router.route(event)
     if (sim.clockTicksRemaining <= 0) {
       // Buzzer: roles were the sim's alone — dropping it wipes the deal (AD-002).
       this.sim = null

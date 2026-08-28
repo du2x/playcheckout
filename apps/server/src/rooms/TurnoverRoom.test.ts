@@ -208,11 +208,22 @@ function collectAll(room: ClientRoom) {
           return found
         }
         const remaining = deadline - Date.now()
-        if (remaining <= 0) throw new Error(`timeout waiting for ${type}`)
+        if (remaining <= 0)
+          throw new Error(
+            `timeout waiting for ${type}; seen so far: ${snaps.map((m) => m.type).join(',')}`,
+          )
         await Promise.race([
           new Promise<void>((resolve) => wake.push(resolve)),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`timeout waiting for ${type}`)), remaining),
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `timeout waiting for ${type}; seen so far: ${snaps.map((m) => m.type).join(',')}`,
+                  ),
+                ),
+              remaining,
+            ),
           ),
         ])
       }
@@ -707,6 +718,373 @@ describe('server:movement', () => {
     guest.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
     const err = await guestCollector.waitFor('error')
     expect(err.payload.code).toBe('elevator-locked')
+    guestCollector.stop()
+    host.leave()
+    guest.leave()
+  })
+})
+
+// Spec WORK-01..16 (gate scenarios sim:prep/sim:unprep/sim:fake_prep, server
+// halves): work intents through the room, positions feeding the sim (AD-005
+// seam), and positional delivery — interiors reach only segment occupants.
+// Timing note: intent WS arrival races fixed tick counts, so events are awaited
+// with a drive-until helper; exact channel durations are pinned at sim level
+// (sim:prep/sim:unprep/sim:fake_prep), the server asserts payloads and routing.
+describe('server:work_channels', () => {
+  /** Drive ticks until the collector holds the event, then return it. */
+  async function driveUntil(
+    collector: ReturnType<typeof collectAll>,
+    type: string,
+    instance: TurnoverRoom,
+    maxTicks = 300,
+  ) {
+    for (let i = 0; i < maxTicks; i++) {
+      instance.__driveTicks(1)
+      await new Promise((r) => setTimeout(r, 10))
+      try {
+        return await collector.waitFor(type, 0)
+      } catch {
+        // buffer still empty this round — drive again
+      }
+    }
+    throw new Error(`driveUntil: ${type} never arrived within ${maxTicks} ticks`)
+  }
+
+  async function sleep(ms: number) {
+    await new Promise((r) => setTimeout(r, ms))
+  }
+
+  /** Records every message type+payload without consuming them (negative assertions). */
+  function record(room: ClientRoom) {
+    const seen: { type: string; payload: Record<string, unknown> }[] = []
+    const off = room.onMessage('*', (messageType, envelope) => {
+      seen.push({
+        type: String(messageType),
+        payload: (envelope as { payload: Record<string, unknown> }).payload,
+      })
+    })
+    return {
+      seen,
+      stop() {
+        off()
+      },
+    }
+  }
+
+  /** Index of a client in the roomWithFour ordering (collector alignment). */
+  function clients_index(clients: readonly ClientRoom[], target: ClientRoom): number {
+    const index = clients.indexOf(target)
+    if (index < 0) throw new Error('client not in list')
+    return index
+  }
+
+  /** Start a round with a 30 s test shift and read each player's private role. */
+  async function startWithRoles(
+    clients: ClientRoom[],
+    collectors: ReturnType<typeof collectAll>[],
+  ): Promise<{ instance: TurnoverRoom; staff: ClientRoom[]; saboteur: ClientRoom }> {
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+    clients[0]?.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+    instance.__driveTicks(1) // the deal tick
+    const roles = new Map<ClientRoom, string>()
+    for (const [i, collector] of collectors.entries()) {
+      const dealt = await collector.waitFor('role:dealt')
+      const client = clients[i]
+      if (client === undefined) throw new Error('client missing')
+      roles.set(client, dealt.payload.role as string)
+    }
+    const staff = clients.filter((c) => roles.get(c) === 'staff')
+    const saboteur = clients.find((c) => roles.get(c) === 'saboteur')
+    if (saboteur === undefined || staff.length < 2) throw new Error('unexpected deal')
+    return { instance, staff, saboteur }
+  }
+
+  /** Ride a player to floor1 and walk them to x tiles (guest-floor segment land). */
+  async function rideToFloor1X(instance: TurnoverRoom, player: ClientRoom, xTiles: number) {
+    player.send('move:start', { type: 'move:start', dir: 'left' })
+    await sleep(50)
+    instance.__driveTicks(60) // 15 tiles to the west landing + margin
+    player.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    player.send('elevator:call', { type: 'elevator:call', target: 'floor1' })
+    await sleep(50)
+    instance.__driveTicks(100) // flash + 60-tick arrival + 40-tick ride
+    player.send('move:start', { type: 'move:start', dir: 'right' })
+    await sleep(50)
+    instance.__driveTicks(Math.round((xTiles * 10) / 3)) // 300 millitiles/tile
+    player.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    instance.__driveTicks(1) // terminal reconcile tick
+  }
+
+  it('routes a staff prep end-to-end: work:started, room:prepped to occupants, work:ended (WORK-01/02)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((room) => collectAll(room))
+      const { instance, staff } = await startWithRoles([host, a, b, c], collectors)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+      const workerIdx = clients_index([host, a, b, c], worker)
+      const workerCollector = collectors[workerIdx]
+      if (workerCollector === undefined) throw new Error('no collector')
+
+      await rideToFloor1X(instance, worker, 3) // inside room 1
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const started = await driveUntil(workerCollector, 'work:started', instance)
+      expect(started.payload).toEqual({
+        playerId: worker.sessionId,
+        floor: 'floor1',
+        room: 1,
+        seconds: 5,
+      })
+      // Entering the segment observed the fresh interior — to the worker only.
+      const observed = await workerCollector.waitFor('room:observed')
+      expect(observed.payload).toEqual({
+        playerId: worker.sessionId,
+        floor: 'floor1',
+        room: 1,
+        state: 'fresh',
+      })
+
+      await driveUntil(workerCollector, 'work:ended', instance)
+      const prepped = await workerCollector.waitFor('room:prepped')
+      expect(prepped.payload).toEqual({ floor: 'floor1', room: 1 })
+
+      // Occupants-only: a viewer in the lobby received no interior event.
+      const lobbyCollector = collectors[0]
+      await expect(lobbyCollector?.waitFor('room:prepped', 300)).rejects.toThrow(/timeout/)
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('delivers room transitions only to segment occupants — same floor, other room sees nothing (WORK-15)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((room) => collectAll(room))
+      const { instance, staff } = await startWithRoles([host, a, b, c], collectors)
+      const worker = staff[0]
+      const outsider = staff[1]
+      if (worker === undefined || outsider === undefined) throw new Error('staff missing')
+      const outsiderFeed = record(outsider)
+
+      await rideToFloor1X(instance, worker, 3) // room 1
+      await rideToFloor1X(instance, outsider, 9.5) // x=9500 → room 3 — same floor, other segment
+
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const workerCollector = collectors[clients_index([host, a, b, c], worker)]
+      if (workerCollector === undefined) throw new Error('no collector')
+      await driveUntil(workerCollector, 'work:ended', instance)
+      await sleep(50)
+      instance.__driveTicks(2)
+
+      // Positive control: the outsider did receive their own interior view —
+      // the LAST observation is room 3 (they walked through rooms 1 and 2).
+      const observed = outsiderFeed.seen.filter((m) => m.type === 'room:observed').at(-1)
+      expect(observed?.payload).toEqual({
+        playerId: outsider.sessionId,
+        floor: 'floor1',
+        room: 3,
+        state: 'fresh',
+      })
+      // …but none of the worker's channel facts or room transition.
+      const types = outsiderFeed.seen.map((m) => m.type)
+      expect(types).not.toContain('room:prepped')
+      expect(types).not.toContain('work:started')
+      expect(types).not.toContain('work:ended')
+      outsiderFeed.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('rejects work:start in lobby phase, outside segments, twice, and on prepped rooms (WORK-03)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((room) => collectAll(room))
+      // Lobby phase: work is impossible before the round starts.
+      host.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const early = await collectors[0]?.waitFor('error')
+      expect(early?.payload.code).toBe('round-not-active')
+
+      const { instance, staff } = await startWithRoles([host, a, b, c], collectors)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+      const workerCollector = collectors[clients_index([host, a, b, c], worker)]
+      if (workerCollector === undefined) throw new Error('no collector')
+
+      // Still standing in the lobby: not inside any segment.
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const outside = await workerCollector.waitFor('error')
+      expect(outside.payload.code).toBe('not-in-room')
+
+      await rideToFloor1X(instance, worker, 3)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(workerCollector, 'work:started', instance)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const busy = await workerCollector.waitFor('error')
+      expect(busy.payload.code).toBe('channel-active')
+
+      await driveUntil(workerCollector, 'work:ended', instance) // finish the prep
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const done = await workerCollector.waitFor('error')
+      expect(done.payload.code).toBe('room-not-workable')
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('runs the saboteur matrix end-to-end: un-prep the prepped room, fake-prep a fresh one (WORK-04/05/08/09)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((room) => collectAll(room))
+      const { instance, staff, saboteur } = await startWithRoles([host, a, b, c], collectors)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+      const workerCollector = collectors[clients_index([host, a, b, c], worker)]
+      const sabCollector = collectors[clients_index([host, a, b, c], saboteur)]
+      if (workerCollector === undefined || sabCollector === undefined)
+        throw new Error('no collector')
+
+      // Staff preps room 1 and stays inside (occupant of the coming trash event).
+      await rideToFloor1X(instance, worker, 3)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(workerCollector, 'work:ended', instance)
+      await workerCollector.waitFor('room:prepped')
+
+      // Saboteur walks into room 1 and un-preps it: 3 s channel, trashed.
+      await rideToFloor1X(instance, saboteur, 3)
+      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const started = await driveUntil(sabCollector, 'work:started', instance)
+      expect(started.payload).toEqual({
+        playerId: saboteur.sessionId,
+        floor: 'floor1',
+        room: 1,
+        seconds: 3,
+      })
+      const ended = await driveUntil(sabCollector, 'work:ended', instance)
+      expect(ended.payload.outcome).toBe('completed')
+      const trashed = await sabCollector.waitFor('room:trashed')
+      expect(trashed.payload).toEqual({ floor: 'floor1', room: 1 })
+      // The staff occupant of the same room saw the transition too (WORK-15).
+      await workerCollector.waitFor('room:trashed')
+
+      // Fake prep on a fresh room: identical confirmation, no transition ever.
+      saboteur.send('move:start', { type: 'move:start', dir: 'right' })
+      await sleep(50)
+      instance.__driveTicks(9) // x = 5700 → room 2 (fresh)
+      saboteur.send('move:stop', { type: 'move:stop' })
+      await sleep(50)
+      instance.__driveTicks(1)
+      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 2 })
+      const fakeStarted = await driveUntil(sabCollector, 'work:started', instance)
+      expect(fakeStarted.payload).toEqual({
+        playerId: saboteur.sessionId,
+        floor: 'floor1',
+        room: 2,
+        seconds: 5,
+      })
+      await driveUntil(sabCollector, 'work:ended', instance)
+      await expect(sabCollector.waitFor('room:prepped', 300)).rejects.toThrow(/timeout/)
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('dies with the round: a channel live at the buzzer emits no work:ended (WORK-13)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((room) => collectAll(room))
+      const { instance, staff } = await startWithRoles([host, a, b, c], collectors)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+      const workerCollector = collectors[clients_index([host, a, b, c], worker)]
+      if (workerCollector === undefined) throw new Error('no collector')
+      await rideToFloor1X(instance, worker, 3)
+      // Park before the buzzer (600-tick shift) and start a prep that cannot
+      // finish before tick 600.
+      instance.__driveTicks(350)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(workerCollector, 'work:started', instance)
+      // The channel cannot outlast the remaining shift: drive to the buzzer.
+      instance.__driveTicks(600)
+      await workerCollector.waitFor('round:buzzer')
+      await expect(workerCollector?.waitFor('work:ended', 300)).rejects.toThrow(/timeout/)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const late = await workerCollector?.waitFor('error')
+      expect(late?.payload.code).toBe('round-not-active')
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
+
+// Room-shell verifier fold-ins (deferred notes, cycle 2.1): the lobby phase
+// re-asserts its guards after a rejection, and a rejected join leaves the
+// roster untouched.
+describe('server:lobby folds', () => {
+  it('accepts the host start after a rejected non-host start (reject-then-start leg)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const aCollector = collectAll(a)
+    a.send('lobby:start', { type: 'lobby:start' })
+    const err = await aCollector.waitFor('error')
+    expect(err.payload.code).toBe('not-host')
+    // The lobby phase still accepts a valid start afterwards.
+    const hostCollector = collectAll(host)
+    host.send('lobby:start', { type: 'lobby:start' })
+    const instance = TurnoverRoom.instances.at(-1)
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(1) // the deal tick carries round:started
+    const started = await hostCollector.waitFor('round:started')
+    expect(started.payload.playerIds).toHaveLength(4)
+    aCollector.stop()
+    hostCollector.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
+
+  it('leaves the roster unchanged when a duplicate-name join is rejected (LOBBY-05)', async () => {
+    const host = await createRoom('ada')
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const guestCollector = collectAll(guest)
+    const before = guestCollector.waitFor('lobby:snapshot')
+    await expect(newClient().joinById(host.roomId, { name: 'bruno' })).rejects.toThrow(
+      /name taken/i,
+    )
+    // No fresh snapshot follows the rejection: the roster is unchanged.
+    await new Promise((r) => setTimeout(r, 100))
+    const snapshot = await before
+    const roster = snapshot.payload.roster as { name: string }[]
+    expect(roster.map((p) => p.name)).toEqual(['ada', 'bruno'])
     guestCollector.stop()
     host.leave()
     guest.leave()

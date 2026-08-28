@@ -163,7 +163,7 @@ T5 → T6 → T7
 
 ---
 
-### T5: Room wiring — work intents, position feed, occupants in vivo
+### T5: Room wiring — work intents, position feed, occupants in vivo ✅ Done
 
 **What**: Wire `TurnoverRoom`: `work:start` zod handler (phase guard → `round-not-active`; `sim.startWork` rejections → error codes 1:1); `advance()` builds the positions map from `movement.positionOf` and passes it to `sim.tick(positions)`; `onLeave` calls `sim?.leave()` mid-round. Add the `server:work_channels` describe: envelope/policy assertions for the five types (work:started/ended/room:observed self; room:prepped/room:trashed occupants-only), staff prep end-to-end over the test seam, rejection payloads, buzzer leg. Fold in room-shell verifier notes in `TurnoverRoom.test.ts`: reject-then-start re-assertion and roster-unchanged-after-name-rejection (LOBBY-05).
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts` + `TurnoverRoom.test.ts` (edits)
