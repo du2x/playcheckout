@@ -54,6 +54,14 @@ test.describe('client:elevator_lobby', () => {
     await host.waitForTimeout(300)
     expect((await readOwn(host)).x).toBeLessThanOrEqual(TILE)
 
+    // Confinement holds in prediction too (MOVE-08): holding right on floor1
+    // pre-round must NOT slide the own rectangle (server refuses the intent).
+    await host.keyboard.down('ArrowRight')
+    await host.waitForTimeout(600)
+    await host.keyboard.up('ArrowRight')
+    await host.waitForTimeout(300)
+    expect((await readOwn(host)).x).toBeLessThanOrEqual(TILE)
+
     // Round-trip: ArrowDown from floor1 targets the lobby.
     await host.keyboard.press('ArrowDown')
     await host.waitForFunction(
