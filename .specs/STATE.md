@@ -121,6 +121,34 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-008
+- **Decision**: Live players see their current floor only; the full-building view is
+  spectator-exclusive (FR-20 made explicit for live play). Enforced **server-side**:
+  `PlayerMoved` (and all later position/visibility streams) route per recipient —
+  a live player receives positions for their own floor only. Elevator riders receive
+  no floor stream while in a car (car interior; arrival switches them to the arrival
+  floor). Fired players switch to the unfiltered full-building stream (FR-20).
+  Message shapes unchanged — only routing policy changes; the registry's
+  recipient-policy enum (AD-006) extends deliberately (e.g. `sameFloor`, `spectators`)
+  when cycle 2.4's Design phase declares the position streams.
+- **Reason**: FR-20 grants the overview camera including room interiors to fired
+  spectators only — the privilege implies live players lack it, but no FR says so
+  explicitly; recorded here rather than editing the locked prd. Client-side-only
+  filtering would violate the message-only hard rule (never send anything a player
+  cannot legitimately know): today `PlayerMoved` broadcasts `server → all players`
+  with floor included, so a modded or zoomed-out live client could render
+  cross-floor positions — in a hidden-information game that leak is the product.
+- **Trade-off**: Server needs per-recipient routing by floor plus two broadcast
+  modes (live per-floor vs spectator full-building) instead of one broadcast
+  pipeline — built as visibility-class channels, not a special case. Cross-floor
+  elevator-exit sightings stay impossible for live players (FR-6: "who rode when"
+  stays voice testimony); changing that requires a new AD.
+- **Scope**: cycle 2.4 `movement` Design (recipient policies for position streams),
+  `apps/server` Router, `packages/shared/src/protocol/registry.ts`, future
+  spectator/camera cycles.
+- **Date**: 2026-08-28
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: protocol-registry (`.specs/features/protocol-registry/`) — cycle 2.3 (AD-006) ✅ COMPLETE
@@ -138,7 +166,8 @@
 - **Next step**: cycle 2.4 `movement` (`.specs/features/movement/spec.md` exists) — Design
   must target the registry (declare new message types there; recipient-policy enum extends
   deliberately, e.g. `nearby`/`roomOccupants` land with their first consumers; 20 Hz
-  position streams ride the envelope's seq/time)
+  position streams ride the envelope's seq/time). Position-stream routing follows AD-008:
+  live players receive own-floor positions only, riders none, spectators unfiltered.
 - **Blockers**: none (Gate 4 human rounds pending for first-light + protocol-registry is
   N/A; run `pnpm boot`, open 4 tabs, create/join/start when convenient)
 - **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script
