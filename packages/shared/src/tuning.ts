@@ -20,6 +20,8 @@ export const TUNING = {
   RUSTLE_RANGE_TILES: 3,
   ELEVATOR_ARRIVE_SECONDS: 3,
   ELEVATOR_RIDE_SECONDS_PER_FLOOR: 2,
+  /** Open-door dwell at every stop (cycle 2.6, AD-014 — new constant, not in prd §7). */
+  ELEVATOR_DWELL_SECONDS: 1,
   ELEVATOR_CAPACITY: 2,
   PLAYER_SPEED_TILES_PER_SEC: 6,
   /** Boarding range around a car's landing x (cycle 2.4, AD-007 — new constant, not in prd §7). */

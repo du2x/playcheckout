@@ -26,6 +26,8 @@ export const HALL_MAX_MILLI = HALL_LENGTH_TILES * MILLI
 /** Elevator cycle in ticks, derived from §7 (3 s arrival, 2 s per floor). */
 export const ARRIVE_TICKS = TUNING.ELEVATOR_ARRIVE_SECONDS * TICK_HZ
 export const RIDE_TICKS_PER_FLOOR = TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR * TICK_HZ
+/** Open-door dwell at every stop, derived from §7-external ELEVATOR_DWELL_SECONDS. */
+export const DWELL_TICKS = TUNING.ELEVATOR_DWELL_SECONDS * TICK_HZ
 /** West (car 1) and east (car 2) landings, same x on every level (FR-5). */
 export const CAR_LANDING_MILLI: Record<1 | 2, number> = { 1: 0, 2: HALL_MAX_MILLI }
 

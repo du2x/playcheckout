@@ -8,6 +8,7 @@ export type { MovementEvent, SimEvent } from './events.js'
 export {
   ARRIVE_TICKS,
   CAR_LANDING_MILLI,
+  DWELL_TICKS,
   type MoveDir,
   MovementSim,
   RIDE_TICKS_PER_FLOOR,
