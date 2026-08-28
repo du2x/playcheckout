@@ -38,6 +38,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)
 - last seen: 2026-08-28T11:43:49Z
 
+### L-005 - The vite dev proxy must forward the colyseus room websocket path /<processId>/<roomId> (SDK Client.buildEndpoint), not a fixed /websocket — the same-origin gate-3 harness cannot catch dev-proxy breakage; verify pnpm boot manually when touching vite.config or the connection layer.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `client` · harmful: 0
+- features: first-light
+- evidence: session: create-room dead click report (client)
+- last seen: 2026-08-28T11:57:37Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

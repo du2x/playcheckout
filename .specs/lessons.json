@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 5,
+  "next_id": 6,
   "lessons": [
     {
       "id": "L-001",
@@ -76,6 +76,24 @@
       ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
+    },
+    {
+      "id": "L-005",
+      "key": "gate_fail::the vite dev proxy must forward the colyseus room websocket path processid roomid sdk client buildendpoint not a fixed websocket the same origin gate 3 harness cannot catch dev proxy breakage verify pnpm boot manually when touching vite config or the connection layer",
+      "text": "The vite dev proxy must forward the colyseus room websocket path /<processId>/<roomId> (SDK Client.buildEndpoint), not a fixed /websocket — the same-origin gate-3 harness cannot catch dev-proxy breakage; verify pnpm boot manually when touching vite.config or the connection layer.",
+      "signal": "gate_fail",
+      "scope": "client",
+      "status": "candidate",
+      "features": [
+        "first-light"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "session: create-room dead click report (client)"
+      ],
+      "created": "2026-08-28T11:57:37Z",
+      "last_seen": "2026-08-28T11:57:37Z"
     }
   ]
 }
