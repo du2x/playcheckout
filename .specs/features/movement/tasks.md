@@ -169,7 +169,7 @@ T4 → T5 → T6
 
 ---
 
-### T5: Client world — persistent scene, prediction, panels
+### T5: Client world — persistent scene, prediction, panels ✅ Done
 
 **What**: Add `WorldScene` (scene key `'Round'`, replacing `RoundScene`): one labeled Rectangle per player, one Ellipse per car, hall/panel visuals in DOM; cursor-key input sending `move:start`/`move:stop` with local prediction and server reconcile; `applyServerEvents` applying `player:moved` (self reconcile, others lerp) and `elevator:*`; floor view follows the local player. Extend `MAPPERS` (five new actions; reducer no-ops the four high-frequency ones — documented render-state decision), `Connection` (`sendMoveStart/sendMoveStop/sendElevatorCall`), and `App` (movement-kind actions → scene + surgical `#elevator-panel` textContent updates; `syncScenes` starts the world at first lobby entry and keeps it across the buzzer). Unit tests: mapper pins for the new actions + reducer no-op identity.
 **Where**: `apps/client/src/scenes/WorldScene.ts` (new; edits in `mappers.ts`, `state.ts`, `app.ts`, `connection.ts`, `main.ts`; delete `RoundScene.ts`)

@@ -31,6 +31,13 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       el('div', { id: 'role-label' }, ['your role']),
       roleCard,
       errorLine,
+      // Position-only elevator panels: car floors, never occupants (privacy rule).
+      el('div', { id: 'elevator-panel' }, [
+        'elevators  W: ',
+        el('span', { id: 'panel-west' }, ['lobby']),
+        ' · E: ',
+        el('span', { id: 'panel-east' }, ['lobby']),
+      ]),
     ]),
   )
 

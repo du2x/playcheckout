@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { App } from './app'
 import { installDebugHook } from './debug'
 import { BootScene } from './scenes/BootScene'
-import { RoundScene } from './scenes/RoundScene'
+import { WorldScene } from './scenes/WorldScene'
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -10,7 +10,7 @@ const game = new Phaser.Game({
   width: 832,
   height: 576,
   backgroundColor: '#0f1419',
-  scene: [BootScene, RoundScene],
+  scene: [BootScene, WorldScene],
 })
 
 if (import.meta.env.MODE !== 'production') {

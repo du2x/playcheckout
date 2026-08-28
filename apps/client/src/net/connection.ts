@@ -93,6 +93,18 @@ export class Connection {
     this.room.send('lobby:start', { type: 'lobby:start' })
   }
 
+  sendMoveStart(dir: 'left' | 'right'): void {
+    this.room.send('move:start', { type: 'move:start', dir })
+  }
+
+  sendMoveStop(): void {
+    this.room.send('move:stop', { type: 'move:stop' })
+  }
+
+  sendElevatorCall(target: string): void {
+    this.room.send('elevator:call', { type: 'elevator:call', target })
+  }
+
   leave(): void {
     this.room.leave()
   }

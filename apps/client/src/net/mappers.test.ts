@@ -65,4 +65,34 @@ describe('protocol mappers', () => {
     )
     expect(s.error).toBe('need at least 4 players')
   })
+
+  it('maps movement events to render-state actions; the reducer no-ops them (MOVE-03)', () => {
+    const moved = first(
+      MAPPERS['player:moved']({ playerId: 'p2', floor: 'lobby', x: 12.3, facing: 'left' }),
+    )
+    expect(moved).toEqual({
+      type: 'player-moved',
+      playerId: 'p2',
+      floor: 'lobby',
+      x: 12.3,
+      facing: 'left',
+    })
+    const before = initialViewState()
+    expect(reduce(before, moved as never)).toBe(before) // identity: render state
+    const called = first(MAPPERS['elevator:called']({ floor: 'lobby', car: 1 }))
+    expect(reduce(before, called as never)).toBe(before)
+    const carMoved = first(MAPPERS['elevator:moved']({ car: 2, floor: 'floor2' }))
+    expect(reduce(before, carMoved as never)).toBe(before)
+    const left = first(MAPPERS['player:left']({ playerId: 'p2' }))
+    expect(reduce(before, left as never)).toBe(before)
+  })
+
+  it('maps movement:snapshot into view state (MOVE-18)', () => {
+    const snap = {
+      players: [{ playerId: 'p1', floor: 'lobby' as const, x: 15 }],
+      cars: [{ car: 1 as const, floor: 'lobby' as const }],
+    }
+    const s = reduce(initialViewState(), first(MAPPERS['movement:snapshot'](snap)))
+    expect(s.movementSnapshot).toEqual(snap)
+  })
 })
