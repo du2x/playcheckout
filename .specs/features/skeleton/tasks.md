@@ -169,7 +169,7 @@ T6 → T7
 
 ---
 
-### T5: apps/server — Fastify + Colyseus transport shell
+### T5: apps/server — Fastify + Colyseus transport shell ✅ (commit: feat(server))
 
 **What**: Fastify bootstrap hosting Colyseus via `new WebSocketTransport({ server: fastify.server })`, `@fastify/static` serving client dist, `PlaceholderRoom` with `patchRate = null`; integration test boots on ephemeral port via `@colyseus/testing`, joins the room, fetches a static asset. Transport import shape verified against installed 0.18 package types — never assumed.
 **Where**: `apps/server/`
