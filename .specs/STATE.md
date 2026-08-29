@@ -358,41 +358,63 @@
 
 ## Handoff
 
-- **Feature**: AD-015 — remove lobby-phase movement confinement (fixes
-  "player can't leave the elevator" feel when exploring pre-round)
-- **Phase / Task**: Design decision reversal → Execute → gates 1–3 verified
-  (`pnpm typecheck` + `pnpm lint` green; `pnpm test:sim` 189/189;
-  `pnpm test:client` 22/22)
-- **Completed**: deleted the `phase === 'lobby' && floor !== 'lobby'` guard in
-  `packages/sim/src/movement.ts:178` and the phase-confinement prediction gate in
-  `apps/client/src/scenes/WorldScene.ts:398`; rewrote/amended `sim:motion` tests
-  (pre-round guest-floor walking, post-buzzer movement, exit-continues-walking);
-  updated `client:movement` post-buzzer assertion to verify movement is allowed;
-  recorded **AD-015** in `STATE.md`; updated `movement/spec.md`,
-  `movement/design.md`, `movement/validation.md`, `elevator-lobby/spec.md`, and
-  `elevator-lobby/validation.md` to reflect removed confinement.
-- **In-progress** (file:line): none
-- **Next step**: cycle 2.6 `evidence` (FR-10–FR-13). Note: with pre-round guest-floor
-  walking now allowed, room-shell/work evidence cues may be observable pre-round;
-  decide whether `room:observed` and door-open flashes should fire in lobby phase.
-- **Blockers**: none (Gate 4 human round pending: verify a pre-round rider can exit
-  on floor1 and walk away)
-- **Uncommitted files**: AD-015 changes across `packages/sim`, `apps/client`,
-  `.specs/`, and auto-formatted `.specs/lessons.json`
+- **Feature**: `elevator-animation` — client-only door-open/close + ride
+  animation for the two elevator cars, layered on the existing
+  `elevator-riders` state machine (AD-013/AD-014); no wire/sim changes.
+- **Phase / Task**: Execute → T1–T6 committed and gated green
+  (`pnpm typecheck` + `pnpm lint` clean for all touched files;
+  `pnpm test:sim` 213/213; `pnpm test:client` new `client:elevator_doors`
+  scenario passing). **T7 (this handoff) is in progress; the mandatory
+  post-Execute Verifier dispatch has NOT yet run.**
+- **Completed**:
+  - T1–T3 (commit `d88d6a7`): pure `CarClock`/`advanceCarClock` reducer +
+    `ElevatorPresenter` class in `apps/client/src/scenes/elevatorPresenter.ts`,
+    using narrow structural interfaces (`GraphicsLike`/`EllipseLike`/
+    `SceneLike`) instead of `Phaser.*` value imports so the module stays
+    unit-testable under the client vitest project (Phaser can't load under
+    plain node — no `window`). Documents a `SPEC_DEVIATION`: a rider-triggered
+    (in-car press) departure never fires `elevator:called` (AD-013), so the
+    presenter treats the fixed dwell timeout elapsing as the deterministic
+    close-and-depart trigger for that case.
+  - T4 (commit `b192056`): wired `ElevatorPresenter` into
+    `apps/client/src/scenes/WorldScene.ts` — constructed in `create()`,
+    fed plain fields (`action.car`, `action.floor as FloorId`) from
+    `applyAction`'s `elevator-called`/`elevator-moved` cases, ticked from
+    `update()` with Phaser's own `delta`; removed the old inline
+    `car.ellipse.setVisible(...)` line (superseded by presenter gating).
+  - T5 (commit `584bab8`): new `apps/client/harness/elevator-doors.spec.ts`
+    (`client:elevator_doors`), single-client scenario proving the harness
+    Rectangle/Ellipse contract survives and a real browser opens/closes/hides
+    the car per the presenter's clock.
+  - T6 (commit `0bc2f64`): flipped all `ELAN-NN` rows in
+    `.specs/features/elevator-animation/spec.md` to Done; also committed
+    `design.md` for the first time (authored during Design but never staged
+    before the T1 commit).
+- **In-progress** (file:line): none — T7's only remaining action is this
+  Handoff write, followed immediately by the Verifier dispatch.
+- **Next step**: dispatch a fresh Verifier sub-agent (author ≠ verifier) over
+  the full `elevator-animation` diff (`c800eb8..0bc2f64`) — spec-anchored
+  outcome check + discrimination sensor — and write
+  `.specs/features/elevator-animation/validation.md`. Then run
+  `validate_state.py elevator-animation` to confirm PASS before declaring the
+  feature done.
+- **Blockers**: none. Gate 4 (human 5-minute round, player-facing) is
+  recommended but not yet performed for this feature.
+- **Uncommitted files**: none from this feature (all six task commits are
+  clean); pre-existing unrelated working-tree changes remain untouched
+  (`.specs/LESSONS.md`, `.specs/lessons.json`, `package.json` `boot` script,
+  `scripts/`, `.playwright-mcp/`, `.specs/features/elevator-riders/validation.md`
+  — carried over from before this session, not part of this feature).
 - **Branch**: master
 
-Deferred notes from Verifier (room-shell PASS, low-severity spec-precision gaps):
-(1) LOBBY-02 "create no room" clause unasserted; (2) rejected start intent lacks a
-lobby-phase re-assertion (reject-then-start mutant); (3) LOBBY-05 "roster unchanged"
-after name rejection unasserted — fold into the next cycle touching TurnoverRoom.
-
-Deferred notes from Verifier (first-light PASS): (2) LIGHT-02 unknown-code message,
-(3) LIGHT-08 "round already active", (4) LIGHT-04 1-char name minimum — fold into the
-next client-touching cycle.
-
-Deferred notes from Verifier (protocol-registry PASS, low severity, fold into the next
-cycle touching these files): (N1) TurnoverRoom.test.ts:412-415 comment misattributes the
-collector-added `type` key to Colyseus transport; (N2) registry.test.ts:66-70 pins policy
-membership, not literal per-key values — a literal per-key policy walk would be direct;
-(N3) RESOLVED — the dead `RegistryEntry` declaration is gone from registry.ts
-(renamed to the used `Entry<K>`).
+Deferred notes carried forward (still open, not yet folded into any cycle):
+(1) room-shell PASS gaps — LOBBY-02 "create no room" clause unasserted;
+rejected start intent lacks a lobby-phase re-assertion (reject-then-start
+mutant); LOBBY-05 "roster unchanged" after name rejection unasserted — fold
+into the next cycle touching `TurnoverRoom`.
+(2) first-light PASS gaps — LIGHT-02 unknown-code message, LIGHT-08 "round
+already active", LIGHT-04 1-char name minimum — fold into the next
+client-touching cycle.
+(3) protocol-registry PASS, low severity — `TurnoverRoom.test.ts:412-415`
+comment misattributes the collector-added `type` key to Colyseus transport;
+`registry.test.ts:66-70` pins policy membership, not literal per-key values.

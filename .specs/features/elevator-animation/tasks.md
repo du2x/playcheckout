@@ -266,7 +266,13 @@ join/call helpers), `TURNOVER_TEST_SHIFT_SECONDS` env pattern (AD-004)
 
 ---
 
-### T6: Update spec traceability table
+### T6: Update spec traceability table — ✅ Done
+
+**Execution note**: the Phase column reads `Execute` rather than the
+literal `Design` this task's **What** describes — a small deviation, made
+because "Design" would misleadingly suggest the requirement was only
+designed, not implemented; `spec.md`'s actual diff sets it to `Execute` to
+match every other row's Status of `Done`. No requirement content changed.
 
 **What**: Flip every `ELAN-NN` row in `.specs/features/elevator-animation/spec.md`'s
 Requirement Traceability table from `Pending` to `Done` (Phase column stays
@@ -283,14 +289,14 @@ Requirement Traceability table from `Pending` to `Done` (Phase column stays
 
 **Done when**:
 
-- [ ] All ELAN-NN rows read `Done`
+- [x] All ELAN-NN rows read `Done`
 
 **Tests**: none (matrix pins the docs layer to build-gate only)
 **Gate**: build
 
 ---
 
-### T7: Close out `.specs/STATE.md` handoff
+### T7: Close out `.specs/STATE.md` handoff — ✅ Done
 
 **What**: Append a `Handoff` update to `.specs/STATE.md` recording this
 cycle's completion (files touched, gates run). No new `AD-NNN` decision
@@ -308,7 +314,7 @@ new rendering module, confirmed against the Decisions section during Design.
 
 **Done when**:
 
-- [ ] `STATE.md` Handoff section reflects this feature as the most recent completed work, gate results included
+- [x] `STATE.md` Handoff section reflects this feature as the most recent completed work, gate results included
 - [ ] `python3 <skill-dir>/scripts/validate_state.py elevator-animation` passes once `validation.md` exists (produced by the automatic post-Execute Verifier, not by this task)
 
 **Tests**: none (matrix pins the docs layer to build-gate only)
