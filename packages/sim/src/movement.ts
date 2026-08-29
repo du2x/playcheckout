@@ -566,6 +566,11 @@ export class MovementSim {
     for (const [pid, p] of candidates) {
       if (car.riders.length >= TUNING.ELEVATOR_CAPACITY) break
       p.inCar = carId
+      // Boarding ends the walk: clear the held move so a later move:stop while
+      // aboard cannot emit a terminal player:moved for a rider (riders are on
+      // NO floor, AD-009 — the exit intent resumes the stream via facingDirty).
+      p.moving = null
+      p.facingDirty = false
       if (p.x !== landing) {
         p.x = landing
         events.push(moved(pid, p))
