@@ -1,16 +1,17 @@
-import type {
-  CarId,
-  FloorId,
-  GuestFloorId,
-  MovementSnapshot,
-  RoomIndex,
-  RoomState,
-} from '@turnover/shared'
+import type { FloorId, GuestFloorId, RoomIndex } from '@turnover/shared'
 import type Phaser from 'phaser'
 import { Connection } from './net/connection'
 import { initialRiderSession, type RiderUpdate, reduceRider } from './riderSession'
 import type { WorldScene } from './scenes/WorldScene'
-import { initialViewState, reduce, type ViewAction, type ViewName, type ViewState } from './state'
+import {
+  ACTION_ROUTES,
+  initialViewState,
+  reduce,
+  type SceneAction,
+  type ViewAction,
+  type ViewName,
+  type ViewState,
+} from './state'
 import { el } from './ui/dom'
 import { renderJoin } from './ui/joinView'
 import { renderLobby } from './ui/lobbyView'
@@ -102,13 +103,13 @@ export class App {
             this.world()?.setRiderSession(this.rider)
             this.updateRiderChip()
           }
-          if (action.type === 'elevator-pressed' || action.type === 'elevator-riders') {
-            // Rider-exclusive events: fully consumed by the session — the
-            // scene no longer derives riding from them.
+          const route = ACTION_ROUTES[action.type]
+          if (route === 'scene') {
+            if (isSceneAction(action)) this.world()?.applyAction(action)
             continue
           }
-          if (isMovementRenderAction(action)) {
-            this.world()?.applyAction(action)
+          if (route === 'consumed') {
+            // Rider-exclusive events: fully consumed by the session.
             continue
           }
           this.dispatch(action)
@@ -246,36 +247,10 @@ export class App {
   }
 }
 
-/** Movement/work actions are render state (design: movement data-flow split). */
-function isMovementRenderAction(action: ViewAction): action is
-  | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: 'left' | 'right' }
-  | { type: 'elevator-called'; floor: FloorId; car: CarId }
-  | { type: 'elevator-moved'; car: CarId; floor: FloorId }
-  | { type: 'player-left'; playerId: string }
-  | { type: 'player-left-floor'; playerId: string; floor: FloorId }
-  | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
-  | { type: 'work-started'; playerId: string; floor: FloorId; room: RoomIndex; seconds: number }
-  | {
-      type: 'work-ended'
-      playerId: string
-      floor: FloorId
-      room: RoomIndex
-      outcome: 'completed' | 'cancelled'
-    }
-  | { type: 'room-observed'; playerId: string; floor: FloorId; room: RoomIndex; state: RoomState }
-  | { type: 'room-prepped'; floor: FloorId; room: RoomIndex }
-  | { type: 'room-trashed'; floor: FloorId; room: RoomIndex } {
-  return (
-    action.type === 'player-moved' ||
-    action.type === 'elevator-called' ||
-    action.type === 'elevator-moved' ||
-    action.type === 'player-left' ||
-    action.type === 'player-left-floor' ||
-    action.type === 'movement-snapshot' ||
-    action.type === 'work-started' ||
-    action.type === 'work-ended' ||
-    action.type === 'room-observed' ||
-    action.type === 'room-prepped' ||
-    action.type === 'room-trashed'
-  )
+/**
+ * Scene narrowing derived from ACTION_ROUTES (state.ts): the runtime check
+ * and the type claim come from the same table, so they cannot disagree.
+ */
+function isSceneAction(action: ViewAction): action is SceneAction {
+  return ACTION_ROUTES[action.type] === 'scene'
 }

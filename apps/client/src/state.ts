@@ -110,6 +110,53 @@ export function initialViewState(): ViewState {
   }
 }
 
+/** Where the App routes an action after the rider session has reduced it. */
+export type ActionRoute = 'view' | 'scene' | 'consumed'
+
+/**
+ * Routing declared once (architecture review 2026-08-29): every ViewAction
+ * member names its post-reduction route exactly once — `view` → the reducer
+ * (state + DOM), `scene` → the world scene (render state), `consumed` → fully
+ * absorbed by the rider session (riderSession.ts runs on every action either
+ * way). The `satisfies` is the drift guard in both directions: a typo'd or
+ * extra key fails, and a new ViewAction member without a route fails the
+ * Record — the App never hand-lists action kinds.
+ */
+export const ACTION_ROUTES = {
+  'submit-join': 'view',
+  'join-failed': 'view',
+  snapshot: 'view',
+  'round-started': 'view',
+  'player-moved': 'scene',
+  'elevator-called': 'scene',
+  'elevator-moved': 'scene',
+  'elevator-pressed': 'consumed',
+  'elevator-riders': 'consumed',
+  'player-left': 'scene',
+  'player-left-floor': 'scene',
+  'movement-snapshot': 'scene',
+  'work-started': 'scene',
+  'work-ended': 'scene',
+  'room-observed': 'scene',
+  'room-prepped': 'scene',
+  'room-trashed': 'scene',
+  'role-dealt': 'view',
+  buzzer: 'view',
+  'intent-error': 'view',
+  'connection-lost': 'view',
+  'clear-error': 'view',
+} as const satisfies Record<ViewAction['type'], ActionRoute>
+
+type RouteOf<K extends ViewAction['type']> = (typeof ACTION_ROUTES)[K]
+
+/** The scene-kind members, derived from the route table — no second list. */
+export type SceneAction = Extract<
+  ViewAction,
+  {
+    type: { [K in ViewAction['type']]: RouteOf<K> extends 'scene' ? K : never }[ViewAction['type']]
+  }
+>
+
 export function reduce(state: ViewState, action: ViewAction): ViewState {
   switch (action.type) {
     case 'submit-join':
