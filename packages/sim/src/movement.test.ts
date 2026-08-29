@@ -464,6 +464,29 @@ describe('sim:elevator', () => {
     expect(runUntilCarMoved(sim, 1, 'lobby')).toBe(DWELL_TICKS + 2 * RIDE_TICKS_PER_FLOOR)
   })
 
+  it('rejects a press of a queued non-head floor silently — exactly one pressed event per accepted press (ELR P2 AC2)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    boardParkedCar(sim, 'p1', 1)
+    expect(sim.pressFloor('p1', 'floor3')).toBe('accepted') // departs: the served head
+    expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // queued behind the head
+    // The queued (non-head) floor is already lit: re-pressing it while it
+    // waits behind the served head is a duplicate — silently ignored.
+    expect(sim.pressFloor('p1', 'floor2')).toBe('ignored')
+    // Exactly one pressed event per accepted press — never one for the
+    // duplicate — and the queue keeps its two entries (a double-queue would
+    // later reach the zero-ride throw).
+    expect(sim.tick().filter((e) => e.type === 'elevator:pressed')).toEqual([
+      { type: 'elevator:pressed', playerId: 'p1', floor: 'floor3', car: 1 },
+      { type: 'elevator:pressed', playerId: 'p1', floor: 'floor2', car: 1 },
+    ])
+    expect(sim.snapshotForRider('p1').carOccupants).toEqual({
+      car: 1,
+      riders: ['p1'],
+      queue: ['floor3', 'floor2'],
+    })
+  })
+
   it('treats same-floor calls at an open-doors car as decoy flashes without dispatch (MOVE-12, ELR P3 AC5)', () => {
     const sim = new MovementSim()
     sim.join('p1')
