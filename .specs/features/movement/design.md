@@ -252,7 +252,7 @@ interface CarState {
 | Duplicate `move:start` / stray `move:stop` | No-ops (spec edges) | None |
 | `elevator:call` in lobby phase | ~~Intent error~~ **AD-011**: dispatches normally (see `.specs/features/elevator-lobby/`) | — |
 | Call queued (both cars busy) when the buzzer fires | ~~`lock()` clears the FIFO~~ **AD-011**: the queue survives the buzzer and is served by the next car to free | Queued call's flash fires post-buzzer |
-| Duplicate call (same pickup floor arriving + same destination, or already queued) | No dispatch; `elevator:called` still emitted (flash, MOVE-12 narrowed by AD-012) | Panel pulses, no car change |
+| Duplicate call | ~~same pickup floor arriving + same destination, or already queued~~ **current (AD-014 + AD-019)**: a car ARRIVING at the pickup, RIDING with the pickup queued, or the pickup already queued; or BOTH cars parked open-doors at the pickup. A single parked car no longer duplicates — the other car is summoned | Panel pulses, no car change |
 | Player leaves mid-walk / in-car | `movement.leave` removes them (car riders list pruned); `player:left` broadcast | Rectangle disappears everywhere |
 | Round starts mid-walk | Intents continue uninterrupted (spec edge) | None |
 | 3rd player at landing on arrival | Stays queued; boards at the car's next arrival (MOVE-13) | Waits at landing |

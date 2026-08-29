@@ -2,10 +2,11 @@ import { expect, type Page, test } from '@playwright/test'
 
 // Spec EL-01/EL-04 (AD-011, gate scenario client:elevator_lobby) rewritten for
 // the press model (AD-014): the full elevator machine runs BEFORE any round
-// starts — no host start, no test shift. A call with a car parked open-doors is
-// a decoy flash; walking to a landing auto-boards; Digit1/Digit0 press the
-// destination in-car; exit resumes the floor stream. This is the fast
-// Playwright entry point for elevator debugging.
+// starts — no host start, no test shift. A call with BOTH cars parked
+// open-doors is a decoy flash (AD-019 narrowed the duplicate predicate); a
+// single parked car would summon the other one. Walking to a landing
+// auto-boards; Digit1/Digit0 press the destination in-car; exit resumes the
+// floor stream. This is the fast Playwright entry point for elevator debugging.
 
 const TILE = 832 / 30
 

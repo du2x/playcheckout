@@ -53,7 +53,7 @@ confirmed unless marked otherwise.
 | Ghost trips (presser walks off, empty car serves) | Presses persist; the queue belongs to the car, not the presser | Visible empty car going somewhere is prime evidence; a free sabotage move | y |
 | Duplicate press (floor already queued/being served) | Rejected silently — no `elevator:pressed` event | Keeps press testimony honest | y |
 | Pressing the car's current floor | Rejected silently | Doors are already open — walk | y |
-| Caller never boards | Car arrives, opens doors, dwell, nobody boards → idles open-doors there; same-floor re-call = decoy flash (duplicate pickup), calls from other floors dispatch normally | Only coherent reading now that calls carry no destination | y |
+| Caller never boards | Car arrives, opens doors, dwell, nobody boards → idles open-doors there; ~~same-floor re-call = decoy flash (duplicate pickup)~~ **amended by AD-019 (2026-08-29)**: a parked open-doors car no longer duplicates — the call summons the OTHER car to this floor; only when BOTH cars are parked here does the re-call stay a decoy flash. Calls from other floors dispatch normally | Only coherent reading now that calls carry no destination | y |
 | Rider knowledge during movement snapshot | A rider-viewer's snapshot includes their car's occupants; non-rider snapshots never carry occupancy | Same knowledge as the live message, delivered at join/buzzer resync | y (derived, user confirmed) |
 | Dwell length | `TUNING.ELEVATOR_DWELL_SECONDS = 1` (20 ticks) | Long enough to step off, short enough to feel like an elevator | y |
 | Boarding stays silent to bystanders | No `elevator:boarded` message; inference from stream-stop suffices | FR-6 purity; a new message buys nothing | y |
@@ -103,7 +103,7 @@ a product of in-car negotiation.
 4. WHEN a car's dwell ends and its queue is non-empty THEN the car SHALL depart to the oldest queued floor at 2 s per floor traveled, and on arrival open doors, dwell, and remove that floor from the queue <!-- event-driven -->
 5. WHEN the queue empties after a served floor THEN the car SHALL idle with doors open at that floor until a new press or dispatch occurs <!-- event-driven -->
 6. WHEN a player calls an elevator THEN the system SHALL dispatch exactly as today (sooner car; among idle cars, empty ones are preferred first — closest landing, tie → car 1, occupied idle only when no empty idle car exists; overflow FIFO) except that the call SHALL NOT carry or imply a destination <!-- event-driven -->
-7. IF a call arrives for a pickup floor a car is already en route to (or queued for) THEN the system SHALL emit the `elevator:called` flash without a new dispatch (duplicate predicate = pickup floor only, narrowing AD-012) <!-- unwanted-behavior -->
+7. IF a call arrives for a pickup floor a car is already en route to (or queued for) THEN the system SHALL emit the `elevator:called` flash without a new dispatch (duplicate predicate = pickup floor only, narrowing AD-012; **AD-019**: a car parked open-doors at the pickup floor is NOT a duplicate — the other car is summoned instead, and only both-cars-parked flashes) <!-- unwanted-behavior -->
 8. WHILE a car is moving THEN the system SHALL reject walk intents from its riders; WHILE doors are open (dwell or idle) THEN riders SHALL be able to walk off and candidates within `ELEVATOR_LANDING_TILES` of the car's landing SHALL be able to board up to capacity 2 (closest first, ties by playerId, overflow queues) <!-- state-driven -->
 9. The system SHALL keep `elevator:called`/`elevator:moved` payloads exactly `{floor, car}`/`{car, floor}` — never queue contents, never occupancy, never press targets <!-- ubiquitous -->
 
@@ -128,7 +128,7 @@ they fall out of the open-door model the other stories require.
 2. WHEN a rider remains in the car at a served floor THEN they SHALL be able to press another floor and continue riding (stay-in-car; no forced exit) <!-- event-driven -->
 3. WHEN every rider of a car walks off (dwell or idle) while presses remain queued THEN the car SHALL still depart and serve the queue (ghost trip) <!-- event-driven -->
 4. WHEN a car arrives at a pickup floor and no candidate is within boarding range at boarding resolution THEN the pickup SHALL complete without riders and the car SHALL idle with doors open at that floor (caller-never-boards) <!-- event-driven -->
-5. IF a call is made from the floor where a car is idling with open doors THEN the system SHALL treat it as a duplicate (decoy flash, no dispatch) — boarding and pressing is the way to move it <!-- unwanted-behavior -->
+5. ~~IF a call is made from the floor where a car is idling with open doors THEN the system SHALL treat it as a duplicate (decoy flash, no dispatch) — boarding and pressing is the way to move it~~ **Amended by AD-019**: a single parked car no longer duplicates — the call dispatches (or queues for) the OTHER car; the flash remains only when BOTH cars are parked at the floor, where boarding/pressing is still the way to move them <!-- unwanted-behavior -->
 6. WHEN a rider exits through open doors THEN their position SHALL resume on the same-floor `player:moved` stream at the car's landing (exit is visible; boarding remains silent) <!-- event-driven -->
 
 **Independent Test**: Sim scenario per behavior — stay-in-car rider presses a

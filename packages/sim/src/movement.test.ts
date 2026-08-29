@@ -505,7 +505,7 @@ describe('sim:elevator', () => {
     })
   })
 
-  it('treats same-floor calls at an open-doors car as decoy flashes without dispatch (MOVE-12, ELR P3 AC5)', () => {
+  it('treats a call with BOTH cars parked open-doors at the pickup floor as a decoy flash (AD-019: narrowed MOVE-12, ELR P3 AC5)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
@@ -525,8 +525,10 @@ describe('sim:elevator', () => {
     expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
       { type: 'elevator:riders', car: 2, riders: [], queue: [] },
     ])
-    // Boarding and pressing is the way to move an open-doors car: a call from
-    // its floor is a duplicate — the decoy flashes, nothing dispatches.
+    // Boarding and pressing is the way to move a parked car. With BOTH cars
+    // parked at floor1 nothing can arrive, so a call stays a decoy flash
+    // (AD-019: a single parked car no longer duplicates — the other is
+    // summoned; see the two tests below).
     expect(sim.callElevator('p1')).toBe('ignored')
     expect(sim.callElevator('p2')).toBe('ignored')
     const events = sim.tick()
@@ -536,6 +538,66 @@ describe('sim:elevator', () => {
       { type: 'elevator:called', floor: 'floor1', car: 1 },
     ])
     expect(events.filter((e) => e.type === 'elevator:moved')).toEqual([])
+  })
+
+  it('summons the OTHER car when one is parked open-doors at the pickup floor (AD-019)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    // Car 1 idles open-doors at floor1 (p1 rode it there and stepped off).
+    boardParkedCar(sim, 'p1', 1)
+    expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
+    sim.startMove('p1', 'right')
+    expect(sim.viewOf('p1').car).toBeNull()
+    // Consume the walk-off occupancy update (AD-013) before the call.
+    expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
+      { type: 'elevator:riders', car: 1, riders: [], queue: [] },
+    ])
+    // The call is NOT a duplicate: car 1 is parked here, so car 2 is summoned.
+    expect(sim.callElevator('p1')).toBe('dispatched')
+    expect(sim.tick().filter((e) => e.type === 'elevator:called')).toEqual([
+      { type: 'elevator:called', floor: 'floor1', car: 2 },
+    ])
+    // The flash tick above already counted toward the 60-tick arrival.
+    expect(runUntilCarMoved(sim, 2, 'floor1')).toBe(3 * TICK_HZ - 1)
+    // Car 2 dwells and idles open-doors beside car 1; nobody boarded (p1
+    // stands at car 1's west landing, out of car 2's boarding range).
+    for (let i = 0; i < DWELL_TICKS; i++) expect(carEvents(sim.tick())).toEqual([])
+    expect(carEvents(sim.tick())).toEqual([])
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([
+      { car: 1, floor: 'floor1' },
+      { car: 2, floor: 'floor1' },
+    ])
+  })
+
+  it('queues the call for a busy other car when one is parked open-doors at the pickup floor (AD-019, MOVE-15)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    sim.join('p3')
+    // Car 2 departs to floor1 (rider stays aboard); car 1 departs to floor3.
+    boardParkedCar(sim, 'p2', 2)
+    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
+    boardParkedCar(sim, 'p3', 1)
+    expect(sim.pressFloor('p3', 'floor3')).toBe('accepted')
+    // p1 calls from the lobby center with car 1 riding: no car is parked at
+    // the LOBBY, both cars busy → sim-level FIFO queue, no flash yet.
+    expect(sim.callElevator('p1')).toBe('dispatched')
+    // Car 2 frees first (floor1, ~tick 40) and serves the queued lobby pickup;
+    // car 1 is still mid-ride to floor3.
+    const seen: MovementEvent[] = []
+    for (let i = 0; i < 250; i++) seen.push(...sim.tick())
+    expect(seen.filter((e) => e.type === 'elevator:called')).toEqual([
+      { type: 'elevator:called', floor: 'lobby', car: 2 },
+    ])
+    expect(
+      seen.some((e) => e.type === 'elevator:moved' && e.car === 2 && e.floor === 'lobby'),
+    ).toBe(true)
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
+      { car: 1, floor: 'floor3' },
+      { car: 2, floor: 'lobby' },
+    ])
   })
 
   it('queues a call when both cars are busy and serves it with the first car to free (MOVE-15)', () => {

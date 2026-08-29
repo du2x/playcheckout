@@ -213,7 +213,7 @@ export class MovementSim {
       const car = this.cars[id]
       if (car.phase === 'arriving') return car.pickup === pickup
       if (car.phase === 'riding') return car.queue.includes(pickup)
-      return car.floor === pickup // idle | dwelling: doors open there
+      return false
     })
     if (duplicating !== undefined) {
       this.announce({ kind: 'called', floor: pickup, car: duplicating })
@@ -223,10 +223,23 @@ export class MovementSim {
       this.announce({ kind: 'called', floor: pickup, car: 1 })
       return 'ignored'
     }
+    // AD-019: a car parked open-doors (idle|dwelling) at the pickup floor no
+    // longer duplicates the call — the OTHER car is summoned to this floor
+    // instead, so the parked car is excluded from dispatch candidacy. Only
+    // when BOTH cars are parked here can nothing arrive: the call stays a
+    // decoy flash (boarding/pressing a parked car is how it moves).
+    const parked = (id: 1 | 2): boolean => {
+      const car = this.cars[id]
+      return (car.phase === 'idle' || car.phase === 'dwelling') && car.floor === pickup
+    }
+    if (parked(1) && parked(2)) {
+      this.announce({ kind: 'called', floor: pickup, car: 1 })
+      return 'ignored'
+    }
     // AD-014 (design review): among idle cars, EMPTY ones are drafted first —
     // an occupied-idle car carries a deliberating rider and is used only when
     // no empty idle car exists. Within each pool: closest landing, tie → car 1.
-    const idle = ([1, 2] as const).filter((id) => this.cars[id].phase === 'idle')
+    const idle = ([1, 2] as const).filter((id) => this.cars[id].phase === 'idle' && !parked(id))
     const closest = (pool: (1 | 2)[]): 1 | 2 | undefined =>
       [...pool].sort(
         (a, b) =>
