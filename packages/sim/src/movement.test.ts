@@ -2,6 +2,7 @@ import type { FloorId, MovementEvent } from '@turnover/shared'
 import { HALL_LENGTH_TILES, TUNING } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { DWELL_TICKS, MovementSim, RIDE_TICKS_PER_FLOOR, SPEED_MILLI_PER_TICK } from './movement.js'
+import { TICK_HZ } from './tick.js'
 
 function movedEvents(events: readonly MovementEvent[]) {
   return events.filter((e) => e.type === 'player:moved')
@@ -300,6 +301,15 @@ describe('movement visibility (AD-008)', () => {
 // ride = 40/floor, dwell = 20 ticks at EVERY stop. Calls carry no destination;
 // the destination is an in-car press (AD-014).
 describe('sim:elevator', () => {
+  it('pins the dwell literal: exactly 20 ticks derived from ELEVATOR_DWELL_SECONDS × TICK_HZ (ELR-14)', () => {
+    // Spec-precision pin (ELR P3 AC1): every dwell assertion elsewhere is
+    // constant-relative, so a tuning drift (e.g. 0.95 s → 19 ticks) must fail
+    // HERE, not survive the suite.
+    expect(TUNING.ELEVATOR_DWELL_SECONDS).toBe(1)
+    expect(DWELL_TICKS).toBe(TUNING.ELEVATOR_DWELL_SECONDS * TICK_HZ)
+    expect(DWELL_TICKS).toBe(20)
+  })
+
   it('arrives at exactly tick 60, dwells exactly 20 ticks, and idles for a caller who never boards (MOVE-11, ELR-14, ELR P3 AC4)', () => {
     const sim = new MovementSim()
     sim.join('p1')
