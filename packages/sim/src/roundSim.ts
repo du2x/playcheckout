@@ -1,8 +1,9 @@
-import { type Role, TUNING } from '@turnover/shared'
+import { type GuestFloorId, type Role, roomIndexAtMilli, TUNING } from '@turnover/shared'
 import { dealRoles } from './deal.js'
 import type { SimEvent } from './events.js'
+import { Justice } from './justice.js'
 import { TICK_HZ } from './tick.js'
-import { type RoundPositions, WorkChannels } from './work.js'
+import { type PositionSample, type RoundPositions, WorkChannels } from './work.js'
 
 export interface RoundSimConfig {
   readonly seed: number
@@ -13,6 +14,18 @@ export interface RoundSimConfig {
    * the shift is TUNING.SHIFT_SECONDS × TICK_HZ exactly as prd §7 locks it.
    */
   readonly totalTicks?: number
+}
+
+/** `\`${floor}:${room}\`` — the justice segment key (room 0 = open hall). */
+function roomKeyOf(floor: GuestFloorId, room: number): string | null {
+  return room === 0 ? null : `${floor}:${room}`
+}
+
+function splitRoomKey(
+  key: string,
+): [GuestFloorId, Parameters<WorkChannels['activeUnprepOwner']>[1]] {
+  const [floor, room] = key.split(':') as [GuestFloorId, string]
+  return [floor, Number(room) as Parameters<WorkChannels['activeUnprepOwner']>[1]]
 }
 
 /**
@@ -28,6 +41,10 @@ export class RoundSim {
   readonly playerIds: readonly string[]
   private readonly deal: Map<string, Role>
   private readonly work: WorkChannels
+  private readonly justice: Justice
+  /** Own segment tracking for walk-in detection (decoupled from work.ts's
+   *  interior-observation state — design decision, cycle 2.8). */
+  private readonly justiceSegments = new Map<string, string | null>()
   private started = false
   private ticksLeft: number
 
@@ -41,6 +58,7 @@ export class RoundSim {
     this.playerIds = [...config.playerIds]
     this.deal = dealRoles(config.seed, this.playerIds)
     this.work = new WorkChannels(this.deal)
+    this.justice = new Justice(this.deal)
     const totalTicks = config.totalTicks ?? RoundSim.TOTAL_TICKS
     if (!Number.isInteger(totalTicks) || totalTicks < 1) {
       throw new Error(`totalTicks must be a positive integer, got ${config.totalTicks}`)
@@ -72,8 +90,42 @@ export class RoundSim {
         events.push({ type: 'role:dealt', playerId, role })
       }
     }
-    for (const workEvent of this.work.tick(positions ?? new Map())) {
+    // Fired players are out of live play: one stale position may arrive after
+    // the firing (the room tears them down on the event), so they are filtered
+    // before any justice or work processing reads them.
+    const live = new Map<string, PositionSample>()
+    if (positions !== undefined) {
+      for (const [playerId, sample] of positions) {
+        if (!this.justice.isFired(playerId)) live.set(playerId, sample)
+      }
+    }
+    // Walk-in conviction check (JUST-01..03, FR-15): segment diff against the
+    // work channels' active un-prep rooms — BEFORE work.tick, so a channel
+    // completing this very tick still convicts (channel active at the entry
+    // tick, spec edge). Deterministic order: positions-map insertion order.
+    for (const [playerId, p] of live) {
+      const key =
+        p.floor === 'lobby' ? null : roomKeyOf(p.floor as GuestFloorId, roomIndexAtMilli(p.x))
+      if (key === (this.justiceSegments.get(playerId) ?? null)) continue
+      this.justiceSegments.set(playerId, key)
+      if (key === null) continue
+      const [floor, room] = splitRoomKey(key)
+      const owner = this.work.activeUnprepOwner(floor, room)
+      this.justice.walkIn(playerId, owner)
+    }
+    for (const workEvent of this.work.tick(live)) {
       events.push(workEvent)
+      // Grace (JUST-07/08): `room:trashed` can only come from a completed
+      // un-prep — attribute it to the deal's single saboteur.
+      if (workEvent.type === 'room:trashed') this.justice.noteSabotage()
+    }
+    // Firing teardown (JUST-04/06/11): the fired player's channels are
+    // cancelled silently (WORK-12) and their position memory is dropped, so
+    // later accusations/range checks cannot reach them.
+    for (const fired of this.justice.drainPending()) {
+      events.push(fired)
+      this.work.leave(fired.playerId)
+      this.justiceSegments.delete(fired.playerId)
     }
     this.ticksLeft--
     if (this.ticksLeft === 0) events.push({ type: 'round:buzzer' })

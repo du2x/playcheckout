@@ -78,6 +78,28 @@ export class WorkChannels {
   }
 
   /**
+   * Justice query (cycle 2.8): the owner of the active un-prep channel in one
+   * room, or null. At most one exists (exactly one saboteur, one channel per
+   * player) — the walk-in conviction's channel lookup.
+   */
+  activeUnprepOwner(floor: GuestFloorId, room: RoomIndex): string | null {
+    for (const channel of this.channels.values()) {
+      if (channel.kind === 'unprep' && channel.floor === floor && channel.room === room) {
+        return channel.playerId
+      }
+    }
+    return null
+  }
+
+  /**
+   * Justice query (cycle 2.8): the last fed position of one player — the
+   * accusation range check reads the movement layer's positions here.
+   */
+  positionOf(playerId: string): PositionSample | undefined {
+    return this.lastPositions.get(playerId)
+  }
+
+  /**
    * Validate and start a channel (FR-7/8/9). The action matrix:
    * staff on fresh|trashed → prep (100 ticks); saboteur on prepped → un-prep
    * (60 ticks); saboteur on fresh|trashed → fake prep (100 ticks, no effect).

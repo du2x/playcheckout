@@ -213,11 +213,11 @@ confirm fires and both pages see the name-only toast while the round continues.
 
 | Requirement ID | Story | Phase | Status |
 | -------------- | ----- | ----- | ------ |
-| JUST-01 | P1: Walk-in conviction | Execute | Pending |
-| JUST-02 | P1: Walk-in conviction | Execute | Pending |
-| JUST-03 | P1: Walk-in conviction | Execute | Pending |
-| JUST-04 | P1: Walk-in conviction | Execute | Pending |
-| JUST-05 | P1: Walk-in conviction | Execute | Pending |
+| JUST-01 | P1: Walk-in conviction | Execute | Done |
+| JUST-02 | P1: Walk-in conviction | Execute | Done |
+| JUST-03 | P1: Walk-in conviction | Execute | Done |
+| JUST-04 | P1: Walk-in conviction | Execute | Done |
+| JUST-05 | P1: Walk-in conviction | Execute | Done |
 | JUST-06 | P2: Accusation | Execute | Pending |
 | JUST-07 | P2: Accusation | Execute | Pending |
 | JUST-08 | P2: Accusation | Execute | Pending |

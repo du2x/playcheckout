@@ -99,7 +99,7 @@ T6 → T7
 
 ---
 
-### T2: Sim — justice module, walk-in conviction, grace
+### T2: Sim — justice module, walk-in conviction, grace ✅
 
 **What**: Create `packages/sim/src/justice.ts` (fired set, verdicts, pending event queue, grace end via `noteSabotage`), add `WorkChannels.activeUnprepOwner`/`positionOf` queries, wire walk-in detection into `RoundSim.tick` (own segment diff, deterministic order per design).
 **Where**: `packages/sim/src/justice.ts` (new), `packages/sim/src/work.ts`, `packages/sim/src/roundSim.ts`
