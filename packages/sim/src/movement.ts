@@ -524,6 +524,21 @@ export class MovementSim {
    */
   private board(carId: 1 | 2, car: CarState, events: MovementEvent[]): void {
     const landing = CAR_LANDING_MILLI[carId]
+    // AD-016 hysteresis: the episode guard only needs to cover the walk-off.
+    // An exiter observed OUTSIDE the boarding zone (on the car's floor) may
+    // re-board by walking back in; the exit itself places the player at the
+    // landing, so the ~4-tick walk-off stays guard-protected.
+    for (const pid of car.exitedThisStop) {
+      const p = this.players.get(pid)
+      if (
+        p !== undefined &&
+        p.inCar === null &&
+        p.floor === car.floor &&
+        Math.abs(p.x - landing) > TUNING.ELEVATOR_LANDING_TILES * MILLI
+      ) {
+        car.exitedThisStop.delete(pid)
+      }
+    }
     const candidates = [...this.players.entries()]
       .filter(
         ([pid, p]) => p.inCar === null && p.floor === car.floor && !car.exitedThisStop.has(pid),

@@ -330,7 +330,9 @@
   `roadmap.md` cycle table (2.6 insert, successors shift to 2.10), movement
   design.md "call semantics" interpretation marked AD-014-superseded.
 - **Date**: 2026-08-28
-- **Status**: active
+- **Status**: active — **Amended by AD-016**: design pin (a)'s episode guard
+  narrows to landing-zone hysteresis (an exiter may re-board once observed
+  outside the boarding zone; the walk-off stays guarded).
 
 ### AD-015
 - **Decision**: Remove lobby-phase movement confinement (MOVE-08). Players may
@@ -355,6 +357,32 @@
   `.specs/features/elevator-lobby/{spec,validation}.md`.
 - **Date**: 2026-08-29
 - **Status**: active
+
+### AD-016
+- **Decision**: Landing-zone hysteresis on the door-open-episode guard. The
+  `exitedThisStop` exclusion (AD-014 design pin (a)) is lifted per-player once
+  the exiter is observed OUTSIDE the car's boarding zone
+  (`|x − landing| > TUNING.ELEVATOR_LANDING_TILES`) on the car's floor, checked
+  on every open-door tick in `board()`. The walk-off itself stays guarded: exit
+  places the player at the landing, and clearing the 1-tile radius takes ~4
+  ticks, so instant re-board remains impossible.
+- **Reason**: Playtest lock-out (2026-08-29): a player who hopped off an idle
+  car could never re-board — the episode guard clears only on the car's next
+  DEPARTURE, but an idle car with an empty queue never departs — and pressing
+  E could not summon the car (a car already on the caller's floor is the
+  duplicate/flash case, AD-012/AD-014). Combined: stranded until another
+  player moved that car.
+- **Trade-off**: The guard's guarantee narrows from "final for the episode" to
+  "final while inside the zone" — deliberate walk-away-and-return now re-boards
+  (the intended affordance); no board/exit oscillation is possible because
+  re-boarding still requires leaving the zone first. Pinned by three sim
+  scenarios (re-board after leaving the zone; guard holds inside the zone; a
+  re-boarded rider presses and rides).
+- **Scope**: `packages/sim/src/movement.ts` (exit comment, board() hysteresis,
+  CarState doc), `packages/sim/src/movement.test.ts`, future cycles touching
+  elevator exit/boarding.
+- **Date**: 2026-08-29
+- **Status**: active — amends AD-014 design pin (a) (which amended AD-012).
 
 ## Handoff
 

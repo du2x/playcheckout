@@ -769,14 +769,16 @@ describe('sim:elevator', () => {
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
     expect(lastX(sim, 'p1')).toBe(0)
     // Hallway walking is now allowed pre-round (AD-015): the exiter leaves the
-    // landing and cannot re-board the same open-door stop (episode guard).
+    // landing and cannot re-board while inside the zone (episode guard, AD-016
+    // hysteresis lifts it once they are observed outside — they only walk back
+    // 1.5 tiles here, never re-entering the 1-tile zone).
     sim.startMove('p1', 'right')
     for (let i = 0; i < 25; i++) {
       sim.tick()
       expect(sim.viewOf('p1').car).toBeNull()
     }
     expect(lastX(sim, 'p1')).toBeGreaterThan(0)
-    // The episode guard still prevents boarding this stop until the car departs.
+    // Walking back part-way (still outside the zone) does not board either.
     sim.startMove('p1', 'left')
     for (let i = 0; i < 5; i++) sim.tick()
     expect(sim.viewOf('p1').car).toBeNull()
@@ -995,5 +997,68 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     ])
     // A non-rider's snapshotFor falls back to the floor snapshot.
     expect('carOccupants' in sim.snapshotFor('p2')).toBe(false)
+  })
+})
+
+// AD-016 hysteresis: the door-open-episode guard covers the walk-off only.
+// An exiter re-boards by walking out of the 1-tile zone (observed outside)
+// and back in — no stranded players at an idle car's floor.
+describe('re-boarding after an exit (AD-016)', () => {
+  it('re-boards an exiter who walked out of the zone and returned', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    boardParkedCar(sim, 'p1', 1)
+    // Exit and clear the zone: 10 held ticks × 300 milli = 3 tiles out —
+    // observed outside the boarding radius, the guard lifts (AD-016).
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 10; i++) {
+      sim.tick()
+      expect(sim.viewOf('p1').car).toBeNull() // walk-off: no instant re-board
+    }
+    sim.stopMove('p1')
+    sim.tick()
+    // Walk back in: the car still idles open-doors at the landing.
+    sim.startMove('p1', 'left')
+    let boarded = false
+    for (let i = 0; i < 15 && !boarded; i++) {
+      sim.tick()
+      boarded = sim.viewOf('p1').car === 1
+    }
+    expect(boarded).toBe(true)
+    expect(lastX(sim, 'p1')).toBe(0) // snapped to the landing
+  })
+
+  it('keeps the guard while the exiter stays inside the zone (no oscillation)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    boardParkedCar(sim, 'p1', 1)
+    // Exit with a 3-tick walk (0.9 tiles): still inside the 1-tile radius.
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 3; i++) sim.tick()
+    sim.stopMove('p1')
+    sim.tick()
+    expect(lastX(sim, 'p1')).toBe(0.9)
+    // Turn around and linger: the guard holds — no board/exit oscillation.
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 10; i++) {
+      sim.tick()
+      expect(sim.viewOf('p1').car).toBeNull()
+    }
+  })
+
+  it('a re-boarded rider presses and rides normally', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    boardParkedCar(sim, 'p1', 1)
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 10; i++) sim.tick() // outside the zone: guard lifted
+    sim.stopMove('p1')
+    sim.tick()
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 15 && sim.viewOf('p1').car === null; i++) sim.tick()
+    expect(sim.viewOf('p1').car).toBe(1)
+    expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
+    expect(sim.viewOf('p1').car).toBe(1) // stayed aboard the served floor
   })
 })
