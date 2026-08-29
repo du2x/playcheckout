@@ -126,7 +126,7 @@ T6 → T7
 
 ---
 
-### T3: Sim — accusation resolution and verdicts
+### T3: Sim — accusation resolution and verdicts ✅
 
 **What**: Implement `RoundSim.accuse` (eligibility guards, range check via `positionOf`, grace-aware validity, fire either party) with the coarse `resolved | rejection` return; cover the named `sim:accuse` and `sim:firing_toast` gate scenarios.
 **Where**: `packages/sim/src/roundSim.ts`, `packages/sim/src/justice.ts`, `packages/sim/src/justice.test.ts` (or roundSim.test.ts per house layout)

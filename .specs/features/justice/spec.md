@@ -218,12 +218,12 @@ confirm fires and both pages see the name-only toast while the round continues.
 | JUST-03 | P1: Walk-in conviction | Execute | Done |
 | JUST-04 | P1: Walk-in conviction | Execute | Done |
 | JUST-05 | P1: Walk-in conviction | Execute | Done |
-| JUST-06 | P2: Accusation | Execute | Pending |
-| JUST-07 | P2: Accusation | Execute | Pending |
-| JUST-08 | P2: Accusation | Execute | Pending |
-| JUST-09 | P2: Accusation | Execute | Pending |
-| JUST-10 | P2: Accusation | Execute | Pending |
-| JUST-11 | P2: Accusation | Execute | Pending |
+| JUST-06 | P2: Accusation | Execute | Done |
+| JUST-07 | P2: Accusation | Execute | Done |
+| JUST-08 | P2: Accusation | Execute | Done |
+| JUST-09 | P2: Accusation | Execute | Done |
+| JUST-10 | P2: Accusation | Execute | Done |
+| JUST-11 | P2: Accusation | Execute | Done |
 | JUST-12 | P3: Firing feedback | Execute | Done |
 | JUST-13 | P3: Firing feedback | Execute | Done |
 | JUST-14 | P3: Firing feedback | Execute | Done |

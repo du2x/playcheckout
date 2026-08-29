@@ -66,6 +66,23 @@ export class Justice {
     return channelOwnerId
   }
 
+  /**
+   * Accusation validity (JUST-07/08, FR-18/19): correct = the target is the
+   * saboteur AND the grace window has ended; everything else — innocent
+   * target or saboteur still in grace — is wrong and fires the ACCUSER,
+   * indistinguishably. Eligibility (who may accuse, range, live-ness) is the
+   * caller's job; this method only routes the verdict. The return value is
+   * for tests/telemetry — it must never reach a client-bound payload.
+   */
+  accuse(accuserId: string, targetId: string): 'correct' | 'wrong' {
+    if (targetId === this.saboteurId && this.saboteurHasUnprepped) {
+      this.fire(targetId, 'correct-accusation')
+      return 'correct'
+    }
+    this.fire(accuserId, 'wrong-accusation')
+    return 'wrong'
+  }
+
   /** Drain the events queued by this tick's verdicts (announce pattern). */
   drainPending(): readonly Extract<SimEvent, { type: 'player:fired' }>[] {
     return this.pending.splice(0)

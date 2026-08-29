@@ -28,6 +28,15 @@ function splitRoomKey(
   return [floor, Number(room) as Parameters<WorkChannels['activeUnprepOwner']>[1]]
 }
 
+/** Why an `accuse` intent was rejected — the room maps these to errors 1:1. */
+export type AccuseRejection =
+  | 'round-not-active'
+  | 'accuser-not-live'
+  | 'accuser-is-saboteur'
+  | 'self-target'
+  | 'target-not-live'
+  | 'out-of-range'
+
 /**
  * Headless round state machine (AD-002: the sim owns the round only).
  * Inputs + time in, events out — no I/O, no clocks. The room drives one
@@ -147,6 +156,37 @@ export class RoundSim {
   /** Drop a departing player's channel silently (WORK-12). */
   leave(playerId: string): void {
     this.work.leave(playerId)
+  }
+
+  /**
+   * Validate and resolve an accusation (JUST-06..11, FR-17/18/19). Eligibility
+   * is enforced here — round active, accuser live and staff, target live and
+   * not the accuser, same floor within TUNING.ACCUSATION_RANGE_TILES (movement
+   * positions, inclusive) — the client menu is a mirror, never an authority.
+   * The return value is coarse: it NEVER distinguishes verdicts; validity is
+   * carried only by the internal event's `reason`, which the Router strips.
+   */
+  accuse(accuserId: string, targetId: string): 'resolved' | AccuseRejection {
+    if (!this.started || this.ticksLeft <= 0) return 'round-not-active'
+    if (this.justice.isFired(accuserId)) return 'accuser-not-live'
+    if (accuserId === this.justice.saboteurId) return 'accuser-is-saboteur'
+    if (accuserId === targetId) return 'self-target'
+    if (this.justice.isFired(targetId) || !this.playerIds.includes(targetId)) {
+      return 'target-not-live'
+    }
+    const accuser = this.work.positionOf(accuserId)
+    const target = this.work.positionOf(targetId)
+    const range = TUNING.ACCUSATION_RANGE_TILES * 1000
+    if (
+      accuser === undefined ||
+      target === undefined ||
+      accuser.floor !== target.floor ||
+      Math.abs(accuser.x - target.x) > range
+    ) {
+      return 'out-of-range'
+    }
+    this.justice.accuse(accuserId, targetId)
+    return 'resolved'
   }
 
   /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */
