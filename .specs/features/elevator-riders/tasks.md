@@ -192,7 +192,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ### Phase 2: Pure sim rework
 
-#### T6: MovementSim car state machine rework
+#### T6: MovementSim car state machine rework — ✅ Done
 
 **What**: Rework `MovementSim` car state: `CarState {floor, riders, phase: idle|arriving|dwelling|riding, ticksLeft, pickup: FloorId|null, queue: FloorId[], exitedThisStop: Set<string>}`. Replace `target` with FIFO `queue`; add `DWELL_TICKS`; implement `callElevator(playerId)` destination-free (duplicate = pickup floor only, narrowing AD-012; dispatch prefers empty idle cars — closest landing, tie → car 1 — then occupied idle, then FIFO queue), `pressFloor(playerId, floor)` (rider-only, ignore duplicate/being-served — including `pickup` while `arriving` — and current-floor-while-doors-open; enqueue + announce, zero-ride guard asserts `rideTicks>0` on departure), `startMove` door-open exit (in-car rider holding direction exits this intent; ignored lobby-phase confinement; walk proceeds next tick), auto-board every open-door tick (arrival + every `dwelling`/`idle` tick; capacity 2, distance-then-playerId, `exitedThisStop` guard until departure), tick order `announced → player movement → tickCars (dwell countdown, board, departures/arrivals)`, ghost trips, caller-never-boards idle, `arriving`→`dwelling`→`riding`→arrival flow. Rewrite affected `movement.test.ts` suites (MOVE-10..15 tick math now includes dwell; arrival no longer auto-exits).
 **Where**: `packages/sim/src/movement.ts`
@@ -205,12 +205,12 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-sim-harness`
 
 **Done when**:
-- [ ] `callElevator` is destination-free; same-floor duplicate flashes without dispatch; empty-idle preferred
-- [ ] `pressFloor` queues FIFO; duplicate/current-floor-while-open and pickup-while-arriving are silently ignored; non-rider rejected
-- [ ] Dwell is exactly 20 ticks at every stop; riding is `|Δfloors|*40`; departure asserts `rideTicks>0`
-- [ ] Episode guard prevents re-boarding until departure; exit works in any phase; ghost trips serve
-- [ ] Bit-for-bit replay across two runs for a 100+ tick scripted dwell+queue scenario
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `callElevator` is destination-free; same-floor duplicate flashes without dispatch; empty-idle preferred
+- [x] `pressFloor` queues FIFO; duplicate/current-floor-while-open and pickup-while-arriving are silently ignored; non-rider rejected
+- [x] Dwell is exactly 20 ticks at every stop; riding is `|Δfloors|*40`; departure asserts `rideTicks>0`
+- [x] Episode guard prevents re-boarding until departure; exit works in any phase; ghost trips serve
+- [x] Bit-for-bit replay across two runs for a 100+ tick scripted dwell+queue scenario
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: unit
 **Gate**: quick

@@ -1,7 +1,8 @@
 import { randomInt } from 'node:crypto'
 import type { FloorId, RoomIndex } from '@turnover/shared'
 import {
-  elevatorCallLegacyIntentSchema,
+  elevatorCallIntentSchema,
+  elevatorPressIntentSchema,
   type LobbySnapshot,
   lobbyStartIntentSchema,
   moveStartIntentSchema,
@@ -95,17 +96,20 @@ export class TurnoverRoom extends Room {
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {
       this.movement.stopMove(client.sessionId)
     })
-    // SPEC_DEVIATION (transitional, removed with the T6 sim rework): the wire
-    // here still validates the legacy destination-carrying call so the
-    // cycle-2.4 sim keeps routing trips; the exported protocol contract is
-    // already the final destination-free `elevatorCallIntentSchema` (ELR-06).
-    this.onMessage('elevator:call', elevatorCallLegacyIntentSchema, (client, intent) => {
-      if (this.movement.callElevator(client.sessionId, intent.target) === 'rejected') {
+    // Destination-free call (ELR-06/AD-014): the target lives in the in-car
+    // press intent; a duplicate call flashes via the sim event only.
+    this.onMessage('elevator:call', elevatorCallIntentSchema, (client) => {
+      if (this.movement.callElevator(client.sessionId) === 'rejected') {
         this.router.toSelf('error', client.sessionId, {
           code: 'elevator-locked',
           message: 'you are already riding an elevator',
         })
       }
+    })
+    // In-car floor press (ELR-08/AD-014): rider-only. A non-rider press is
+    // rejected silently — nothing on the wire, no error message (ELR P2 AC3).
+    this.onMessage('elevator:press', elevatorPressIntentSchema, (client, intent) => {
+      this.movement.pressFloor(client.sessionId, intent.floor)
     })
     // Work intents (cycle 2.5, FR-7/8/9): the action matrix lives in the sim —
     // the room validates the phase and maps rejection reasons 1:1 to errors.

@@ -40,17 +40,9 @@ export const elevatorCallIntentSchema = z
 export type ElevatorCallIntent = z.infer<typeof elevatorCallIntentSchema>
 
 /**
- * TRANSITIONAL (removed with the T6 sim rework): the cycle-2.4 MovementSim
- * still routes destination-carrying trips, so the room keeps accepting the
- * legacy optional `target` until the press-queue machine replaces it. The
- * exported contract above is already the final destination-free shape.
+ * TRANSITIONAL legacy destination-carrying call — REMOVED with the T6 sim
+ * rework (AD-014): the wire accepts only the destination-free schema above.
  */
-export const elevatorCallLegacyIntentSchema = z
-  .object({
-    type: z.literal('elevator:call'),
-    target: FLOOR_ENUM,
-  })
-  .strict()
 
 /** Press a floor inside the car the sender is riding (ELR-06/ELR-08). */
 export const elevatorPressIntentSchema = z
