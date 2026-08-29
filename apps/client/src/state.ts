@@ -80,6 +80,9 @@ export type ViewAction =
   | { type: 'room-settled'; floor: FloorId; room: RoomIndex }
   | { type: 'room-rustle'; floor: FloorId; room: RoomIndex }
   | { type: 'room-entered'; playerId: string; floor: FloorId; room: RoomIndex }
+  // Justice (cycle 2.8): firing is public but name-only (FR-18) — the scene
+  // removes the rectangle; the accusation session renders the toast (T5).
+  | { type: 'player-fired'; playerId: string }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }
   | { type: 'intent-error'; message: string }
@@ -151,6 +154,7 @@ export const ACTION_ROUTES = {
   'room-settled': 'scene',
   'room-rustle': 'scene',
   'room-entered': 'scene',
+  'player-fired': 'scene',
   'role-dealt': 'view',
   buzzer: 'view',
   'intent-error': 'view',
@@ -225,6 +229,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'room-settled':
     case 'room-rustle':
     case 'room-entered':
+    case 'player-fired':
       return state
   }
 }

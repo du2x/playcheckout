@@ -52,6 +52,23 @@ export type SimEvent =
       readonly floor: FloorId
       readonly room: RoomIndex
     }
+  // --- Justice (cycle 2.8, FR-15/18/19): firing is public but name-only.
+  // `reason` is server-internal — the registry projection strips it, so the
+  // wire payload is exactly {playerId} (FR-18; leak rules 3/4: no role, no
+  // grace state, no validity verdict on the wire). Telemetry (2.10) reads the
+  // reason from this event stream 1:1 (FR-23).
+  | {
+      readonly type: 'player:fired'
+      readonly playerId: string
+      readonly reason: FireReason
+    }
+
+/**
+ * Why a player was fired — server-internal only, never projected to the wire.
+ * `wrong-accusation` covers both wrong cases (innocent target, saboteur in
+ * grace) indistinguishably: validity is revealed only on the recap (FR-22).
+ */
+export type FireReason = 'walkin' | 'wrong-accusation' | 'correct-accusation'
 
 /**
  * Movement events (cycle 2.4, AD-005): emitted by the room-owned MovementSim in

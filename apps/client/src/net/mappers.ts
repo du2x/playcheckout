@@ -41,4 +41,6 @@ export const MAPPERS: {
   'room:settled': (p) => [{ type: 'room-settled', ...p }],
   'room:rustle': (p) => [{ type: 'room-rustle', ...p }],
   'room:entered': (p) => [{ type: 'room-entered', ...p }],
+  // Justice (cycle 2.8): name-only firing — {playerId} is the whole payload.
+  'player:fired': ({ playerId }) => [{ type: 'player-fired', playerId }],
 }

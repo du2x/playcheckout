@@ -66,3 +66,17 @@ export const workStartIntentSchema = z
   })
   .strict()
 export type WorkStartIntent = z.infer<typeof workStartIntentSchema>
+
+/**
+ * Accuse a nearby player of being the saboteur (FR-17, cycle 2.8). Staff-only,
+ * same-floor within TUNING.ACCUSATION_RANGE_TILES — all enforced server-side
+ * from the movement layer's positions; the client menu is a mirror, never an
+ * authority. No cancel exists: once sent, the accusation resolves.
+ */
+export const accuseIntentSchema = z
+  .object({
+    type: z.literal('accuse'),
+    targetId: z.string().min(1),
+  })
+  .strict()
+export type AccuseIntent = z.infer<typeof accuseIntentSchema>

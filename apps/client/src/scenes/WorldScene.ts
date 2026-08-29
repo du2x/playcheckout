@@ -94,6 +94,9 @@ type MovementAction =
   | { type: 'room-settled'; floor: string; room: number }
   | { type: 'room-rustle'; floor: string; room: number }
   | { type: 'room-entered'; playerId: string; floor: string; room: number }
+  // Justice (cycle 2.8): name-only firing — the fired player's rectangle is
+  // removed and the accusation session renders the toast (accuseSession, T5).
+  | { type: 'player-fired'; playerId: string }
 
 interface PlayerDisplay {
   rect: Phaser.GameObjects.Rectangle
@@ -332,6 +335,11 @@ export class WorldScene extends Phaser.Scene {
           Date.now(),
         )
         this.beep(180)
+        break
+      case 'player-fired':
+        // Rectangle removal + fired state render with the accusation session
+        // slice (JUST-04/15, T5) — the protocol row lands first so the
+        // exhaustive dispatch compiles.
         break
     }
   }

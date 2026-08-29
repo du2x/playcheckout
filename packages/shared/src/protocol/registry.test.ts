@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { FLOOR_IDS } from '../layout.js'
 import { ROLES } from '../roles.js'
-import { elevatorCallIntentSchema, elevatorPressIntentSchema } from './intents.js'
+import {
+  accuseIntentSchema,
+  elevatorCallIntentSchema,
+  elevatorPressIntentSchema,
+} from './intents.js'
 import {
   type LobbySnapshot,
   lobbyStartIntentSchema,
@@ -110,6 +114,7 @@ describe('protocol registry', () => {
     'room:settled': 'occupants',
     'room:rustle': 'earshot',
     'room:entered': 'sameFloor',
+    'player:fired': 'all',
   } as const
 
   it('declares exactly the core, movement, and work types — riders rows included (REG-03, AD-013)', () => {
@@ -358,5 +363,38 @@ describe('protocol registry', () => {
       room: 2,
       state: 'trashed',
     })
+  })
+
+  // JUST-12/13/14 (cycle 2.8): firing is public but name-only — the payload is
+  // exactly {playerId}; the sim event's internal reason (and any grace or
+  // validity trace) never reaches the wire (FR-18, leak rules 3/4).
+  it('projects player:fired to all players with a {playerId}-only payload (FR-18)', () => {
+    const row = PROTOCOL_REGISTRY['player:fired']
+    expect(row.recipients).toBe('all')
+    const projected = row.fromSim({
+      type: 'player:fired',
+      playerId: 'p3',
+      reason: 'correct-accusation',
+    })
+    expect(projected.payload).toEqual({ playerId: 'p3' })
+    expect(Object.keys(projected.payload).sort()).toEqual(['playerId'])
+    expect(projected.self).toBeUndefined()
+    expect(projected.visibility).toBeUndefined()
+    const keys = Object.keys(projected.payload)
+    expect(keys).not.toContain('reason')
+    expect(keys).not.toContain('valid')
+    expect(keys).not.toContain('role')
+  })
+
+  it('accuse intent accepts exactly a non-empty targetId and rejects the rest (FR-17)', () => {
+    expect(accuseIntentSchema.parse({ type: 'accuse', targetId: 'p2' })).toEqual({
+      type: 'accuse',
+      targetId: 'p2',
+    })
+    expect(() => accuseIntentSchema.parse({ type: 'accuse', targetId: '' })).toThrow()
+    expect(() => accuseIntentSchema.parse({ type: 'accuse' })).toThrow()
+    expect(() =>
+      accuseIntentSchema.parse({ type: 'accuse', targetId: 'p2', floor: 'floor1' }),
+    ).toThrow()
   })
 })

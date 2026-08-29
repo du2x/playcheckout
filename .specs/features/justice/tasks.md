@@ -72,7 +72,7 @@ T6 → T7
 
 ## Task Breakdown
 
-### T1: Protocol — declare the firing event and accusation intent
+### T1: Protocol — declare the firing event and accusation intent ✅
 
 **What**: Add the `player:fired` SimEvent (internal `reason`), the `PlayerFired` wire payload + `'all'` registry row, the `accuse` intent schema, and the `'justice-rejected'` IntentError code.
 **Where**: `packages/shared/src/protocol/simEvents.ts`, `packages/shared/src/protocol/messages.ts`, `packages/shared/src/protocol/registry.ts`, `packages/shared/src/protocol/intents.ts`

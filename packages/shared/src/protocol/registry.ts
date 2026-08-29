@@ -8,6 +8,7 @@ import type {
   IntentError,
   LobbySnapshot,
   MovementSnapshot,
+  PlayerFired,
   PlayerLeft,
   PlayerLeftFloor,
   PlayerMoved,
@@ -125,6 +126,9 @@ export interface Payloads {
   'room:rustle': RoomRustle
   /** server → same-floor viewers. A player entered the room's segment (FR-10 cue half). */
   'room:entered': RoomEntered
+  // --- Justice (cycle 2.8): firing is public but name-only (FR-18) ---
+  /** server → all players. A firing resolved (walk-in or accusation); {playerId} exactly. */
+  'player:fired': PlayerFired
 }
 
 export type RegistryKey = keyof Payloads
@@ -340,6 +344,16 @@ export const PROTOCOL_REGISTRY = {
       payload: { playerId: event.playerId, floor: event.floor, room: event.room },
       visibility: { floor: event.floor },
     })) as SimProjection<'room:entered'>,
+  },
+  // --- Justice (cycle 2.8): public-but-name-only firing. The projection
+  // strips the sim event's internal `reason` — the wire carries {playerId}
+  // and nothing else (FR-18; leak rules 3/4).
+  'player:fired': {
+    payload: {} as PlayerFired,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { playerId: event.playerId },
+    })) as SimProjection<'player:fired'>,
   },
 } as const satisfies { [K in RegistryKey]: Entry<K> } & {
   [K in SimEvent['type'] | MovementEvent['type']]: unknown

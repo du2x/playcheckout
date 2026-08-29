@@ -66,6 +66,7 @@ export interface IntentError {
     | 'not-in-room'
     | 'room-not-workable'
     | 'channel-active'
+    | 'justice-rejected'
   readonly message: string
 }
 
@@ -237,6 +238,16 @@ export interface RoomEntered {
   readonly playerId: string
   readonly floor: FloorId
   readonly room: RoomIndex
+}
+
+/**
+ * server → all players. A firing resolved (walk-in or accusation, either
+ * verdict) — name-only (FR-18): no role, no reason, no validity flag. Why the
+ * player was fired and whether the accusation was correct are revealed only on
+ * the recap (FR-22, cycle 2.9).
+ */
+export interface PlayerFired {
+  readonly playerId: string
 }
 
 /**
