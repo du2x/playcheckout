@@ -74,7 +74,10 @@
 - **Scope**: cycle 2.3 `movement` and all later cycles; `apps/server`, `packages/sim`,
   `packages/shared`, `apps/client`.
 - **Date**: 2026-08-28
-- **Status**: active
+- **Status**: active — **Amendment (2026-08-29)**: with AD-015 there is no
+  movement-side behavior left to unlock; the movement layer is phase-free.
+  `MovementSim.unlock`/`lock` and the write-only `phase` field are deleted
+  (the room keeps its own phase — that is the AD-002/AD-005 seam).
 
 ### AD-006
 - **Decision**: Insert cycle 2.3 `protocol-registry` before `movement` (cycles shift:
@@ -391,4 +394,5 @@ Deferred notes from Verifier (protocol-registry PASS, low severity, fold into th
 cycle touching these files): (N1) TurnoverRoom.test.ts:412-415 comment misattributes the
 collector-added `type` key to Colyseus transport; (N2) registry.test.ts:66-70 pins policy
 membership, not literal per-key values — a literal per-key policy walk would be direct;
-(N3) `RegistryEntry<P>` (registry.ts:41-44) exported but unused — dead declaration.
+(N3) RESOLVED — the dead `RegistryEntry` declaration is gone from registry.ts
+(renamed to the used `Entry<K>`).
