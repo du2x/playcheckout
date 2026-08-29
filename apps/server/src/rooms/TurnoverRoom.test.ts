@@ -945,6 +945,79 @@ describe('server:elevator_riders', () => {
     b.leave()
     c.leave()
   })
+
+  it('flushes a mid-trip rider disconnect: remaining rider updated, slot freed, player:left unchanged (ELR-01/02, design disconnect row)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const feeds = [host, a, b, c].map((room) => feed(room))
+      const instance = TurnoverRoom.instances.at(-1)
+      if (instance === undefined) throw new Error('no room instance')
+
+      // Round active: the later landing candidate must walk on floor1 (MOVE-06).
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      instance.__driveTicks(1) // the deal tick
+
+      // host + a board car 1 and depart toward floor1.
+      await boardAndPressFloor1(instance, [host, a])
+
+      // a disconnects MID-TRIP (car 1 riding, doors shut).
+      const seenBeforeLeave = feeds[0]?.seen.length ?? 0
+      a.leave()
+      await sleep(50)
+      instance.__driveTicks(1) // the disconnect-dirty flush tick
+      await sleep(50)
+
+      // (a) The remaining rider's feed carries exactly one elevator:riders —
+      // the leaver no longer names the car; the queued floor survives.
+      const postLeave = (feeds[0]?.seen ?? []).slice(seenBeforeLeave)
+      const flushes = postLeave.filter((m) => m.type === 'elevator:riders')
+      expect(flushes).toHaveLength(1)
+      expect(flushes[0]?.payload).toEqual({
+        car: 1,
+        riders: [host.sessionId],
+        queue: ['floor1'],
+      })
+
+      // (c) The player:left broadcast is unchanged by the movement wiring.
+      const left = postLeave.find((m) => m.type === 'player:left')
+      expect(left?.payload).toEqual({ playerId: a.sessionId })
+
+      // (b) The freed capacity slot is boardable: b rides car 2 to floor1 and
+      // walks to car 1's west landing — boarding a car that already carries
+      // host is possible only because the disconnect removed a from car.riders
+      // (a ghost leaver would keep the capacity-2 car full forever).
+      b.send('move:start', { type: 'move:start', dir: 'right' })
+      await sleep(50)
+      instance.__driveTicks(60) // walk from center; auto-boarding catches car 2
+      b.send('move:stop', { type: 'move:stop' })
+      await sleep(50)
+      b.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+      await sleep(50)
+      instance.__driveTicks(40) // lobby → floor1 ride
+      await sleep(50)
+      b.send('move:start', { type: 'move:start', dir: 'left' }) // exit in the dwell
+      await sleep(50)
+      instance.__driveTicks(110) // walk 30 → 0.9 tiles from the west landing
+      await sleep(50)
+      instance.__driveTicks(2) // flush b's boarding occupancy update
+      await sleep(50)
+
+      const boardFlush = (feeds[0]?.seen ?? [])
+        .filter((m) => m.type === 'elevator:riders')
+        .at(-1)?.payload
+      expect(boardFlush?.car).toBe(1)
+      expect((boardFlush?.riders as string[]).sort()).toEqual([host.sessionId, b.sessionId].sort())
+
+      for (const f of feeds) f.stop()
+      host.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })
 
 // Spec WORK-01..16 (gate scenarios sim:prep/sim:unprep/sim:fake_prep, server

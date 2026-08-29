@@ -179,6 +179,9 @@ export class TurnoverRoom extends Room {
 
   override onLeave(client: Client) {
     this.players.delete(client.sessionId)
+    // Remove from movement sim first: clears car.riders, marks dirty so the
+    // next tick emits elevator:riders (disconnect row, design.md / ELR P1 AC2).
+    this.movement.leave(client.sessionId)
     // A leaver's channel dies silently — no work:ended, no trace (WORK-12).
     this.sim?.leave(client.sessionId)
     // Public knowledge: the rectangle disappears everywhere (MOVE-19).
