@@ -195,7 +195,7 @@ same-floor viewers (entrant included), pass-through fires, exit/stop stays silen
 | EVID-01 | P1: Door cards | Execute | Done |
 | EVID-02 | P1: Door cards | Execute | Done |
 | EVID-03 | P1: Door cards | Execute | Done |
-| EVID-04 | P1: Door cards | Design | Pending |
+| EVID-04 | P1: Door cards | Execute | Done |
 | {rid} | P1: Door cards | Design | Pending |
 | EVID-06 | P2: Freshness | Execute | Done |
 | EVID-07 | P2: Freshness | Execute | Done |

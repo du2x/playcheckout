@@ -99,11 +99,17 @@ export class TurnoverRoom extends Room {
         // stale — standing occupants emit no stream, so without this refresh
         // they stay invisible until they move. Same-floor occupants learn the
         // arrival from the exiter's own resumed player:moved stream.
-        this.router.toSelf(
-          'movement:snapshot',
-          client.sessionId,
-          this.movement.snapshotFor(client.sessionId),
-        )
+        // EVID-04: the arrival floor's carded rooms ride along — cards are
+        // floor-public (FR-11) and the round sim owns them (empty pre-round;
+        // cards die with the sim at the buzzer, evidence is round-scoped).
+        const arrivalFloor = this.movement.viewOf(client.sessionId).floor
+        const cards =
+          arrivalFloor !== null && arrivalFloor !== 'lobby'
+            ? (this.sim?.cardedOn(arrivalFloor) ?? [])
+            : []
+        this.router.toSelf('movement:snapshot', client.sessionId, {
+          ...this.movement.snapshotFor(client.sessionId, cards),
+        })
       }
     })
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {

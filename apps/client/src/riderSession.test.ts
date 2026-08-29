@@ -17,7 +17,7 @@ function ridersAction(
 }
 
 function movementSnapshot(carOccupants: MovementSnapshot['carOccupants']): MovementSnapshot {
-  return { players: [], cars: [], carOccupants } as MovementSnapshot
+  return { players: [], cars: [], cardedRooms: [], carOccupants } as MovementSnapshot
 }
 
 function riding() {

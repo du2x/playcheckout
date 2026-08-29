@@ -1401,3 +1401,81 @@ describe('server:lobby folds', () => {
     guest.leave()
   })
 })
+
+// Spec EVID-04 (cycle 2.7): the door-open exit snapshot carries the arrival
+// floor's carded rooms — cards are floor-public (FR-11) and the round sim
+// owns the card set (AD-005 seam).
+describe('server:evidence', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  it('delivers the arrival floor carded rooms in the exit snapshot (EVID-04)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const hostCollector = collectAll(host)
+      const aCollector = collectAll(a)
+      const instanceRef = TurnoverRoom.instances.at(-1)
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instanceRef?.__phase()).toBe('round'))
+
+      // Host rides car 1 up to floor1 and exits at the landing.
+      host.send('elevator:call', { type: 'elevator:call' })
+      await sleep(30)
+      host.send('move:start', { type: 'move:start', dir: 'left' })
+      await sleep(30)
+      instanceRef?.__driveTicks(70) // car arrives + host boards
+      host.send('move:stop', { type: 'move:stop' })
+      await sleep(30)
+      host.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+      await sleep(30)
+      instanceRef?.__driveTicks(40) // lobby → floor1
+      host.send('move:start', { type: 'move:start', dir: 'right' }) // exit
+      await sleep(30)
+      instanceRef?.__driveTicks(5)
+      host.send('move:stop', { type: 'move:stop' })
+      await sleep(30)
+
+      // Host walks into room 1 and preps it: the card hangs (EVID-01).
+      host.send('move:start', { type: 'move:start', dir: 'right' })
+      await sleep(30)
+      instanceRef?.__driveTicks(8) // 0 → ~2400 milli: inside room 1's segment
+      host.send('move:stop', { type: 'move:stop' })
+      await sleep(30)
+      host.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await sleep(30)
+      instanceRef?.__driveTicks(1)
+      await hostCollector.waitFor('work:started')
+      instanceRef?.__driveTicks(100)
+      await hostCollector.waitFor('room:carded')
+
+      // Guest a rides up and exits: their exit snapshot carries cardedRooms [1].
+      // Car 2 sits parked open-doors at the east landing — she walks straight
+      // in (~47 ticks to the zone) and auto-boards, no call needed (AD-014).
+      a.send('move:start', { type: 'move:start', dir: 'right' })
+      await sleep(30)
+      instanceRef?.__driveTicks(50) // walk into the boarding zone; auto-board
+      a.send('move:stop', { type: 'move:stop' })
+      await sleep(30)
+      a.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+      await sleep(30)
+      instanceRef?.__driveTicks(40) // lobby → floor1
+      a.send('move:start', { type: 'move:start', dir: 'right' }) // exit → snapshot
+      await sleep(30)
+      instanceRef?.__driveTicks(5)
+
+      // Guest a's only snapshot on this connection is the door-open exit one
+      // (the join snapshot predates the collector).
+      const exitSnap = await aCollector.waitFor('movement:snapshot')
+      expect(exitSnap.payload.cardedRooms).toEqual([1])
+
+      hostCollector.stop()
+      aCollector.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})

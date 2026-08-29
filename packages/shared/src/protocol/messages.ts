@@ -153,6 +153,12 @@ export interface MovementSnapshotCar {
 export interface MovementSnapshot {
   readonly players: readonly MovementSnapshotPlayer[]
   readonly cars: readonly MovementSnapshotCar[]
+  /**
+   * Carded rooms of the snapshot's floor, ascending (EVID-04, cycle 2.7) —
+   * cards are floor-public (FR-11), so own-floor cards ride the own-floor
+   * snapshot; other floors' cards never appear (AD-009 filtering).
+   */
+  readonly cardedRooms: readonly RoomIndex[]
   readonly carOccupants?: {
     readonly car: CarId
     readonly riders: readonly string[]

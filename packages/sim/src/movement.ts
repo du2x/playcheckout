@@ -320,9 +320,13 @@ export class MovementSim {
    * NO floor (AD-009): a player inside a car never appears in a floor
    * snapshot (with no auto-exit they can be aboard indefinitely).
    */
-  snapshotForFloor(floor: FloorId): {
+  snapshotForFloor(
+    floor: FloorId,
+    cardedRooms: readonly RoomIndex[] = [],
+  ): {
     players: { playerId: string; floor: FloorId; x: number }[]
     cars: { car: 1 | 2; floor: FloorId }[]
+    cardedRooms: readonly RoomIndex[]
   } {
     return {
       players: [...this.players.entries()]
@@ -332,6 +336,7 @@ export class MovementSim {
         { car: 1 as const, floor: this.cars[1].floor },
         { car: 2 as const, floor: this.cars[2].floor },
       ],
+      cardedRooms: [...cardedRooms],
     }
   }
 
@@ -343,14 +348,18 @@ export class MovementSim {
    * occupants + press queue. A non-rider falls back to the byte-identical
    * floor snapshot — occupancy never appears. Callers never branch.
    */
-  snapshotFor(playerId: string): {
+  snapshotFor(
+    playerId: string,
+    cardedRooms: readonly RoomIndex[] = [],
+  ): {
     players: { playerId: string; floor: FloorId; x: number }[]
     cars: { car: 1 | 2; floor: FloorId }[]
+    cardedRooms: readonly RoomIndex[]
     carOccupants?: { car: 1 | 2; riders: string[]; queue: FloorId[] }
   } {
     const p = this.players.get(playerId)
     if (p === undefined || p.inCar === null) {
-      return this.snapshotForFloor(p?.floor ?? 'lobby')
+      return this.snapshotForFloor(p?.floor ?? 'lobby', cardedRooms)
     }
     const car = this.cars[p.inCar]
     return {
@@ -359,6 +368,9 @@ export class MovementSim {
         { car: 1 as const, floor: this.cars[1].floor },
         { car: 2 as const, floor: this.cars[2].floor },
       ],
+      // A rider's card set is empty: cards are floor knowledge and riders
+      // have no floor while in a car (AD-009).
+      cardedRooms: [],
       carOccupants: { car: p.inCar, riders: [...car.riders], queue: [...car.queue] },
     }
   }

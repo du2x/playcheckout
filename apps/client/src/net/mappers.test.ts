@@ -91,6 +91,7 @@ describe('protocol mappers', () => {
     const snap = {
       players: [{ playerId: 'p1', floor: 'lobby' as const, x: 15 }],
       cars: [{ car: 1 as const, floor: 'lobby' as const }],
+      cardedRooms: [2 as const],
     }
     const s = reduce(initialViewState(), first(MAPPERS['movement:snapshot'](snap)))
     expect(s.movementSnapshot).toEqual(snap)

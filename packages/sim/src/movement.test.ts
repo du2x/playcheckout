@@ -869,6 +869,7 @@ describe('sim:elevator', () => {
         { playerId: 'p1', floor: 'lobby', x: 18 },
         { playerId: 'p2', floor: 'lobby', x: 15 },
       ],
+      cardedRooms: [],
       cars: [
         { car: 1, floor: 'lobby' },
         { car: 2, floor: 'lobby' },
@@ -985,6 +986,7 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     const floorSnap = sim.snapshotForFloor('lobby')
     expect(floorSnap).toEqual({
       players: [{ playerId: 'p2', floor: 'lobby', x: 15 }],
+      cardedRooms: [],
       cars: [
         { car: 1, floor: 'lobby' },
         { car: 2, floor: 'lobby' },
@@ -1060,5 +1062,46 @@ describe('re-boarding after an exit (AD-016)', () => {
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
     expect(sim.viewOf('p1').car).toBe(1) // stayed aboard the served floor
+  })
+})
+
+// Spec EVID-04 (cycle 2.7): the own-floor carded-room set rides the snapshot;
+// riders get an empty set (cards are floor knowledge, AD-009), join/buzzer
+// callers omit the parameter and receive [].
+describe('movement snapshot: carded rooms', () => {
+  function riderOnFloor1(): MovementSim {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 50 && sim.viewOf('p1').car === null; i++) sim.tick()
+    sim.pressFloor('p1', 'floor1')
+    for (let i = 0; i < RIDE_TICKS_PER_FLOOR; i++) sim.tick()
+    sim.startMove('p1', 'right') // exit at the floor1 landing
+    for (let i = 0; i < 5 && sim.viewOf('p1').car !== null; i++) sim.tick()
+    return sim
+  }
+
+  it('carries the given carded rooms on a floor snapshot, defaulting to []', () => {
+    const sim = riderOnFloor1()
+    expect(sim.snapshotForFloor('floor1').cardedRooms).toEqual([])
+    expect(sim.snapshotForFloor('floor1', [2, 5]).cardedRooms).toEqual([2, 5])
+    // The lobby floor snapshot is unaffected.
+    expect(sim.snapshotForFloor('lobby').cardedRooms).toEqual([])
+  })
+
+  it('passes the carded set through to a non-rider snapshot and empties it for riders', () => {
+    const sim = riderOnFloor1()
+    // p1 exited: non-rider on floor1 — their snapshot carries the floor's cards.
+    expect(sim.snapshotFor('p1', [1]).cardedRooms).toEqual([1])
+
+    // A rider still in the car: no floor, so no cards — even when the caller
+    // passes a set (the rider policy wins, AD-009).
+    const riding = new MovementSim()
+    riding.join('p1')
+    riding.startMove('p1', 'left')
+    for (let i = 0; i < 50 && riding.viewOf('p1').car === null; i++) riding.tick()
+    const riderSnap = riding.snapshotFor('p1', [1, 2])
+    expect(riderSnap.cardedRooms).toEqual([])
+    expect(riderSnap.carOccupants).toBeDefined()
   })
 })

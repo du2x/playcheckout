@@ -150,7 +150,7 @@ T6 → T7 → T8
 
 ---
 
-### T5: Server — snapshot cards + room wiring
+### T5: Server — snapshot cards + room wiring — ✅ done
 
 **What**: Add `cardedRooms: RoomIndex[]` to `MovementSnapshot`; optional `cardedRooms` param on `snapshotForFloor`/`snapshotFor` (default `[]`); pass `sim.cardedOn(arrivalFloor)` at the AD-017 door-open-exit handler in `TurnoverRoom`. E2E room test: round active, staff preps a room, another player rides the elevator to that floor and exits — their exit snapshot carries that floor's carded rooms and no other floor's.
 **Where**: `packages/sim/src/movement.ts`, `roundSim.ts` (query delegate if not in T2), `apps/server/src/rooms/TurnoverRoom.ts`, `TurnoverRoom.test.ts`, `movement.test.ts`
