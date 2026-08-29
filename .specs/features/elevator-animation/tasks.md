@@ -63,10 +63,10 @@ T1 → T3 → T4
 ### Phase 3: Harness verification + traceability close-out
 
 ```
-T4 → T5 → T6 → T7
+T4 → T5 → T6 → T7 → T8
 ```
 
-Total: 7 tasks, one batch (≤ ~7-task budget) — no sub-agent offer needed;
+Total: 8 tasks, one batch (≤ ~8-task budget) — no sub-agent offer needed;
 execute inline.
 
 ---
@@ -322,6 +322,46 @@ new rendering module, confirmed against the Decisions section during Design.
 
 ---
 
+### T8: Fix verifier gaps and re-verify — ✅ Done
+
+**What**: Address the independent Verifier's FAIL report
+(`.specs/features/elevator-animation/validation.md`):
+- Re-anchor dwell timing so `open` begins exactly at `elevator:moved` receipt
+  (ELAN-02).
+- Derive all P2 animation durations from `TUNING.ELEVATOR_ARRIVE_SECONDS` /
+  `ELEVATOR_RIDE_SECONDS_PER_FLOOR` (ELAN-08).
+- Add a fake `GraphicsLike` recorder to unit tests so door geometry (real gap
+  when open, zero gap when closed) is asserted and kills the surviving
+  `gap = 0` mutant (ELAN-01).
+- Add explicit off-floor arrival suppression coverage (ELAN-07).
+- Add a vertical arrival slide so "motion at landing position" is proven, not
+  just fade-in (ELAN-06).
+- Update `design.md` to match the corrected phase model (`open`/`closing`/
+  `transit`, no separate `arriving` phase; no `Date.now()` forwarding).
+**Where**: `apps/client/src/scenes/elevatorPresenter.ts`,
+`apps/client/src/scenes/elevatorPresenter.test.ts`,
+`apps/client/src/scenes/WorldScene.ts`,
+`.specs/features/elevator-animation/design.md`
+**Depends on**: T7
+**Reuses**: existing `TUNING` constants, existing harness contract
+**Requirement**: ELAN-01, ELAN-02, ELAN-06, ELAN-07, ELAN-08, ELAN-09
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `pnpm typecheck` passes
+- [x] `pnpm biome check` passes on changed files
+- [x] `pnpm test:sim` passes (including new/updated unit tests)
+- [x] `pnpm test:client` passes the feature scenario (pre-existing flakes excluded)
+- [ ] Independent Verifier re-runs and reports PASS
+
+**Tests**: unit + e2e
+**Gate**: full
+
 ## Task Granularity Check
 
 | Task | Scope | Status |
@@ -333,6 +373,7 @@ new rendering module, confirmed against the Decisions section during Design.
 | T5: harness scenario | 1 file | ✅ Granular |
 | T6: spec traceability | 1 file, doc-only | ✅ Granular |
 | T7: STATE.md handoff | 1 file, doc-only | ✅ Granular |
+| T8: verifier gap fixes | 3 source files + design.md | ✅ Granular |
 
 ## Diagram-Definition Cross-Check
 
@@ -345,6 +386,7 @@ new rendering module, confirmed against the Decisions section during Design.
 | T5 | T4 | T4 -> T5 | ✅ Match |
 | T6 | T5 | T5 -> T6 | ✅ Match |
 | T7 | T6 | T6 -> T7 | ✅ Match |
+| T8 | T7 | T7 -> T8 | ✅ Match |
 
 ## Test Co-location Validation
 
@@ -357,9 +399,10 @@ new rendering module, confirmed against the Decisions section during Design.
 | T5 | harness | e2e | e2e | ✅ OK |
 | T6 | spec docs | none | none | ✅ OK |
 | T7 | STATE.md docs | none | none | ✅ OK |
+| T8 | reducer + presenter + wiring | unit + e2e | unit + e2e | ✅ OK |
 
 Execution is strictly sequential - no intra-phase parallelism. Packing into
 task-budgeted batches: Phase 1 (2) + Phase 2 (2, T1 shared with Phase 1 as a
-cross-phase dependency) + Phase 3 (3, T4 shared with Phase 2) = 7 distinct
-tasks → one batch, at the ~7-task budget — execute inline, no sub-agent
+cross-phase dependency) + Phase 3 (4, T4 shared with Phase 2) = 8 distinct
+tasks → one batch, at the ~8-task budget — execute inline, no sub-agent
 offer.

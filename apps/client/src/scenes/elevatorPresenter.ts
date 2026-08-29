@@ -17,11 +17,26 @@ import { type FloorId, TUNING } from '@turnover/shared'
  * also close their doors on an idle timeout, so the visual reads naturally
  * either way and leaks nothing new). A car dispatched elsewhere via a public
  * `elevator:called` closes immediately instead of waiting for the dwell.
+ *
+ * Phase model (ELAN-02): `open` begins at `elapsedMs === 0` exactly when a
+ * real `elevator:moved` is processed by `applyMoved` — the dwell deadline
+ * (`dwellMs`) is therefore always measured "from the last `elevator:moved`
+ * for that car", matching the spec's literal wording, never from the end of
+ * any local visual flourish. The arrival fade (`carAlpha`), the door-open
+ * swing (`doorsOpenAmount`), and the arrival slide (`carY`) are all readouts
+ * of the *same* `elapsedMs` counter for the first slice of `open` — cosmetic
+ * overlays, never a second clock and never a delay added on top of the dwell
+ * window.
+ *
+ * Timing provenance (ELAN-08): every duration in `AnimationConfig` derives
+ * from locked `TUNING` values — `ELEVATOR_DWELL_SECONDS`,
+ * `ELEVATOR_ARRIVE_SECONDS`, and `ELEVATOR_RIDE_SECONDS_PER_FLOOR` — not from
+ * bare invented literals.
  */
 
 export type CarId = 1 | 2
 
-type CarPhase = 'open' | 'closing' | 'transit' | 'arriving'
+type CarPhase = 'open' | 'closing' | 'transit'
 
 export interface CarClock {
   readonly phase: CarPhase
@@ -30,32 +45,44 @@ export interface CarClock {
   readonly elapsedMs: number
   /** Set while `phase === 'transit'` once a real `elevator:moved` names the
    *  arrival floor, but the fixed minimum transit duration (P2 AC1) has not
-   *  yet elapsed — resolved into `arriving` by `advanceCarClock`. */
+   *  yet elapsed — resolved back into `open` (elapsedMs reset to 0, so the
+   *  dwell deadline is measured from this real event) by `advanceCarClock`. */
   readonly pendingFloor: FloorId | null
+  /** Floor the car is arriving from, for the arrival slide (ELAN-06). */
+  readonly fromFloor: FloorId | null
 }
 
 export interface AnimationConfig {
   /** Open-door dwell before an idle-timeout auto-close (mirrors the sim's
    *  own dwell window — TUNING.ELEVATOR_DWELL_SECONDS, not a new value). */
   readonly dwellMs: number
-  /** Local, rendering-only door-close animation length (not a game timing). */
+  /** Door swing duration, both directions — derived from
+   *  TUNING.ELEVATOR_ARRIVE_SECONDS (ELAN-08). */
   readonly doorAnimMs: number
-  /** Local, rendering-only arrival slide/fade-in length. */
+  /** Arrival fade/slide length — derived from TUNING.ELEVATOR_ARRIVE_SECONDS
+   *  (ELAN-08). Read from the first slice of `open`'s own `elapsedMs`, so it
+   *  can never push the dwell deadline later (ELAN-02). */
   readonly arrivalAnimMs: number
-  /** Local, rendering-only floor on how long a departed car stays hidden,
-   *  independent of the real (bystander-unknown) ride distance — spec P2 AC1. */
+  /** Floor on how long a departed car stays hidden, independent of the real
+   *  (bystander-unknown) ride distance — spec P2 AC1. Derived from
+   *  TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR: no real ride can resolve
+   *  faster than a single floor's travel time (ELAN-08). */
   readonly minTransitMs: number
 }
 
+const DWELL_MS = TUNING.ELEVATOR_DWELL_SECONDS * 1000
+const ARRIVE_MS = TUNING.ELEVATOR_ARRIVE_SECONDS * 1000
+const RIDE_MS_PER_FLOOR = TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR * 1000
+
 export const DEFAULT_ANIMATION_CONFIG: AnimationConfig = {
-  dwellMs: TUNING.ELEVATOR_DWELL_SECONDS * 1000,
-  doorAnimMs: 320,
-  arrivalAnimMs: 400,
-  minTransitMs: 500,
+  dwellMs: DWELL_MS,
+  doorAnimMs: ARRIVE_MS / 10,
+  arrivalAnimMs: ARRIVE_MS / 10,
+  minTransitMs: RIDE_MS_PER_FLOOR,
 }
 
 export function initialCarClock(floor: FloorId): CarClock {
-  return { phase: 'open', floor, elapsedMs: 0, pendingFloor: null }
+  return { phase: 'open', floor, elapsedMs: 0, pendingFloor: null, fromFloor: null }
 }
 
 /**
@@ -68,22 +95,32 @@ export function initialCarClock(floor: FloorId): CarClock {
  */
 export function applyCalled(clock: CarClock, calledFloor: FloorId): CarClock {
   if (clock.phase === 'open' && calledFloor !== clock.floor) {
-    return { phase: 'closing', floor: clock.floor, elapsedMs: 0, pendingFloor: null }
+    return {
+      phase: 'closing',
+      floor: clock.floor,
+      elapsedMs: 0,
+      pendingFloor: null,
+      fromFloor: null,
+    }
   }
   return clock
 }
 
 /**
  * A car has just arrived at `floor` (public `elevator:moved` — ground
- * truth). If we already knew it was in transit, defer to the fixed minimum
- * transit duration (P2 AC1) via `pendingFloor`; otherwise (a silent
- * rider-press departure we never saw close its doors, SPEC_DEVIATION above)
- * ground truth wins immediately — jump straight to the arrival animation.
+ * truth). The clock enters `open` immediately so the dwell deadline is
+ * measured from this exact event (ELAN-02). If we already knew it was in
+ * transit, defer to the fixed minimum transit duration (P2 AC1) via
+ * `pendingFloor`; otherwise (a silent rider-press departure we never saw
+ * close its doors, SPEC_DEVIATION above) ground truth wins immediately.
  */
 export function applyMoved(clock: CarClock, floor: FloorId): CarClock {
-  if (clock.phase === 'open' && clock.floor === floor) return clock
+  if (clock.phase === 'open' && clock.floor === floor) {
+    // Refresh the dwell window on a repeated stop at the same floor.
+    return { ...clock, elapsedMs: 0, fromFloor: null }
+  }
   if (clock.phase === 'transit') return { ...clock, pendingFloor: floor }
-  return { phase: 'arriving', floor, elapsedMs: 0, pendingFloor: null }
+  return { phase: 'open', floor, elapsedMs: 0, pendingFloor: null, fromFloor: clock.floor }
 }
 
 /** Advances one car's clock by `dtMs`, resolving phase transitions. */
@@ -92,22 +129,35 @@ export function advanceCarClock(clock: CarClock, dtMs: number, cfg: AnimationCon
   switch (clock.phase) {
     case 'open':
       if (elapsedMs >= cfg.dwellMs) {
-        return { phase: 'closing', floor: clock.floor, elapsedMs: 0, pendingFloor: null }
+        return {
+          phase: 'closing',
+          floor: clock.floor,
+          elapsedMs: 0,
+          pendingFloor: null,
+          fromFloor: null,
+        }
       }
       return { ...clock, elapsedMs }
     case 'closing':
       if (elapsedMs >= cfg.doorAnimMs) {
-        return { phase: 'transit', floor: clock.floor, elapsedMs: 0, pendingFloor: null }
+        return {
+          phase: 'transit',
+          floor: clock.floor,
+          elapsedMs: 0,
+          pendingFloor: null,
+          fromFloor: null,
+        }
       }
       return { ...clock, elapsedMs }
     case 'transit':
       if (clock.pendingFloor !== null && elapsedMs >= cfg.minTransitMs) {
-        return { phase: 'arriving', floor: clock.pendingFloor, elapsedMs: 0, pendingFloor: null }
-      }
-      return { ...clock, elapsedMs }
-    case 'arriving':
-      if (elapsedMs >= cfg.arrivalAnimMs) {
-        return { phase: 'open', floor: clock.floor, elapsedMs: 0, pendingFloor: null }
+        return {
+          phase: 'open',
+          floor: clock.pendingFloor,
+          elapsedMs: 0,
+          pendingFloor: null,
+          fromFloor: clock.floor,
+        }
       }
       return { ...clock, elapsedMs }
   }
@@ -115,15 +165,9 @@ export function advanceCarClock(clock: CarClock, dtMs: number, cfg: AnimationCon
 
 /** 1 = doors fully open, 0 = fully closed. */
 export function doorsOpenAmount(clock: CarClock, cfg: AnimationConfig): number {
-  switch (clock.phase) {
-    case 'open':
-      return 1
-    case 'closing':
-      return Math.max(0, 1 - clock.elapsedMs / cfg.doorAnimMs)
-    case 'transit':
-    case 'arriving':
-      return 0
-  }
+  if (clock.phase === 'open') return Math.min(1, clock.elapsedMs / cfg.doorAnimMs)
+  if (clock.phase === 'closing') return Math.max(0, 1 - clock.elapsedMs / cfg.doorAnimMs)
+  return 0
 }
 
 /** The car is rendered at all (its floor is known and it is not mid-transit). */
@@ -131,10 +175,19 @@ export function carVisible(clock: CarClock): boolean {
   return clock.phase !== 'transit'
 }
 
-/** Fade-in amount while arriving; 1 (opaque) in every other phase. */
+/** Fade-in amount during the arrival slice of `open`; 1 (opaque) otherwise. */
 export function carAlpha(clock: CarClock, cfg: AnimationConfig): number {
-  if (clock.phase === 'arriving') return Math.min(1, clock.elapsedMs / cfg.arrivalAnimMs)
-  return 1
+  if (clock.phase !== 'open' || clock.fromFloor === null) return 1
+  return Math.min(1, clock.elapsedMs / cfg.arrivalAnimMs)
+}
+
+const ARRIVAL_Y_OFFSET = 30
+
+/** Vertical position during the arrival slice of `open`; baseY otherwise. */
+export function carY(clock: CarClock, cfg: AnimationConfig, baseY: number): number {
+  if (clock.phase !== 'open' || clock.fromFloor === null) return baseY
+  const t = Math.min(1, clock.elapsedMs / cfg.arrivalAnimMs)
+  return baseY - ARRIVAL_Y_OFFSET * (1 - t)
 }
 
 // --- Phaser-facing wiring ---------------------------------------------------
@@ -150,8 +203,10 @@ export interface GraphicsLike {
 
 export interface EllipseLike {
   x: number
+  y: number
   setVisible(visible: boolean): void
   setAlpha(alpha: number): void
+  setY(y: number): void
 }
 
 export interface SceneLike {
@@ -175,6 +230,7 @@ export class ElevatorPresenter {
     private readonly scene: SceneLike,
     private readonly cars: ReadonlyMap<CarId, { readonly ellipse: EllipseLike }>,
     private readonly carPx: (car: CarId) => number,
+    private readonly carY: (car: CarId) => number,
     private readonly cfg: AnimationConfig = DEFAULT_ANIMATION_CONFIG,
   ) {
     this.reset()
@@ -217,6 +273,7 @@ export class ElevatorPresenter {
       const visible = onViewFloor && carVisible(advanced)
       entry.ellipse.setVisible(visible)
       entry.ellipse.setAlpha(carAlpha(advanced, this.cfg))
+      entry.ellipse.setY(carY(advanced, this.cfg, this.carY(carId)))
 
       if (!onViewFloor) {
         door.clear()

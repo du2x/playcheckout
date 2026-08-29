@@ -138,7 +138,12 @@ export class WorldScene extends Phaser.Scene {
       this.cars.set(id, { ellipse, floor: 'lobby' })
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
-    this.elevatorPresenter = new ElevatorPresenter(this, this.cars, (car) => this.carPx(car))
+    this.elevatorPresenter = new ElevatorPresenter(
+      this,
+      this.cars,
+      (car) => this.carPx(car),
+      () => GROUND_Y + 30,
+    )
 
     const keyboard = this.input.keyboard
     if (keyboard !== null) {
