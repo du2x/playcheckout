@@ -99,10 +99,24 @@ export class App {
         const ownId = this.state.snapshot?.ownId
         for (const action of actions) {
           if (action.type === 'elevator-pressed') {
-            // Rider-exclusive press testimony (ELR-06): surgical chip write.
+            // Rider-exclusive press testimony (ELR-06): the pressed floor
+            // joins the own car's lit set — the queue rides in the chip state
+            // (AD-013), refreshed authoritatively by elevator:riders events.
+            if (this.riding !== null && !this.riding.queue.includes(action.floor)) {
+              this.riding = { ...this.riding, queue: [...this.riding.queue, action.floor] }
+            }
             this.lastPress = { playerId: action.playerId, floor: action.floor }
             this.updateRiderChip()
             continue
+          }
+          if (action.type === 'elevator-moved' && this.riding?.car === action.car) {
+            // Arrival serves the floor: it leaves the queue (P2 AC4) and its
+            // indicator unlights. Routed on to the scene below as usual.
+            this.riding = {
+              ...this.riding,
+              queue: this.riding.queue.filter((f) => f !== action.floor),
+            }
+            this.updateRiderChip()
           }
           if (action.type === 'elevator-riders') {
             // AD-013: the own id in the occupancy list is the authoritative
