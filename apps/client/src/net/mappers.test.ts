@@ -97,6 +97,32 @@ describe('protocol mappers', () => {
   })
 })
 
+// Spec ELR-01/ELR-06 (AD-013, cycle 2.6): the rider-exclusive messages map to
+// render-state actions the reducer no-ops — payload keys pinned exactly (the
+// press payload carries no car field; the occupancy payload carries the queue).
+describe('elevator rider mappers (cycle 2.6)', () => {
+  const before = initialViewState()
+
+  it('maps elevator:pressed to the press action with exactly {playerId, floor} (ELR-06)', () => {
+    const pressed = first(MAPPERS['elevator:pressed']({ playerId: 'p2', floor: 'floor1' }))
+    expect(pressed).toEqual({ type: 'elevator-pressed', playerId: 'p2', floor: 'floor1' })
+    expect(reduce(before, pressed)).toBe(before) // identity: render state
+  })
+
+  it('maps elevator:riders to the occupancy action with exactly {car, riders, queue} (ELR-01)', () => {
+    const riders = first(
+      MAPPERS['elevator:riders']({ car: 1, riders: ['p1', 'p2'], queue: ['floor2', 'lobby'] }),
+    )
+    expect(riders).toEqual({
+      type: 'elevator-riders',
+      car: 1,
+      riders: ['p1', 'p2'],
+      queue: ['floor2', 'lobby'],
+    })
+    expect(reduce(before, riders)).toBe(before)
+  })
+})
+
 // Spec WORK-10/14/16 + FR-9: work events map to scene-kind actions the reducer
 // no-ops; no payload names a role or a channel kind, so no mapper can leak one.
 describe('work mappers (cycle 2.5)', () => {

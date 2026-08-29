@@ -1,5 +1,4 @@
 import {
-  FLOOR_IDS,
   type FloorId,
   type GuestFloorId,
   type MovementSnapshot,
@@ -36,7 +35,7 @@ export interface WorldStartData {
   ownId: string
   sendMoveStart: (dir: 'left' | 'right') => void
   sendMoveStop: () => void
-  sendElevatorCall: (target: FloorId) => void
+  sendElevatorCall: () => void
   sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
 }
 
@@ -75,7 +74,7 @@ export class WorldScene extends Phaser.Scene {
   private ownId = ''
   private sendMoveStart: (dir: 'left' | 'right') => void = () => {}
   private sendMoveStop: () => void = () => {}
-  private sendElevatorCall: (target: FloorId) => void = () => {}
+  private sendElevatorCall: () => void = () => {}
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
@@ -126,10 +125,10 @@ export class WorldScene extends Phaser.Scene {
       keyboard.on('keydown-RIGHT', () => this.beginMove('right'))
       keyboard.on('keyup-LEFT', () => this.endMove('left'))
       keyboard.on('keyup-RIGHT', () => this.endMove('right'))
-      // Elevator calls: up/down summons a car to this floor and rides one
-      // level in that direction (gray-box input; richer destination UI later).
-      keyboard.on('keydown-UP', () => this.callElevator(1))
-      keyboard.on('keydown-DOWN', () => this.callElevator(-1))
+      // Elevator calls: up/down summons a car to this floor — destination-free
+      // (AD-014): the destination is chosen inside the car via a press.
+      keyboard.on('keydown-UP', () => this.callElevator())
+      keyboard.on('keydown-DOWN', () => this.callElevator())
       // Work: Space starts a channel inside the room segment the own
       // rectangle stands in; the server validates role and room state (FR-7).
       keyboard.on('keydown-SPACE', () => this.startWorkHere())
@@ -286,13 +285,9 @@ export class WorldScene extends Phaser.Scene {
     this.sendMoveStop()
   }
 
-  private callElevator(direction: 1 | -1): void {
-    const own = this.players.get(this.ownId)
-    if (own === undefined) return
-    const idx = FLOOR_IDS.indexOf(own.floor as FloorId)
-    const target = FLOOR_IDS[Math.min(FLOOR_IDS.length - 1, Math.max(0, idx + direction))]
-    if (target === undefined || target === own.floor) return
-    this.sendElevatorCall(target)
+  /** Destination-free elevator call (AD-014): the pickup floor is implicit. */
+  private callElevator(): void {
+    this.sendElevatorCall()
   }
 
   private carPx(car: 1 | 2): number {

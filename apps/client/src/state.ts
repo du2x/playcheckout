@@ -47,6 +47,15 @@ export type ViewAction =
   | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: Facing }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
+  // Rider-exclusive render state (AD-013): reducer no-ops like the
+  // other scene-kind events — the chip lives in the DOM layer (T10).
+  | { type: 'elevator-pressed'; playerId: string; floor: FloorId }
+  | {
+      type: 'elevator-riders'
+      car: CarId
+      riders: readonly string[]
+      queue: readonly FloorId[]
+    }
   | { type: 'player-left'; playerId: string }
   | { type: 'player-left-floor'; playerId: string; floor: FloorId }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
@@ -142,6 +151,8 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'player-moved':
     case 'elevator-called':
     case 'elevator-moved':
+    case 'elevator-pressed':
+    case 'elevator-riders':
     case 'player-left':
     case 'player-left-floor':
       return state

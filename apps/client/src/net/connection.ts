@@ -1,6 +1,6 @@
 import type { Room } from '@colyseus/sdk'
 import { Client } from '@colyseus/sdk'
-import type { Envelope, GuestFloorId, RegistryKey, RoomIndex } from '@turnover/shared'
+import type { Envelope, FloorId, GuestFloorId, RegistryKey, RoomIndex } from '@turnover/shared'
 import { recordGap, recordServerMessage, registerGapProbe, setLocalIdentity } from '../debug'
 import type { ViewAction } from '../state'
 import { MAPPERS } from './mappers'
@@ -101,8 +101,14 @@ export class Connection {
     this.room.send('move:stop', { type: 'move:stop' })
   }
 
-  sendElevatorCall(target: string): void {
-    this.room.send('elevator:call', { type: 'elevator:call', target })
+  /** Destination-free call (AD-014): the pickup floor is the caller's floor. */
+  sendElevatorCall(): void {
+    this.room.send('elevator:call', { type: 'elevator:call' })
+  }
+
+  /** Press a floor inside the car the player is riding (ELR-06, AD-014). */
+  sendElevatorPress(floor: FloorId): void {
+    this.room.send('elevator:press', { type: 'elevator:press', floor })
   }
 
   /** Start a work channel inside the room's segment the player stands in (FR-7). */

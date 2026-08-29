@@ -271,7 +271,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T9: Client connection and mappers
+#### T9: Client connection and mappers — ✅ Done
 
 **What**: Update `Connection.sendElevatorCall()` to send destination-free `{type:'elevator:call'}` and add `sendElevatorPress(floor)`; add `MAPPERS` entries `elevator:pressed`→`elevator-pressed` and `elevator:riders`→`elevator-riders`; keep reducer no-ops for the high-frequency movement kinds. Add mapper pin tests.
 **Where**: `apps/client/src/net/connection.ts`
@@ -284,9 +284,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: NONE
 
 **Done when**:
-- [ ] `sendElevatorCall` sends no `target`; `sendElevatorPress` sends `{type:'elevator:press', floor}`
-- [ ] `mappers.test.ts` pins both new mappers' payload keys (pressed `{playerId,floor}`, riders `{car,riders,queue}`)
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `sendElevatorCall` sends no `target`; `sendElevatorPress` sends `{type:'elevator:press', floor}`
+- [x] `mappers.test.ts` pins both new mappers' payload keys (pressed `{playerId,floor}`, riders `{car,riders,queue}`)
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: unit
 **Gate**: quick

@@ -21,6 +21,10 @@ export const MAPPERS: {
   'player:moved': (p) => [{ type: 'player-moved', ...p }],
   'elevator:called': (p) => [{ type: 'elevator-called', ...p }],
   'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
+  // Rider-exclusive messages (AD-013): mapper pins live with the
+  // connection task (T9); the reducer no-ops the scene-kind actions.
+  'elevator:pressed': (p) => [{ type: 'elevator-pressed', ...p }],
+  'elevator:riders': (p) => [{ type: 'elevator-riders', ...p }],
   'player:left': ({ playerId }) => [{ type: 'player-left', playerId }],
   'player:left-floor': (p) => [{ type: 'player-left-floor', ...p }],
   'movement:snapshot': (snapshot) => [{ type: 'movement-snapshot', snapshot }],
