@@ -237,15 +237,15 @@ test.describe('client:movement', () => {
     // floor1.
     for (const page of pages) await page.waitForSelector('#lobby-view', { timeout: 45_000 })
 
-    // Post-buzzer re-confinement (MOVE-08): ada is on floor1; the server refuses
-    // her move intent — bruno's (lobby) view of ada stays put.
-    const beforeHold = (await readScene(pages[1] as Page)).labels.find((l) => l.text === 'ada')?.x
+    // Post-buzzer movement is no longer confined to the lobby (AD-015): ada
+    // remains on floor1 and can keep walking there.
+    const beforeHold = labelX(await readScene(host), 'ada')
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(600)
     await host.keyboard.up('ArrowRight')
-    await pages[1]?.waitForTimeout(300)
-    const after = (await readScene(pages[1] as Page)).labels.find((l) => l.text === 'ada')
-    expect(after?.x).toBe(beforeHold)
+    await host.waitForTimeout(200)
+    const afterHold = labelX(await readScene(host), 'ada')
+    expect(afterHold).toBeGreaterThan(beforeHold + TILE)
 
     // A leaver's rectangle disappears everywhere (MOVE-19).
     await (pages[3] as Page).context().close()

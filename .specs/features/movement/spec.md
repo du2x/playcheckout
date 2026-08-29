@@ -77,24 +77,26 @@ following within 2 ticks.
 
 ---
 
-### P1: Full-building movement unlocks at round start ⭐ MVP
+### P1: Full-building movement from join ⭐ MVP
 
-**User Story**: As a player, I want to reach all 3 guest floors once the round
-starts, so that the 24 rooms become part of the game.
+**User Story**: As a player, I want to walk anywhere in the building from the
+moment I join, so that the 24 rooms and elevators feel like one continuous
+playable space.
 
-**Why P1**: The round is spatially meaningless without floor access; the lobby
-confinement must lift exactly at the host-start transition.
+**Why P1**: Spatial freedom makes the lobby feel alive and removes the
+surprising mismatch between "can ride an elevator anywhere" and "cannot walk
+there".
 
 **Acceptance Criteria**:
 
-1. WHILE the room is in round state THEN a player's x SHALL be unclamped to each floor's hall bounds and the player SHALL be able to change floors ONLY by riding an elevator.
+1. AT ALL TIMES a player's x SHALL be unclamped to each floor's hall bounds and the player SHALL be able to change floors ONLY by riding an elevator.
 2. WHEN the round starts THEN every player SHALL keep their current x and floor (no repositioning; AD-005 assumption — flagged for user review).
-3. WHEN the buzzer fires and the room returns to lobby state THEN players SHALL remain at their current positions, their floor if not `lobby` included, and walkability SHALL re-confine to the grand lobby (their next move intent can only change x on the `lobby` floor) — full building re-locks until the next start.
+3. WHEN the buzzer fires and the room returns to lobby state THEN players SHALL remain at their current positions, their floor if not `lobby` included, and walkability SHALL NOT be re-confined — the full building remains walkable in the lobby phase.
 4. IF a move intent arrives for a player inside an elevator car THEN the server SHALL ignore it (positions change only via the car's motion).
 
-**Independent Test**: `sim:motion` extension — round-state floor/x freedom, buzzer
-re-confinement, in-car move rejection; `client:movement` extension — post-buzzer
-attempt to move off `lobby` floor is refused by the server (rectangle stays).
+**Independent Test**: `sim:motion` extension — floor/x freedom across
+unlock/lock, in-car move rejection; `client:movement` extension — post-buzzer
+movement on a guest floor is allowed (rectangle moves).
 
 ---
 
@@ -170,7 +172,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | MOVE-05 | P1: Lobby movement | T2/T5 | Implemented |
 | MOVE-06 | P1: Building unlock | T2/T5 | Implemented |
 | MOVE-07 | P1: Building unlock | T2/T5 | Implemented |
-| MOVE-08 | P1: Building unlock | T2/T5 | Implemented |
+| MOVE-08 | P1: Building unlock — lobby-phase walking on all floors (AD-015) | T2/T5 | Implemented |
 | MOVE-09 | P1: Building unlock | T2/T5 | Implemented |
 | MOVE-10 | P1: Elevators | T3 | Implemented |
 | MOVE-11 | P1: Elevators | T3 | Implemented |
@@ -193,7 +195,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 How we know the feature is successful:
 
-- [ ] `pnpm test:sim` runs `sim:motion` and `sim:elevator`: exact speed integration, clamp/confinement transitions, deterministic elevator cycles across ≥100-tick scripted sequences with bit-for-bit replay.
-- [ ] `pnpm test:client` runs `client:movement`: keyboard-driven movement visible on 4 tabs within 2 ticks, lobby bounds pre-round, building unlock at start, panels position-only.
-- [ ] A human can join a room, walk the grand lobby immediately, and ride both elevators to all 3 floors after host start.
+- [ ] `pnpm test:sim` runs `sim:motion` and `sim:elevator`: exact speed integration, hall bounds, deterministic elevator cycles across ≥100-tick scripted sequences with bit-for-bit replay.
+- [ ] `pnpm test:client` runs `client:movement`: keyboard-driven movement visible on 4 tabs within 2 ticks, lobby and guest-floor walking pre-round and post-buzzer, panels position-only.
+- [ ] A human can join a room, walk the grand lobby immediately, and ride both elevators to all 3 floors before or after host start.
 - [ ] Protocol audit: no message contains roles, room interiors, elevator occupants, or grace state; all new types carry recipient comments (turnover-protocol rule 5).

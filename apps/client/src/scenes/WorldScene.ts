@@ -91,8 +91,6 @@ export class WorldScene extends Phaser.Scene {
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
-  /** Round phase mirror: prediction must match the server's confinement. */
-  private round = false
   /** The actor's own running channel: DOM progress bar state (never a kind). */
   private work: { startedAt: number; seconds: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
@@ -158,13 +156,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Phase mirror from the App (round:started / buzzer): own prediction
-   * integrates only under the server's confinement rule — lobby phase allows
-   * walking on the lobby floor only (MOVE-08), so a pre-round rider standing
-   * on a guest floor must NOT predict movement the server will refuse.
+   * Phase mirror from the App (round:started / buzzer). Movement is now
+   * allowed in lobby phase on any floor (AD-015), so this is a no-op kept for
+   * API compatibility.
    */
-  setRound(round: boolean): void {
-    this.round = round
+  setRound(_round: boolean): void {
+    // no-op: confinement removed by AD-015
   }
 
   /** Send work:start when the own predicted position is inside a segment. */
@@ -396,8 +393,7 @@ export class WorldScene extends Phaser.Scene {
     const dt = delta / 1000
     // Local prediction for the own rectangle; server positions reconcile it.
     const own = this.players.get(this.ownId)
-    const confined = !this.round && own !== undefined && own.floor !== 'lobby'
-    if (own !== undefined && this.ownMoving !== null && !confined) {
+    if (own !== undefined && this.ownMoving !== null) {
       own.x += this.ownMoving === 'left' ? -SPEED_TILES_PER_SEC * dt : SPEED_TILES_PER_SEC * dt
       own.x = Math.min(30, Math.max(0, own.x))
     }

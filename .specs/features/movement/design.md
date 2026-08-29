@@ -96,12 +96,12 @@ graph TD
 ### MovementSim — `packages/sim/src/movement.ts` (new, pure)
 
 - **Purpose**: The always-running spatial substrate: player positions, intents,
-  20 Hz integration, confinement phases, and the two elevator cars.
+  20 Hz integration, hall bounds, and the two elevator cars.
 - **Interface** (inputs + time in, events out — no I/O, no clocks):
   - `new MovementSim()` — starts in `lobby` phase, empty roster, both cars idle at `lobby` (car 1 west x=0, car 2 east x=HALL_LENGTH_TILES)
   - `join(playerId: string): void` — place at lobby center facing right (fresh joiner placement = FR-2 "spawn")
   - `leave(playerId: string): void` — remove (mid-round: rectangle disappears; car riders: removed from car)
-  - `startMove(playerId, dir: 'left' | 'right')` — idempotent; ignored in lobby phase if the player's floor ≠ `lobby` (MOVE-08) or if in a car (MOVE-09); sets facing immediately
+  - `startMove(playerId, dir: 'left' | 'right')` — idempotent; ignored only if in a car (MOVE-09); sets facing immediately
   - `stopMove(playerId)` — no-op if not moving
   - `callElevator(playerId, target: FloorId): 'dispatched' | 'ignored' | 'rejected'` —
     ~~destination-bearing call; `'ignored'` is the duplicate-call
@@ -113,11 +113,10 @@ graph TD
     destination is chosen inside the car via `pressFloor` (FIFO press queue).
     See `.specs/features/elevator-riders/`
   - `unlock() / lock()` — room start / buzzer transitions; **no position changes**
-    (MOVE-07, MOVE-08: positions persist; lobby phase re-confines *future*
-    movement to the `lobby` floor). `lock()` additionally **clears the call
-    FIFO**~~ (AD-011 superseded): the queue survives the buzzer and is served
-    by the next car to free — elevators run in both phases. In-flight trips
-    still complete
+    (MOVE-07: positions persist). Movement is allowed in lobby phase on any
+    floor (AD-015). `lock()` additionally **clears the call FIFO**~~ (AD-011
+    superseded): the queue survives the buzzer and is served by the next car to
+    free — elevators run in both phases. In-flight trips still complete
   - `tick(): readonly MovementEvent[]` — one 0.05 s step; integrates moving players, advances cars, emits events; idle ticks emit `[]`
   - `snapshot(): MovementSnapshot` — current public movement state (MOVE-18)
   - `positionOf(playerId)` — room reads for later cycles (AD-005 seam)

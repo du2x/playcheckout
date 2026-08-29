@@ -18,7 +18,7 @@ rejection edge.
 
 | Feature | Reason |
 | --- | --- |
-| Pre-round walking on guest floors | MOVE-08 confinement unchanged (user-confirmed assumption); riders who stay on a guest floor pre-round simply cannot walk there until the round starts |
+| Pre-round walking on guest floors | Now in scope — AD-015 removed lobby-phase confinement; riders who stay on a guest floor pre-round may walk there immediately |
 | Client UI changes | None needed — the client never gated calls on phase |
 
 ---
@@ -47,12 +47,12 @@ testable) from the moment I join.
 1. WHEN an `elevator:call` intent arrives from a player not inside a car — in either phase — THEN the server SHALL dispatch exactly as during a round: the sooner car (tie → car 1), the fixed 60-tick arrival, decoy flash on an already-targeted floor, FIFO queue when both cars are busy, and the same events (`elevator:called`, `elevator:moved`, rider `player:moved`, departure `player:left-floor`).
 2. WHEN the buzzer fires with a call queued THEN the in-flight trips SHALL complete AND the queued call SHALL be dispatched by the next car to go idle (no drop).
 3. IF the caller is inside a car THEN the server SHALL reject the intent with an `elevator-locked` error — the only remaining rejection reason.
-4. WHEN a player rides pre-round THEN the lobby-phase move confinement (MOVE-08) SHALL still apply on guest floors: a rider who arrives on floor1 pre-round cannot walk until the round starts, and can only leave by elevator.
+4. WHEN a player rides pre-round THEN the lobby-phase move confinement (MOVE-08) SHALL NOT apply on guest floors: a rider who arrives on floor1 pre-round MAY walk there immediately (AD-015).
 
-**Independent Test**: amended `sim:elevator`/`sim:motion` legs (pre-round ride,
-post-buzzer queued dispatch, in-car rejection), server `elevator:call` pre-round
-dispatch test, and the `client:elevator_lobby` harness scenario (ride up and
-back before any round starts).
+**Independent Test**: amended `sim:elevator`/`sim:motion` legs (pre-round ride
+and walk-off on a guest floor, post-buzzer queued dispatch, in-car rejection),
+server `elevator:call` pre-round dispatch test, and the `client:elevator_lobby`
+harness scenario (ride up and back before any round starts).
 
 ## Requirement Traceability
 

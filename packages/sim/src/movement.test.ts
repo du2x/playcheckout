@@ -213,7 +213,7 @@ describe('sim:motion', () => {
     expect(lastX(sim, 'p2')).toBeLessThan(p2x)
   })
 
-  it('keeps the floor on lobby in lobby phase and persists positions across lock/unlock (MOVE-04, MOVE-07, MOVE-08)', () => {
+  it('keeps the floor on lobby in lobby phase and persists positions across lock/unlock (MOVE-04, MOVE-07)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.startMove('p1', 'right')
@@ -226,11 +226,31 @@ describe('sim:motion', () => {
     expect(lastX(sim, 'p1')).toBe(xBefore + 0.3)
     expect(events[0]).toMatchObject({ playerId: 'p1', floor: 'lobby' })
 
-    sim.lock() // buzzer: positions persist; lobby-floor movement still allowed
+    sim.lock() // buzzer: positions persist; movement still allowed
     sim.startMove('p1', 'left')
     const xAtLock = lastX(sim, 'p1')
     sim.tick()
     expect(lastX(sim, 'p1')).toBe(xAtLock - 0.3)
+  })
+
+  it('allows walking on guest floors in lobby phase (AD-015)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    // Ride the west car to floor1 pre-round, exit, and stop near the landing.
+    boardParkedCar(sim, 'p1', 1)
+    expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
+    sim.startMove('p1', 'right')
+    sim.tick()
+    expect(sim.positionOf('p1')?.floor).toBe('floor1')
+    sim.stopMove('p1')
+    sim.tick()
+    const xStart = lastX(sim, 'p1')
+    // Lobby phase: walking on floor1 is now allowed.
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 10; i++) sim.tick()
+    sim.stopMove('p1')
+    expect(lastX(sim, 'p1')).toBe(xStart + 3)
   })
 
   it('treats duplicate start and stray stop as no-ops (spec edges)', () => {
@@ -738,36 +758,33 @@ describe('sim:elevator', () => {
     expect(sim.viewOf('p1').car).toBe(1)
   })
 
-  it('serves presses pre-round and leaves a pre-round exiter standing — no oscillation (EL-01, EL-04, MOVE-08, ELR edge)', () => {
+  it('serves presses pre-round and lets a pre-round exiter walk away (EL-01, EL-04, AD-015, ELR edge)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     // Pre-round: board the parked west car and press floor1 — no round needed.
     boardParkedCar(sim, 'p1', 1)
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
-    // Exit through the open doors pre-round: allowed in ANY phase...
+    // Exit through the open doors pre-round: allowed in ANY phase (AD-015).
     sim.startMove('p1', 'right')
     expect(sim.viewOf('p1').car).toBeNull()
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
     expect(lastX(sim, 'p1')).toBe(0)
-    // ...but hallway walking stays confined pre-round (MOVE-08): the exiter
-    // stands at the landing, never re-boarding the open-door car beside them
-    // (episode guard — the car never departs, the guard never clears).
-    sim.startMove('p1', 'right') // confinement: walking refused
+    // Hallway walking is now allowed pre-round (AD-015): the exiter leaves the
+    // landing and cannot re-board the same open-door stop (episode guard).
+    sim.startMove('p1', 'right')
     for (let i = 0; i < 25; i++) {
       sim.tick()
       expect(sim.viewOf('p1').car).toBeNull()
-      expect(lastX(sim, 'p1')).toBe(0)
     }
-    // The round unlocks: the exiter walks away from the landing (MOVE-06).
-    sim.unlock()
-    sim.startMove('p1', 'right')
-    expect(movedEvents(sim.tick()).some((e) => e.playerId === 'p1')).toBe(true)
-    for (let i = 0; i < 9; i++) sim.tick()
-    expect(lastX(sim, 'p1')).toBe(3)
+    expect(lastX(sim, 'p1')).toBeGreaterThan(0)
+    // The episode guard still prevents boarding this stop until the car departs.
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 5; i++) sim.tick()
+    expect(sim.viewOf('p1').car).toBeNull()
   })
 
-  it('ignores in-car move intents while doors are shut; open doors let the rider walk off (MOVE-09, MOVE-16)', () => {
+  it('ignores in-car move intents while doors are shut; open doors let the rider walk off (MOVE-09, MOVE-16, AD-015)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     boardParkedCar(sim, 'p1', 1)
@@ -785,7 +802,7 @@ describe('sim:elevator', () => {
     sim.tick()
     expect(sim.viewOf('p1').car).toBeNull()
     expect(sim.positionOf('p1')?.floor).toBe('floor2')
-    expect(sim.positionOf('p1')?.x).toBe(0)
+    expect(sim.positionOf('p1')?.x).toBe(0.3) // walking continues (AD-015)
   })
 
   it('dispatches across floors while a car is mid-arrival elsewhere (AD-012 narrowed: pickup-only predicate)', () => {

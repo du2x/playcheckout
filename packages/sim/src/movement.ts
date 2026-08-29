@@ -168,15 +168,13 @@ export class MovementSim {
       this.markRidersDirty(carId) // walk-off: remaining riders get the update
       // Door-open-episode guard: exiting is final for this stop — the board
       // filter excludes the exiter until the car next departs (no oscillation:
-      // clearing the boarding radius takes ~4 ticks, and a pre-round exiter at
-      // a guest floor cannot walk at all).
+      // clearing the boarding radius takes ~4 ticks).
       car.exitedThisStop.add(playerId)
       p.facing = dir
       p.facingDirty = true // the same-floor player:moved stream resumes next tick
-      p.moving = this.phase === 'round' || p.floor === 'lobby' ? dir : null
+      p.moving = dir
       return
     }
-    if (this.phase === 'lobby' && p.floor !== 'lobby') return
     p.facing = dir
     if (p.moving === dir) return
     p.facingDirty = true

@@ -329,32 +329,53 @@
 - **Date**: 2026-08-28
 - **Status**: active
 
+### AD-015
+- **Decision**: Remove lobby-phase movement confinement (MOVE-08). Players may
+  walk on any floor from the moment they join, including pre-round and
+  post-buzzer lobby phases. The `MovementSim.startMove` guard
+  `phase === 'lobby' && floor !== 'lobby'` is deleted; the client's prediction
+  mirror no longer gates movement by phase.
+- **Reason**: User-reported friction: riders who explored the building pre-round
+  via elevators were stuck at guest-floor landings with no clear affordance.
+  The confinement rule was a user-confirmed design in AD-011/EL-04 but proved
+  confusing in play-feel; removing it makes the lobby a true free-roam space
+  and eliminates a mismatch between "can ride anywhere" and "can't walk there".
+- **Trade-off**: The gather-up phase loses its sharp confinement boundary —
+  players can scatter across the building before roles are dealt, which mildly
+  weakens the pre-round lobby-as-lobby identity. Positions still persist across
+  start/buzzer (MOVE-07), and work channels remain round-scoped, so mechanical
+  consequences are limited. Specs and tests that asserted confinement are
+  amended.
+- **Scope**: `packages/sim/src/movement.ts`, `packages/sim/src/movement.test.ts`,
+  `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/movement.spec.ts`,
+  `.specs/features/movement/{spec,design,validation}.md`,
+  `.specs/features/elevator-lobby/{spec,validation}.md`.
+- **Date**: 2026-08-29
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: elevator-lobby (`.specs/features/elevator-lobby/`) — AD-011 fix ✅ COMPLETE
-- **Phase / Task**: Specify → Execute (small scope, inline) → Verifier **PASS**
-  (`validation.md`: 4/4 EL ACs evidenced; sensor 5 injected / 5 killed / 0 surviving;
-  gates 1–3 exit 0 — 163/163 sim+server, 21/21 client; doc-only gap closed in the
-  same session: movement spec/design stale elevator text now annotated as
-  AD-011-superseded). Gate 4 human round still open.
-- **Completed**: `MovementSim.callElevator` phase guard removed (only in-car callers
-  rejected, `movement.ts:142`); `lock()` no longer clears the call FIFO (queued calls
-  served across the buzzer, EL-02); intent-error message updated; elevator panel added
-  to the lobby view (`lobbyView.ts`) and made self-healing in `WorldScene.update()`;
-  amended sim tests (pre-round ride, post-buzzer queued dispatch at exact tick 99,
-  in-car rejection, confinement interplay) + server test + new harness scenario
-  `client:elevator_lobby` (ride floor1 and back with zero host starts — the fast
-  Playwright elevator-debug entry point). Commit `63fd475`.
+- **Feature**: AD-015 — remove lobby-phase movement confinement (fixes
+  "player can't leave the elevator" feel when exploring pre-round)
+- **Phase / Task**: Design decision reversal → Execute → gates 1–3 verified
+  (`pnpm typecheck` + `pnpm lint` green; `pnpm test:sim` 189/189;
+  `pnpm test:client` 22/22)
+- **Completed**: deleted the `phase === 'lobby' && floor !== 'lobby'` guard in
+  `packages/sim/src/movement.ts:178` and the phase-confinement prediction gate in
+  `apps/client/src/scenes/WorldScene.ts:398`; rewrote/amended `sim:motion` tests
+  (pre-round guest-floor walking, post-buzzer movement, exit-continues-walking);
+  updated `client:movement` post-buzzer assertion to verify movement is allowed;
+  recorded **AD-015** in `STATE.md`; updated `movement/spec.md`,
+  `movement/design.md`, `movement/validation.md`, `elevator-lobby/spec.md`, and
+  `elevator-lobby/validation.md` to reflect removed confinement.
 - **In-progress** (file:line): none
-- **Next step**: cycle 2.6 `evidence` (FR-10–FR-13) per the previous handoff. Note for
-  its Design: pass-through room crossings already emit `room:observed` (2.5) and
-  elevators now run pre-round — decide whether door-open cues apply pre-round (likely
-  no: work channels are round-scoped, so pre-round door traffic is elevator-only).
-- **Blockers**: none (Gate 4 human rounds pending: movement, work-channels,
-  elevator-lobby — the elevator one is quick now: `pnpm boot`, one tab, walk to a
-  landing, ArrowUp/ArrowDown with no round started)
-- **Uncommitted files**: user WIP `scripts/dev-boot.mjs` + `package.json` boot script;
-  `.playwright-mcp/` gitignored session logs
+- **Next step**: cycle 2.6 `evidence` (FR-10–FR-13). Note: with pre-round guest-floor
+  walking now allowed, room-shell/work evidence cues may be observable pre-round;
+  decide whether `room:observed` and door-open flashes should fire in lobby phase.
+- **Blockers**: none (Gate 4 human round pending: verify a pre-round rider can exit
+  on floor1 and walk away)
+- **Uncommitted files**: AD-015 changes across `packages/sim`, `apps/client`,
+  `.specs/`, and auto-formatted `.specs/lessons.json`
 - **Branch**: master
 
 Deferred notes from Verifier (room-shell PASS, low-severity spec-precision gaps):
