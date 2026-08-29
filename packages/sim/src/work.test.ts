@@ -644,9 +644,7 @@ describe('sim:door_open_cue', () => {
       ['ada', 'staff'],
       ['vin', 'saboteur'],
     ])
-    const enter = sim.tick(
-      positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', 3000)]),
-    )
+    const enter = sim.tick(positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', 3000)]))
     expect(workOf(enter, 'room:entered')).toEqual([
       { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 1 },
       { type: 'room:entered', playerId: 'vin', floor: 'floor1', room: 1 },

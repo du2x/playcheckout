@@ -191,9 +191,8 @@ test.describe('client:work_channels', () => {
         'room 2: fresh',
       )
       const prepped = await host.evaluate(() => {
-        const t = (
-          window as unknown as { __TURNOVER__: { events: { type: string }[] } }
-        ).__TURNOVER__
+        const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } })
+          .__TURNOVER__
         return t.events.some((e) => e.type === 'room:prepped' || e.type === 'room:trashed')
       })
       expect(prepped).toBe(false)
@@ -213,7 +212,9 @@ test.describe('client:work_channels', () => {
       await host.waitForFunction(
         () => {
           const t = (
-            window as unknown as { __TURNOVER__: { events: { type: string; payload: { floor?: string } }[] } }
+            window as unknown as {
+              __TURNOVER__: { events: { type: string; payload: { floor?: string } }[] }
+            }
           ).__TURNOVER__
           return t.events.some((e) => e.type === 'room:prepped' && e.payload.floor === 'floor1')
         },

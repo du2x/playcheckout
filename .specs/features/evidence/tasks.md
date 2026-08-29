@@ -187,7 +187,7 @@ T6 → T7 → T8
 
 ---
 
-### T7: Harness — client:evidence_cues scenario
+### T7: Harness — client:evidence_cues scenario — ✅ done
 
 **What**: Add `apps/client/harness/evidence.spec.ts`: two clients join a real server (test shift), host starts, one walks in and preps a room; assert via `window.__TURNOVER__` that the OTHER client's hallway view shows the card glyph, receives the door-open cue when the preparer enters, and (second round leg with a saboteur deal) hears/receives the rustle cue on trash. Run the full `pnpm test:client`.
 **Where**: `apps/client/harness/evidence.spec.ts`

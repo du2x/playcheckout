@@ -141,7 +141,8 @@ describe('router: positional policies', () => {
     const sameFloorOtherRoom = fakeClient('elsewhere')
     const router = newRouter(inside, sameFloorOtherRoom)
     router.setViewContext((sessionId) => {
-      if (sessionId === 'inside') return { floor: 'floor2', roomKey: 'floor2:5', car: null, x: 15000 }
+      if (sessionId === 'inside')
+        return { floor: 'floor2', roomKey: 'floor2:5', car: null, x: 15000 }
       return { floor: 'floor2', roomKey: null, car: null, x: 15000 } // same floor, outside segments
     })
 

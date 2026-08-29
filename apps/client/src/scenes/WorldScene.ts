@@ -11,8 +11,8 @@ import {
 } from '@turnover/shared'
 import Phaser from 'phaser'
 import {
-  type EvidenceSession,
   dropCues,
+  type EvidenceSession,
   initialEvidenceSession,
   liveCues,
   reduceEvidence,
@@ -300,7 +300,12 @@ export class WorldScene extends Phaser.Scene {
       case 'room-entered':
         this.evidence = reduceEvidence(
           this.evidence,
-          { type: 'entered', playerId: action.playerId, floor: action.floor, room: action.room as RoomIndex },
+          {
+            type: 'entered',
+            playerId: action.playerId,
+            floor: action.floor,
+            room: action.room as RoomIndex,
+          },
           Date.now(),
         )
         this.beep(660)
@@ -414,8 +419,7 @@ export class WorldScene extends Phaser.Scene {
     if (layer === null) return
     for (const key of this.evidence.cards) {
       if (this.cardMarkers.has(key)) continue
-      const [floor, roomRaw] = key.split(':')
-      const room = Number(roomRaw) as RoomIndex
+      const room = Number(key.split(':')[1]) as RoomIndex
       const marker = document.createElement('div')
       marker.dataset.roomKey = key
       marker.textContent = 'CARD'

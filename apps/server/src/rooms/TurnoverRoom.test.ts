@@ -1412,68 +1412,120 @@ describe('server:evidence', () => {
     vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '30')
     try {
       const [host, a, b, c] = await roomWithFour()
+      const pages = [host, a, b, c]
+      // Private role deals (rule 3): read each client's own role:dealt to pick
+      // the staff rider — a saboteur's work on a fresh room is a FAKE (FR-9)
+      // and would correctly hang no card.
+      const roles = new Map<ClientRoom, string>()
+      for (const p of pages) {
+        p.onMessage('role:dealt', (envelope) =>
+          roles.set(p, (envelope as { payload: { role: string } }).payload.role),
+        )
+      }
       const hostCollector = collectAll(host)
-      const aCollector = collectAll(a)
       const instanceRef = TurnoverRoom.instances.at(-1)
       host.send('lobby:start', { type: 'lobby:start' })
       await vi.waitFor(() => expect(instanceRef?.__phase()).toBe('round'))
+      instanceRef?.__driveTicks(1) // the deal (round:started + role:dealt each)
+      await vi.waitFor(() => expect(roles.size).toBe(4))
+      const staffPage = pages.find((p) => roles.get(p) === 'staff')
+      if (staffPage === undefined) throw new Error('no staff dealt')
+      // The snapshot receiver is a different page than the staff rider.
+      const receiver = pages.find((p) => p !== staffPage)
+      if (receiver === undefined) throw new Error('no receiver page')
+      const staffCollector = collectAll(staffPage)
+      const receiverCollector = collectAll(receiver)
 
-      // Host rides car 1 up to floor1 and exits at the landing.
-      host.send('elevator:call', { type: 'elevator:call' })
-      await sleep(30)
-      host.send('move:start', { type: 'move:start', dir: 'left' })
-      await sleep(30)
-      instanceRef?.__driveTicks(70) // car arrives + host boards
-      host.send('move:stop', { type: 'move:stop' })
-      await sleep(30)
-      host.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
-      await sleep(30)
-      instanceRef?.__driveTicks(40) // lobby → floor1
-      host.send('move:start', { type: 'move:start', dir: 'right' }) // exit
-      await sleep(30)
-      instanceRef?.__driveTicks(5)
-      host.send('move:stop', { type: 'move:stop' })
-      await sleep(30)
-
-      // Host walks into room 1 and preps it: the card hangs (EVID-01).
-      host.send('move:start', { type: 'move:start', dir: 'right' })
-      await sleep(30)
-      instanceRef?.__driveTicks(8) // 0 → ~2400 milli: inside room 1's segment
-      host.send('move:stop', { type: 'move:stop' })
-      await sleep(30)
-      host.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      await sleep(30)
-      instanceRef?.__driveTicks(1)
-      await hostCollector.waitFor('work:started')
-      instanceRef?.__driveTicks(100)
-      await hostCollector.waitFor('room:carded')
-
-      // Guest a rides up and exits: their exit snapshot carries cardedRooms [1].
-      // Car 2 sits parked open-doors at the east landing — she walks straight
-      // in (~47 ticks to the zone) and auto-boards, no call needed (AD-014).
-      a.send('move:start', { type: 'move:start', dir: 'right' })
-      await sleep(30)
+      // --- Staff rider: car 1 up, exit, park inside room 1, real prep. ---
+      staffPage.send('elevator:call', { type: 'elevator:call' })
+      await sleep(60)
+      staffPage.send('move:start', { type: 'move:start', dir: 'left' })
+      await sleep(60)
       instanceRef?.__driveTicks(50) // walk into the boarding zone; auto-board
-      a.send('move:stop', { type: 'move:stop' })
-      await sleep(30)
-      a.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
-      await sleep(30)
+      await staffCollector.waitFor('elevator:riders', 8000) // boarding confirmed
+      staffPage.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+      await sleep(60)
+      instanceRef?.__driveTicks(1)
+      await staffCollector.waitFor('elevator:pressed', 8000)
       instanceRef?.__driveTicks(40) // lobby → floor1
-      a.send('move:start', { type: 'move:start', dir: 'right' }) // exit → snapshot
-      await sleep(30)
-      instanceRef?.__driveTicks(5)
+      await staffCollector.waitFor('elevator:moved', 8000)
+      staffPage.send('move:start', { type: 'move:start', dir: 'right' }) // exit
+      await sleep(60)
+      await staffCollector.waitFor('movement:snapshot', 8000) // door-open exit
 
-      // Guest a's only snapshot on this connection is the door-open exit one
-      // (the join snapshot predates the collector).
-      const exitSnap = await aCollector.waitFor('movement:snapshot')
+      // Drain the boarding walk's queued moved events so the parking loop
+      // below reads only fresh positions.
+      for (;;) {
+        try {
+          await staffCollector.waitFor('player:moved', 40)
+        } catch {
+          break
+        }
+      }
+
+      // Walk right until parked INSIDE room 1's segment ([1000, 4500) milli).
+      staffPage.send('move:start', { type: 'move:start', dir: 'right' })
+      await sleep(60)
+      let ownX = 0
+      for (let i = 0; i < 15 && ownX < 2.1; i++) {
+        instanceRef?.__driveTicks(1)
+        const moved = await staffCollector.waitFor('player:moved')
+        ownX = (moved.payload as { x: number }).x
+      }
+      expect(ownX).toBeGreaterThanOrEqual(2.1)
+      expect(ownX).toBeLessThan(4.4) // parked with margin before the far edge
+      staffPage.send('move:stop', { type: 'move:stop' })
+      // Park-until-still: probe until TWO consecutive driven ticks produce no
+      // own movement — only then is the stop intent guaranteed processed (a
+      // late stop would walk the rider out of the segment and cancel).
+      let quietProbes = 0
+      let lastX = ownX
+      for (let i = 0; i < 20 && quietProbes < 2; i++) {
+        instanceRef?.__driveTicks(1)
+        try {
+          const moved = await staffCollector.waitFor('player:moved', 1200)
+          lastX = (moved.payload as { x: number }).x
+          quietProbes = 0
+        } catch {
+          quietProbes++
+        }
+      }
+      expect(quietProbes).toBe(2)
+      expect(lastX).toBeLessThan(4.4)
+
+      staffPage.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await sleep(60)
+      instanceRef?.__driveTicks(2) // the private start confirmation announces next tick
+      await staffCollector.waitFor('work:started', 8000)
+      instanceRef?.__driveTicks(100)
+      // The card hangs on the prep completion (EVID-01).
+      await staffCollector.waitFor('room:carded', 8000)
+
+      // --- Receiver: rides up and exits — the door-open exit snapshot
+      // carries the arrival floor's carded rooms (EVID-04). Car 2 sits parked
+      // open-doors at the east lobby landing, so no call is needed (a call
+      // here would be the decoy flash, FR-5) — walk straight in and board.
+      receiver.send('move:start', { type: 'move:start', dir: 'right' })
+      await sleep(60)
+      instanceRef?.__driveTicks(50) // walk into the east boarding zone; auto-board
+      await receiverCollector.waitFor('elevator:riders', 8000)
+      receiver.send('move:stop', { type: 'move:stop' })
+      await sleep(60)
+      receiver.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+      await sleep(60)
+      instanceRef?.__driveTicks(1)
+      await receiverCollector.waitFor('elevator:pressed', 8000)
+      instanceRef?.__driveTicks(40) // lobby → floor1
+      await receiverCollector.waitFor('elevator:moved', 8000)
+      receiver.send('move:start', { type: 'move:start', dir: 'right' }) // exit → snapshot
+      await sleep(60)
+      const exitSnap = await receiverCollector.waitFor('movement:snapshot', 8000)
       expect(exitSnap.payload.cardedRooms).toEqual([1])
 
       hostCollector.stop()
-      aCollector.stop()
-      host.leave()
-      a.leave()
-      b.leave()
-      c.leave()
+      staffCollector.stop()
+      receiverCollector.stop()
+      for (const p of pages) p.leave()
     } finally {
       vi.unstubAllEnvs()
     }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   CUE_TTL_MS,
-  type EvidenceSession,
   dropCues,
+  type EvidenceSession,
   initialEvidenceSession,
   liveCues,
   reduceEvidence,
