@@ -259,6 +259,11 @@ export class ElevatorPresenter {
     this.clocks.set(car, applyMoved(clock, floor))
   }
 
+  /** Read-only view of one car's animation clock (in-car screen readouts). */
+  clockOf(car: CarId): CarClock | undefined {
+    return this.clocks.get(car)
+  }
+
   /** Advances every car's clock and redraws door/car visuals for `viewFloor`. */
   tick(dtMs: number, viewFloor: FloorId): void {
     for (const carId of [1, 2] as const) {

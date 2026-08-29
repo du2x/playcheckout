@@ -19,6 +19,12 @@ import {
   reduceEvidence,
 } from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
+import {
+  floorLabel,
+  setCarScreenFloor,
+  setCarScreenState,
+  transitFloorReadout,
+} from '../ui/carScreen'
 import { ElevatorPresenter } from './elevatorPresenter'
 
 /**
@@ -114,6 +120,10 @@ export class WorldScene extends Phaser.Scene {
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
   private work: { startedAt: number; seconds: number } | null = null
+  /** The in-car screen's current ride leg: sweep anchored when the leg's
+   *  destination became known (the presenter's own transit clock may predate
+   *  the real departure by up to a dwell window). */
+  private carScreenLeg: { from: FloorId; to: FloorId; startedAt: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
   /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
@@ -572,6 +582,48 @@ export class WorldScene extends Phaser.Scene {
     }, 700)
   }
 
+  /** Current-floor sweep + state line for the in-car screen (every frame). */
+  private syncCarScreenReadouts(): void {
+    const session = this.riderSession
+    const clock = session === null ? undefined : this.elevatorPresenter?.clockOf(session.car)
+    if (session === null || clock === undefined) {
+      this.carScreenLeg = null
+      setCarScreenFloor(null)
+      setCarScreenState(null)
+      return
+    }
+    if (clock.phase !== 'transit') {
+      this.carScreenLeg = null
+      setCarScreenFloor(clock.floor)
+      setCarScreenState(clock.phase === 'open' ? 'doors open' : 'doors closing')
+      return
+    }
+    // Transit: riders know the current leg's destination from the own car's
+    // press queue (rider-exclusive, already on their screen); bystander ground
+    // truth (`pendingFloor`) names it once the arrival event lands. No known
+    // destination = a car that merely closed after its dwell — not a ride.
+    const dest = clock.pendingFloor ?? session.queue[0] ?? null
+    if (dest === null) {
+      this.carScreenLeg = null
+      setCarScreenFloor(clock.floor)
+      setCarScreenState('doors closed')
+      return
+    }
+    // Anchor (or re-anchor) the sweep when the leg starts or retargets, so
+    // transition floors step per ride stride from the known departure.
+    let startedAt = this.carScreenLeg?.startedAt ?? 0
+    if (
+      this.carScreenLeg === null ||
+      this.carScreenLeg.from !== clock.floor ||
+      this.carScreenLeg.to !== dest
+    ) {
+      startedAt = Date.now()
+      this.carScreenLeg = { from: clock.floor, to: dest, startedAt }
+    }
+    setCarScreenFloor(transitFloorReadout(clock.floor, dest, Date.now() - startedAt))
+    setCarScreenState(`moving to ${floorLabel(dest)}`)
+  }
+
   /** Progress bar is DOM: fill width from the own channel's elapsed time. */
   private updateWorkBar(): void {
     const bar = document.querySelector('#work-progress')
@@ -640,6 +692,10 @@ export class WorldScene extends Phaser.Scene {
     // The elevator panel is self-healing: view re-renders rebuild the DOM
     // element, so refresh it every frame from scene state.
     this.updatePanel()
+    // The in-car screen's readouts follow the own car's animation clock —
+    // floor swept through transition floors mid-ride, state line naming the
+    // door/motion phase. Both cleared when not riding.
+    this.syncCarScreenReadouts()
     // Work-channel DOM state: bar fill follows elapsed time; the interior
     // label lives only while the own rectangle stands inside the segment.
     if (this.work !== null) {

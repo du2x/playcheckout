@@ -1,4 +1,5 @@
 import type { LobbySnapshot } from '@turnover/shared'
+import { buildCarScreen } from './carScreen'
 import { el } from './dom'
 
 /**
@@ -68,6 +69,8 @@ export function renderLobby(
         ]),
         el('span', { id: 'elevator-press' }, []),
       ]),
+      // In-car screen (AD-013): rides are possible pre-round (AD-011).
+      buildCarScreen(),
     ]),
   )
 }

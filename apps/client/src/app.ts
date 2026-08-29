@@ -12,6 +12,7 @@ import {
   type ViewName,
   type ViewState,
 } from './state'
+import { syncCarScreen } from './ui/carScreen'
 import { el } from './ui/dom'
 import { renderJoin } from './ui/joinView'
 import { renderLobby } from './ui/lobbyView'
@@ -197,6 +198,7 @@ export class App {
     const riding = this.rider
     if (riding === null) {
       chip.setAttribute('hidden', '')
+      syncCarScreen(null, [], () => {})
       return
     }
     chip.removeAttribute('hidden')
@@ -216,6 +218,12 @@ export class App {
           ? ''
           : `${names.get(riding.lastPress.playerId) ?? riding.lastPress.playerId} pressed ${riding.lastPress.floor}`
     }
+    // In-car screen (AD-013): the button panel mirrors the same session.
+    syncCarScreen(
+      riding,
+      riding.occupants.map((id) => names.get(id) ?? id),
+      (floor) => this.connection?.sendElevatorPress(floor),
+    )
   }
 
   private render(): void {
