@@ -406,7 +406,13 @@ export class WorldScene extends Phaser.Scene {
         // Others follow server positions within ~2 ticks (exponential approach).
         display.x += (display.targetX - display.x) * Math.min(1, dt * 12)
       }
-      const visible = display.floor === this.viewFloor && !display.left
+      // Riders are on NO floor (AD-009): the own rectangle never renders while
+      // riding — the boarding events are routed while the boarder's view is a
+      // rider's (no floor stream), so the chip is the in-car view instead.
+      const visible =
+        display.floor === this.viewFloor &&
+        !display.left &&
+        !(id === this.ownId && this.riding !== null)
       display.rect.setVisible(visible)
       display.label.setVisible(visible)
       display.rect.x = display.x * TILE_PX
