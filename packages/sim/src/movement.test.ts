@@ -520,6 +520,50 @@ describe('sim:elevator', () => {
     expect(runUntilCarMoved(sim, 2, 'lobby')).toBe(59)
   })
 
+  it('drops a boarding player queued call (AD-012 #3: no car to an abandoned floor)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    sim.join('p3')
+    // Stage the two departures one tick apart so car 1 (floor3, the longest
+    // ride) frees long after car 2 returns: p3 pre-steps to 28.8 (1.2 tiles
+    // out of car 2's boarding range), p2 boards parked car 1 via the helper.
+    sim.startMove('p3', 'right')
+    for (let i = 0; i < 46; i++) sim.tick()
+    sim.stopMove('p3')
+    expect(lastX(sim, 'p3')).toBe(28.8)
+    boardParkedCar(sim, 'p2', 1)
+    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted') // car 1: 120-tick ride
+    sim.startMove('p3', 'right')
+    for (let i = 0; i < 10 && sim.viewOf('p3').car === null; i++) sim.tick()
+    sim.stopMove('p3')
+    expect(sim.pressFloor('p3', 'floor1')).toBe('accepted') // car 2: 40-tick ride
+    // p1 calls from the lobby center: both cars riding → the call waits in
+    // the sim-level FIFO (MOVE-15) — no flash, no dispatch yet.
+    expect(sim.callElevator('p1')).toBe('dispatched')
+    // p1 heads for the east landing. p3 (stay-in-car) queues the lobby return
+    // during the floor1 dwell, so car 2 comes back and auto-boards p1.
+    sim.startMove('p1', 'right')
+    expect(runUntilCarMoved(sim, 2, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
+    expect(sim.pressFloor('p3', 'lobby')).toBe('accepted')
+    expect(runUntilCarMoved(sim, 2, 'lobby')).toBe(DWELL_TICKS + RIDE_TICKS_PER_FLOOR)
+    expect(sim.viewOf('p1').car).toBe(2) // boarded the other car at its landing
+    // Boarding drops the boarder's own queued call (AD-012 #3): no car may
+    // ever be summoned to a floor they left. Tick past car 1's arrival, dwell,
+    // and idle transition — a surviving call would flash there and dispatch
+    // car 1 to the lobby.
+    const tail: MovementEvent[] = []
+    for (let i = 0; i < 150; i++) tail.push(...sim.tick())
+    expect(tail.filter((e) => e.type === 'elevator:called')).toEqual([])
+    expect(
+      tail.some((e) => e.type === 'elevator:moved' && e.car === 1 && e.floor === 'lobby'),
+    ).toBe(false)
+    expect(sim.snapshot().cars).toEqual([
+      { car: 1, floor: 'floor3' },
+      { car: 2, floor: 'lobby' },
+    ])
+  })
+
   it('serves a call queued at the buzzer once a car frees (EL-02, AD-011)', () => {
     const sim = new MovementSim()
     sim.join('p1')
