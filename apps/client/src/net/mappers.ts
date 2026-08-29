@@ -35,4 +35,10 @@ export const MAPPERS: {
   'room:observed': (p) => [{ type: 'room-observed', ...p }],
   'room:prepped': (p) => [{ type: 'room-prepped', ...p }],
   'room:trashed': (p) => [{ type: 'room-trashed', ...p }],
+  // Evidence (cycle 2.7): scene-kind actions; WorldScene renders the hallway
+  // cues and the evidence session keeps the card set.
+  'room:carded': (p) => [{ type: 'room-carded', ...p }],
+  'room:settled': (p) => [{ type: 'room-settled', ...p }],
+  'room:rustle': (p) => [{ type: 'room-rustle', ...p }],
+  'room:entered': (p) => [{ type: 'room-entered', ...p }],
 }

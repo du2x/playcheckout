@@ -39,6 +39,19 @@ export type SimEvent =
     }
   | { readonly type: 'room:prepped'; readonly floor: FloorId; readonly room: RoomIndex }
   | { readonly type: 'room:trashed'; readonly floor: FloorId; readonly room: RoomIndex }
+  // --- Evidence layer (cycle 2.7, FR-10 cue half / FR-11 / FR-12 / FR-13):
+  // hallway-visible info is exactly cards, door-open events, and in-range
+  // rustle (leak rule 2). Cards carry no timestamp (FR-11); interiors still
+  // travel only on room:observed / occupants rows.
+  | { readonly type: 'room:carded'; readonly floor: FloorId; readonly room: RoomIndex }
+  | { readonly type: 'room:settled'; readonly floor: FloorId; readonly room: RoomIndex }
+  | { readonly type: 'room:rustle'; readonly floor: FloorId; readonly room: RoomIndex }
+  | {
+      readonly type: 'room:entered'
+      readonly playerId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
 
 /**
  * Movement events (cycle 2.4, AD-005): emitted by the room-owned MovementSim in

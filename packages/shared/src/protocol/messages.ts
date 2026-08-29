@@ -202,6 +202,37 @@ export interface RoomTrashed {
   readonly room: RoomIndex
 }
 
+// ---------------------------------------------------------------------------
+// Evidence layer (cycle 2.7, FR-10–FR-13). Cards, rustle, and door-open cues
+// are hallway-visible (leak rule 2); payloads never carry timestamps (FR-11),
+// authors, roles, or interior state.
+// ---------------------------------------------------------------------------
+
+/** server → same-floor viewers. A room became prepped; its card is now hung (FR-11). */
+export interface RoomCarded {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → the room's occupants. Fresh trash aged past FRESHNESS_WINDOW_SECONDS (FR-12). */
+export interface RoomSettled {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → earshot viewers (same floor within RUSTLE_RANGE_TILES, through walls — FR-13). */
+export interface RoomRustle {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → same-floor viewers. A player entered the room's segment (FR-10 cue half). */
+export interface RoomEntered {
+  readonly playerId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
 /**
  * client → server intent: host starts the round (FR-2). Validated by zod in the
  * room's `validate()` handler; the server rejects, it never trusts. Intents are

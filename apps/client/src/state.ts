@@ -73,6 +73,13 @@ export type ViewAction =
   | { type: 'room-observed'; playerId: string; floor: FloorId; room: RoomIndex; state: RoomState }
   | { type: 'room-prepped'; floor: FloorId; room: RoomIndex }
   | { type: 'room-trashed'; floor: FloorId; room: RoomIndex }
+  // Evidence render-state actions (cycle 2.7): cards and cues are scene/DOM
+  // display state; no payload names a role or an interior beyond the read
+  // already granted (leak rule 2).
+  | { type: 'room-carded'; floor: FloorId; room: RoomIndex }
+  | { type: 'room-settled'; floor: FloorId; room: RoomIndex }
+  | { type: 'room-rustle'; floor: FloorId; room: RoomIndex }
+  | { type: 'room-entered'; playerId: string; floor: FloorId; room: RoomIndex }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }
   | { type: 'intent-error'; message: string }
@@ -140,6 +147,10 @@ export const ACTION_ROUTES = {
   'room-observed': 'scene',
   'room-prepped': 'scene',
   'room-trashed': 'scene',
+  'room-carded': 'scene',
+  'room-settled': 'scene',
+  'room-rustle': 'scene',
+  'room-entered': 'scene',
   'role-dealt': 'view',
   buzzer: 'view',
   'intent-error': 'view',
@@ -210,6 +221,10 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'room-observed':
     case 'room-prepped':
     case 'room-trashed':
+    case 'room-carded':
+    case 'room-settled':
+    case 'room-rustle':
+    case 'room-entered':
       return state
   }
 }

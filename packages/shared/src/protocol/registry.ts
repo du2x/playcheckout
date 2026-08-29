@@ -12,8 +12,13 @@ import type {
   PlayerLeftFloor,
   PlayerMoved,
   RoleDealt,
+  RoomCarded,
+  RoomEntered,
+  RoomIndex,
   RoomObserved,
   RoomPrepped,
+  RoomRustle,
+  RoomSettled,
   RoomTrashed,
   RoundBuzzer,
   RoundStarted,
@@ -41,7 +46,7 @@ import type { MovementEvent, SimEvent } from './simEvents.js'
  * `riders` (cycle 2-6, AD-013) delivers ONLY to viewers riding the event's car
  * — occupancy and press knowledge belongs exclusively to the people inside.
  */
-export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants' | 'riders'
+export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants' | 'riders' | 'earshot'
 
 /**
  * Positional selector a projection returns for the positional policies: the
@@ -54,6 +59,8 @@ export interface EventVisibility {
   readonly roomKey?: string
   /** Which car the event concerns — the riders key the Router matches against. */
   readonly car?: CarId
+  /** Which room segment the event concerns — the earshot range the Router matches against. */
+  readonly room?: RoomIndex
 }
 
 /**
@@ -109,6 +116,15 @@ export interface Payloads {
   'room:prepped': RoomPrepped
   /** server → the room's occupants. An un-prep transition completed (FR-8). */
   'room:trashed': RoomTrashed
+  // --- Evidence (cycle 2.7): hallway-visible cues (leak rule 2) ---
+  /** server → same-floor viewers. A prep transition completed; the card is hung (FR-11). */
+  'room:carded': RoomCarded
+  /** server → the room's occupants. The trash aged past the freshness window (FR-12). */
+  'room:settled': RoomSettled
+  /** server → earshot viewers. Sabotage rustle within RUSTLE_RANGE_TILES through walls (FR-13). */
+  'room:rustle': RoomRustle
+  /** server → same-floor viewers. A player entered the room's segment (FR-10 cue half). */
+  'room:entered': RoomEntered
 }
 
 export type RegistryKey = keyof Payloads
@@ -290,6 +306,40 @@ export const PROTOCOL_REGISTRY = {
       payload: { floor: event.floor, room: event.room },
       visibility: { roomKey: `${event.floor}:${event.room}` },
     })) as SimProjection<'room:trashed'>,
+  },
+  // --- Evidence (cycle 2.7): cards/entered are floor-public (FR-10/FR-11),
+  // settled stays occupant-only, rustle is exactly as wide as earshot ---
+  'room:carded': {
+    payload: {} as RoomCarded,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, room: event.room },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'room:carded'>,
+  },
+  'room:settled': {
+    payload: {} as RoomSettled,
+    recipients: 'occupants',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, room: event.room },
+      visibility: { roomKey: `${event.floor}:${event.room}` },
+    })) as SimProjection<'room:settled'>,
+  },
+  'room:rustle': {
+    payload: {} as RoomRustle,
+    recipients: 'earshot',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, room: event.room },
+      visibility: { floor: event.floor, room: event.room },
+    })) as SimProjection<'room:rustle'>,
+  },
+  'room:entered': {
+    payload: {} as RoomEntered,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { playerId: event.playerId, floor: event.floor, room: event.room },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'room:entered'>,
   },
 } as const satisfies { [K in RegistryKey]: Entry<K> } & {
   [K in SimEvent['type'] | MovementEvent['type']]: unknown

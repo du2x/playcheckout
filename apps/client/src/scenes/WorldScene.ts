@@ -72,6 +72,12 @@ type MovementAction =
   | { type: 'room-observed'; playerId: string; floor: string; room: number; state: RoomState }
   | { type: 'room-prepped'; floor: string; room: number }
   | { type: 'room-trashed'; floor: string; room: number }
+  // Evidence (cycle 2.7): hallway-visible cues; rendering lands with the
+  // evidence slice — the scene stores them no-op for now.
+  | { type: 'room-carded'; floor: string; room: number }
+  | { type: 'room-settled'; floor: string; room: number }
+  | { type: 'room-rustle'; floor: string; room: number }
+  | { type: 'room-entered'; playerId: string; floor: string; room: number }
 
 interface PlayerDisplay {
   rect: Phaser.GameObjects.Rectangle
@@ -256,6 +262,13 @@ export class WorldScene extends Phaser.Scene {
         interior.state = action.type === 'room-prepped' ? 'prepped' : 'trashed'
         break
       }
+      // Evidence cues (cycle 2.7): stored no-op until the evidence slice wires
+      // the hallway card glyphs, door-open flashes, and rustle audio (T6).
+      case 'room-carded':
+      case 'room-settled':
+      case 'room-rustle':
+      case 'room-entered':
+        break
     }
   }
 

@@ -106,6 +106,10 @@ describe('protocol registry', () => {
     'room:observed': 'self',
     'room:prepped': 'occupants',
     'room:trashed': 'occupants',
+    'room:carded': 'sameFloor',
+    'room:settled': 'occupants',
+    'room:rustle': 'earshot',
+    'room:entered': 'sameFloor',
   } as const
 
   it('declares exactly the core, movement, and work types — riders rows included (REG-03, AD-013)', () => {
@@ -123,10 +127,61 @@ describe('protocol registry', () => {
 
   it('declares a valid recipient policy on every entry (REG-19)', () => {
     for (const [key, entry] of Object.entries(PROTOCOL_REGISTRY)) {
-      expect(['all', 'self', 'sameFloor', 'occupants', 'riders'], `policy of ${key}`).toContain(
-        entry.recipients,
-      )
+      expect(
+        ['all', 'self', 'sameFloor', 'occupants', 'riders', 'earshot'],
+        `policy of ${key}`,
+      ).toContain(entry.recipients)
     }
+  })
+
+  // EVID-05/13/15: cards and rustle payloads are exactly {floor, room} — no
+  // timestamp, author, or interior state rides the wire (FR-11, leak rule 2).
+  it('projects the evidence rows: cards and rustle carry floor+room only (EVID-05, EVID-15)', () => {
+    const carded = PROTOCOL_REGISTRY['room:carded'].fromSim({
+      type: 'room:carded',
+      floor: 'floor1',
+      room: 4,
+    })
+    expect(carded.payload).toEqual({ floor: 'floor1', room: 4 })
+    expect(carded.visibility).toEqual({ floor: 'floor1' })
+    expect(carded.self).toBeUndefined()
+
+    const rustle = PROTOCOL_REGISTRY['room:rustle'].fromSim({
+      type: 'room:rustle',
+      floor: 'floor2',
+      room: 3,
+    })
+    expect(PROTOCOL_REGISTRY['room:rustle'].recipients).toBe('earshot')
+    expect(rustle.payload).toEqual({ floor: 'floor2', room: 3 })
+    expect(rustle.visibility).toEqual({ floor: 'floor2', room: 3 })
+
+    for (const payload of [carded.payload, rustle.payload]) {
+      expect(Object.keys(payload).sort()).toEqual(['floor', 'room'])
+      expect(Object.keys(payload)).not.toContain('timestamp')
+      expect(Object.keys(payload)).not.toContain('author')
+      expect(Object.keys(payload)).not.toContain('state')
+    }
+  })
+
+  it('projects room:settled to occupants and room:entered to the floor with the entrant named (EVID-16)', () => {
+    const settled = PROTOCOL_REGISTRY['room:settled'].fromSim({
+      type: 'room:settled',
+      floor: 'floor3',
+      room: 7,
+    })
+    expect(settled.payload).toEqual({ floor: 'floor3', room: 7 })
+    expect(settled.visibility).toEqual({ roomKey: 'floor3:7' })
+    expect(settled.self).toBeUndefined()
+
+    const entered = PROTOCOL_REGISTRY['room:entered'].fromSim({
+      type: 'room:entered',
+      playerId: 'p2',
+      floor: 'floor1',
+      room: 2,
+    })
+    expect(entered.payload).toEqual({ playerId: 'p2', floor: 'floor1', room: 2 })
+    expect(entered.visibility).toEqual({ floor: 'floor1' })
+    expect(entered.self).toBeUndefined()
   })
 
   it('projects movement events to payloads that never name elevator occupants (MOVE-17)', () => {
