@@ -178,28 +178,49 @@ test.describe('client:work_channels', () => {
     })
     expect(observed?.state).toBe('fresh')
     expect(observed?.room).toBeGreaterThanOrEqual(1)
-    await host.waitForFunction(
-      () => {
-        const label = document.querySelector('#room-state')
-        return (
-          label !== null && !label.hasAttribute('hidden') && /prepped/.test(label.textContent ?? '')
-        )
-      },
-      undefined,
-      { timeout: 5000 },
+    // The deal is random server-side: ada's channel preps the room only when
+    // she is staff. A saboteur's work on a fresh room is a FAKE prep —
+    // animation only, no state change, and by protocol NOTHING is emitted
+    // (FR-9), so the label must stay fresh and no room:prepped may arrive.
+    const isSaboteur = await host.evaluate(
+      () => document.querySelector('#role-card')?.textContent === 'saboteur',
     )
-    await host.waitForFunction(
-      () => {
+    if (isSaboteur) {
+      await host.waitForTimeout(1500)
+      expect(await host.evaluate(() => document.querySelector('#room-state')?.textContent)).toBe(
+        'room 2: fresh',
+      )
+      const prepped = await host.evaluate(() => {
         const t = (
-          window as unknown as {
-            __TURNOVER__: { events: { type: string; payload: { floor?: string } }[] }
-          }
+          window as unknown as { __TURNOVER__: { events: { type: string }[] } }
         ).__TURNOVER__
-        return t.events.some((e) => e.type === 'room:prepped' && e.payload.floor === 'floor1')
-      },
-      undefined,
-      { timeout: 5000 },
-    )
+        return t.events.some((e) => e.type === 'room:prepped' || e.type === 'room:trashed')
+      })
+      expect(prepped).toBe(false)
+    } else {
+      await host.waitForFunction(
+        () => {
+          const label = document.querySelector('#room-state')
+          return (
+            label !== null &&
+            !label.hasAttribute('hidden') &&
+            /prepped/.test(label.textContent ?? '')
+          )
+        },
+        undefined,
+        { timeout: 5000 },
+      )
+      await host.waitForFunction(
+        () => {
+          const t = (
+            window as unknown as { __TURNOVER__: { events: { type: string; payload: { floor?: string } }[] } }
+          ).__TURNOVER__
+          return t.events.some((e) => e.type === 'room:prepped' && e.payload.floor === 'floor1')
+        },
+        undefined,
+        { timeout: 5000 },
+      )
+    }
 
     // Non-occupant tab: no interior event, no channel event, no room label
     // (WORK-15/16 in vivo; protocol rule 2 enforced end-to-end).
