@@ -357,7 +357,7 @@ new rendering module, confirmed against the Decisions section during Design.
 - [x] `pnpm biome check` passes on changed files
 - [x] `pnpm test:sim` passes (including new/updated unit tests)
 - [x] `pnpm test:client` passes the feature scenario (pre-existing flakes excluded)
-- [ ] Independent Verifier re-runs and reports PASS
+- [x] Independent Verifier re-runs and reports PASS
 
 **Tests**: unit + e2e
 **Gate**: full
