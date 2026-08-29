@@ -210,7 +210,29 @@ milliseconds) straight through as `dtMs`.
 ---
 
 
-### T5: Add `client:elevator_doors` Playwright harness scenario
+### T5: Add `client:elevator_doors` Playwright harness scenario — ✅ Done
+
+**Execution note**: implemented as a single-client scenario (mirrors
+`elevatorLobby.spec.ts`'s fast entry point), not the two-clients-call sketch
+below. Reasoning: AD-014's duplicate-call predicate is pickup-floor-only, so
+any second call to a floor already holding an open-door car is a no-op decoy
+— proving a *fresh* dispatch+observe would need a second car parked
+elsewhere first, adding setup with no additional coverage over what
+`elevatorLobby.spec.ts`/`movement.spec.ts` already prove for the call path.
+Instead: ada rides her own car in-car (exercises the SPEC_DEVIATION path —
+no `elevator:called` fires for a rider press), and the moment she exits, her
+own `viewFloor` flips to the car's floor — she becomes the bystander/observer
+of her *own* car's remaining open-door window without a second tab. The
+1-second dwell window is generous for `waitForFunction` polling (not for a
+human), so no artificial two-client setup was needed. Assertion (b)'s
+`Graphics`-node-count idea was dropped: this presenter always keeps exactly
+one persistent `Graphics` object per car (created once in `reset()`, cleared/
+redrawn every tick, never added/removed), so a *count* check can't
+distinguish open vs. closed doors — `Ellipse.visible` is the correct,
+already-exposed-by-harness signal instead, and is what the test asserts.
+Assertion (c)'s "not visible during transit" is covered as the terminal,
+non-flaky end-state check (car1 never departs again after auto-closing in
+this scenario).
 
 **What**: New `apps/client/harness/elevator-doors.spec.ts`, modeled on
 `movement.spec.ts`'s car-related assertions: join two clients on the same
@@ -234,9 +256,10 @@ join/call helpers), `TURNOVER_TEST_SHIFT_SECONDS` env pattern (AD-004)
 
 **Done when**:
 
-- [ ] Scenario passes under `pnpm test:client`
-- [ ] Rectangle/Ellipse counts assertion matches existing `round.spec.ts`/`movement.spec.ts` style exactly (same query pattern)
-- [ ] Scenario is named and tagged consistent with existing gate-scenario naming (`client:elevator_doors`) so it is traceable per `AGENTS.md`'s "every task names its gates" rule
+- [x] Scenario passes under `pnpm test:client`
+- [x] Rectangle/Ellipse counts assertion matches existing `round.spec.ts`/`movement.spec.ts` style exactly (same query pattern)
+- [x] Scenario is named and tagged consistent with existing gate-scenario naming (`client:elevator_doors`) so it is traceable per `AGENTS.md`'s "every task names its gates" rule
+
 
 **Tests**: e2e
 **Gate**: full
