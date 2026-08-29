@@ -2,6 +2,7 @@ import {
   type FloorId,
   type GuestFloorId,
   type MovementSnapshot,
+  ROOMS_PER_FLOOR,
   type RoomIndex,
   type RoomState,
   roomIndexAtMilli,
@@ -121,6 +122,8 @@ export class WorldScene extends Phaser.Scene {
   private cardMarkers = new Map<string, HTMLElement>()
   private cueNodes = new Map<number, HTMLElement>()
   private audio: AudioContext | null = null
+  /** Static door frames (one per room segment) — phase-free, visible from join. */
+  private doorNodes = new Map<RoomIndex, HTMLElement>()
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
@@ -145,8 +148,10 @@ export class WorldScene extends Phaser.Scene {
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
     this.cueNodes.clear()
+    this.doorNodes.clear()
     this.riderSession = data.riderSession
     this.buildEvidenceLayer()
+    this.buildDoorsLayer()
 
     // Hall line (Graphics — deliberately not a Rectangle/Text: harness contract).
     this.add
@@ -413,6 +418,54 @@ export class WorldScene extends Phaser.Scene {
     return (centerMilli / 1000) * TILE_PX
   }
 
+  /**
+   * Static door frames (client:doors_pre_round): one framed opening per room
+   * segment (AD-010 geometry), rendered from the moment the world mounts —
+   * phase-free, so pre-round free-roam (AD-015) shows room boundaries. DOM like
+   * every non-contract visual; the grand lobby floor has no rooms, so the
+   * frames hide there and on every other non-guest view floor.
+   */
+  private buildDoorsLayer(): void {
+    document.querySelector('#doors-layer')?.remove()
+    const gameEl = document.querySelector('#game')
+    if (gameEl === null) return
+    const layer = document.createElement('div')
+    layer.id = 'doors-layer'
+    layer.style.position = 'absolute'
+    layer.style.inset = '0'
+    layer.style.pointerEvents = 'none'
+    for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
+      const startPx = (roomSegmentStartMilli(room as RoomIndex) / 1000) * TILE_PX
+      const endPx = (roomSegmentEndMilli(room as RoomIndex) / 1000) * TILE_PX
+      const door = document.createElement('div')
+      door.dataset.doorRoom = String(room)
+      door.style.position = 'absolute'
+      door.style.left = `${startPx + 4}px`
+      door.style.top = `${GROUND_Y - 72}px`
+      door.style.width = `${endPx - startPx - 8}px`
+      door.style.height = '72px'
+      door.style.border = '2px solid #667788'
+      door.style.borderBottom = 'none'
+      door.style.boxSizing = 'border-box'
+      door.style.visibility = 'hidden'
+      door.textContent = String(room)
+      door.style.textAlign = 'center'
+      door.style.fontSize = '11px'
+      door.style.color = '#8899aa'
+      layer.appendChild(door)
+      this.doorNodes.set(room as RoomIndex, door)
+    }
+    gameEl.appendChild(layer)
+  }
+
+  /** Door frames follow the own view floor (guest floors only, phase-free). */
+  private syncDoors(): void {
+    const visible = this.viewFloor !== 'lobby'
+    for (const door of this.doorNodes.values()) {
+      door.style.visibility = visible ? 'visible' : 'hidden'
+    }
+  }
+
   /** Create-on-demand card glyph per carded room; visible on the own floor only. */
   private syncCardMarkers(): void {
     const layer = this.evidenceLayer
@@ -583,6 +636,7 @@ export class WorldScene extends Phaser.Scene {
       marker.style.visibility = key.split(':')[0] === this.viewFloor ? 'visible' : 'hidden'
     }
     this.syncCues()
+    this.syncDoors()
     // The elevator panel is self-healing: view re-renders rebuild the DOM
     // element, so refresh it every frame from scene state.
     this.updatePanel()
