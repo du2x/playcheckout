@@ -175,7 +175,16 @@ now centralized here).
 
 ---
 
-### T4: Wire `ElevatorPresenter` into `WorldScene`
+### T4: Wire `ElevatorPresenter` into `WorldScene` — ✅ Done
+
+**Execution note**: T3's actual `onCalled(car, floor)`/`onMoved(car, floor)`
+signatures (no `atMs`/timestamp param — elapsed time is tracked internally by
+`tick(dtMs, ...)`, a purer design than the timestamp-based sketch below) mean
+this task forwards `action.car`/`action.floor as FloorId` only, not
+`Date.now()`. `create()` builds a fresh `ElevatorPresenter` after the car-
+Ellipse loop (its constructor already calls `reset()`, so no separate
+`.reset()` call was needed). `update()` passes Phaser's own `delta` (already
+milliseconds) straight through as `dtMs`.
 
 **What**: In `WorldScene.create()`, construct `this.elevatorPresenter = new ElevatorPresenter(this, this.cars, this.carPx.bind(this))` after the existing car-Ellipse creation loop, and call `.reset()` alongside the existing `this.cars.clear()` reset block. In `applyAction`, the `'elevator-called'` case calls `this.elevatorPresenter.onCalled(action.car, Date.now())` before/after the existing `this.updatePanel(); this.flashPanel()` calls; the `'elevator-moved'` case calls `this.elevatorPresenter.onMoved(action.car, action.floor as FloorId, Date.now())` before/after the existing `car.floor = action.floor; this.updatePanel()`. In `update(time, dt)`, add `this.elevatorPresenter.tick(dt, this.viewFloor)`, and remove the now-redundant `car.ellipse.setVisible(car.floor === this.viewFloor)` line (superseded by the presenter's own gating in `tick`).
 **Where**: `apps/client/src/scenes/WorldScene.ts`
@@ -190,15 +199,16 @@ now centralized here).
 
 **Done when**:
 
-- [ ] `WorldScene` forwards only plain fields (car id, floor, timestamp) to the presenter — never the raw `MovementAction` (ELAN-11)
-- [ ] Existing panel update/flash behavior on `elevator-called`/`elevator-moved` is unchanged (byte-identical DOM behavior)
-- [ ] The old inline `car.ellipse.setVisible(...)` line is removed, replaced by presenter-owned gating
-- [ ] `pnpm typecheck` and `pnpm lint` pass; `pnpm test:sim` still green (no regression in existing `apps/client` unit tests)
+- [x] `WorldScene` forwards only plain fields (car id, floor, timestamp) to the presenter — never the raw `MovementAction` (ELAN-11)
+- [x] Existing panel update/flash behavior on `elevator-called`/`elevator-moved` is unchanged (byte-identical DOM behavior)
+- [x] The old inline `car.ellipse.setVisible(...)` line is removed, replaced by presenter-owned gating
+- [x] `pnpm typecheck` and `pnpm lint` pass; `pnpm test:sim` still green (no regression in existing `apps/client` unit tests)
 
 **Tests**: unit (existing `apps/client` vitest suite must stay green; no new unit tests added by this task — covered by T2/T5)
 **Gate**: quick
 
 ---
+
 
 ### T5: Add `client:elevator_doors` Playwright harness scenario
 

@@ -9,6 +9,7 @@ import {
 } from '@turnover/shared'
 import Phaser from 'phaser'
 import type { RiderUpdate } from '../riderSession'
+import { ElevatorPresenter } from './elevatorPresenter'
 
 /**
  * The persistent world (cycle 2.4, AD-005): mounts when the player first joins
@@ -91,6 +92,8 @@ export class WorldScene extends Phaser.Scene {
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
+  /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
+  private elevatorPresenter: ElevatorPresenter | null = null
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
@@ -134,6 +137,8 @@ export class WorldScene extends Phaser.Scene {
       const ellipse = this.add.ellipse(this.carPx(id), GROUND_Y + 30, 46, 60, 0x775533)
       this.cars.set(id, { ellipse, floor: 'lobby' })
     }
+    // Fresh presenter per scene restart (its constructor resets both clocks).
+    this.elevatorPresenter = new ElevatorPresenter(this, this.cars, (car) => this.carPx(car))
 
     const keyboard = this.input.keyboard
     if (keyboard !== null) {
@@ -194,10 +199,12 @@ export class WorldScene extends Phaser.Scene {
       case 'elevator-moved': {
         const car = this.cars.get(action.car)
         if (car !== undefined) car.floor = action.floor
+        this.elevatorPresenter?.onMoved(action.car, action.floor as FloorId)
         this.updatePanel()
         break
       }
       case 'elevator-called':
+        this.elevatorPresenter?.onCalled(action.car, action.floor as FloorId)
         this.updatePanel()
         this.flashPanel()
         break
@@ -399,9 +406,7 @@ export class WorldScene extends Phaser.Scene {
       display.rect.x = display.x * TILE_PX
       display.label.x = display.x * TILE_PX
     }
-    for (const [, car] of this.cars) {
-      car.ellipse.setVisible(car.floor === this.viewFloor)
-    }
+    this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
     // The elevator panel is self-healing: view re-renders rebuild the DOM
     // element, so refresh it every frame from scene state.
     this.updatePanel()
