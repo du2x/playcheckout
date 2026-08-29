@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test'
 
-// Spec MOVE-01..19 (gate scenario client:movement): keyboard-driven movement on
-// real tabs — own prediction, others following, lobby bounds, building unlock at
-// start, elevator rides with position-only panels, post-buzzer re-confinement,
-// and a leaver's rectangle disappearing.
+// Spec MOVE-01..19 (gate scenario client:movement) + ELR-01..06 (gate scenario
+// client:elevator_riders): keyboard-driven movement on real tabs — own
+// prediction, others following, lobby bounds, building unlock at start,
+// press-model elevator rides with position-only panels, the rider-exclusive
+// chip, post-buzzer re-confinement, and a leaver's rectangle disappearing.
 
 const TILE = 832 / 30
 const SPEED = 6 // tiles per second (prd §7)
@@ -38,20 +39,45 @@ async function readScene(page: Page): Promise<SceneRead> {
   })
 }
 
-function onLanding(): boolean {
-  const t = (
-    window as unknown as {
-      __TURNOVER__: {
-        scene: (
-          n: string,
-        ) => { children: { list: { type: string; text?: string; x: number }[] } } | null
-      }
+interface ChipRead {
+  hidden: boolean
+  names: string
+  lit: string[]
+  press: string
+}
+
+/** The rider-exclusive DOM chip beside the panel (AD-013). */
+async function readChip(page: Page): Promise<ChipRead> {
+  return page.evaluate(() => {
+    const chip = document.querySelector('#elevator-riders')
+    if (chip === null) throw new Error('rider chip missing')
+    return {
+      hidden: chip.hasAttribute('hidden'),
+      names: chip.querySelector('#elevator-riders-names')?.textContent ?? '',
+      lit: [...chip.querySelectorAll('.floor-indicator.lit')].map(
+        (e) => (e as HTMLElement).dataset.floor ?? '',
+      ),
+      press: chip.querySelector('#elevator-press')?.textContent ?? '',
     }
-  ).__TURNOVER__
-  const scene = t.scene('Round')
-  if (scene === null) return false
-  const ada = scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')
-  return ada !== undefined && ada.x <= 832 / 30
+  })
+}
+
+/** Wire audit: occupancy/queue must never reach a non-rider (ELR-03/ELR-06 AC9). */
+async function wireAudit(page: Page): Promise<{ occupancyCount: number; panelShapes: string[][] }> {
+  return page.evaluate(() => {
+    const events = (
+      window as unknown as { __TURNOVER__: { events: { type: string; payload?: object }[] } }
+    ).__TURNOVER__.events
+    const occupancyKeys = ['carOccupants', 'riders', 'queue']
+    const occupancyCount = events.filter((e) => {
+      const payload = e.payload
+      return payload !== undefined && occupancyKeys.some((k) => k in payload)
+    }).length
+    const panelShapes = events
+      .filter((e) => e.type === 'elevator:called' || e.type === 'elevator:moved')
+      .map((e) => Object.keys(e.payload as Record<string, unknown>).sort())
+    return { occupancyCount, panelShapes }
+  })
 }
 
 function labelX(scene: SceneRead, name: string): number {
@@ -124,10 +150,10 @@ test.describe('client:movement', () => {
     await host.context().close()
   })
 
-  test('round: building unlocks, elevator rides, panels stay position-only (MOVE-10..17)', async ({
+  test('round: press-model ride, rider invisibility, position-only panels (MOVE-10..17, ELR-05/14)', async ({
     browser,
   }) => {
-    test.setTimeout(60_000) // the test shift (30 s, AD-004) plus choreography
+    test.setTimeout(90_000) // the test shift (30 s, AD-004) plus choreography
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -139,52 +165,87 @@ test.describe('client:movement', () => {
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
 
     // Walk to the west landing PRE-ROUND (AD-005: lobby walking + position
-    // persistence) so the whole elevator cycle fits inside the 8 s test shift.
+    // persistence): the parked car auto-boards ada (AD-014 boarding rule) and
+    // her rider-exclusive chip appears with her own name.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
-    await host.waitForTimeout(300)
-    expect(await host.evaluate(onLanding)).toBe(true)
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 5000 },
+    )
+    expect((await readChip(host)).names).toContain('ada')
 
     await host.click('#start-button')
     for (const page of pages) await page.waitForSelector('#round-hud')
-    await host.keyboard.press('ArrowUp') // call: pickup here, target floor1
 
-    // The car arrives (3 s), boards, and rides to floor1 (2 s): panels update.
+    // In-car press (Digit1 → floor1): the car departs at 2 s per floor — no
+    // call, no destination at call time (AD-014).
+    await host.keyboard.press('1')
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'floor1',
       undefined,
       { timeout: 8000 },
     )
     const panel = await host.textContent('#elevator-panel')
-    // Position-only: the panel names floors, never player ids or names.
+    // Position-only: the panel names floors, never player ids or names, and
+    // the chip's rider data never leaks into it (MOVE-16/17 preserved).
     expect(panel).not.toContain('ada')
     expect(panel).not.toContain('bruno')
 
-    // The rider's view follows the car: their own label now renders on floor1's
-    // view, and the car landed at the west edge (x = 0 px).
+    // While aboard (doors open at floor1, queue empty) the own rectangle is
+    // invisible — riders are on no floor and have no floor stream (AD-009).
     await host.waitForTimeout(300)
     const hostScene = await readScene(host)
-    expect(labelX(hostScene, 'ada')).toBeLessThanOrEqual(TILE)
+    expect(hostScene.labels.find((l) => l.text === 'ada')?.visible).toBe(false)
 
-    // A player who never called stays on the lobby floor view (bruno's tab still
-    // shows the lobby view; ada's rectangle is not on their floor).
-    const guestScene = await readScene(pages[1] as Page)
-    const adaOnGuest = guestScene.labels.find((l) => l.text === 'ada')
-    expect(adaOnGuest?.visible).toBe(false)
+    // Exit through the open doors: the own floor stream resumes at the car's
+    // landing (ELR P3 AC6) and she walks right along floor1.
+    await host.keyboard.down('ArrowRight')
+    await host.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (n: string) => {
+                children: { list: { type: string; text?: string; visible: boolean }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = t.scene('Round')
+        if (scene === null) return false
+        return (
+          scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')?.visible === true
+        )
+      },
+      undefined,
+      { timeout: 5000 },
+    )
+    await host.waitForTimeout(500) // keep walking while held
+    await host.keyboard.up('ArrowRight')
+    await host.waitForTimeout(200)
+    const afterExit = await readScene(host)
+    const adaX = labelX(afterExit, 'ada')
+    expect(adaX).toBeGreaterThan(TILE) // she left the landing
+    expect(adaX).toBeLessThan(5 * TILE) // ~500 ms of walking
 
-    // Buzzer (30 s test shift, AD-004 seam widened for the work-channel cycle):
-    // view returns to lobby; the rider keeps floor1.
+    // Buzzer (30 s test shift, AD-004 seam): view returns to lobby; ada keeps
+    // floor1.
     for (const page of pages) await page.waitForSelector('#lobby-view', { timeout: 45_000 })
 
     // Post-buzzer re-confinement (MOVE-08): ada is on floor1; the server refuses
-    // her move intent — the OTHER tabs' view of ada stays put.
+    // her move intent — bruno's (lobby) view of ada stays put.
+    const beforeHold = (await readScene(pages[1] as Page)).labels.find((l) => l.text === 'ada')?.x
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(600)
     await host.keyboard.up('ArrowRight')
     await pages[1]?.waitForTimeout(300)
     const after = (await readScene(pages[1] as Page)).labels.find((l) => l.text === 'ada')
-    expect(after?.x).toBe(guestScene.labels.find((l) => l.text === 'ada')?.x)
+    expect(after?.x).toBe(beforeHold)
 
     // A leaver's rectangle disappears everywhere (MOVE-19).
     await (pages[3] as Page).context().close()
@@ -206,5 +267,106 @@ test.describe('client:movement', () => {
     )
 
     for (const page of pages.slice(0, 3)) await page.context().close()
+  })
+})
+
+// Spec ELR-01..06 (gate scenario client:elevator_riders): two tabs share a car —
+// each rider sees both names' chip and the lit press indicator, the press
+// redirects the car visibly, the floor tab sees no occupancy anywhere and no
+// occupancy/queue/press-target data on the wire, and an exited rider does not
+// re-board the same open-door stop (door-open-episode guard, ELR edge).
+test.describe('client:elevator_riders', () => {
+  test('shared ride: rider-exclusive chip, lit indicator, press redirect, no re-board', async ({
+    browser,
+  }) => {
+    test.setTimeout(60_000)
+    const host = await browser.newContext().then((c) => c.newPage())
+    const code = await createRoom(host, 'ada')
+    const rider2 = await browser.newContext().then((c) => c.newPage())
+    await join(rider2, code, 'bruno')
+    const watcher = await browser.newContext().then((c) => c.newPage())
+    await join(watcher, code, 'caro')
+    await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 3)
+
+    // Both riders walk to the west landing together: the parked car auto-boards
+    // both (capacity 2, AD-014) and each chip shows BOTH names (ELR-01).
+    await host.keyboard.down('ArrowLeft')
+    await rider2.keyboard.down('ArrowLeft')
+    await host.waitForTimeout(3000)
+    await host.keyboard.up('ArrowLeft')
+    await rider2.keyboard.up('ArrowLeft')
+    for (const page of [host, rider2]) {
+      await page.waitForFunction(
+        () => {
+          const chip = document.querySelector('#elevator-riders')
+          if (chip === null || chip.hasAttribute('hidden')) return false
+          const names = chip.querySelector('#elevator-riders-names')?.textContent ?? ''
+          return names.includes('ada') && names.includes('bruno')
+        },
+        undefined,
+        { timeout: 5000 },
+      )
+    }
+    // The floor tab's chip stays hidden (ELR-01 AC3: non-riders see nothing).
+    expect((await readChip(watcher)).hidden).toBe(true)
+
+    // The press redirects the car (ELR-06): ada queues floor1 — the floor1
+    // indicator lights on BOTH riders' chips and the last-press line names her.
+    await host.keyboard.press('1')
+    for (const page of [host, rider2]) {
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('#elevator-riders .floor-indicator.lit[data-floor="floor1"]')
+            .length === 1,
+        undefined,
+        { timeout: 5000 },
+      )
+    }
+    expect((await readChip(host)).press).toContain('ada pressed floor1')
+    expect((await readChip(rider2)).press).toContain('ada pressed floor1')
+
+    // The car rides to floor1 (2 s): the public panel follows for everyone.
+    await watcher.waitForFunction(
+      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      undefined,
+      { timeout: 10_000 },
+    )
+
+    // Wire purity on the floor (ELR-03, ELR-06 AC9): no occupancy, queue, or
+    // press-target data in ANY event caro received; panel payloads stay
+    // exactly {car, floor}.
+    const audit = await wireAudit(watcher)
+    expect(audit.occupancyCount).toBe(0)
+    for (const shape of audit.panelShapes) expect(shape).toEqual(['car', 'floor'])
+
+    // Bruno exits through the open doors, stepping only briefly: he stays
+    // within the boarding radius (the episode guard must hold him out).
+    await rider2.keyboard.down('ArrowRight')
+    await rider2.waitForTimeout(150)
+    await rider2.keyboard.up('ArrowRight')
+
+    // Ada's chip drops bruno (ELR-01 AC2); bruno's own chip hides — his floor
+    // stream resumed (ELR P3 AC6).
+    await host.waitForFunction(
+      () => (document.querySelector('#elevator-riders-names')?.textContent ?? '') === 'ada',
+      undefined,
+      { timeout: 5000 },
+    )
+    await rider2.waitForFunction(
+      () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
+      undefined,
+      { timeout: 5000 },
+    )
+
+    // Door-open-episode guard (ELR edge): bruno stands within the boarding
+    // radius while the car idles open-doors at this stop — he is NOT re-boarded.
+    await host.waitForTimeout(1500)
+    expect((await readChip(host)).names).toBe('ada')
+    const brunoScene = await readScene(rider2)
+    expect(brunoScene.labels.find((l) => l.text === 'bruno')?.visible).toBe(true)
+
+    await host.context().close()
+    await rider2.context().close()
+    await watcher.context().close()
   })
 })

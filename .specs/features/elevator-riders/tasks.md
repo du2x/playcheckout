@@ -319,7 +319,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T11: Harness scenarios for elevator riders
+#### T11: Harness scenarios for elevator riders — ✅ Done
 
 **What**: Rewrite `movement.spec.ts` and `elevatorLobby.spec.ts` ride choreography for the press model (call → board → press → ride; 20-tick dwell expectations) and add a `client:elevator_riders` harness scenario: two tabs share a car — each shows the other's name and matching lit indicators while riding (press changes the car's path visibly), a third tab on the floor shows no occupancy anywhere and no queue, and a rider who exits does not re-board the same open-door stop.
 **Where**: `apps/client/harness/movement.spec.ts`
@@ -332,9 +332,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-client-harness`
 
 **Done when**:
-- [ ] `pnpm test:client` passes: `client:movement` (updated), `client:elevator_lobby` (updated, zero host starts still exercises pre-round riding via press), and new `client:elevator_riders` assertions (chip exclusive to riders, press redirects, no re-board same stop)
-- [ ] No panel payload leaks to non-riders on the wire (harness inspects `elevator:called`/`elevator:moved` keys still only `car`/`floor`)
-- [ ] Gate check passes: `pnpm test:client` (full)
+- [x] `pnpm test:client` passes: `client:movement` (updated), `client:elevator_lobby` (updated, zero host starts still exercises pre-round riding via press), and new `client:elevator_riders` assertions (chip exclusive to riders, press redirects, no re-board same stop)
+- [x] No panel payload leaks to non-riders on the wire (harness inspects `elevator:called`/`elevator:moved` keys still only `car`/`floor`)
+- [x] Gate check passes: `pnpm test:client` (full)
 
 **Tests**: e2e
 **Gate**: full

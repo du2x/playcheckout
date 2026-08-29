@@ -1,9 +1,11 @@
 import { expect, type Page, test } from '@playwright/test'
 
-// Spec EL-01/EL-04 (AD-011, gate scenario client:elevator_lobby): the full
-// elevator machine runs BEFORE any round starts — no host start, no test shift.
-// Walk to a landing, call with ArrowUp, ride to floor1, ride back with
-// ArrowDown. This is the fast Playwright entry point for elevator debugging.
+// Spec EL-01/EL-04 (AD-011, gate scenario client:elevator_lobby) rewritten for
+// the press model (AD-014): the full elevator machine runs BEFORE any round
+// starts — no host start, no test shift. A call with a car parked open-doors is
+// a decoy flash; walking to a landing auto-boards; Digit1/Digit0 press the
+// destination in-car; exit resumes the floor stream. This is the fast
+// Playwright entry point for elevator debugging.
 
 const TILE = 832 / 30
 
@@ -27,7 +29,9 @@ async function readOwn(page: Page): Promise<{ x: number; visible: boolean }> {
 }
 
 test.describe('client:elevator_lobby', () => {
-  test('rides floor1 and back before any round starts (EL-01, EL-04)', async ({ browser }) => {
+  test('decoy flash, auto-board, in-car presses ride floor1 and back (EL-01, EL-04, ELR-05/14)', async ({
+    browser,
+  }) => {
     test.setTimeout(45_000)
     const host = await browser.newContext().then((c) => c.newPage())
     await host.goto('/')
@@ -35,17 +39,10 @@ test.describe('client:elevator_lobby', () => {
     await host.click('#create-button')
     await host.waitForSelector('#lobby-view')
 
-    // Walk to the west landing (15 tiles at 6 tiles/s ≈ 2.5 s).
-    await host.keyboard.down('ArrowLeft')
-    await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
-    await host.waitForTimeout(300)
-    expect((await readOwn(host)).x).toBeLessThanOrEqual(TILE)
-
-    // Call: ArrowUp from the lobby targets floor1. The car arrives (3 s),
-    // boards the caller at the landing, and rides (2 s/floor).
+    // A call with a car parked open-doors at the lobby is a DUPLICATE
+    // (AD-014: duplicate predicate = pickup floor only): no dispatch, but the
+    // panel pulses — a call always looks registered (AD-012 acknowledgment).
     await host.keyboard.press('ArrowUp')
-    // AD-012: the call is acknowledged visually — the panel pulses, then clears.
     await host.waitForFunction(
       () =>
         (document.querySelector('#elevator-panel') as HTMLElement | null)?.style.backgroundColor ===
@@ -60,32 +57,78 @@ test.describe('client:elevator_lobby', () => {
       undefined,
       { timeout: 3000 },
     )
+    // The decoy dispatched nothing: the parked car is still at the lobby.
+    expect(await host.textContent('#panel-west')).toBe('lobby')
+
+    // Walk to the west landing (15 tiles at 6 tiles/s ≈ 2.5 s): the parked car
+    // auto-boards ada (AD-014: board every open-door tick) and her
+    // rider-exclusive chip appears.
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForTimeout(3000)
+    await host.keyboard.up('ArrowLeft')
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 5000 },
+    )
+
+    // In-car press floor1 (Digit1): the car departs directly — no 3 s arrival,
+    // she is already aboard (2 s per floor).
+    await host.keyboard.press('1')
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
-    // The arrival switched the rider's view to floor1, standing at the landing.
-    await host.waitForTimeout(300)
-    expect((await readOwn(host)).x).toBeLessThanOrEqual(TILE)
 
-    // Confinement holds in prediction too (MOVE-08): holding right on floor1
-    // pre-round must NOT slide the own rectangle (server refuses the intent).
-    await host.keyboard.down('ArrowRight')
-    await host.waitForTimeout(600)
-    await host.keyboard.up('ArrowRight')
-    await host.waitForTimeout(300)
-    expect((await readOwn(host)).x).toBeLessThanOrEqual(TILE)
-
-    // Round-trip: ArrowDown from floor1 targets the lobby.
-    await host.keyboard.press('ArrowDown')
+    // Stay-in-car (ELR P2 AC2): press lobby (Digit0) — the car rides back.
+    await host.keyboard.press('0')
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'lobby',
       undefined,
       { timeout: 10_000 },
     )
+
+    // Exit through the open doors: the own floor stream resumes at the lobby
+    // landing (ELR P3 AC6) and she walks right — pre-round lobby walking is
+    // allowed, so prediction and server agree. Hold long enough to leave the
+    // landing before releasing.
+    await host.keyboard.down('ArrowRight')
+    await host.waitForFunction(
+      () => {
+        const w = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (n: string) => {
+                children: { list: { type: string; text?: string; visible: boolean }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = w.scene('Round')
+        if (scene === null) return false
+        return (
+          scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')?.visible === true
+        )
+      },
+      undefined,
+      { timeout: 5000 },
+    )
+    await host.waitForTimeout(500) // keep walking while held
+    await host.keyboard.up('ArrowRight')
     await host.waitForTimeout(300)
-    expect((await readOwn(host)).x).toBeLessThanOrEqual(TILE)
+    const own = await readOwn(host)
+    expect(own.visible).toBe(true)
+    expect(own.x).toBeGreaterThan(TILE)
+
+    // The chip hid when she left the car (visible only while riding).
+    await host.waitForFunction(
+      () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
+      undefined,
+      { timeout: 5000 },
+    )
 
     // No round was ever started: the round HUD never mounts.
     expect(await host.$('#round-hud')).toBeNull()

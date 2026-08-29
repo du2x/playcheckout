@@ -88,7 +88,8 @@ test.describe('client:work_channels', () => {
     }
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
 
-    // Pre-round: walk to the west landing so the round begins there (AD-005).
+    // Pre-round: walk to the west landing — the parked car auto-boards ada
+    // (AD-014 boarding rule); the round begins with her aboard.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
@@ -99,18 +100,20 @@ test.describe('client:work_channels', () => {
 
     await host.click('#start-button')
     for (const page of pages) await page.waitForSelector('#round-hud')
-    await host.keyboard.press('ArrowUp') // call: pickup here, target floor1
+    await host.keyboard.press('1') // in-car press: ride to floor1 (AD-014)
 
-    // Ride to floor1 (3 s arrival + 2 s ride per §7).
+    // Ride to floor1 (2 s per floor per §7; no arrival — she is aboard).
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
 
+    // Exit through the open doors: holding right walks her off the car and
+    // then along floor1.
+    await host.keyboard.down('ArrowRight')
     // WORK-17 in vivo: while ada walks on floor1, the lobby tab's event stream
     // receives NO new positions for her (sameFloor routing, AD-009).
-    await host.keyboard.down('ArrowRight')
     const beforeMoves = await adaMoveCount(pages[1] as Page, adaId)
     await host.waitForTimeout(1000)
     const afterMoves = await adaMoveCount(pages[1] as Page, adaId)
