@@ -33,6 +33,15 @@ export class App {
   private connection: Connection | null = null
   private roomCode = ''
   private stopClock: (() => void) | null = null
+  /** The car the local player rides with its occupants + queue (AD-013) —
+   * rider-exclusive chip state; null when not riding. */
+  private riding: {
+    car: CarId
+    occupants: readonly string[]
+    queue: readonly FloorId[]
+  } | null = null
+  /** Last press seen in the own car (`#elevator-press` line, AD-013). */
+  private lastPress: { playerId: string; floor: FloorId } | null = null
 
   constructor(
     private readonly root: HTMLElement,
@@ -87,7 +96,41 @@ export class App {
     return {
       onActions: (actions: ViewAction[]) => {
         let viewChanged = false
+        const ownId = this.state.snapshot?.ownId
         for (const action of actions) {
+          if (action.type === 'elevator-pressed') {
+            // Rider-exclusive press testimony (ELR-06): surgical chip write.
+            this.lastPress = { playerId: action.playerId, floor: action.floor }
+            this.updateRiderChip()
+            continue
+          }
+          if (action.type === 'elevator-riders') {
+            // AD-013: the own id in the occupancy list is the authoritative
+            // boarding signal; its absence (for the car we rode) is a walk-off.
+            if (ownId !== undefined && action.riders.includes(ownId)) {
+              if (this.riding === null) this.lastPress = null // fresh boarding
+              this.riding = { car: action.car, occupants: action.riders, queue: action.queue }
+            } else if (this.riding?.car === action.car) {
+              this.riding = null
+              this.lastPress = null
+            }
+            this.world()?.applyAction(action) // scene keymap gate tracks riding
+            this.updateRiderChip()
+            continue
+          }
+          if (action.type === 'player-moved' && action.playerId === ownId && this.riding) {
+            // The own floor stream resumes only off a car: exit/walk-off.
+            this.riding = null
+            this.lastPress = null
+            this.updateRiderChip()
+          }
+          if (action.type === 'movement-snapshot') {
+            // Join/buzzer resync (AD-013): carOccupants present = riding.
+            const own = action.snapshot.carOccupants
+            this.riding = own ? { car: own.car, occupants: own.riders, queue: own.queue } : null
+            this.lastPress = null
+            this.updateRiderChip()
+          }
           if (isMovementRenderAction(action)) {
             this.world()?.applyAction(action)
             continue
@@ -165,6 +208,39 @@ export class App {
     })
   }
 
+  /**
+   * Surgical chip write (AD-013): occupant names, the own car's queue as four
+   * lit floor indicators (lit = queued or being served), and the last-press
+   * line — visible only while the local player rides. The `#elevator-panel`
+   * sibling is never touched: panels stay position-only (MOVE-17).
+   */
+  private updateRiderChip(): void {
+    const chip = document.querySelector('#elevator-riders')
+    if (chip === null) return
+    const riding = this.riding
+    if (riding === null) {
+      chip.setAttribute('hidden', '')
+      return
+    }
+    chip.removeAttribute('hidden')
+    const names = new Map(this.state.snapshot?.roster.map((e) => [e.id, e.name] as const) ?? [])
+    const namesEl = chip.querySelector('#elevator-riders-names')
+    if (namesEl !== null) {
+      namesEl.textContent = riding.occupants.map((id) => names.get(id) ?? id).join(', ')
+    }
+    for (const indicator of chip.querySelectorAll<HTMLElement>('.floor-indicator')) {
+      const floor = indicator.dataset.floor as FloorId | undefined
+      indicator.classList.toggle('lit', floor !== undefined && riding.queue.includes(floor))
+    }
+    const press = chip.querySelector('#elevator-press')
+    if (press !== null) {
+      press.textContent =
+        this.lastPress === null
+          ? ''
+          : `${names.get(this.lastPress.playerId) ?? this.lastPress.playerId} pressed ${this.lastPress.floor}`
+    }
+  }
+
   private render(): void {
     this.stopClock?.()
     this.stopClock = null
@@ -191,6 +267,8 @@ export class App {
         this.root.append(el('div', { id: 'lost-view' }, ['connection lost']))
         break
     }
+    // View re-renders rebuild the chip DOM: restore the rider-exclusive state.
+    this.updateRiderChip()
   }
 }
 

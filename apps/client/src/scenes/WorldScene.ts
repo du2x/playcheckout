@@ -25,6 +25,14 @@ const TILE_PX = 832 / 30 // hall width in px per tile
 const GROUND_Y = 430
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
 
+/** In-car press keymap (ELR-06): browser event.code → floor pressed. */
+const IN_CAR_FLOOR_BY_CODE: Record<string, FloorId> = {
+  Digit1: 'floor1',
+  Digit2: 'floor2',
+  Digit3: 'floor3',
+  Digit0: 'lobby',
+}
+
 export interface WorldPlayerEntry {
   readonly id: string
   readonly name: string
@@ -36,6 +44,7 @@ export interface WorldStartData {
   sendMoveStart: (dir: 'left' | 'right') => void
   sendMoveStop: () => void
   sendElevatorCall: () => void
+  sendElevatorPress: (floor: FloorId) => void
   sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
 }
 
@@ -43,6 +52,7 @@ type MovementAction =
   | { type: 'player-moved'; playerId: string; floor: string; x: number; facing: string }
   | { type: 'elevator-called'; floor: string; car: 1 | 2 }
   | { type: 'elevator-moved'; car: 1 | 2; floor: string }
+  | { type: 'elevator-riders'; car: 1 | 2; riders: readonly string[]; queue: readonly string[] }
   | { type: 'player-left'; playerId: string }
   | { type: 'player-left-floor'; playerId: string; floor: string }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
@@ -75,6 +85,7 @@ export class WorldScene extends Phaser.Scene {
   private sendMoveStart: (dir: 'left' | 'right') => void = () => {}
   private sendMoveStop: () => void = () => {}
   private sendElevatorCall: () => void = () => {}
+  private sendElevatorPress: (floor: FloorId) => void = () => {}
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
@@ -86,6 +97,8 @@ export class WorldScene extends Phaser.Scene {
   private work: { startedAt: number; seconds: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
+  /** The car the local player is riding, or null (keymap gate for presses). */
+  private riding: 1 | 2 | null = null
 
   constructor() {
     super('Round')
@@ -96,6 +109,7 @@ export class WorldScene extends Phaser.Scene {
     this.sendMoveStart = data.sendMoveStart
     this.sendMoveStop = data.sendMoveStop
     this.sendElevatorCall = data.sendElevatorCall
+    this.sendElevatorPress = data.sendElevatorPress
     this.sendWorkStart = data.sendWorkStart
     this.players.clear()
     this.cars.clear()
@@ -103,6 +117,7 @@ export class WorldScene extends Phaser.Scene {
     this.viewFloor = 'lobby'
     this.work = null
     this.interior = null
+    this.riding = null
 
     // Hall line (Graphics — deliberately not a Rectangle/Text: harness contract).
     this.add
@@ -125,10 +140,17 @@ export class WorldScene extends Phaser.Scene {
       keyboard.on('keydown-RIGHT', () => this.beginMove('right'))
       keyboard.on('keyup-LEFT', () => this.endMove('left'))
       keyboard.on('keyup-RIGHT', () => this.endMove('right'))
-      // Elevator calls: up/down summons a car to this floor — destination-free
-      // (AD-014): the destination is chosen inside the car via a press.
+      // Elevator calls: up/down/E summons a car to this floor — destination-
+      // free (AD-014): the destination is chosen inside the car via a press.
       keyboard.on('keydown-UP', () => this.callElevator())
       keyboard.on('keydown-DOWN', () => this.callElevator())
+      keyboard.on('keydown-E', () => this.callElevator())
+      // In-car floor presses (ELR-06): 1/2/3 press floor1..floor3, 0 presses
+      // lobby — active only while the local player rides a car.
+      keyboard.on('keydown', (event: KeyboardEvent) => {
+        const floor = IN_CAR_FLOOR_BY_CODE[event.code]
+        if (floor !== undefined) this.pressFloor(floor)
+      })
       // Work: Space starts a channel inside the room segment the own
       // rectangle stands in; the server validates role and room state (FR-7).
       keyboard.on('keydown-SPACE', () => this.startWorkHere())
@@ -168,9 +190,20 @@ export class WorldScene extends Phaser.Scene {
         if (action.playerId === this.ownId) {
           display.targetX = null
           this.viewFloor = action.floor
+          // The own floor stream only runs OFF a car: boarding's position snap
+          // precedes the first riders update, and an exit resumes the stream —
+          // either way the own player:moved clears stale riding state.
+          this.riding = null
         } else {
           display.targetX = action.x
         }
+        break
+      }
+      case 'elevator-riders': {
+        // AD-013: the rider-exclusive occupancy update is the authoritative
+        // riding signal — board (own id present) and walk-off (absent).
+        if (action.riders.includes(this.ownId)) this.riding = action.car
+        else if (this.riding === action.car) this.riding = null
         break
       }
       case 'elevator-moved': {
@@ -260,6 +293,9 @@ export class WorldScene extends Phaser.Scene {
       const car = this.cars.get(c.car)
       if (car !== undefined) car.floor = c.floor
     }
+    // AD-013: a rider's snapshot carries their car's occupants; a non-rider's
+    // carries none — the snapshot is authoritative at join/buzzer resync.
+    this.riding = snapshot.carOccupants?.car ?? null
     this.updatePanel()
   }
 
@@ -288,6 +324,12 @@ export class WorldScene extends Phaser.Scene {
   /** Destination-free elevator call (AD-014): the pickup floor is implicit. */
   private callElevator(): void {
     this.sendElevatorCall()
+  }
+
+  /** In-car floor press — sent only while the local player rides a car. */
+  private pressFloor(floor: FloorId): void {
+    if (this.riding === null) return
+    this.sendElevatorPress(floor)
   }
 
   private carPx(car: 1 | 2): number {

@@ -55,6 +55,19 @@ export function renderLobby(
         ' · E: ',
         el('span', { id: 'panel-east' }, ['lobby']),
       ]),
+      // Rider chip (AD-013): occupants, four lit floor indicators (lit =
+      // queued or being served), and the last-press line — visible only while
+      // the local player rides; the panel above stays position-only.
+      el('div', { id: 'elevator-riders', hidden: '' }, [
+        el('span', { id: 'elevator-riders-names' }, []),
+        el('span', { id: 'elevator-indicators' }, [
+          el('span', { class: 'floor-indicator', 'data-floor': 'lobby' }, ['L']),
+          el('span', { class: 'floor-indicator', 'data-floor': 'floor1' }, ['1']),
+          el('span', { class: 'floor-indicator', 'data-floor': 'floor2' }, ['2']),
+          el('span', { class: 'floor-indicator', 'data-floor': 'floor3' }, ['3']),
+        ]),
+        el('span', { id: 'elevator-press' }, []),
+      ]),
     ]),
   )
 }

@@ -295,7 +295,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T10: Client world scene and panel chip
+#### T10: Client world scene and panel chip — ✅ Done
 
 **What**: In `WorldScene`, route not-in-car keys (`ArrowUp`/`ArrowDown`/`KeyE`) to `sendElevatorCall()` and in-car keys (`Digit1`/`Digit2`/`Digit3`→floor1..3, `Digit0`→lobby) to `sendElevatorPress(floor)`; apply server `elevator:pressed`/`elevator:riders` actions in `App` as surgical DOM writes to a new `#elevator-riders` chip (occupant names, visible only while the local player is a rider) plus four floor indicators (lobby/1/2/3, lit = queued or being served) and a `#elevator-press` last-press line beside the existing `#elevator-panel`. Add the chip/indicator elements to `lobbyView.ts` and `roundHud.ts`; keep `WorldScene` rider-invisibility (no car-interior rectangles) and panel position-only guarantee.
 **Where**: `apps/client/src/scenes/WorldScene.ts`
@@ -308,9 +308,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-client-harness`
 
 **Done when**:
-- [ ] Keymap sends destination-free calls outside cars and floor presses inside cars
-- [ ] Chip shows co-riders + lit indicators to riders only; non-riders' DOM has empty/hidden chip; `#elevator-panel` never contains names or queue data (MOVE-17 preserved)
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] Keymap sends destination-free calls outside cars and floor presses inside cars
+- [x] Chip shows co-riders + lit indicators to riders only; non-riders' DOM has empty/hidden chip; `#elevator-panel` never contains names or queue data (MOVE-17 preserved)
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim` (behavior assertions pinned by the T11 harness per the coverage matrix)
 
 **Tests**: unit
 **Gate**: quick
