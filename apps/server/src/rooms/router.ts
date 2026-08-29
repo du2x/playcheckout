@@ -6,7 +6,10 @@ import {
   type RecipientPolicy,
   type RegistryKey,
   type RegistryPayload,
+  roomSegmentEndMilli,
+  roomSegmentStartMilli,
   type SimEvent,
+  TUNING,
 } from '@turnover/shared'
 import type { Client, Room } from 'colyseus'
 
@@ -38,9 +41,14 @@ export interface ViewContext {
   readonly roomKey: string | null
   /** The car the viewer is riding, or null on any floor (AD-013). */
   readonly car: CarId | null
+  /**
+   * The viewer's integer millitile x on their floor, or null for riders and
+   * unknown positions — the earshot-policy routing key (cycle 2.7, FR-13).
+   */
+  readonly x: number | null
 }
 
-const NO_VIEW: ViewContext = { floor: null, roomKey: null, car: null }
+const NO_VIEW: ViewContext = { floor: null, roomKey: null, car: null, x: null }
 
 interface Projection {
   payload: unknown
@@ -130,6 +138,24 @@ export class Router {
         if (this.viewContext(client.sessionId).car === visibility?.car) {
           this.deliver(client, key, payload, time)
         }
+      }
+      return
+    }
+    if (recipients === 'earshot') {
+      // EVID-13 (FR-13): the sabotage rustle is heard exactly as far as it
+      // carries — same floor, within RUSTLE_RANGE_TILES of the room's segment
+      // (distance to the nearer edge, through walls, inclusive boundary).
+      const floor = visibility?.floor
+      const room = visibility?.room
+      if (floor === undefined || room === undefined) return
+      const rangeMilli = TUNING.RUSTLE_RANGE_TILES * 1000
+      const start = roomSegmentStartMilli(room)
+      const end = roomSegmentEndMilli(room)
+      for (const client of this.liveClients()) {
+        const vc = this.viewContext(client.sessionId)
+        if (vc.floor !== floor || vc.x === null) continue
+        const dist = vc.x < start ? start - vc.x : vc.x > end ? vc.x - end : 0
+        if (dist <= rangeMilli) this.deliver(client, key, payload, time)
       }
       return
     }

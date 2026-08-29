@@ -131,7 +131,7 @@ T6 → T7 → T8
 
 ---
 
-### T4: Server — ViewContext.x + earshot delivery
+### T4: Server — ViewContext.x + earshot delivery — ✅ done
 
 **What**: Add `x: number | null` (integer millitiles) to `ViewContext` and to every `movement.viewOf` return shape (riders → null); add the `'earshot'` dispatch branch to the Router: deliver iff same floor AND `dist(vc.x, room segment) ≤ TUNING.RUSTLE_RANGE_TILES × 1000` (nearer edge, inside = 0, inclusive boundary). Update the `toEqual` viewOf assertions in `movement.test.ts` and add router tests: inside room, 2 tiles, exactly 3000 milli (in), 3001 milli (out), other floor, rider, lobby.
 **Where**: `apps/server/src/rooms/router.ts`, `packages/sim/src/movement.ts`, `router.test.ts`, `movement.test.ts`

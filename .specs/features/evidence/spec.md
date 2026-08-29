@@ -204,7 +204,7 @@ same-floor viewers (entrant included), pass-through fires, exit/stop stays silen
 | EVID-10 | P2: Freshness | Execute | Done |
 | EVID-11 | P2: Freshness | Execute | Done |
 | EVID-12 | P3: Rustle | Execute | Done |
-| EVID-13 | P3: Rustle | Design | Pending |
+| EVID-13 | P3: Rustle | Execute | Done |
 | EVID-14 | P3: Rustle | Execute | Done |
 | {rid} | P3: Rustle | Design | Pending |
 | {rid} | P4: Door-open cue | Design | Pending |
