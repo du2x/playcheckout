@@ -8,6 +8,7 @@ import type {
 } from '@turnover/shared'
 import type Phaser from 'phaser'
 import { Connection } from './net/connection'
+import { initialRiderSession, type RiderUpdate, reduceRider } from './riderSession'
 import type { WorldScene } from './scenes/WorldScene'
 import { initialViewState, reduce, type ViewAction, type ViewName, type ViewState } from './state'
 import { el } from './ui/dom'
@@ -33,15 +34,10 @@ export class App {
   private connection: Connection | null = null
   private roomCode = ''
   private stopClock: (() => void) | null = null
-  /** The car the local player rides with its occupants + queue (AD-013) —
-   * rider-exclusive chip state; null when not riding. */
-  private riding: {
-    car: CarId
-    occupants: readonly string[]
-    queue: readonly FloorId[]
-  } | null = null
-  /** Last press seen in the own car (`#elevator-press` line, AD-013). */
-  private lastPress: { playerId: string; floor: FloorId } | null = null
+  /** The rider session (AD-013): the single derivation of the local player's
+   * in-car state, reduced purely in riderSession.ts — the chip renders from it
+   * and the world scene receives it for its keymap gate + rider visibility. */
+  private rider: RiderUpdate = initialRiderSession()
 
   constructor(
     private readonly root: HTMLElement,
@@ -98,52 +94,18 @@ export class App {
         let viewChanged = false
         const ownId = this.state.snapshot?.ownId
         for (const action of actions) {
-          if (action.type === 'elevator-pressed') {
-            // Rider-exclusive press testimony (ELR-06): the pressed floor
-            // joins the own car's lit set — the queue rides in the chip state
-            // (AD-013), refreshed authoritatively by elevator:riders events.
-            if (this.riding !== null && !this.riding.queue.includes(action.floor)) {
-              this.riding = { ...this.riding, queue: [...this.riding.queue, action.floor] }
-            }
-            this.lastPress = { playerId: action.playerId, floor: action.floor }
+          // Rider knowledge reduces first (one state home, riderSession.ts);
+          // the scene's keymap gate + the chip both consume the result.
+          const riderBefore = this.rider
+          this.rider = reduceRider(this.rider, action, ownId)
+          if (this.rider !== riderBefore) {
+            this.world()?.setRiderSession(this.rider)
             this.updateRiderChip()
+          }
+          if (action.type === 'elevator-pressed' || action.type === 'elevator-riders') {
+            // Rider-exclusive events: fully consumed by the session — the
+            // scene no longer derives riding from them.
             continue
-          }
-          if (action.type === 'elevator-moved' && this.riding?.car === action.car) {
-            // Arrival serves the floor: it leaves the queue (P2 AC4) and its
-            // indicator unlights. Routed on to the scene below as usual.
-            this.riding = {
-              ...this.riding,
-              queue: this.riding.queue.filter((f) => f !== action.floor),
-            }
-            this.updateRiderChip()
-          }
-          if (action.type === 'elevator-riders') {
-            // AD-013: the own id in the occupancy list is the authoritative
-            // boarding signal; its absence (for the car we rode) is a walk-off.
-            if (ownId !== undefined && action.riders.includes(ownId)) {
-              if (this.riding === null) this.lastPress = null // fresh boarding
-              this.riding = { car: action.car, occupants: action.riders, queue: action.queue }
-            } else if (this.riding?.car === action.car) {
-              this.riding = null
-              this.lastPress = null
-            }
-            this.world()?.applyAction(action) // scene keymap gate tracks riding
-            this.updateRiderChip()
-            continue
-          }
-          if (action.type === 'player-moved' && action.playerId === ownId && this.riding) {
-            // The own floor stream resumes only off a car: exit/walk-off.
-            this.riding = null
-            this.lastPress = null
-            this.updateRiderChip()
-          }
-          if (action.type === 'movement-snapshot') {
-            // Join/buzzer resync (AD-013): carOccupants present = riding.
-            const own = action.snapshot.carOccupants
-            this.riding = own ? { car: own.car, occupants: own.riders, queue: own.queue } : null
-            this.lastPress = null
-            this.updateRiderChip()
           }
           if (isMovementRenderAction(action)) {
             this.world()?.applyAction(action)
@@ -216,6 +178,7 @@ export class App {
       sendElevatorPress: (floor: FloorId) => this.connection?.sendElevatorPress(floor),
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
         this.connection?.sendWorkStart(floor, room),
+      riderSession: this.rider,
     })
   }
 
@@ -228,7 +191,7 @@ export class App {
   private updateRiderChip(): void {
     const chip = document.querySelector('#elevator-riders')
     if (chip === null) return
-    const riding = this.riding
+    const riding = this.rider
     if (riding === null) {
       chip.setAttribute('hidden', '')
       return
@@ -246,9 +209,9 @@ export class App {
     const press = chip.querySelector('#elevator-press')
     if (press !== null) {
       press.textContent =
-        this.lastPress === null
+        riding.lastPress === null
           ? ''
-          : `${names.get(this.lastPress.playerId) ?? this.lastPress.playerId} pressed ${this.lastPress.floor}`
+          : `${names.get(riding.lastPress.playerId) ?? riding.lastPress.playerId} pressed ${riding.lastPress.floor}`
     }
   }
 

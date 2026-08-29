@@ -28,3 +28,10 @@ The per-room server module that applies recipient policies to sim events and
 room-originated sends, and stamps the envelope. Owns the per-connection
 sequence counters.
 _Avoid_: dispatcher, message switch
+
+**Rider session**:
+The client's single derivation of the local player's in-car state — car,
+occupants, press queue, last press — reduced purely from the ViewAction
+stream. The rider chip renders from it and the world scene consumes it (press
+keymap gate, rider visibility). Derived once, never per-consumer.
+_Avoid_: riding state, rider chip state

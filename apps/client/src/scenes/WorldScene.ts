@@ -8,6 +8,7 @@ import {
   TUNING,
 } from '@turnover/shared'
 import Phaser from 'phaser'
+import type { RiderUpdate } from '../riderSession'
 
 /**
  * The persistent world (cycle 2.4, AD-005): mounts when the player first joins
@@ -46,13 +47,14 @@ export interface WorldStartData {
   sendElevatorCall: () => void
   sendElevatorPress: (floor: FloorId) => void
   sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
+  /** The App-reduced rider session at mount time (usually null on fresh join). */
+  riderSession: RiderUpdate
 }
 
 type MovementAction =
   | { type: 'player-moved'; playerId: string; floor: string; x: number; facing: string }
   | { type: 'elevator-called'; floor: string; car: 1 | 2 }
   | { type: 'elevator-moved'; car: 1 | 2; floor: string }
-  | { type: 'elevator-riders'; car: 1 | 2; riders: readonly string[]; queue: readonly string[] }
   | { type: 'player-left'; playerId: string }
   | { type: 'player-left-floor'; playerId: string; floor: string }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
@@ -95,8 +97,9 @@ export class WorldScene extends Phaser.Scene {
   private work: { startedAt: number; seconds: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
-  /** The car the local player is riding, or null (keymap gate for presses). */
-  private riding: 1 | 2 | null = null
+  /** The App-owned rider session (riderSession.ts): keymap gate + rider
+   * visibility. The scene derives nothing — it only consumes. */
+  private riderSession: RiderUpdate = null
 
   constructor() {
     super('Round')
@@ -115,7 +118,7 @@ export class WorldScene extends Phaser.Scene {
     this.viewFloor = 'lobby'
     this.work = null
     this.interior = null
-    this.riding = null
+    this.riderSession = data.riderSession
 
     // Hall line (Graphics — deliberately not a Rectangle/Text: harness contract).
     this.add
@@ -166,6 +169,11 @@ export class WorldScene extends Phaser.Scene {
     this.sendWorkStart(floor as GuestFloorId, room as RoomIndex)
   }
 
+  /** The App pushes the reduced rider session whenever it changes. */
+  setRiderSession(session: RiderUpdate): void {
+    this.riderSession = session
+  }
+
   /** Movement-kind ViewActions are routed here by the App (render state). */
   applyAction(action: MovementAction): void {
     switch (action.type) {
@@ -178,20 +186,9 @@ export class WorldScene extends Phaser.Scene {
         if (action.playerId === this.ownId) {
           display.targetX = null
           this.viewFloor = action.floor
-          // The own floor stream only runs OFF a car: boarding's position snap
-          // precedes the first riders update, and an exit resumes the stream —
-          // either way the own player:moved clears stale riding state.
-          this.riding = null
         } else {
           display.targetX = action.x
         }
-        break
-      }
-      case 'elevator-riders': {
-        // AD-013: the rider-exclusive occupancy update is the authoritative
-        // riding signal — board (own id present) and walk-off (absent).
-        if (action.riders.includes(this.ownId)) this.riding = action.car
-        else if (this.riding === action.car) this.riding = null
         break
       }
       case 'elevator-moved': {
@@ -281,9 +278,6 @@ export class WorldScene extends Phaser.Scene {
       const car = this.cars.get(c.car)
       if (car !== undefined) car.floor = c.floor
     }
-    // AD-013: a rider's snapshot carries their car's occupants; a non-rider's
-    // carries none — the snapshot is authoritative at join/buzzer resync.
-    this.riding = snapshot.carOccupants?.car ?? null
     this.updatePanel()
   }
 
@@ -316,7 +310,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** In-car floor press — sent only while the local player rides a car. */
   private pressFloor(floor: FloorId): void {
-    if (this.riding === null) return
+    if (this.riderSession === null) return
     this.sendElevatorPress(floor)
   }
 
@@ -399,7 +393,7 @@ export class WorldScene extends Phaser.Scene {
       const visible =
         display.floor === this.viewFloor &&
         !display.left &&
-        !(id === this.ownId && this.riding !== null)
+        !(id === this.ownId && this.riderSession !== null)
       display.rect.setVisible(visible)
       display.label.setVisible(visible)
       display.rect.x = display.x * TILE_PX
