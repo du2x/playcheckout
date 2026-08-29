@@ -15,6 +15,8 @@ import { TICK_HZ } from './tick.js'
 /** Channel durations, derived from §7: 5 s prep/fake, 3 s un-prep. */
 export const PREP_TICKS = TUNING.PREP_SECONDS * TICK_HZ
 export const UNPREP_TICKS = TUNING.UNPREP_SECONDS * TICK_HZ
+/** Freshness window (FR-12): trash older than this has settled. */
+export const FRESHNESS_TICKS = TUNING.FRESHNESS_WINDOW_SECONDS * TICK_HZ
 
 /** Why a `work:start` intent ended the way it did (room maps these to errors 1:1). */
 export type StartWorkResult = 'accepted' | 'not-in-room' | 'room-not-workable' | 'channel-active'
@@ -46,6 +48,11 @@ export class WorkChannels {
   private readonly lastPositions = new Map<string, PositionSample>()
   /** Last segment key seen per player — `room:observed` fires on changes only. */
   private readonly lastSegment = new Map<string, string | null>()
+  /** Rooms whose prep ever completed (EVID-01) — permanent, no removal (FR-11). */
+  private readonly carded = new Set<string>()
+  /** roomKey → absolute tick the freshness window elapses (EVID-06). */
+  private readonly settleAt = new Map<string, number>()
+  private elapsedTicks = 0
   private pendingStarted: SimEvent[] = []
 
   constructor(private readonly deal: ReadonlyMap<string, Role>) {
@@ -59,6 +66,15 @@ export class WorkChannels {
   /** The current state of one room (guest floors only). */
   stateOf(floor: GuestFloorId, room: RoomIndex): RoomState {
     return this.states.get(roomKey(floor, room)) ?? 'fresh'
+  }
+
+  /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */
+  cardedOn(floor: GuestFloorId): RoomIndex[] {
+    const rooms: RoomIndex[] = []
+    for (let room = 1 as RoomIndex; room <= 8; room = (room + 1) as RoomIndex) {
+      if (this.carded.has(roomKey(floor, room))) rooms.push(room)
+    }
+    return rooms
   }
 
   /**
@@ -114,6 +130,7 @@ export class WorkChannels {
    * same-tick completions apply in start order), then segment observation.
    */
   tick(positions: RoundPositions): readonly SimEvent[] {
+    this.elapsedTicks++
     for (const [playerId, pos] of positions) this.lastPositions.set(playerId, pos)
     const events: SimEvent[] = this.pendingStarted.splice(0)
 
@@ -153,6 +170,18 @@ export class WorkChannels {
               ? { type: 'room:prepped', floor: channel.floor, room: channel.room }
               : { type: 'room:trashed', floor: channel.floor, room: channel.room },
           )
+          if (target === 'prepped') {
+            // EVID-01: the card auto-hangs on prep completion — permanent
+            // (no removal exists, FR-11); a re-prep re-emits idempotently.
+            this.carded.add(key)
+            events.push({ type: 'room:carded', floor: channel.floor, room: channel.room })
+            // EVID-09: a prepped room has no trash to settle — cancel.
+            this.settleAt.delete(key)
+          } else {
+            // EVID-06: the window starts at the sabotage completion tick;
+            // re-trash overwrites (EVID-10).
+            this.settleAt.set(key, this.elapsedTicks + FRESHNESS_TICKS)
+          }
         }
       } // fake prep: animation only — no state change, no room event (FR-9)
       events.push({
@@ -162,6 +191,16 @@ export class WorkChannels {
         room: channel.room,
         outcome: 'completed',
       })
+    }
+
+    // Freshness settle (EVID-08): AFTER completions so a same-tick prep
+    // completion cancels the deadline before this check reads it.
+    for (const [key, at] of [...this.settleAt]) {
+      if (this.elapsedTicks < at) continue
+      this.settleAt.delete(key)
+      const [floor, room] = key.split(':') as [GuestFloorId, string]
+      this.states.set(key, 'settled')
+      events.push({ type: 'room:settled', floor, room: Number(room) as RoomIndex })
     }
 
     // Segment observation (FR-10 read half): entering a room's segment sends

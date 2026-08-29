@@ -96,4 +96,9 @@ export class RoundSim {
   leave(playerId: string): void {
     this.work.leave(playerId)
   }
+
+  /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */
+  cardedOn(floor: Parameters<WorkChannels['cardedOn']>[0]): ReturnType<WorkChannels['cardedOn']> {
+    return this.work.cardedOn(floor)
+  }
 }

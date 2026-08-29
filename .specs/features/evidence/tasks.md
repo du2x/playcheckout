@@ -93,7 +93,7 @@ T6 → T7 → T8
 
 ---
 
-### T2: Sim — cards + freshness state machine
+### T2: Sim — cards + freshness state machine — ✅ done
 
 **What**: Extend `WorkChannels` with `elapsedTicks`, `carded: Set<string>`, `settleAt: Map<string, number>`; hang a card + emit `room:carded` on every `room:prepped` transition (idempotent, fake touches nothing); on `room:trashed` set `settleAt = T + FRESHNESS_WINDOW_SECONDS × TICK_HZ`; prep completion deletes the deadline; settle-check (after completions, before observation) emits `room:settled` (occupants routing) on the exact boundary tick; re-trash overwrites the deadline. Add `cardedOn(floor)` + `RoundSim.cardedOn` delegate.
 **Where**: `packages/sim/src/work.ts`, `roundSim.ts`, `work.test.ts`

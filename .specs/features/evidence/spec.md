@@ -192,17 +192,17 @@ same-floor viewers (entrant included), pass-through fires, exit/stop stays silen
 
 | Requirement ID | Story | Phase | Status |
 | -------------- | ----- | ----- | ------ |
-| EVID-01 | P1: Door cards | Design | Pending |
-| EVID-02 | P1: Door cards | Design | Pending |
-| EVID-03 | P1: Door cards | Design | Pending |
+| EVID-01 | P1: Door cards | Execute | Done |
+| EVID-02 | P1: Door cards | Execute | Done |
+| EVID-03 | P1: Door cards | Execute | Done |
 | EVID-04 | P1: Door cards | Design | Pending |
 | {rid} | P1: Door cards | Design | Pending |
-| EVID-06 | P2: Freshness | Design | Pending |
-| EVID-07 | P2: Freshness | Design | Pending |
-| EVID-08 | P2: Freshness | Design | Pending |
-| EVID-09 | P2: Freshness | Design | Pending |
-| EVID-10 | P2: Freshness | Design | Pending |
-| EVID-11 | P2: Freshness | Design | Pending |
+| EVID-06 | P2: Freshness | Execute | Done |
+| EVID-07 | P2: Freshness | Execute | Done |
+| EVID-08 | P2: Freshness | Execute | Done |
+| EVID-09 | P2: Freshness | Execute | Done |
+| EVID-10 | P2: Freshness | Execute | Done |
+| EVID-11 | P2: Freshness | Execute | Done |
 | EVID-12 | P3: Rustle | Design | Pending |
 | EVID-13 | P3: Rustle | Design | Pending |
 | EVID-14 | P3: Rustle | Design | Pending |

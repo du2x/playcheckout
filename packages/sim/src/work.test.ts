@@ -1,7 +1,8 @@
 import type { GuestFloorId, Role, SimEvent } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
+import { RoundSim } from './roundSim.js'
 import { TICK_HZ } from './tick.js'
-import { PREP_TICKS, UNPREP_TICKS, WorkChannels } from './work.js'
+import { FRESHNESS_TICKS, PREP_TICKS, UNPREP_TICKS, WorkChannels } from './work.js'
 
 // Spec WORK-01..15 (gate scenarios sim:prep / sim:unprep / sim:fake_prep):
 // scripted positions + start intents over the pure work system. Positions are
@@ -49,6 +50,8 @@ describe('sim:prep', () => {
     }
     expect(sim.tick(here)).toEqual([
       { type: 'room:prepped', floor: 'floor1', room: 1 },
+      // EVID-01: the card auto-hangs on the prep completion (same tick).
+      { type: 'room:carded', floor: 'floor1', room: 1 },
       { type: 'work:ended', playerId: 'ada', floor: 'floor1', room: 1, outcome: 'completed' },
     ])
     expect(sim.stateOf('floor1', R1)).toBe('prepped')
@@ -205,6 +208,70 @@ describe('sim:unprep', () => {
     expect(UNPREP_TICKS).toBe(60)
   })
 
+  it('keeps the card hung across a re-trash (EVID-03) and re-emits it on re-prep (EVID-01)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    const adaHere = positions(['ada', pos('floor1', CENTER)], ['vin', pos('lobby', LOBBY)])
+    const both = positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', CENTER)])
+    sim.tick(adaHere)
+    // Prep: card hangs.
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    const prepDone = ticks(sim, PREP_TICKS, both)
+    expect(workOf(prepDone, 'room:carded')).toEqual([
+      { type: 'room:carded', floor: 'floor1', room: 1 },
+    ])
+    expect(sim.cardedOn('floor1')).toEqual([1])
+
+    // Un-prep: the card STAYS — no un-card event exists anywhere (FR-11).
+    expect(sim.startWork('vin', 'floor1', R1)).toBe('accepted')
+    const trashDone = ticks(sim, UNPREP_TICKS, both)
+    expect(trashDone.some((e: SimEvent) => e.type.startsWith('room:'))).toBe(true)
+    expect(workOf(trashDone, 'room:carded')).toEqual([])
+    expect(sim.cardedOn('floor1')).toEqual([1])
+
+    // Re-prep: the transition re-emits the card (idempotent on the client).
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    const reDone = ticks(sim, PREP_TICKS, both)
+    expect(workOf(reDone, 'room:carded')).toEqual([
+      { type: 'room:carded', floor: 'floor1', room: 1 },
+    ])
+    expect(sim.cardedOn('floor1')).toEqual([1])
+  })
+
+  it('carries no timestamp, author, or validity flag on the card (EVID-05)', () => {
+    const sim = simWith([['ada', 'staff']])
+    const here = positions(['ada', pos('floor1', CENTER)])
+    sim.tick(here)
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    const done = ticks(sim, PREP_TICKS, here)
+    const cards = workOf(done, 'room:carded')
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toBeDefined()
+    const card = cards[0] as (typeof cards)[number]
+    expect(Object.keys(card).sort()).toEqual(['floor', 'room', 'type'])
+  })
+
+  it('queries the carded rooms ascending per floor and nothing for floors without cards (EVID-04 prep)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['bruno', 'staff'],
+    ])
+    const here = positions(['ada', pos('floor1', CENTER)], ['bruno', pos('floor2', 2750 + 3500)])
+    sim.tick(here) // ada in floor1 room1, bruno in floor2 room2
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    expect(sim.startWork('bruno', 'floor2', 2)).toBe('accepted')
+    const done = ticks(sim, PREP_TICKS, here)
+    expect(workOf(done, 'room:carded')).toEqual([
+      { type: 'room:carded', floor: 'floor1', room: 1 },
+      { type: 'room:carded', floor: 'floor2', room: 2 },
+    ])
+    expect(sim.cardedOn('floor1')).toEqual([1])
+    expect(sim.cardedOn('floor2')).toEqual([2])
+    expect(sim.cardedOn('floor3')).toEqual([])
+  })
+
   it('rejects a staff un-prep on a prepped room — role gating is server-side (WORK-07)', () => {
     const sim = simWith([
       ['ada', 'staff'],
@@ -241,6 +308,7 @@ describe('sim:fake_prep', () => {
       { type: 'work:ended', playerId: 'vin', floor: 'floor1', room: 1, outcome: 'completed' },
     ])
     expect(sim.stateOf('floor1', R1)).toBe('fresh')
+    expect(sim.cardedOn('floor1')).toEqual([]) // EVID-02: a fake hangs nothing
   })
 
   it('never emits a room transition for a fake channel on a trashed room (WORK-09)', () => {
@@ -315,5 +383,163 @@ describe('sim:work determinism', () => {
       return JSON.stringify(log)
     }
     expect(run()).toBe(run())
+  })
+})
+
+// Spec EVID-06..11 (gate scenario sim:freshness): trash ages. The window is
+// exactly TUNING.FRESHNESS_WINDOW_SECONDS × TICK_HZ ticks since the sabotage
+// completion tick; prep cancels, re-trash restarts, the buzzer kills.
+
+function ticks(sim: WorkChannels, count: number, here: ReturnType<typeof positions>): SimEvent[] {
+  let acc: SimEvent[] = []
+  for (let i = 0; i < count; i++) acc = acc.concat(sim.tick(here))
+  return acc
+}
+
+function trashRoom1(sim: WorkChannels): number {
+  // Staff preps room 1, then the saboteur un-preps it; returns the absolute
+  // tick count consumed (both players parked inside the segment).
+  const adaHere = positions(['ada', pos('floor1', CENTER)], ['vin', pos('lobby', LOBBY)])
+  const both = positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', CENTER)])
+  sim.tick(adaHere)
+  expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+  for (let i = 0; i < PREP_TICKS; i++) sim.tick(adaHere)
+  sim.tick(both) // vin walks in (entry tick)
+  expect(sim.startWork('vin', 'floor1', R1)).toBe('accepted')
+  for (let i = 0; i < UNPREP_TICKS; i++) sim.tick(both)
+  return PREP_TICKS + UNPREP_TICKS + 1
+}
+
+describe('sim:freshness', () => {
+  it('settles exactly FRESHNESS_WINDOW_SECONDS × TICK_HZ ticks after the sabotage (EVID-06, EVID-07, EVID-08)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    expect(sim.tick(positions())).toEqual([]) // warm-up entry tick
+    trashRoom1(sim)
+    expect(sim.stateOf('floor1', R1)).toBe('trashed')
+
+    // The window: 1499 silent ticks of 'trashed', then settle on the boundary.
+    for (let i = 1; i < FRESHNESS_TICKS; i++) {
+      expect(sim.tick(positions())).toEqual([])
+      expect(sim.stateOf('floor1', R1)).toBe('trashed')
+    }
+    expect(sim.tick(positions())).toEqual([{ type: 'room:settled', floor: 'floor1', room: 1 }])
+    expect(sim.stateOf('floor1', R1)).toBe('settled')
+    expect(FRESHNESS_TICKS).toBe(1500)
+  })
+
+  it('reads a settled room as settled through room:observed (EVID-07)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    trashRoom1(sim)
+    for (let i = 0; i < FRESHNESS_TICKS; i++) sim.tick(positions())
+    expect(sim.stateOf('floor1', R1)).toBe('settled')
+
+    // A player who re-enters (segment was left) reads 'settled' (FR-10).
+    sim.tick(positions(['ada', pos('floor1', OUTSIDE)])) // walk out: lastSegment clears
+    const reentry = sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    expect(workOf(reentry, 'room:observed')).toEqual([
+      { type: 'room:observed', playerId: 'ada', floor: 'floor1', room: 1, state: 'settled' },
+    ])
+  })
+
+  it('cancels the pending settle when the room is re-prepped before the window elapses (EVID-09)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    const adaHere = positions(['ada', pos('floor1', CENTER)], ['vin', pos('lobby', LOBBY)])
+    sim.tick(adaHere)
+    trashRoom1(sim)
+
+    // Re-prep 100 ticks into the 1500-tick window.
+    for (let i = 0; i < 100; i++) sim.tick(adaHere)
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    for (let i = 0; i < PREP_TICKS; i++) sim.tick(adaHere)
+    expect(sim.stateOf('floor1', R1)).toBe('prepped')
+
+    // Run well past the original deadline: no settle may fire from prepped.
+    for (let i = 0; i < FRESHNESS_TICKS; i++) {
+      sim.tick(adaHere)
+      expect(sim.stateOf('floor1', R1)).toBe('prepped')
+    }
+    expect(sim.cardedOn('floor1')).toEqual([1]) // card survived (FR-11)
+  })
+
+  it('restarts the window on a re-trash after a cancelled one (EVID-10)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    const adaHere = positions(['ada', pos('floor1', CENTER)], ['vin', pos('lobby', LOBBY)])
+    const both = positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', CENTER)])
+    sim.tick(adaHere)
+    trashRoom1(sim) // trash #1
+    for (let i = 0; i < 100; i++) sim.tick(adaHere)
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    for (let i = 0; i < PREP_TICKS; i++) sim.tick(adaHere) // cancel + prepped
+    sim.tick(both) // vin is back in the segment (he was parked in the lobby view)
+    expect(sim.startWork('vin', 'floor1', R1)).toBe('accepted')
+    for (let i = 0; i < UNPREP_TICKS; i++) sim.tick(both) // trash #2
+
+    // The NEW window: still trashed past the ORIGINAL deadline would-be spot.
+    const remaining = FRESHNESS_TICKS - 1
+    for (let i = 0; i < remaining; i++) {
+      sim.tick(both)
+      expect(sim.stateOf('floor1', R1)).toBe('trashed')
+    }
+    // ...then settles exactly 1500 ticks after trash #2.
+    expect(sim.tick(both)).toEqual([{ type: 'room:settled', floor: 'floor1', room: 1 }])
+    expect(sim.stateOf('floor1', R1)).toBe('settled')
+  })
+
+  it('dies with the round: no room:settled after the buzzer (EVID-11)', () => {
+    // RoundSim with a shift too short for the window to elapse; roles are
+    // discovered from the private role:dealt events (roundSim.test.ts pattern).
+    const shiftTicks = PREP_TICKS + UNPREP_TICKS + 10
+    const sim = new RoundSim({
+      seed: 1,
+      playerIds: ['ada', 'vin', 'p3', 'p4'],
+      totalTicks: shiftTicks,
+    })
+    const dealt = sim.tick().filter((e) => e.type === 'role:dealt')
+    const saboteur = dealt.find((e) => 'role' in e && e.role === 'saboteur')
+    if (saboteur === undefined || !('playerId' in saboteur)) throw new Error('no saboteur dealt')
+    const staffId = ['ada', 'vin', 'p3', 'p4'].find((id) => id !== saboteur.playerId)
+    if (staffId === undefined) throw new Error('no staff dealt')
+    // All four stand inside room 1's segment so ANY of them may start work.
+    const inside = positions(
+      ['ada', pos('floor1', CENTER)],
+      ['vin', pos('floor1', CENTER)],
+      ['p3', pos('floor1', 3000)],
+      ['p4', pos('floor1', 3100)],
+    )
+    sim.tick(inside)
+    expect(sim.startWork(staffId, 'floor1', R1)).toBe('accepted')
+    let trashSeen = false
+    for (let i = 0; i < PREP_TICKS; i++) {
+      trashSeen ||= sim.tick(inside).some((e) => e.type === 'room:prepped')
+    }
+    expect(sim.startWork(saboteur.playerId, 'floor1', R1)).toBe('accepted')
+    for (let i = 0; i < UNPREP_TICKS; i++) {
+      trashSeen ||= sim.tick(inside).some((e) => e.type === 'room:trashed')
+    }
+    expect(trashSeen).toBe(true)
+
+    // Burn the remaining shift ticks (buzzer inside the window) — then silence.
+    let buzzerSeen = false
+    for (let i = 0; i < shiftTicks; i++) {
+      const events = sim.tick(inside)
+      if (events.some((e) => e.type === 'round:buzzer')) buzzerSeen = true
+      expect(events.some((e) => e.type === 'room:settled')).toBe(false)
+    }
+    expect(buzzerSeen).toBe(true)
+    for (let i = 0; i < FRESHNESS_TICKS; i++) {
+      expect(sim.tick(inside)).toEqual([])
+    } // frozen: no settle event ever arrives after the buzzer (WORK-13)
   })
 })
