@@ -81,6 +81,7 @@ interface QueuedCall {
 type PendingAnnounce =
   | { kind: 'called'; floor: FloorId; car: 1 | 2 }
   | { kind: 'pressed'; playerId: string; floor: FloorId; car: 1 | 2 }
+  | { kind: 'riders'; car: 1 | 2 }
 
 export class MovementSim {
   private phase: 'lobby' | 'round' = 'lobby'
@@ -107,6 +108,9 @@ export class MovementSim {
   }
   private callQueue: QueuedCall[] = []
   private announced: PendingAnnounce[] = []
+  /** Cars whose rider list changed since the last tick — one coalesced
+   * `elevator:riders` per dirty car at tick start (AD-013). */
+  private ridersDirty: (1 | 2)[] = []
 
   // --- roster / lifecycle -------------------------------------------------
 
@@ -124,9 +128,18 @@ export class MovementSim {
 
   leave(playerId: string): void {
     this.players.delete(playerId)
-    for (const car of [this.cars[1], this.cars[2]]) {
-      car.riders = car.riders.filter((r) => r !== playerId)
+    for (const id of [1, 2] as const) {
+      const car = this.cars[id]
+      if (car.riders.includes(playerId)) {
+        car.riders = car.riders.filter((r) => r !== playerId)
+        this.markRidersDirty(id) // disconnect-dirty flush: one update next tick
+      }
     }
+  }
+
+  /** Queue a rider-list update for the next tick — one per car, coalesced. */
+  private markRidersDirty(carId: 1 | 2): void {
+    if (!this.ridersDirty.includes(carId)) this.ridersDirty.push(carId)
   }
 
   // --- intents ------------------------------------------------------------
@@ -152,6 +165,7 @@ export class MovementSim {
       p.floor = car.floor
       p.x = CAR_LANDING_MILLI[carId]
       car.riders = car.riders.filter((r) => r !== playerId)
+      this.markRidersDirty(carId) // walk-off: remaining riders get the update
       // Door-open-episode guard: exiting is final for this stop — the board
       // filter excludes the exiter until the car next departs (no oscillation:
       // clearing the boarding radius takes ~4 ticks, and a pre-round exiter at
@@ -354,6 +368,33 @@ export class MovementSim {
   }
 
   /**
+   * AD-013 rider snapshot (join and buzzer resync for mid-car viewers): a
+   * rider's snapshot carries an EMPTY players list (no floor stream in a car,
+   * AD-009 — this also fixes the AD-009 rider leak), both cars' public floors
+   * (panels stay public), and their car's occupants + press queue. A non-rider
+   * falls back to the byte-identical floor snapshot — occupancy never appears.
+   */
+  snapshotForRider(playerId: string): {
+    players: { playerId: string; floor: FloorId; x: number }[]
+    cars: { car: 1 | 2; floor: FloorId }[]
+    carOccupants?: { car: 1 | 2; riders: string[]; queue: FloorId[] }
+  } {
+    const p = this.players.get(playerId)
+    if (p === undefined || p.inCar === null) {
+      return this.snapshotForFloor(p?.floor ?? 'lobby')
+    }
+    const car = this.cars[p.inCar]
+    return {
+      players: [],
+      cars: [
+        { car: 1 as const, floor: this.cars[1].floor },
+        { car: 2 as const, floor: this.cars[2].floor },
+      ],
+      carOccupants: { car: p.inCar, riders: [...car.riders], queue: [...car.queue] },
+    }
+  }
+
+  /**
    * AD-008 view context for the Router: a live player's own floor (riders get
    * none — no floor stream while in a car) plus the room-segment key they
    * currently stand in (null outside every segment; AD-010 segments), and the
@@ -381,10 +422,22 @@ export class MovementSim {
   /** Advance one 0.05 s step; returns the events emitted this tick (may be []). */
   tick(): readonly MovementEvent[] {
     const events: MovementEvent[] = []
+    // AD-013: every rider-list change (board, walk-off, disconnect) reaches the
+    // car's riders next tick as ONE elevator:riders carrying the car's current
+    // occupants AND press queue — the "lit buttons visible from inside" model.
+    for (const id of this.ridersDirty.splice(0)) {
+      const car = this.cars[id]
+      events.push({
+        type: 'elevator:riders',
+        car: id,
+        riders: [...car.riders],
+        queue: [...car.queue],
+      })
+    }
     for (const a of this.announced.splice(0)) {
       if (a.kind === 'called') {
         events.push({ type: 'elevator:called', floor: a.floor, car: a.car })
-      } else {
+      } else if (a.kind === 'pressed') {
         events.push({
           type: 'elevator:pressed',
           playerId: a.playerId,
@@ -520,6 +573,7 @@ export class MovementSim {
       car.riders.push(pid)
       this.callQueue = this.callQueue.filter((q) => q.playerId !== pid)
       events.push({ type: 'player:left-floor', playerId: pid, floor: car.floor })
+      this.markRidersDirty(carId) // AD-013: riders learn the new occupant list
     }
   }
 }

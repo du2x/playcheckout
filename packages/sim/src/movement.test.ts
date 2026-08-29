@@ -25,6 +25,9 @@ function boardParkedCar(sim: MovementSim, playerId: string, carId: 1 | 2): void 
   for (let i = 0; i < 100 && sim.viewOf(playerId).car !== carId; i++) sim.tick()
   sim.stopMove(playerId)
   expect(sim.viewOf(playerId).car).toBe(carId)
+  // Consume the AD-013 occupancy update that flushes on the tick after any
+  // boarding (full-payload pins live in the ELR P1 describe below).
+  sim.tick()
 }
 
 /** Tick until the car reports a moved event for `floor`; returns the tick offset. */
@@ -467,6 +470,10 @@ describe('sim:elevator', () => {
     expect(runUntilCarMoved(sim, 2, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
     sim.startMove('p2', 'left')
     expect(sim.viewOf('p2').car).toBeNull()
+    // Consume the walk-off occupancy update (AD-013) before the calls.
+    expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
+      { type: 'elevator:riders', car: 2, riders: [], queue: [] },
+    ])
     // Boarding and pressing is the way to move an open-doors car: a call from
     // its floor is a duplicate — the decoy flashes, nothing dispatches.
     expect(sim.callElevator('p1')).toBe('ignored')
@@ -551,7 +558,12 @@ describe('sim:elevator', () => {
     sim.startMove('p1', 'right')
     expect(sim.viewOf('p1').car).toBeNull()
     // Ghost trip: the empty car departs at dwell expiry and serves floor2.
-    expect(carEvents(sim.tick())).toEqual([
+    // The walk-off's occupancy update (empty riders, surviving queue) and the
+    // accepted press announce both flush on this tick.
+    expect(
+      sim.tick().filter((e) => e.type === 'elevator:riders' || e.type === 'elevator:pressed'),
+    ).toEqual([
+      { type: 'elevator:riders', car: 1, riders: [], queue: ['floor2'] },
       { type: 'elevator:pressed', playerId: 'p1', floor: 'floor2', car: 1 },
     ])
     for (let i = 1; i < DWELL_TICKS; i++) expect(carEvents(sim.tick())).toEqual([])
@@ -654,6 +666,10 @@ describe('sim:elevator', () => {
     expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
     expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(2 * RIDE_TICKS_PER_FLOOR)
     sim.startMove('p3', 'left')
+    // Consume the walk-off occupancy update (AD-013) before the calls.
+    expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
+      { type: 'elevator:riders', car: 2, riders: [], queue: [] },
+    ])
     // p1 (lobby center, tie → car 1) calls: car 1 is now ARRIVING to the lobby.
     expect(sim.callElevator('p1')).toBe('dispatched')
     expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
@@ -731,5 +747,100 @@ describe('boarding left-floor event (WORK-19)', () => {
     for (let i = 0; i < 60; i++) {
       expect(sim.tick().filter((e) => e.type === 'player:left-floor')).toEqual([])
     }
+  })
+})
+
+// ELR P1 + AD-013: occupancy and press-queue knowledge is rider-exclusive.
+// The sim emits elevator:riders on EVERY rider-list change (board, walk-off,
+// disconnect dirty-flush) next tick, carrying the car's current occupants AND
+// press queue. Wire-level exclusivity ("neither appears for non-riders") is
+// the riders recipient policy — pinned by the Router tests (AD-013) and the
+// registry projections.
+describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
+  it('emits elevator:riders on boarding with the full occupant + queue payload (ELR-01)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.startMove('p1', 'left')
+    let ridersEvent: MovementEvent | undefined
+    for (let i = 0; i < 100 && ridersEvent === undefined; i++) {
+      for (const e of sim.tick()) {
+        if (e.type === 'elevator:riders') ridersEvent = e
+      }
+    }
+    expect(ridersEvent).toEqual({ type: 'elevator:riders', car: 1, riders: ['p1'], queue: [] })
+  })
+
+  it('emits an updated list when a rider walks off, carrying the surviving queue (ELR-02, ELR-04)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    boardParkedCar(sim, 'p1', 1) // flushes ['p1']
+    boardParkedCar(sim, 'p2', 1) // flushes ['p1', 'p2']
+    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted') // departs immediately
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
+    // During the dwell: p2 queues another floor, then p1 walks off. The
+    // walk-off update carries the car's survivors AND its queued floors.
+    expect(sim.pressFloor('p2', 'floor2')).toBe('accepted')
+    sim.startMove('p1', 'right')
+    expect(sim.viewOf('p1').car).toBeNull()
+    let ridersEvent: MovementEvent | undefined
+    for (let i = 0; i < 20 && ridersEvent === undefined; i++) {
+      for (const e of sim.tick()) {
+        if (e.type === 'elevator:riders') ridersEvent = e
+      }
+    }
+    expect(ridersEvent).toEqual({
+      type: 'elevator:riders',
+      car: 1,
+      riders: ['p2'],
+      queue: ['floor2'],
+    })
+  })
+
+  it('flushes exactly one elevator:riders on the next tick after a disconnect (ELR-01 dirty flush)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p2', 1) // boarding updates flushed by the helper
+    sim.leave('p1')
+    expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
+      { type: 'elevator:riders', car: 1, riders: ['p2'], queue: [] },
+    ])
+    for (let i = 0; i < 10; i++) {
+      expect(sim.tick().some((e) => e.type === 'elevator:riders')).toBe(false)
+    }
+  })
+
+  it('gives riders players:[], public car floors, and carOccupants; floor snapshots never carry occupancy (ELR-03, ELR-04)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    boardParkedCar(sim, 'p1', 1)
+    expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // queue into the snapshot
+    const riderSnap = sim.snapshotForRider('p1')
+    expect(riderSnap.players).toEqual([]) // no floor stream in a car (AD-009)
+    expect(riderSnap.cars).toEqual([
+      { car: 1, floor: 'lobby' },
+      { car: 2, floor: 'lobby' },
+    ])
+    expect(riderSnap.carOccupants).toEqual({ car: 1, riders: ['p1'], queue: ['floor2'] })
+    // Non-rider snapshots are byte-identical to the public shape — no
+    // occupancy field anywhere.
+    const floorSnap = sim.snapshotForFloor('lobby')
+    expect(floorSnap).toEqual({
+      players: [{ playerId: 'p2', floor: 'lobby', x: 15 }],
+      cars: [
+        { car: 1, floor: 'lobby' },
+        { car: 2, floor: 'lobby' },
+      ],
+    })
+    expect('carOccupants' in floorSnap).toBe(false)
+    // The rider never appears in any floor snapshot while aboard (AD-009).
+    expect(sim.snapshotForFloor('lobby').players).toEqual([
+      { playerId: 'p2', floor: 'lobby', x: 15 },
+    ])
+    // A non-rider's snapshotForRider falls back to the floor snapshot.
+    expect('carOccupants' in sim.snapshotForRider('p2')).toBe(false)
   })
 })

@@ -38,7 +38,7 @@ import type { MovementEvent, SimEvent } from './simEvents.js'
  * Closed recipient-policy enum. Extended deliberately, never speculatively:
  * `sameFloor` (AD-008/AD-009) delivers to live viewers on the event's floor;
  * `occupants` (cycle 2.5) delivers to viewers inside the event's room segment;
- * `riders` (cycle 2.6, AD-013) delivers ONLY to viewers riding the event's car
+ * `riders` (cycle 2-6, AD-013) delivers ONLY to viewers riding the event's car
  * — occupancy and press knowledge belongs exclusively to the people inside.
  */
 export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants' | 'riders'

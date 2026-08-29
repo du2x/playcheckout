@@ -219,7 +219,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T7: Occupancy/queue events and rider snapshot
+#### T7: Occupancy/queue events and rider snapshot — ✅ Done
 
 **What**: Emit `elevator:pressed` (next tick, rider-exclusive via `riders` policy) on accepted presses and `elevator:riders {car, riders, queue}` on every rider-list change (board, walk-off exit, disconnect) plus dirty-flush in `leave()` and at tick start; extend `viewOf(playerId)` to return `{floor, roomKey, car}` (riders keep `floor:null, car:N`) and add `snapshotForRider(playerId)` / `snapshotForFloor` branching so rider snapshots carry `players:[]`, both cars' public floors, and `carOccupants {car, riders, queue}` while non-rider snapshots are byte-identical to today.
 **Where**: `packages/sim/src/movement.ts`
@@ -232,10 +232,10 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-sim-harness`
 
 **Done when**:
-- [ ] `elevator:pressed` payload is exactly `{playerId, floor}` (car in visibility only); `elevator:riders` payload is exactly `{car, riders, queue}`; neither appears for non-riders
-- [ ] `viewOf` riders returns `car`; non-riders return `car:null`; `snapshotForRider` vs `snapshotForFloor` contracts hold
-- [ ] Disconnect-dirty flush emits a single `elevator:riders` next tick; episode guard tests cover pre-round exit oscillation (no spam)
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `elevator:pressed` payload is exactly `{playerId, floor}` (car in visibility only); `elevator:riders` payload is exactly `{car, riders, queue}`; neither appears for non-riders
+- [x] `viewOf` riders returns `car`; non-riders return `car:null`; `snapshotForRider` vs `snapshotForFloor` contracts hold
+- [x] Disconnect-dirty flush emits a single `elevator:riders` next tick; episode guard tests cover pre-round exit oscillation (no spam)
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: unit
 **Gate**: quick
