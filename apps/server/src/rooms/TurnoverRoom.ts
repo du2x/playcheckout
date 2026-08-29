@@ -91,7 +91,20 @@ export class TurnoverRoom extends Room {
     })
     // Movement intents (zod-validated, outside the registry — protocol rules).
     this.onMessage('move:start', moveStartIntentSchema, (client, intent) => {
+      const carBefore = this.movement.viewOf(client.sessionId).car
       this.movement.startMove(client.sessionId, intent.dir)
+      if (carBefore !== null && this.movement.viewOf(client.sessionId).car === null) {
+        // Door-open exit = floor change (protocol rule: personal snapshots on
+        // visibility change). The exiter's picture of the arrival floor is
+        // stale — standing occupants emit no stream, so without this refresh
+        // they stay invisible until they move. Same-floor occupants learn the
+        // arrival from the exiter's own resumed player:moved stream.
+        this.router.toSelf(
+          'movement:snapshot',
+          client.sessionId,
+          this.movement.snapshotFor(client.sessionId),
+        )
+      }
     })
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {
       this.movement.stopMove(client.sessionId)

@@ -384,6 +384,29 @@
 - **Date**: 2026-08-29
 - **Status**: active — amends AD-014 design pin (a) (which amended AD-012).
 
+### AD-017
+- **Decision**: Send the exiting rider a personal movement snapshot on door-open
+  exit. The `move:start` handler detects a rider→walker transition
+  (`viewOf(sessionId).car` non-null before the intent, null after) and routes
+  `movement:snapshot` via `snapshotFor` to the exiter (`self` policy — no
+  registry change). Same-floor occupants need nothing new: the exit places the
+  player at the landing and the facing-dirty rule emits their own `player:moved`
+  next tick, so the arrival is visible on their stream immediately.
+- **Reason**: Playtest report (2026-08-29): a player arriving on a floor could
+  not see standing occupants until they moved — snapshots existed only for
+  join and buzzer, so the exiter's last picture of the floor predated their
+  ride, and standing players emit no stream to correct it. This closes a
+  documented-but-unimplemented protocol rule: "per-player snapshots are sent on
+  join and on visibility change (…floor change)".
+- **Trade-off**: One extra snapshot (~dozens of bytes) per exit; no new message
+  type, no sim change (the room orchestrates over existing sim queries). The
+  snapshot carries only the exiter's own legitimate view (their new floor's
+  occupants + public car floors), per the message-only rule.
+- **Scope**: `apps/server/src/rooms/TurnoverRoom.ts` (move:start handler),
+  `apps/client/harness/movement.spec.ts` (arrival-floor-reveal scenario).
+- **Date**: 2026-08-29
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: `elevator-animation` — client-only door-open/close + ride

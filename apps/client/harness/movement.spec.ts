@@ -370,3 +370,91 @@ test.describe('client:elevator_riders', () => {
     await watcher.context().close()
   })
 })
+
+// AD-017 (protocol rule: personal snapshots on floor change): an exiter's
+// picture of the arrival floor is stale — standing occupants emit no stream,
+// so without the exit snapshot they stay invisible until they move. Ada rides
+// up and stands still; bruno follows later and must see her IMMEDIATELY on
+// exit, without ada emitting a single event since before his ride.
+test.describe('client:elevator_riders — arrival floor reveal', () => {
+  test('an exiter sees standing occupants of the arrival floor immediately (AD-017)', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000)
+    const host = await browser.newContext().then((c) => c.newPage())
+    const code = await createRoom(host, 'ada')
+    const follower = await browser.newContext().then((c) => c.newPage())
+    await join(follower, code, 'bruno')
+    const extra = await Promise.all(
+      ['caro', 'dina'].map((name) =>
+        browser
+          .newContext()
+          .then((c) => c.newPage())
+          .then((page) => join(page, code, name).then(() => page)),
+      ),
+    )
+    await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
+
+    await host.click('#start-button')
+    await follower.waitForSelector('#round-hud')
+
+    // Ada rides the WEST car to floor1, exits, and walks ~6 tiles east; then
+    // she stands still for the rest of the test — no further events.
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForTimeout(3000)
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('1')
+    await host.waitForFunction(
+      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      undefined,
+      { timeout: 10_000 },
+    )
+    await host.keyboard.down('ArrowRight')
+    await host.waitForTimeout(1000)
+    await host.keyboard.up('ArrowRight')
+    const adaScene = await readScene(host)
+    expect(adaScene.labels.find((l) => l.text === 'ada')?.visible).toBe(true)
+    const adaX = adaScene.labels.find((l) => l.text === 'ada')?.x ?? 0
+
+    // Bruno rides the EAST car (car 1 is away) to the same floor and steps
+    // off only briefly — he stays inside the boarding radius (AD-016 guard).
+    await follower.keyboard.down('ArrowRight')
+    await follower.waitForTimeout(3000)
+    await follower.keyboard.up('ArrowRight')
+    await follower.keyboard.press('1')
+    await follower.waitForFunction(
+      () => document.querySelector('#panel-east')?.textContent === 'floor1',
+      undefined,
+      { timeout: 10_000 },
+    )
+    await follower.keyboard.down('ArrowLeft')
+    await follower.waitForTimeout(150)
+    await follower.keyboard.up('ArrowLeft')
+
+    // THE reveal: ada stands still, yet bruno sees her at her position
+    // immediately — seeded by the exit's personal floor snapshot.
+    await follower.waitForFunction(
+      ({ adaX }) => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (n: string) => {
+                children: { list: { type: string; text?: string; x: number; visible: boolean }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = t.scene('Round')
+        if (scene === null) return false
+        const ada = scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')
+        return ada?.visible === true && Math.abs(ada.x - adaX) < 2 * (832 / 30)
+      },
+      { adaX },
+      { timeout: 5000 },
+    )
+
+    await host.context().close()
+    await follower.context().close()
+    for (const page of extra) await page.context().close()
+  })
+})
