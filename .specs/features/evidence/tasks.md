@@ -205,7 +205,7 @@ T6 → T7 → T8
 
 ---
 
-### T8: Closeout — spec traceability + STATE.md handoff
+### T8: Closeout — spec traceability + STATE.md handoff — ✅ done (traceability 19/19; handoff written; validate_state pending Verifier)
 
 **What**: Flip all EVID-NN rows to Done in `spec.md`, mark tasks complete, write the STATE.md Handoff section (feature, commits, gates, next step), verify `validate_state.py evidence` passes after the Verifier report lands.
 **Where**: `.specs/features/evidence/{spec,tasks}.md`, `.specs/STATE.md`

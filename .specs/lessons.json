@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 12,
+  "next_id": 20,
   "lessons": [
     {
       "id": "L-001",
@@ -12,10 +12,14 @@
       "signal": "ac_gap",
       "scope": "tests",
       "status": "candidate",
-      "features": ["skeleton"],
+      "features": [
+        "skeleton"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"],
+      "evidence": [
+        "packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"
+      ],
       "created": "2026-08-28T00:35:14Z",
       "last_seen": "2026-08-28T00:35:14Z"
     },
@@ -26,10 +30,14 @@
       "signal": "spec_precision_gap",
       "scope": "specs/decision-log",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)"],
+      "evidence": [
+        "AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)"
+      ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -40,10 +48,14 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client/harness",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)"],
+      "evidence": [
+        "LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)"
+      ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -54,10 +66,14 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client/harness",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)"],
+      "evidence": [
+        "LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)"
+      ],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -68,10 +84,14 @@
       "signal": "gate_fail",
       "scope": "client",
       "status": "candidate",
-      "features": ["first-light"],
+      "features": [
+        "first-light"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["session: create-room dead click report (client)"],
+      "evidence": [
+        "session: create-room dead click report (client)"
+      ],
       "created": "2026-08-28T11:57:37Z",
       "last_seen": "2026-08-28T11:57:37Z"
     },
@@ -82,10 +102,14 @@
       "signal": "surviving_mutant",
       "scope": "sim",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["M3 / packages/sim/src/movement.test.ts:255 (sim)"],
+      "evidence": [
+        "M3 / packages/sim/src/movement.test.ts:255 (sim)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -96,10 +120,14 @@
       "signal": "surviving_mutant",
       "scope": "sim",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["M5b / packages/sim/src/movement.test.ts:87 (sim)"],
+      "evidence": [
+        "M5b / packages/sim/src/movement.test.ts:87 (sim)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -110,10 +138,14 @@
       "signal": "ac_gap",
       "scope": "sim",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["MOVE-06 (sim)"],
+      "evidence": [
+        "MOVE-06 (sim)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -124,10 +156,14 @@
       "signal": "spec_precision_gap",
       "scope": "specs",
       "status": "candidate",
-      "features": ["movement"],
+      "features": [
+        "movement"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["AD-008 / .specs/STATE.md (specs)"],
+      "evidence": [
+        "AD-008 / .specs/STATE.md (specs)"
+      ],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -138,10 +174,14 @@
       "signal": "spec_deviation",
       "scope": "protocol/routing",
       "status": "candidate",
-      "features": ["work-channels"],
+      "features": [
+        "work-channels"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["WORK-17/AD-009, movement.spec.ts:173 ghost rectangle (protocol/routing)"],
+      "evidence": [
+        "WORK-17/AD-009, movement.spec.ts:173 ghost rectangle (protocol/routing)"
+      ],
       "created": "2026-08-28T17:56:28Z",
       "last_seen": "2026-08-28T17:56:28Z"
     },
@@ -152,12 +192,160 @@
       "signal": "ac_gap",
       "scope": "server/tests",
       "status": "candidate",
-      "features": ["work-channels"],
+      "features": [
+        "work-channels"
+      ],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": ["TurnoverRoom.test.ts server:work_channels choreography (server/tests)"],
+      "evidence": [
+        "TurnoverRoom.test.ts server:work_channels choreography (server/tests)"
+      ],
       "created": "2026-08-28T17:56:28Z",
       "last_seen": "2026-08-28T17:56:28Z"
+    },
+    {
+      "id": "L-012",
+      "key": "ac_gap::when a sim behavior has a room side trigger join leave lock the sim test proves the sim half only the fix feature task must name a room level integration test for the trigger itself or the wiring ships untested",
+      "text": "When a sim behavior has a room-side trigger (join/leave/lock), the sim test proves the sim half only — the fix/feature task must name a room-level integration test for the trigger itself or the wiring ships untested.",
+      "signal": "ac_gap",
+      "scope": "apps/server,integration",
+      "status": "candidate",
+      "features": [
+        "elevator-riders"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "ELR-01/ELR-02 room half; apps/server/src/rooms/TurnoverRoom.ts:184 (prior Gap 1) (apps/server,integration)"
+      ],
+      "created": "2026-08-29T02:27:25Z",
+      "last_seen": "2026-08-29T02:27:25Z"
+    },
+    {
+      "id": "L-013",
+      "key": "ac_gap::before rewriting a large test suite list its existing pinned behaviors test titles ids and diff that list after the rewrite wholesale rewrites silently drop pins that only the sensor or verifier catches later",
+      "text": "Before rewriting a large test suite, list its existing pinned behaviors (test titles/ids) and diff that list after the rewrite — wholesale rewrites silently drop pins that only the sensor or verifier catches later.",
+      "signal": "ac_gap",
+      "scope": "packages/sim,test-churn",
+      "status": "candidate",
+      "features": [
+        "elevator-riders"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "MOVE-13/AD-012#3 pins; c7d79c8:movement.test.ts:303,385 (prior Gaps 2-3) (packages/sim,test-churn)"
+      ],
+      "created": "2026-08-29T02:27:27Z",
+      "last_seen": "2026-08-29T02:27:27Z"
+    },
+    {
+      "id": "L-014",
+      "key": "gate_fail::kill stale dev servers on 2567 5173 before running pnpm test client the playwright webserver refuses to boot otherwise and the gate fails at startup not in any test",
+      "text": "Kill stale dev servers on :2567/:5173 before running pnpm test:client — the Playwright webServer refuses to boot otherwise and the gate fails at startup, not in any test.",
+      "signal": "gate_fail",
+      "scope": "apps/client,harness,gate-3",
+      "status": "candidate",
+      "features": [
+        "elevator-riders"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "apps/client/harness/playwright.config.ts webServer (:2567/:5173), recurred in both verifier rounds (apps/client,harness,gate-3)"
+      ],
+      "created": "2026-08-29T02:27:32Z",
+      "last_seen": "2026-08-29T02:27:32Z"
+    },
+    {
+      "id": "L-015",
+      "key": "ac_gap::when a spec anchors visual timing to a public event tests must measure from that event receipt rather than from a later local animation phase",
+      "text": "When a spec anchors visual timing to a public event, tests must measure from that event receipt rather than from a later local animation phase.",
+      "signal": "ac_gap",
+      "scope": "apps/client",
+      "status": "candidate",
+      "features": [
+        "elevator-animation"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "ELAN-02 (apps/client)"
+      ],
+      "created": "2026-08-29T15:45:00Z",
+      "last_seen": "2026-08-29T15:45:00Z"
+    },
+    {
+      "id": "L-016",
+      "key": "ac_gap::if an animation spec says timings come from shared tuning and event timestamps the presenter api must carry those anchors and tests must prove those constants are actually used",
+      "text": "If an animation spec says timings come from shared TUNING and event timestamps, the presenter API must carry those anchors and tests must prove those constants are actually used.",
+      "signal": "ac_gap",
+      "scope": "apps/client",
+      "status": "candidate",
+      "features": [
+        "elevator-animation"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "ELAN-08 (apps/client)"
+      ],
+      "created": "2026-08-29T15:45:00Z",
+      "last_seen": "2026-08-29T15:45:00Z"
+    },
+    {
+      "id": "L-017",
+      "key": "surviving_mutant::animation tests must observe rendered geometry or an equivalent stable visual signal visibility only assertions do not protect open vs closed states",
+      "text": "Animation tests must observe rendered geometry or an equivalent stable visual signal; visibility-only assertions do not protect open-vs-closed states.",
+      "signal": "surviving_mutant",
+      "scope": "apps/client",
+      "status": "candidate",
+      "features": [
+        "elevator-animation"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "M6 (apps/client)"
+      ],
+      "created": "2026-08-29T15:45:00Z",
+      "last_seen": "2026-08-29T15:45:00Z"
+    },
+    {
+      "id": "L-018",
+      "key": "spec_precision_gap::for visual arrival requirements assert the player visible landing motion outcome not just an internal alpha or phase proxy",
+      "text": "For visual-arrival requirements, assert the player-visible landing-motion outcome, not just an internal alpha or phase proxy.",
+      "signal": "spec_precision_gap",
+      "scope": "apps/client",
+      "status": "candidate",
+      "features": [
+        "elevator-animation"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "ELAN-06 (apps/client)"
+      ],
+      "created": "2026-08-29T15:45:00Z",
+      "last_seen": "2026-08-29T15:45:00Z"
+    },
+    {
+      "id": "L-019",
+      "key": "spec_deviation::every hidden information spec deviation needs explicit tests for both the public event path and the silent ground truth fallback",
+      "text": "Every hidden-information SPEC_DEVIATION needs explicit tests for both the public-event path and the silent ground-truth fallback.",
+      "signal": "spec_deviation",
+      "scope": "apps/client",
+      "status": "candidate",
+      "features": [
+        "elevator-animation"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "apps/client/src/scenes/elevatorPresenter.ts:13 (apps/client)"
+      ],
+      "created": "2026-08-29T15:45:00Z",
+      "last_seen": "2026-08-29T15:45:00Z"
     }
   ]
 }

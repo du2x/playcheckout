@@ -80,6 +80,54 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: TurnoverRoom.test.ts server:work_channels choreography (server/tests)
 - last seen: 2026-08-28T17:56:28Z
 
+### L-012 - When a sim behavior has a room-side trigger (join/leave/lock), the sim test proves the sim half only — the fix/feature task must name a room-level integration test for the trigger itself or the wiring ships untested.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `apps/server,integration` · harmful: 0
+- features: elevator-riders
+- evidence: ELR-01/ELR-02 room half; apps/server/src/rooms/TurnoverRoom.ts:184 (prior Gap 1) (apps/server,integration)
+- last seen: 2026-08-29T02:27:25Z
+
+### L-013 - Before rewriting a large test suite, list its existing pinned behaviors (test titles/ids) and diff that list after the rewrite — wholesale rewrites silently drop pins that only the sensor or verifier catches later.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `packages/sim,test-churn` · harmful: 0
+- features: elevator-riders
+- evidence: MOVE-13/AD-012#3 pins; c7d79c8:movement.test.ts:303,385 (prior Gaps 2-3) (packages/sim,test-churn)
+- last seen: 2026-08-29T02:27:27Z
+
+### L-014 - Kill stale dev servers on :2567/:5173 before running pnpm test:client — the Playwright webServer refuses to boot otherwise and the gate fails at startup, not in any test.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `apps/client,harness,gate-3` · harmful: 0
+- features: elevator-riders
+- evidence: apps/client/harness/playwright.config.ts webServer (:2567/:5173), recurred in both verifier rounds (apps/client,harness,gate-3)
+- last seen: 2026-08-29T02:27:32Z
+
+### L-015 - When a spec anchors visual timing to a public event, tests must measure from that event receipt rather than from a later local animation phase.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `apps/client` · harmful: 0
+- features: elevator-animation
+- evidence: ELAN-02 (apps/client)
+- last seen: 2026-08-29T15:45:00Z
+
+### L-016 - If an animation spec says timings come from shared TUNING and event timestamps, the presenter API must carry those anchors and tests must prove those constants are actually used.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `apps/client` · harmful: 0
+- features: elevator-animation
+- evidence: ELAN-08 (apps/client)
+- last seen: 2026-08-29T15:45:00Z
+
+### L-017 - Animation tests must observe rendered geometry or an equivalent stable visual signal; visibility-only assertions do not protect open-vs-closed states.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `apps/client` · harmful: 0
+- features: elevator-animation
+- evidence: M6 (apps/client)
+- last seen: 2026-08-29T15:45:00Z
+
+### L-018 - For visual-arrival requirements, assert the player-visible landing-motion outcome, not just an internal alpha or phase proxy.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `apps/client` · harmful: 0
+- features: elevator-animation
+- evidence: ELAN-06 (apps/client)
+- last seen: 2026-08-29T15:45:00Z
+
+### L-019 - Every hidden-information SPEC_DEVIATION needs explicit tests for both the public-event path and the silent ground-truth fallback.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `apps/client` · harmful: 0
+- features: elevator-animation
+- evidence: apps/client/src/scenes/elevatorPresenter.ts:13 (apps/client)
+- last seen: 2026-08-29T15:45:00Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

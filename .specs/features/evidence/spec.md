@@ -196,7 +196,7 @@ same-floor viewers (entrant included), pass-through fires, exit/stop stays silen
 | EVID-02 | P1: Door cards | Execute | Done |
 | EVID-03 | P1: Door cards | Execute | Done |
 | EVID-04 | P1: Door cards | Execute | Done |
-| {rid} | P1: Door cards | Design | Pending |
+| EVID-05 | P1: Door cards | Execute | Done |
 | EVID-06 | P2: Freshness | Execute | Done |
 | EVID-07 | P2: Freshness | Execute | Done |
 | EVID-08 | P2: Freshness | Execute | Done |
@@ -206,11 +206,11 @@ same-floor viewers (entrant included), pass-through fires, exit/stop stays silen
 | EVID-12 | P3: Rustle | Execute | Done |
 | EVID-13 | P3: Rustle | Execute | Done |
 | EVID-14 | P3: Rustle | Execute | Done |
-| {rid} | P3: Rustle | Design | Pending |
-| {rid} | P4: Door-open cue | Design | Pending |
+| EVID-15 | P3: Rustle | Execute | Done |
+| EVID-16 | P4: Door-open cue | Execute | Done |
 | EVID-17 | P4: Door-open cue | Execute | Done |
 | EVID-18 | P4: Door-open cue | Execute | Done |
-| EVID-19 | P4: Door-open cue | Design | Pending |
+| EVID-19 | P4: Door-open cue | Execute | Done |
 
 **Coverage:** 19 total, mapped in tasks.md, 0 unmapped.
 

@@ -409,57 +409,49 @@
 
 ## Handoff
 
-- **Feature**: `elevator-animation` — client-only door-open/close + ride
-  animation for the two elevator cars, layered on the existing
-  `elevator-riders` state machine (AD-013/AD-014); no wire/sim changes.
-- **Phase / Task**: Execute → T1–T8 committed, gated green, and independently
-  verified PASS.
+- **Feature**: `evidence` (cycle 2.7) — door cards (permanent, floor-public,
+  no timestamp, FR-11), the 75 s trash freshness window (FR-12), the sabotage
+  rustle delivered through a new server-side `earshot` recipient policy
+  (FR-13), and the door-open cue on segment entry (FR-10 cue half). No tuning
+  changes; the two §7 constants (FRESHNESS_WINDOW_SECONDS=75,
+  RUSTLE_RANGE_TILES=3) are consumed for the first time.
+- **Phase / Task**: Execute → T1–T7 committed and gated green; T8 (closeout)
+  in progress pending the independent Verifier.
 - **Completed**:
-  - T1–T3 (commit `d88d6a7`): pure `CarClock`/`advanceCarClock` reducer +
-    `ElevatorPresenter` class in `apps/client/src/scenes/elevatorPresenter.ts`,
-    using narrow structural interfaces (`GraphicsLike`/`EllipseLike`/
-    `SceneLike`) instead of `Phaser.*` value imports so the module stays
-    unit-testable under the client vitest project (Phaser can't load under
-    plain node — no `window`). Documents a `SPEC_DEVIATION`: a rider-triggered
-    (in-car press) departure never fires `elevator:called` (AD-013), so the
-    presenter treats the fixed dwell timeout elapsing as the deterministic
-    close-and-depart trigger for that case.
-  - T4 (commit `b192056`): wired `ElevatorPresenter` into
-    `apps/client/src/scenes/WorldScene.ts` — constructed in `create()`,
-    fed plain fields (`action.car`, `action.floor as FloorId`) from
-    `applyAction`'s `elevator-called`/`elevator-moved` cases, ticked from
-    `update()` with Phaser's own `delta`; removed the old inline
-    `car.ellipse.setVisible(...)` line (superseded by presenter gating).
-  - T5 (commit `584bab8`): new `apps/client/harness/elevator-doors.spec.ts`
-    (`client:elevator_doors`), single-client scenario proving the harness
-    Rectangle/Ellipse contract survives and a real browser opens/closes/hides
-    the car per the presenter's clock.
-  - T6 (commit `0bc2f64`): flipped all `ELAN-NN` rows in
-    `.specs/features/elevator-animation/spec.md` to Done; also committed
-    `design.md` for the first time (authored during Design but never staged
-    before the T1 commit).
-  - T7 (commit `2187d5f`): closed out this Handoff section for the initial
-    implementation cycle.
-  - T8 (commit `a5c144e`): fixed the independent Verifier's FAIL report:
-    re-anchored dwell timing to `elevator:moved` receipt (ELAN-02), derived
-    all P2 durations from `TUNING` constants (ELAN-08), added a fake
-    `GraphicsLike` recorder to kill the surviving door-geometry mutant
-    (ELAN-01), added off-floor arrival suppression coverage (ELAN-07), and
-    added a vertical arrival slide (ELAN-06). Updated `design.md` to match
-    the corrected phase model.
-- **Verification**: Independent Verifier re-ran on commit `a5c144e` and
-  reported PASS (`.specs/features/elevator-animation/validation.md`, rev 2).
-  `validate_state.py elevator-animation` exits 0.
-- **Gates**:
-  - `pnpm typecheck` ✅
-  - `pnpm biome check` on changed files ✅
-  - `pnpm test:sim` ✅ 222/222
-  - `pnpm exec playwright test --config apps/client/harness/playwright.config.ts elevator-doors.spec.ts` ✅ 1/1
-  - Full `pnpm test:client` ✅ 22 passed; 2 pre-existing flakes unrelated to
-    this feature (`movement.spec.ts` AD-017 timeout, `round.spec.ts` clock
-    boundary 04:59 vs 05:00).
-- **Next step**: Feature is complete. Gate 4 (human 5-minute round,
-  player-facing) is recommended but optional; no further code work required.
+  - T1 (commit `5d89e2b`): protocol — four `SimEvent` variants + payload
+    interfaces + registry rows (`room:carded`/`room:entered` → `sameFloor`,
+    `room:settled` → `occupants`, `room:rustle` → new `'earshot'` policy);
+    `EventVisibility.room`; client mapper/action plumbing (compile-exhaustive).
+  - T2 (commit `6530100`): sim — `carded` set hung on every prep transition
+    (idempotent re-emission, fake touches nothing), `settleAt` deadlines with
+    exact 1500-tick window, prep-cancel + re-trash-restart + buzzer-silence
+    legs, `cardedOn` query + `RoundSim.cardedOn` delegate.
+  - T3 (commit `c25a511`): sim — `room:rustle` on trash transitions only;
+    `room:entered` on every segment entry (pass-through included) alongside
+    the private `room:observed`.
+  - T4 (commit `dbacd16`): server — `ViewContext.x` (millitiles, null for
+    riders) + `movement.viewOf` x + the Router `earshot` branch (same floor,
+    within RUSTLE_RANGE_TILES of the room's nearer segment edge, inclusive).
+  - T5 (commit `93a97a4`): server — `movement:snapshot.cardedRooms` (own
+    floor), AD-017 exit handler passes `sim.cardedOn(arrivalFloor)`, e2e
+    carded-exit-snapshot test.
+  - T6 (commit `2360444`): client — pure `evidenceSession` reducer
+    (idempotent cards, TTL'd cue buffer) + DOM evidence layer in WorldScene
+    (card glyphs per carded room, door-open/rustle cue markers, WebAudio
+    beeps, round-start reset via the App).
+  - T7 (commit `5a7d088`): harness — `client:evidence_cues` (role-adaptive:
+    reads private role cards, staff preps, saboteur un-preps; asserts carded
+    glyph on both floor1 pages, door-open + rustle cue nodes, card survives
+    re-trash, exactly one role:dealt on the saboteur's stream).
+- **Verification**: independent Verifier pending (T8).
+- **Gates** (at T7 commit `5a7d088`):
+  - `pnpm typecheck` ✅ 0 errors
+  - `pnpm biome check` on changed paths ✅ (remaining root-lint errors are the
+    pre-existing untracked `scripts/dev-boot.mjs`, untouched this cycle)
+  - `pnpm test:sim` ✅ 247/247 (was 222 pre-cycle)
+  - `pnpm test:client` ✅ 25/25 incl. new `client:evidence_cues`
+- **Next step**: run `validate_state.py evidence` after the Verifier's
+  `validation.md` lands; fix any ranked gaps (bounded to 3 iterations).
 - **Blockers**: none.
 - **Uncommitted files**: none from this feature; pre-existing unrelated
   working-tree changes remain untouched (`.specs/LESSONS.md`,
