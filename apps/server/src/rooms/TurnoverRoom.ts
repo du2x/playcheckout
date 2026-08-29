@@ -167,13 +167,12 @@ export class TurnoverRoom extends Room {
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
-    // Personal movement snapshot (viewer-branch, AD-013): fresh joiners always
-    // stand in the lobby, so this resolves to the own-floor view — but the
-    // branch keeps join and buzzer on one rider-aware path.
+    // Personal movement snapshot (snapshotFor resolves the rider-vs-floor
+    // policy internally — join and buzzer share one path).
     this.router.toSelf(
       'movement:snapshot',
       client.sessionId,
-      this.movement.snapshotForRider(client.sessionId),
+      this.movement.snapshotFor(client.sessionId),
     )
   }
 
@@ -284,19 +283,12 @@ export class TurnoverRoom extends Room {
       this.sim = null
       this.phase = 'lobby'
       // Refresh everyone's view of where players and cars now stand
-      // (MOVE-18). Viewer-branch snapshot (AD-013): a mid-car rider gets
-      // their car's occupants + queue with an EMPTY players list (AD-009
-      // leak fix — a floor snapshot is not a legitimate rider view); every
-      // non-rider gets the byte-identical own-floor snapshot.
+      // (MOVE-18): snapshotFor gives a mid-car rider their car's occupants +
+      // queue with an EMPTY players list (AD-013/AD-009 leak fix — a floor
+      // snapshot is not a legitimate rider view) and every non-rider the
+      // byte-identical own-floor snapshot.
       for (const sessionId of this.players.keys()) {
-        const view = this.movement.viewOf(sessionId)
-        this.router.toSelf(
-          'movement:snapshot',
-          sessionId,
-          view.car !== null
-            ? this.movement.snapshotForRider(sessionId)
-            : this.movement.snapshotForFloor(view.floor ?? 'lobby'),
-        )
+        this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
       }
     }
   }

@@ -498,7 +498,7 @@ describe('sim:elevator', () => {
       { type: 'elevator:pressed', playerId: 'p1', floor: 'floor3', car: 1 },
       { type: 'elevator:pressed', playerId: 'p1', floor: 'floor2', car: 1 },
     ])
-    expect(sim.snapshotForRider('p1').carOccupants).toEqual({
+    expect(sim.snapshotFor('p1').carOccupants).toEqual({
       car: 1,
       riders: ['p1'],
       queue: ['floor3', 'floor2'],
@@ -971,7 +971,7 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     sim.join('p2')
     boardParkedCar(sim, 'p1', 1)
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // queue into the snapshot
-    const riderSnap = sim.snapshotForRider('p1')
+    const riderSnap = sim.snapshotFor('p1')
     expect(riderSnap.players).toEqual([]) // no floor stream in a car (AD-009)
     expect(riderSnap.cars).toEqual([
       { car: 1, floor: 'lobby' },
@@ -993,7 +993,7 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     expect(sim.snapshotForFloor('lobby').players).toEqual([
       { playerId: 'p2', floor: 'lobby', x: 15 },
     ])
-    // A non-rider's snapshotForRider falls back to the floor snapshot.
-    expect('carOccupants' in sim.snapshotForRider('p2')).toBe(false)
+    // A non-rider's snapshotFor falls back to the floor snapshot.
+    expect('carOccupants' in sim.snapshotFor('p2')).toBe(false)
   })
 })

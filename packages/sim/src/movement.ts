@@ -336,13 +336,14 @@ export class MovementSim {
   }
 
   /**
-   * AD-013 rider snapshot (join and buzzer resync for mid-car viewers): a
-   * rider's snapshot carries an EMPTY players list (no floor stream in a car,
-   * AD-009 — this also fixes the AD-009 rider leak), both cars' public floors
-   * (panels stay public), and their car's occupants + press queue. A non-rider
-   * falls back to the byte-identical floor snapshot — occupancy never appears.
+   * THE personal snapshot (AD-013; join and buzzer resync): the single home
+   * of the rider-vs-floor policy. A rider's snapshot carries an EMPTY players
+   * list (no floor stream in a car, AD-009 — this also fixes the AD-009 rider
+   * leak), both cars' public floors (panels stay public), and their car's
+   * occupants + press queue. A non-rider falls back to the byte-identical
+   * floor snapshot — occupancy never appears. Callers never branch.
    */
-  snapshotForRider(playerId: string): {
+  snapshotFor(playerId: string): {
     players: { playerId: string; floor: FloorId; x: number }[]
     cars: { car: 1 | 2; floor: FloorId }[]
     carOccupants?: { car: 1 | 2; riders: string[]; queue: FloorId[] }
