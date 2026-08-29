@@ -618,6 +618,65 @@ describe('sim:elevator', () => {
     ])
   })
 
+  it('boards the two closest candidates up to capacity 2 — distance first, ties by playerId — and the overflow waits for the next open-door tick (MOVE-13, ELR P2 AC8)', () => {
+    const sim = new MovementSim()
+    sim.join('p0')
+    sim.join('p2')
+    sim.join('p3')
+    sim.join('p4')
+    // Empty round trip: p0 rides car 1 to floor1, queues the lobby return,
+    // and walks off — the queue belongs to the car, so the EMPTY car comes
+    // back with doors shut and nobody re-boards mid-flight.
+    boardParkedCar(sim, 'p0', 1)
+    expect(sim.pressFloor('p0', 'floor1')).toBe('accepted')
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
+    expect(sim.pressFloor('p0', 'lobby')).toBe('accepted')
+    sim.startMove('p0', 'right') // walk off through the open dwell doors
+    expect(sim.viewOf('p0').car).toBeNull()
+    // While the empty car rides home, position three candidates inside the
+    // 1-tile boarding range of the west landing: p4 at 0.0 tiles, p2 and p3
+    // TIED at 0.3 (lobby-floor walking needs no round, MOVE-08 positive half).
+    sim.startMove('p4', 'left')
+    sim.startMove('p2', 'left')
+    sim.startMove('p3', 'left')
+    for (let i = 0; i < 49; i++) sim.tick()
+    sim.stopMove('p2')
+    sim.stopMove('p3')
+    sim.tick()
+    sim.stopMove('p4')
+    expect(lastX(sim, 'p4')).toBe(0)
+    expect(lastX(sim, 'p2')).toBe(0.3)
+    expect(lastX(sim, 'p3')).toBe(0.3)
+    // Arrival boarding resolution: distance first (p4 at 0.0 beats the tied
+    // pair despite the highest id), then playerId within the tie (p2 over
+    // p3); capacity 2 leaves p3 overflowing.
+    let arrival: readonly MovementEvent[] = []
+    for (let i = 0; i < 100; i++) {
+      const events = sim.tick()
+      if (events.some((e) => e.type === 'elevator:moved' && e.car === 1 && e.floor === 'lobby')) {
+        arrival = events
+        break
+      }
+    }
+    const boarded: string[] = []
+    for (const e of arrival) if (e.type === 'player:left-floor') boarded.push(e.playerId)
+    expect(boarded).toEqual(['p4', 'p2'])
+    expect(sim.viewOf('p4').car).toBe(1)
+    expect(sim.viewOf('p2').car).toBe(1)
+    expect(sim.viewOf('p3').car).toBeNull()
+    // The overflow candidate waits: no boarding while the car is full...
+    for (let i = 0; i < 10; i++) {
+      sim.tick()
+      expect(sim.viewOf('p3').car).toBeNull()
+    }
+    // ...until an exit frees a slot on the next open-door tick.
+    sim.startMove('p4', 'right') // doors open (dwell): p4 walks off
+    expect(sim.viewOf('p4').car).toBeNull()
+    sim.tick()
+    expect(sim.viewOf('p3').car).toBe(1)
+    expect(sim.viewOf('p4').car).toBeNull() // episode guard: no instant re-board
+  })
+
   it('blocks re-boarding after an exit until the car next departs (ELR edge: door-open-episode guard)', () => {
     const sim = new MovementSim()
     sim.join('p1')
