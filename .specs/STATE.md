@@ -255,6 +255,78 @@
 - **Scope**: `packages/sim/src/movement.ts`, `apps/client/src/scenes/WorldScene.ts`,
   movement tests, future elevator-touching cycles.
 - **Date**: 2026-08-28
+- **Status**: active — **Amended by AD-014**: the duplicate predicate narrows to
+  pickup floor ONLY (calls carry no destination anymore, so the destination half
+  of the predicate ceases to exist), and the wrong-way carry is eliminated: the
+  car's path is chosen in-car and its press queue is always visible to its
+  occupants.
+
+### AD-013
+- **Decision**: Rider-exclusive occupancy and press knowledge. A new `riders`
+  recipient policy delivers `elevator:pressed {playerId, floor}` and
+  `elevator:riders {car, riders, queue}` ONLY to viewers riding that car
+  (`ViewContext` gains `car: 1 | 2 | null`; riders keep `floor: null`). The
+  press queue rides in the rider-exclusive payloads and in the rider's personal
+  snapshot (`carOccupants {car, riders, queue}`; non-rider snapshots are
+  byte-identical to before) — the real-elevator "lit buttons are visible from
+  inside" model, closing blind inheritance for late boarders and buzzer
+  rejoiners (design review 2026-08-28). FR-6 panels and
+  `elevator:called`/`elevator:moved` payloads stay `{floor, car}`/`{car, floor}`
+  — never occupancy, never queue, never press targets.
+- **Reason**: The elevator is the game's strongest co-presence moment and
+  transmitted nothing: co-riders could not testify who shared the car or who
+  pressed what. Broadcasting occupancy would make tailing trivial, so the
+  knowledge must be exactly as wide as the car's interior.
+- **Trade-off**: Non-riders (including a rider who just walked off) learn
+  nothing beyond what the public position streams already show; boarding stays
+  inferable only via stream-stop. Client renders the knowledge as a DOM chip
+  visible only while riding (no scene-level car interior — AD-009 preserved).
+- **Scope**: `packages/shared/src/protocol/*`, `apps/server/src/rooms/*`,
+  `packages/sim/src/movement.ts`, `apps/client/src/*`, cycle 2.6 tasks.
+- **Date**: 2026-08-28
+- **Status**: active
+
+### AD-014
+- **Decision**: Call-model rework, one cycle owning elevator semantics
+  end-to-end. `elevator:call` is destination-free (the pickup floor is the whole
+  request; duplicate predicate = pickup floor ONLY, narrowing AD-012); the
+  destination is chosen inside the car via `elevator:press {floor}` (rider-only,
+  strict zod, no cancel) appended to a per-car FIFO press queue. The car becomes
+  a four-phase machine (`idle`/`arriving`/`dwelling`/`riding`; doors open in
+  idle + dwelling) that opens doors at every stop for a 1 s dwell
+  (`ELEVATOR_DWELL_SECONDS = 1` — the only §7-external tuning constant this
+  cycle). Design-review pins (2026-08-28): (a) **door-open-episode exit guard** —
+  a player who exits joins `exitedThisStop`, cleared only on the car's next
+  DEPARTURE; not a same-tick guard, which is provably insufficient (walking off
+  takes ~4 ticks and a pre-round exiter at a guest floor cannot walk at all);
+  (b) **arriving-pickup press rejection** — the pickup floor counts as
+  being-served while `arriving` (no zero-tick rides; departure asserts
+  `rideTicks > 0`, pinned by test); (c) **empty-idle dispatch preference** —
+  among idle cars, empty ones are drafted first (closest landing, tie → car 1),
+  occupied-idle cars only when no empty idle car exists; (d) **queue-in-payload**
+  — the queue rides in `elevator:riders` and rider snapshots so occupants always
+  see it; (e) **lit floor indicators** on the rider chip (lit = queued or being
+  served) give press feedback without a keyboard UI change. Stay-in-car is
+  allowed (a served rider may press again); ghost trips serve an abandoned queue
+  (the queue belongs to the car, walk-offs never clear it); a pickup with nobody
+  in boarding range idles the car open-doors (caller-never-boards); a re-call at
+  an open-door car is the decoy flash.
+- **Reason**: The coupled call `{target}` produced the uninformed wrong-way
+  carry and pre-committed trips nobody in the car chose. Destinations become a
+  product of in-car negotiation, and every stop is observable (who stayed, who
+  bailed, whether anyone boarded).
+- **Trade-off**: All existing timing preserved except where the spec changes it
+  (dwell, open-door idle, press queue): 3 s arrival, 2 s/floor ride, capacity 2,
+  1-tile landings unchanged. Press cancel/un-press does not exist (ever-lit
+  buttons; mispresses are livable and keep the queue rider-knowable); service
+  order is FIFO, not directional (the zigzag is publicly trackable via panels);
+  the rare occupied-idle draft still carries a deliberating rider, visible and
+  redirectable by press after the pickup dwell — playtest revisit via a new AD.
+- **Scope**: `packages/shared/src/*`, `packages/sim/src/movement.ts`,
+  `apps/server/src/rooms/*`, `apps/client/src/*`, `apps/client/harness/*`,
+  `roadmap.md` cycle table (2.6 insert, successors shift to 2.10), movement
+  design.md "call semantics" interpretation marked AD-014-superseded.
+- **Date**: 2026-08-28
 - **Status**: active
 
 ## Handoff

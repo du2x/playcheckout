@@ -104,13 +104,14 @@ graph TD
   - `startMove(playerId, dir: 'left' | 'right')` — idempotent; ignored in lobby phase if the player's floor ≠ `lobby` (MOVE-08) or if in a car (MOVE-09); sets facing immediately
   - `stopMove(playerId)` — no-op if not moving
   - `callElevator(playerId, target: FloorId): 'dispatched' | 'ignored' | 'rejected'` —
-    `'rejected'` when in lobby phase (the room maps this to the `elevator-locked`
-    intent error) or the caller is in a car; `'ignored'` is the duplicate-call
-    path (AD-012: same pickup floor arriving + same destination, or queued)
-    (MOVE-12); `'dispatched'` covers immediate dispatch AND queuing. The
-    `elevator:called` flash announces on the **next tick** after acceptance,
-    naming the serving car (duplicates name that car); queued calls flash
-    at dispatch time, not at call
+    ~~destination-bearing call; `'ignored'` is the duplicate-call
+    path (AD-012: same pickup floor arriving + same destination, or queued)~~
+    **Superseded by AD-014**: calls are destination-free —
+    `callElevator(playerId): 'dispatched' | 'ignored' | 'rejected'`; the
+    duplicate predicate compares the PICKUP floor only (a car arriving to or
+    queued for that pickup, or standing there with open doors), and the
+    destination is chosen inside the car via `pressFloor` (FIFO press queue).
+    See `.specs/features/elevator-riders/`
   - `unlock() / lock()` — room start / buzzer transitions; **no position changes**
     (MOVE-07, MOVE-08: positions persist; lobby phase re-confines *future*
     movement to the `lobby` floor). `lock()` additionally **clears the call
@@ -133,16 +134,18 @@ graph TD
 ### Elevator model (inside `movement.ts`, pure — one file, one concept pair)
 
 - **Levels**: `FLOOR_IDS` = lobby, floor1..3 (4 levels). Landings: car 1 at x=0, car 2 at x=`HALL_LENGTH_TILES` — same on every level.
-- **Car state machine**: `idle(floor)` → `arriving(ticksLeft = ELEVATOR_ARRIVE_SECONDS×TICK_HZ = 60, pickup, target)` → board (instant, same tick) → `riding(ticksLeft = |pickup−target| × RIDE_SECONDS_PER_FLOOR×TICK_HZ = 40/floor, target)` → `idle(target)`. Arrival is a fixed 60 ticks from call regardless of distance — prd FR-5's abstraction, locked by MOVE-11.
+- **Car state machine**: `idle(floor)` → `arriving(ticksLeft = ELEVATOR_ARRIVE_SECONDS×TICK_HZ = 60, pickup, target)` → board (instant, same tick) → `riding(ticksLeft = |pickup−target| × RIDE_SECONDS_PER_FLOOR×TICK_HZ = 40/floor, target)` → `idle(target)`. Arrival is a fixed 60 ticks from call regardless of distance — prd FR-5's abstraction, locked by MOVE-11. **AD-014-superseded**: the single `target` becomes a FIFO press `queue`; the machine gains `dwelling` (open-door stops, 20 ticks) between arrival/riding and idle, and arrival no longer auto-exits anyone — see `.specs/features/elevator-riders/`.
 - **Boarding** (MOVE-13): on the arrival tick, candidates = connected players whose floor == pickup and |x − car landing x| ≤ `ELEVATOR_LANDING_TILES` (new tuning, AD-007: 1 tile); sorted by (distance to car x, then playerId); first `ELEVATOR_CAPACITY` (2) board, rest wait for the next arrival. Boarded players: floor tracks the car (player:moved per floor hop), x pinned to the car's landing x, move intents ignored. Riders keep riding to `target` even if the caller walked away (the trip completes — decoy rides exist). Boarding drops the boarding player's queued calls (AD-012).
 - **Dispatch** (MOVE-10): only **idle** cars are dispatched — with the fixed 3 s
   arrival, all idle cars tie; **AD-012** replaces the flat tie rule with
   landing-distance preference (the car whose landing the caller can actually
   board — boarding happens at the car's own landing), tie → car 1 (west). A
-  **duplicate** call — AD-012: a car arriving to pick up at the caller's floor
-  for the same destination, or the identical queued call — is ignored for
-  dispatch (MOVE-12, narrowed) but still flashes; destination-only matches
-  dispatch normally.
+  **duplicate** call — ~~AD-012: a car arriving to pick up at the caller's floor
+  for the same destination, or the identical queued call~~ **AD-014-superseded:
+  pickup floor only** — is ignored for
+  dispatch (MOVE-12, narrowed) but still flashes; ~~destination-only matches
+  dispatch normally~~ (no destination exists — AD-014). Among idle cars, empty
+  ones are preferred first, then occupied-idle, then the FIFO (AD-014).
   If no car is idle, the call waits in a sim-level FIFO and is served **in FIFO
   order** by the next car to go idle. A car never holds two destinations
   (MOVE-15). `elevator:called` announces on the next tick after acceptance —

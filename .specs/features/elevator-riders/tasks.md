@@ -343,7 +343,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ---
 
-#### T12: Decisions, roadmap, and spec amendments
+#### T12: Decisions, roadmap, and spec amendments — ✅ Done
 
 **What**: Record **AD-013** (rider-exclusive occupancy + queue/press knowledge — `riders` policy) and **AD-014** (call-model rework: destination-free calls, FIFO press queue, 1s dwell, open-door episode guard, stay-in-car, ghost trips, caller-never-boards, empty-idle dispatch preference, zero-ride guard) in `.specs/STATE.md`; shift the roadmap cycle table (insert 2.6 `elevator-riders`, `evidence`→2.7, `justice`→2.8, `round-end`→2.9, `telemetry`→2.10); annotate the movement design's "call semantics" interpretation as AD-014-superseded and note the AD-012 duplicate predicate narrowing.
 **Where**: `.specs/STATE.md`
@@ -356,9 +356,9 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: NONE
 
 **Done when**:
-- [ ] `STATE.md` decisions section contains AD-013 and AD-014 with scope/date/status active; old duplicate/wrong-way-carry notes amended
-- [ ] `roadmap.md` cycle table shows 2.6 `elevator-riders` and shifted successors (2.10 exit)
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint`
+- [x] `STATE.md` decisions section contains AD-013 and AD-014 with scope/date/status active; old duplicate/wrong-way-carry notes amended
+- [x] `roadmap.md` cycle table shows 2.6 `elevator-riders` and shifted successors (2.10 exit)
+- [x] Gate check passes: `pnpm typecheck && pnpm lint`
 
 **Tests**: none
 **Gate**: build
