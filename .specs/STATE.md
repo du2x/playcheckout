@@ -407,6 +407,56 @@
 - **Date**: 2026-08-29
 - **Status**: active
 
+### AD-018
+- **Decision**: Static door frames are client-visible from the moment the world
+  mounts — phase-free, pre-round included (user request before cycle 2.8). The
+  WorldScene renders one DOM door frame per room segment (AD-010 geometry,
+  `#doors-layer`) on every guest floor view; the grand lobby shows none. No
+  sim, protocol, or tuning changes — pure rendering, following the evidence
+  layer's DOM-over-canvas pattern (scene-children contract preserved).
+- **Reason**: User request — with AD-015 free-roam the building is walkable
+  pre-round but rooms were invisible (no door visuals existed at all, any
+  phase); frames also anchor cycle 2.7's cards/cues spatially.
+- **Trade-off**: Purely cosmetic; door frames reveal room boundaries that are
+  public geometry (layout is in `packages/shared`, no hidden state). Frame
+  visibility follows the own view floor like card markers (riders keep the
+  last floor's frames — same accepted behavior).
+- **Scope**: `apps/client/src/scenes/WorldScene.ts`,
+  `apps/client/harness/doors.spec.ts` (new gate `client:doors_pre_round`).
+- **Date**: 2026-08-29
+- **Status**: active
+
+### AD-019
+- **Decision**: Narrow the elevator call duplicate predicate again (user
+  request). A car parked open-doors (`idle`|`dwelling`) at the pickup floor no
+  longer makes a call a duplicate: the parked car is excluded from dispatch
+  candidacy and the OTHER car is summoned to that floor (dispatching normally
+  when it is idle — empty-idle preference and closest-landing tie-break
+  unchanged — or queuing sim-level FIFO when it is busy, MOVE-15). The decoy
+  flash now covers only: a car ARRIVING at the pickup, a car RIDING with the
+  pickup queued, an already-queued call for the pickup, and BOTH cars parked
+  open-doors at the pickup (nothing can arrive; boarding/pressing a parked
+  car is how it moves). No protocol, tuning, or client-logic changes — the
+  flash remains a data-only panel pulse.
+- **Reason**: User directive — with car E parked at the caller's floor, a call
+  for W left both cars untouched (decoy flash), so the only way to bring the
+  far car over was to move E first. Completes the AD-016 strand: that
+  decision's stranded-player playtest cited this exact dispatch dead-end as
+  half of the lock-out.
+- **Trade-off**: MOVE-12's "same pickup floor arriving" decoy survives, but
+  the classic lobby decoy (both cars home, call flashes) now only works when
+  BOTH cars are parked at the pickup floor; a single parked car means a real
+  summon of the other car. A caller standing at the empty parked car's own
+  landing gains a redundant second car (they could just board) — accepted as
+  the natural reading of "a call makes a car come to you".
+- **Scope**: `packages/sim/src/movement.ts` (`callElevator`),
+  `packages/sim/src/movement.test.ts` (both-parked flash renamed, two new
+  AD-019 scenarios), `.specs/features/elevator-riders/spec.md` (P2 AC7 / P3
+  AC5 amendments), `apps/client/harness/elevatorLobby.spec.ts` (comment),
+  `docs/elevator-behavior.md`.
+- **Date**: 2026-08-29
+- **Status**: active — narrows the AD-012/AD-014 duplicate predicate again.
+
 ## Handoff
 
 - **Feature**: `evidence` (cycle 2.7) — door cards (permanent, floor-public,
@@ -455,7 +505,10 @@
   - `pnpm test:sim` ✅ 248/248 (was 222 pre-cycle)
   - `pnpm test:client` ✅ 25/25 incl. new `client:evidence_cues`
 - **Next step**: feature complete. Gate 4 (human 5-minute round,
-  player-facing) recommended before the next cycle. NOTE: commit `84e944b`
+  player-facing) recommended before the next cycle. Pre-2.8 addendum
+  (AD-018, 2026-08-29): static door frames render phase-free from join —
+  `client:doors_pre_round` added, suite 26/26, no sim/protocol changes.
+  Cycle 2.8 may begin. NOTE: commit `84e944b`
   inadvertently included the pre-existing untracked
   `.specs/features/elevator-riders/validation.md` (scope deviation, left in —
   a legitimate prior-cycle artifact). Deferred notes (1)-(3) from the previous
