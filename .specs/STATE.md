@@ -415,8 +415,9 @@
   (FR-13), and the door-open cue on segment entry (FR-10 cue half). No tuning
   changes; the two §7 constants (FRESHNESS_WINDOW_SECONDS=75,
   RUSTLE_RANGE_TILES=3) are consumed for the first time.
-- **Phase / Task**: Execute → T1–T7 committed and gated green; T8 (closeout)
-  in progress pending the independent Verifier.
+- **Phase / Task**: Execute → T1–T8 complete; independent Verifier PASS
+  (10/10 mutants killed, 0 survivors, protocol audit clean). Gap 1 (LOW)
+  fixed post-verdict with a direct EVID-07 assertion; suite 248/248.
 - **Completed**:
   - T1 (commit `5d89e2b`): protocol — four `SimEvent` variants + payload
     interfaces + registry rows (`room:carded`/`room:entered` → `sameFloor`,
@@ -443,15 +444,22 @@
     reads private role cards, staff preps, saboteur un-preps; asserts carded
     glyph on both floor1 pages, door-open + rustle cue nodes, card survives
     re-trash, exactly one role:dealt on the saboteur's stream).
-- **Verification**: independent Verifier pending (T8).
+- **Verification**: `.specs/features/evidence/validation.md` — PASS. Sensor:
+  10 behavior-level mutants in a /tmp scratch, all killed, scratch deleted,
+  real-tree porcelain identical to baseline. `validate_state.py evidence`
+  exit 0.
 - **Gates** (at T7 commit `5a7d088`):
   - `pnpm typecheck` ✅ 0 errors
   - `pnpm biome check` on changed paths ✅ (remaining root-lint errors are the
     pre-existing untracked `scripts/dev-boot.mjs`, untouched this cycle)
-  - `pnpm test:sim` ✅ 247/247 (was 222 pre-cycle)
+  - `pnpm test:sim` ✅ 248/248 (was 222 pre-cycle)
   - `pnpm test:client` ✅ 25/25 incl. new `client:evidence_cues`
-- **Next step**: run `validate_state.py evidence` after the Verifier's
-  `validation.md` lands; fix any ranked gaps (bounded to 3 iterations).
+- **Next step**: feature complete. Gate 4 (human 5-minute round,
+  player-facing) recommended before the next cycle. NOTE: commit `84e944b`
+  inadvertently included the pre-existing untracked
+  `.specs/features/elevator-riders/validation.md` (scope deviation, left in —
+  a legitimate prior-cycle artifact). Deferred notes (1)-(3) from the previous
+  handoff remain open.
 - **Blockers**: none.
 - **Uncommitted files**: none from this feature; pre-existing unrelated
   working-tree changes remain untouched (`.specs/LESSONS.md`,

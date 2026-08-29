@@ -433,6 +433,20 @@ describe('sim:freshness', () => {
     expect(FRESHNESS_TICKS).toBe(1500)
   })
 
+  it('reads trash as trashed through room:observed while the window runs (EVID-07)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    trashRoom1(sim)
+    // A player who left the segment mid-window re-reads the fresh trash.
+    sim.tick(positions(['ada', pos('floor1', OUTSIDE)]))
+    const reentry = sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    expect(workOf(reentry, 'room:observed')).toEqual([
+      { type: 'room:observed', playerId: 'ada', floor: 'floor1', room: 1, state: 'trashed' },
+    ])
+  })
+
   it('reads a settled room as settled through room:observed (EVID-07)', () => {
     const sim = simWith([
       ['ada', 'staff'],
