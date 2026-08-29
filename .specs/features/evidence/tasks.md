@@ -112,7 +112,7 @@ T6 → T7 → T8
 
 ---
 
-### T3: Sim — rustle + door-open emissions
+### T3: Sim — rustle + door-open emissions — ✅ done
 
 **What**: Emit `room:rustle {floor, room}` exactly when a `room:trashed` transition completes (never for fake/cancelled/prep completions); emit `room:entered {playerId, floor, room}` in the observation loop on every segment ENTRY (key change to a non-null room key, pass-through included) alongside the existing `room:observed`. Write `sim:rustle` (emission exclusivity legs) and `sim:door_open_cue` (entry/exit/stillness legs, two entrants same tick, entrant also gets `room:observed`) describes.
 **Where**: `packages/sim/src/work.ts`, `work.test.ts`

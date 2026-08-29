@@ -181,6 +181,9 @@ export class WorkChannels {
             // EVID-06: the window starts at the sabotage completion tick;
             // re-trash overwrites (EVID-10).
             this.settleAt.set(key, this.elapsedTicks + FRESHNESS_TICKS)
+            // EVID-12: the rustle fires on the same tick as the sabotage —
+            // the Router's earshot policy narrows delivery to earshot (FR-13).
+            events.push({ type: 'room:rustle', floor: channel.floor, room: channel.room })
           }
         }
       } // fake prep: animation only — no state change, no room event (FR-9)
@@ -203,8 +206,10 @@ export class WorkChannels {
       events.push({ type: 'room:settled', floor, room: Number(room) as RoomIndex })
     }
 
-    // Segment observation (FR-10 read half): entering a room's segment sends
-    // that player the room's state; every other interior fact stays put.
+    // Segment observation (FR-10 read half) + the door-open cue (FR-10 cue
+    // half, EVID-16): entering a room's segment fires the public
+    // `room:entered` once per entrant and sends that player the room's state
+    // privately; every other interior fact stays put.
     for (const [playerId, pos] of positions) {
       if (pos.floor === 'lobby') {
         this.lastSegment.set(playerId, null)
@@ -215,6 +220,12 @@ export class WorkChannels {
       if (key === (this.lastSegment.get(playerId) ?? null)) continue
       this.lastSegment.set(playerId, key)
       if (key !== null && room !== 0) {
+        events.push({
+          type: 'room:entered',
+          playerId,
+          floor: pos.floor,
+          room,
+        })
         events.push({
           type: 'room:observed',
           playerId,

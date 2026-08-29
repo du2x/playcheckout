@@ -33,8 +33,9 @@ describe('sim:prep', () => {
     ])
     const here = positions(['ada', pos('floor1', CENTER)], ['vin', pos('lobby', LOBBY)])
 
-    // Entry tick: the first interior observation rides alone.
+    // Entry tick: the door-open cue (EVID-16) + the first interior observation.
     expect(sim.tick(here)).toEqual([
+      { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 1 },
       { type: 'room:observed', playerId: 'ada', floor: 'floor1', room: 1, state: 'fresh' },
     ])
     expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
@@ -202,6 +203,8 @@ describe('sim:unprep', () => {
     }
     expect(sim.tick(vinHere)).toEqual([
       { type: 'room:trashed', floor: 'floor1', room: 1 },
+      // EVID-12: the sabotage rustle fires on the same tick as the transition.
+      { type: 'room:rustle', floor: 'floor1', room: 1 },
       { type: 'work:ended', playerId: 'vin', floor: 'floor1', room: 1, outcome: 'completed' },
     ])
     expect(sim.stateOf('floor1', R1)).toBe('trashed')
@@ -541,5 +544,119 @@ describe('sim:freshness', () => {
     for (let i = 0; i < FRESHNESS_TICKS; i++) {
       expect(sim.tick(inside)).toEqual([])
     } // frozen: no settle event ever arrives after the buzzer (WORK-13)
+  })
+})
+
+// Spec EVID-12/13/14 (gate scenario sim:rustle): the sabotage rustle fires
+// exactly once per real trash transition — never for fakes, cancels, preps,
+// or settles. Delivery range is the Router's earshot policy (router.test.ts).
+
+describe('sim:rustle', () => {
+  it('emits room:rustle exactly when a trash transition completes (EVID-12)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    const adaHere = positions(['ada', pos('floor1', CENTER)], ['vin', pos('lobby', LOBBY)])
+    const both = positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', CENTER)])
+    sim.tick(adaHere)
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    const prepEvents = ticks(sim, PREP_TICKS, adaHere)
+    // A plain prep completion carries no rustle.
+    expect(workOf(prepEvents, 'room:rustle')).toEqual([])
+
+    sim.tick(both)
+    expect(sim.startWork('vin', 'floor1', R1)).toBe('accepted')
+    const trashEvents = ticks(sim, UNPREP_TICKS, both)
+    expect(workOf(trashEvents, 'room:rustle')).toEqual([
+      { type: 'room:rustle', floor: 'floor1', room: 1 },
+    ])
+    // Exactly one rustle for the whole channel — and none after.
+    expect(workOf(ticks(sim, 5, both), 'room:rustle')).toEqual([])
+  })
+
+  it('never emits a rustle for a fake prep, a cancelled channel, or a settle (EVID-14)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    const here = positions(['vin', pos('floor1', CENTER)], ['ada', pos('lobby', LOBBY)])
+    sim.tick(here)
+    // Fake prep: no transition, no rustle.
+    expect(sim.startWork('vin', 'floor1', R1)).toBe('accepted')
+    expect(workOf(ticks(sim, PREP_TICKS, here), 'room:rustle')).toEqual([])
+
+    // Cancelled channel: walk out mid-channel.
+    expect(sim.startWork('vin', 'floor1', R1)).toBe('accepted')
+    const cancelEvents = sim.tick(positions(['vin', pos('floor1', OUTSIDE)]))
+    expect(workOf(cancelEvents, 'work:ended')).toEqual([
+      { type: 'work:ended', playerId: 'vin', floor: 'floor1', room: 1, outcome: 'cancelled' },
+    ])
+    expect(workOf(cancelEvents, 'room:rustle')).toEqual([])
+
+    // A settle (freshness expiry) is not a sabotage: no rustle.
+    sim.tick(positions(['ada', pos('floor1', CENTER)])) // ada walks in
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    const prepDone = ticks(sim, PREP_TICKS, positions(['ada', pos('floor1', CENTER)]))
+    expect(workOf(prepDone, 'room:prepped')).toHaveLength(1)
+    expect(workOf(prepDone, 'room:rustle')).toEqual([])
+    ticks(sim, FRESHNESS_TICKS, positions(['ada', pos('floor1', CENTER)]))
+    expect(sim.stateOf('floor1', R1)).toBe('prepped') // cancelled by the prep
+  })
+})
+
+// Spec EVID-16/17/18 (gate scenario sim:door_open_cue): every segment ENTRY
+// fires one floor-public room:entered — pass-through included; exits,
+// stillness, and lobby crossings stay silent.
+
+describe('sim:door_open_cue', () => {
+  it('fires room:entered once per entry, alongside the private room:observed (EVID-16, EVID-17)', () => {
+    const sim = simWith([['ada', 'staff']])
+    const enter = sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    expect(enter).toEqual([
+      { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 1 },
+      { type: 'room:observed', playerId: 'ada', floor: 'floor1', room: 1, state: 'fresh' },
+    ])
+    // Stillness, hallway, and re-entry each behave per the entry-only rule.
+    expect(sim.tick(positions(['ada', pos('floor1', CENTER)]))).toEqual([])
+    expect(workOf(sim.tick(positions(['ada', pos('floor1', OUTSIDE)])), 'room:entered')).toEqual([])
+    const reenter = sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    expect(workOf(reenter, 'room:entered')).toEqual([
+      { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 1 },
+    ])
+  })
+
+  it('fires on a pass-through crossing from one room into the next (EVID-16)', () => {
+    const sim = simWith([['ada', 'staff']])
+    sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    // Room 2 starts at x = 4500 (AD-010); walking straight there is an entry.
+    const cross = sim.tick(positions(['ada', pos('floor1', 5000)]))
+    expect(workOf(cross, 'room:entered')).toEqual([
+      { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 2 },
+    ])
+    expect(workOf(cross, 'room:observed')).toEqual([
+      { type: 'room:observed', playerId: 'ada', floor: 'floor1', room: 2, state: 'fresh' },
+    ])
+  })
+
+  it('fires once per entrant when two players enter on the same tick (edge)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    const enter = sim.tick(
+      positions(['ada', pos('floor1', CENTER)], ['vin', pos('floor1', 3000)]),
+    )
+    expect(workOf(enter, 'room:entered')).toEqual([
+      { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 1 },
+      { type: 'room:entered', playerId: 'vin', floor: 'floor1', room: 1 },
+    ])
+  })
+
+  it('never fires on the lobby floor or while riding a car carries the player (EVID-18)', () => {
+    const sim = simWith([['ada', 'staff']])
+    // Lobby: no rooms, no cues — even on the very first position tick.
+    expect(sim.tick(positions(['ada', pos('lobby', LOBBY)]))).toEqual([])
+    expect(sim.tick(positions(['ada', pos('lobby', 500)]))).toEqual([])
   })
 })

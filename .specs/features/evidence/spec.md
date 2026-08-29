@@ -203,13 +203,13 @@ same-floor viewers (entrant included), pass-through fires, exit/stop stays silen
 | EVID-09 | P2: Freshness | Execute | Done |
 | EVID-10 | P2: Freshness | Execute | Done |
 | EVID-11 | P2: Freshness | Execute | Done |
-| EVID-12 | P3: Rustle | Design | Pending |
+| EVID-12 | P3: Rustle | Execute | Done |
 | EVID-13 | P3: Rustle | Design | Pending |
-| EVID-14 | P3: Rustle | Design | Pending |
+| EVID-14 | P3: Rustle | Execute | Done |
 | {rid} | P3: Rustle | Design | Pending |
 | {rid} | P4: Door-open cue | Design | Pending |
-| EVID-17 | P4: Door-open cue | Design | Pending |
-| EVID-18 | P4: Door-open cue | Design | Pending |
+| EVID-17 | P4: Door-open cue | Execute | Done |
+| EVID-18 | P4: Door-open cue | Execute | Done |
 | EVID-19 | P4: Door-open cue | Design | Pending |
 
 **Coverage:** 19 total, mapped in tasks.md, 0 unmapped.
