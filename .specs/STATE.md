@@ -412,11 +412,8 @@
 - **Feature**: `elevator-animation` — client-only door-open/close + ride
   animation for the two elevator cars, layered on the existing
   `elevator-riders` state machine (AD-013/AD-014); no wire/sim changes.
-- **Phase / Task**: Execute → T1–T6 committed and gated green
-  (`pnpm typecheck` + `pnpm lint` clean for all touched files;
-  `pnpm test:sim` 213/213; `pnpm test:client` new `client:elevator_doors`
-  scenario passing). **T7 (this handoff) is in progress; the mandatory
-  post-Execute Verifier dispatch has NOT yet run.**
+- **Phase / Task**: Execute → T1–T8 committed, gated green, and independently
+  verified PASS.
 - **Completed**:
   - T1–T3 (commit `d88d6a7`): pure `CarClock`/`advanceCarClock` reducer +
     `ElevatorPresenter` class in `apps/client/src/scenes/elevatorPresenter.ts`,
@@ -441,21 +438,33 @@
     `.specs/features/elevator-animation/spec.md` to Done; also committed
     `design.md` for the first time (authored during Design but never staged
     before the T1 commit).
-- **In-progress** (file:line): none — T7's only remaining action is this
-  Handoff write, followed immediately by the Verifier dispatch.
-- **Next step**: dispatch a fresh Verifier sub-agent (author ≠ verifier) over
-  the full `elevator-animation` diff (`c800eb8..0bc2f64`) — spec-anchored
-  outcome check + discrimination sensor — and write
-  `.specs/features/elevator-animation/validation.md`. Then run
-  `validate_state.py elevator-animation` to confirm PASS before declaring the
-  feature done.
-- **Blockers**: none. Gate 4 (human 5-minute round, player-facing) is
-  recommended but not yet performed for this feature.
-- **Uncommitted files**: none from this feature (all six task commits are
-  clean); pre-existing unrelated working-tree changes remain untouched
-  (`.specs/LESSONS.md`, `.specs/lessons.json`, `package.json` `boot` script,
-  `scripts/`, `.playwright-mcp/`, `.specs/features/elevator-riders/validation.md`
-  — carried over from before this session, not part of this feature).
+  - T7 (commit `2187d5f`): closed out this Handoff section for the initial
+    implementation cycle.
+  - T8 (commit `a5c144e`): fixed the independent Verifier's FAIL report:
+    re-anchored dwell timing to `elevator:moved` receipt (ELAN-02), derived
+    all P2 durations from `TUNING` constants (ELAN-08), added a fake
+    `GraphicsLike` recorder to kill the surviving door-geometry mutant
+    (ELAN-01), added off-floor arrival suppression coverage (ELAN-07), and
+    added a vertical arrival slide (ELAN-06). Updated `design.md` to match
+    the corrected phase model.
+- **Verification**: Independent Verifier re-ran on commit `a5c144e` and
+  reported PASS (`.specs/features/elevator-animation/validation.md`, rev 2).
+  `validate_state.py elevator-animation` exits 0.
+- **Gates**:
+  - `pnpm typecheck` ✅
+  - `pnpm biome check` on changed files ✅
+  - `pnpm test:sim` ✅ 222/222
+  - `pnpm exec playwright test --config apps/client/harness/playwright.config.ts elevator-doors.spec.ts` ✅ 1/1
+  - Full `pnpm test:client` ✅ 22 passed; 2 pre-existing flakes unrelated to
+    this feature (`movement.spec.ts` AD-017 timeout, `round.spec.ts` clock
+    boundary 04:59 vs 05:00).
+- **Next step**: Feature is complete. Gate 4 (human 5-minute round,
+  player-facing) is recommended but optional; no further code work required.
+- **Blockers**: none.
+- **Uncommitted files**: none from this feature; pre-existing unrelated
+  working-tree changes remain untouched (`.specs/LESSONS.md`,
+  `.specs/lessons.json`, `package.json` `boot` script, `scripts/`,
+  `.playwright-mcp/`, `.specs/features/elevator-riders/validation.md`).
 - **Branch**: master
 
 Deferred notes carried forward (still open, not yet folded into any cycle):
