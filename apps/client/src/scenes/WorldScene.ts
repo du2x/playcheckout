@@ -5,9 +5,18 @@ import {
   type RoomIndex,
   type RoomState,
   roomIndexAtMilli,
+  roomSegmentEndMilli,
+  roomSegmentStartMilli,
   TUNING,
 } from '@turnover/shared'
 import Phaser from 'phaser'
+import {
+  type EvidenceSession,
+  dropCues,
+  initialEvidenceSession,
+  liveCues,
+  reduceEvidence,
+} from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
 import { ElevatorPresenter } from './elevatorPresenter'
 
@@ -106,6 +115,12 @@ export class WorldScene extends Phaser.Scene {
   private work: { startedAt: number; seconds: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
+  /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
+  private evidence: EvidenceSession = initialEvidenceSession()
+  private evidenceLayer: HTMLElement | null = null
+  private cardMarkers = new Map<string, HTMLElement>()
+  private cueNodes = new Map<number, HTMLElement>()
+  private audio: AudioContext | null = null
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
@@ -127,7 +142,11 @@ export class WorldScene extends Phaser.Scene {
     this.viewFloor = 'lobby'
     this.work = null
     this.interior = null
+    this.evidence = initialEvidenceSession()
+    this.cardMarkers.clear()
+    this.cueNodes.clear()
     this.riderSession = data.riderSession
+    this.buildEvidenceLayer()
 
     // Hall line (Graphics — deliberately not a Rectangle/Text: harness contract).
     this.add
@@ -253,21 +272,46 @@ export class WorldScene extends Phaser.Scene {
         this.interior = { floor: action.floor, room: action.room, state: action.state }
         break
       case 'room-prepped':
-      case 'room-trashed': {
+      case 'room-trashed':
+      case 'room-settled': {
         // Only the room we are inside exists in our view (FR-10); a matching
         // transition updates it, everything else is not for us.
         const interior = this.interior
         if (interior === undefined || interior === null) return
         if (interior.floor !== action.floor || interior.room !== action.room) return
-        interior.state = action.type === 'room-prepped' ? 'prepped' : 'trashed'
+        interior.state =
+          action.type === 'room-prepped'
+            ? 'prepped'
+            : action.type === 'room-trashed'
+              ? 'trashed'
+              : 'settled'
         break
       }
-      // Evidence cues (cycle 2.7): stored no-op until the evidence slice wires
-      // the hallway card glyphs, door-open flashes, and rustle audio (T6).
+      // Evidence cues (cycle 2.7, EVID-19): hallway-visible gray-box rendering
+      // — cards accumulate, door-open and rustle cues flash at the room front.
       case 'room-carded':
-      case 'room-settled':
-      case 'room-rustle':
+        this.evidence = reduceEvidence(
+          this.evidence,
+          { type: 'carded', floor: action.floor, room: action.room as RoomIndex },
+          Date.now(),
+        )
+        this.syncCardMarkers()
+        break
       case 'room-entered':
+        this.evidence = reduceEvidence(
+          this.evidence,
+          { type: 'entered', playerId: action.playerId, floor: action.floor, room: action.room as RoomIndex },
+          Date.now(),
+        )
+        this.beep(660)
+        break
+      case 'room-rustle':
+        this.evidence = reduceEvidence(
+          this.evidence,
+          { type: 'rustle', floor: action.floor, room: action.room as RoomIndex },
+          Date.now(),
+        )
+        this.beep(180)
         break
     }
   }
@@ -341,6 +385,110 @@ export class WorldScene extends Phaser.Scene {
 
   private carPx(car: 1 | 2): number {
     return car === 1 ? 0 : 30 * TILE_PX
+  }
+
+  // --- Evidence rendering (cycle 2.7, EVID-19): DOM layer over the canvas ---
+  // Scene children stay exactly rectangles+ellipses (harness contract); every
+  // evidence visual is absolutely positioned DOM matched to canvas px.
+
+  private buildEvidenceLayer(): void {
+    const gameEl = document.querySelector('#game')
+    if (gameEl === null) return
+    const layer = document.createElement('div')
+    layer.id = 'evidence-layer'
+    layer.style.position = 'absolute'
+    layer.style.inset = '0'
+    layer.style.pointerEvents = 'none'
+    gameEl.appendChild(layer)
+    this.evidenceLayer = layer
+  }
+
+  private roomCenterPx(room: RoomIndex): number {
+    const centerMilli = (roomSegmentStartMilli(room) + roomSegmentEndMilli(room)) / 2
+    return (centerMilli / 1000) * TILE_PX
+  }
+
+  /** Create-on-demand card glyph per carded room; visible on the own floor only. */
+  private syncCardMarkers(): void {
+    const layer = this.evidenceLayer
+    if (layer === null) return
+    for (const key of this.evidence.cards) {
+      if (this.cardMarkers.has(key)) continue
+      const [floor, roomRaw] = key.split(':')
+      const room = Number(roomRaw) as RoomIndex
+      const marker = document.createElement('div')
+      marker.dataset.roomKey = key
+      marker.textContent = 'CARD'
+      marker.style.position = 'absolute'
+      marker.style.left = `${this.roomCenterPx(room) - 24}px`
+      marker.style.top = `${GROUND_Y - 130}px`
+      marker.style.width = '48px'
+      marker.style.padding = '2px 0'
+      marker.style.textAlign = 'center'
+      marker.style.fontSize = '12px'
+      marker.style.background = '#c8a24a'
+      marker.style.color = '#111'
+      marker.style.borderRadius = '3px'
+      layer.appendChild(marker)
+      this.cardMarkers.set(key, marker)
+    }
+  }
+
+  /** Expire cue DOM nodes and prune the session (called every frame). */
+  private syncCues(): void {
+    const now = Date.now()
+    const live = liveCues(this.evidence, now)
+    const expired = new Set(
+      this.evidence.cues.filter((c) => !live.some((l) => l.id === c.id)).map((c) => c.id),
+    )
+    for (const id of expired) {
+      this.cueNodes.get(id)?.remove()
+      this.cueNodes.delete(id)
+    }
+    this.evidence = dropCues(this.evidence, expired)
+    for (const cue of live) {
+      if (this.cueNodes.has(cue.id)) continue
+      const node = document.createElement('div')
+      node.dataset.cueId = String(cue.id)
+      node.dataset.cueKind = cue.kind
+      node.textContent = cue.kind === 'rustle' ? 'rustle' : 'door'
+      node.style.position = 'absolute'
+      node.style.left = `${this.roomCenterPx(cue.room) - 30}px`
+      node.style.top = cue.kind === 'rustle' ? `${GROUND_Y - 100}px` : `${GROUND_Y - 160}px`
+      node.style.width = '60px'
+      node.style.textAlign = 'center'
+      node.style.fontSize = '12px'
+      node.style.color = cue.kind === 'rustle' ? '#e2705a' : '#8ad07a'
+      this.evidenceLayer?.appendChild(node)
+      this.cueNodes.set(cue.id, node)
+    }
+  }
+
+  /** Reset for a fresh round deal: cards and cues die with the previous sim. */
+  resetEvidence(): void {
+    this.evidence = initialEvidenceSession()
+    this.cardMarkers.clear()
+    this.cueNodes.clear()
+    if (this.evidenceLayer !== null) this.evidenceLayer.replaceChildren()
+  }
+
+  /** Short gray-box tone for audible cues; silent in environments without audio. */
+  private beep(freq: number): void {
+    try {
+      if (this.audio === null) this.audio = new AudioContext()
+      const ctx = this.audio
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.frequency.value = freq
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      gain.gain.setValueAtTime(0.06, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.2)
+    } catch {
+      // No AudioContext (headless runs): the visual cue still fires.
+    }
   }
 
   private updatePanel(): void {
@@ -425,6 +573,12 @@ export class WorldScene extends Phaser.Scene {
       display.label.x = display.x * TILE_PX
     }
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
+    // Card glyph visibility follows the own floor; cue flashes expire here.
+    this.syncCardMarkers()
+    for (const [key, marker] of this.cardMarkers) {
+      marker.style.visibility = key.split(':')[0] === this.viewFloor ? 'visible' : 'hidden'
+    }
+    this.syncCues()
     // The elevator panel is self-healing: view re-renders rebuild the DOM
     // element, so refresh it every frame from scene state.
     this.updatePanel()

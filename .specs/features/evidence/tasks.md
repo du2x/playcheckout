@@ -169,7 +169,7 @@ T6 → T7 → T8
 
 ---
 
-### T6: Client — evidence reducer + gray-box rendering
+### T6: Client — evidence reducer + gray-box rendering — ✅ done
 
 **What**: Add `evidenceSession.ts` (reduces `room:carded` into an own-floor carded set — idempotent; buffers `room:entered`/`room:rustle` as timestamped cues; `round:started` clears) + its unit tests; wire the four new mapper rows into the generic dispatcher; render in `WorldScene`: card glyph at each carded room's hallway front (own floor), door-open flash + short beep, rustle low-tone beep + front pulse, drained per frame.
 **Where**: `apps/client/src/evidenceSession.ts` (new), `evidenceSession.test.ts` (new), `apps/client/src/scenes/WorldScene.ts`, dispatcher mappers

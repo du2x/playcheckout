@@ -119,6 +119,8 @@ export class App {
           if (action.type === 'snapshot') {
             this.world()?.syncRoster(action.snapshot.roster)
           }
+          // A fresh deal resets every room: cards and cues die with the sim.
+          if (action.type === 'round-started') this.world()?.resetEvidence()
         }
         if (viewChanged) this.render()
       },
