@@ -217,6 +217,7 @@ export class App {
       sendMoveStart: (dir: 'left' | 'right') => this.connection?.sendMoveStart(dir),
       sendMoveStop: () => this.connection?.sendMoveStop(),
       sendElevatorCall: () => this.connection?.sendElevatorCall(),
+      sendElevatorPress: (floor: FloorId) => this.connection?.sendElevatorPress(floor),
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
         this.connection?.sendWorkStart(floor, room),
     })
