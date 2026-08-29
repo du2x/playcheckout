@@ -155,15 +155,6 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Phase mirror from the App (round:started / buzzer). Movement is now
-   * allowed in lobby phase on any floor (AD-015), so this is a no-op kept for
-   * API compatibility.
-   */
-  setRound(_round: boolean): void {
-    // no-op: confinement removed by AD-015
-  }
-
   /** Send work:start when the own predicted position is inside a segment. */
   private startWorkHere(): void {
     const own = this.players.get(this.ownId)

@@ -22,10 +22,10 @@ import { Router } from './router'
  * policies and stamps envelopes — role:dealt reaches ONLY the dealt player by
  * declared policy.
  *
- * Cycle 2.4 (AD-005): the room also owns a MovementSim that ticks in BOTH
- * phases — players walk the grand lobby from the moment they join and keep
- * their positions across lobby→round→lobby; the full building unlocks at
- * round start. Message-only — patchRate null, no Schema state.
+ * Cycle 2.4 (AD-005): the room also owns a phase-free MovementSim that ticks
+ * in BOTH phases — players walk anywhere from the moment they join and keep
+ * their positions across lobby→round→lobby (AD-015). Message-only —
+ * patchRate null, no Schema state.
  */
 
 /** 24-letter read-aloud alphabet — no I/O (codes are spoken aloud, FR-1). */
@@ -248,8 +248,8 @@ export class TurnoverRoom extends Room {
 
   private startRound() {
     this.phase = 'round'
-    // Full building unlocks at round start; positions persist (MOVE-07).
-    this.movement.unlock()
+    // Positions persist across start/buzzer (MOVE-07): the movement layer is
+    // phase-free and simply keeps running.
     const playerIds = [...this.players.values()]
       .sort((a, b) => a.joinedAt - b.joinedAt)
       .map((p) => p.sessionId)
@@ -283,13 +283,11 @@ export class TurnoverRoom extends Room {
       // Buzzer: roles were the sim's alone — dropping it wipes the deal (AD-002).
       this.sim = null
       this.phase = 'lobby'
-      // Re-confine walking to the grand lobby and refresh everyone's view of
-      // where players and cars now stand (MOVE-08 / MOVE-18). Viewer-branch
-      // snapshot (AD-013): a mid-car rider gets their car's occupants + queue
-      // with an EMPTY players list (AD-009 leak fix — a floor snapshot is not
-      // a legitimate rider view); every non-rider gets the byte-identical
-      // own-floor snapshot.
-      this.movement.lock()
+      // Refresh everyone's view of where players and cars now stand
+      // (MOVE-18). Viewer-branch snapshot (AD-013): a mid-car rider gets
+      // their car's occupants + queue with an EMPTY players list (AD-009
+      // leak fix — a floor snapshot is not a legitimate rider view); every
+      // non-rider gets the byte-identical own-floor snapshot.
       for (const sessionId of this.players.keys()) {
         const view = this.movement.viewOf(sessionId)
         this.router.toSelf(

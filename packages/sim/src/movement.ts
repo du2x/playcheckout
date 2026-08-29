@@ -84,7 +84,6 @@ type PendingAnnounce =
   | { kind: 'riders'; car: 1 | 2 }
 
 export class MovementSim {
-  private phase: 'lobby' | 'round' = 'lobby'
   private readonly players = new Map<string, PlayerMoveState>()
   private readonly cars: Record<1 | 2, CarState> = {
     1: {
@@ -145,14 +144,15 @@ export class MovementSim {
   // --- intents ------------------------------------------------------------
 
   /**
-   * Hold-to-walk. Idempotent while held; in lobby phase confined to the grand
-   * lobby floor (MOVE-08). A direction change flips facing immediately.
+   * Hold-to-walk. Idempotent while held (any floor, any phase — AD-015
+   * removed the lobby confinement). A direction change flips facing
+   * immediately.
    *
    * AD-014 door-open exit: a rider holding a direction while their car's doors
    * are open (idle or dwelling) exits the car THIS intent — placed at the
-   * car's landing in any phase (MOVE-08 confinement applies only to hallway
-   * walking AFTER exit). While the doors are shut (arriving/riding) the intent
-   * is still ignored (MOVE-09): positions change only via the car.
+   * car's landing (hallway walking after exit is unrestricted). While the
+   * doors are shut (arriving/riding) the intent is still ignored (MOVE-09):
+   * positions change only via the car.
    */
   startMove(playerId: string, dir: MoveDir): void {
     const p = this.players.get(playerId)
@@ -305,42 +305,12 @@ export class MovementSim {
     car.exitedThisStop.clear() // departure opens a new door-open episode
   }
 
-  // --- phase transitions (positions never change here: MOVE-07/08) ---------
-
-  unlock(): void {
-    this.phase = 'round'
-  }
-
-  lock(): void {
-    this.phase = 'lobby'
-    // AD-011: elevators run in both phases, so a call queued at the buzzer is
-    // NOT dropped — the next car to go idle serves it, pre-round included.
-    // In-flight trips still complete.
-  }
-
   // --- queries --------------------------------------------------------------
 
   positionOf(playerId: string): { floor: FloorId; x: number; facing: MoveDir } | undefined {
     const p = this.players.get(playerId)
     if (p === undefined) return undefined
     return { floor: p.floor, x: p.x / MILLI, facing: p.facing }
-  }
-
-  snapshot(): {
-    players: { playerId: string; floor: FloorId; x: number }[]
-    cars: { car: 1 | 2; floor: FloorId }[]
-  } {
-    return {
-      players: [...this.players.entries()].map(([playerId, p]) => ({
-        playerId,
-        floor: p.floor,
-        x: p.x / MILLI,
-      })),
-      cars: [
-        { car: 1 as const, floor: this.cars[1].floor },
-        { car: 2 as const, floor: this.cars[2].floor },
-      ],
-    }
   }
 
   /**
@@ -503,6 +473,8 @@ export class MovementSim {
           car.phase = 'idle'
           car.ticksLeft = 0
           // A waiting call is served the moment a car frees (MOVE-15 queue).
+          // AD-011: elevators run in both phases, so a call queued at the
+          // buzzer is NOT dropped — the next car to go idle serves it.
           const next = this.callQueue.shift()
           if (next !== undefined) {
             this.dispatch(id, next.pickup)

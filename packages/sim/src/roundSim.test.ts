@@ -1,13 +1,13 @@
 import { TUNING } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import type { SimEvent } from './events.js'
-import { createRoundSim, RoundSim, TICK_HZ } from './index.js'
+import { RoundSim, TICK_HZ } from './index.js'
 
 // Tuning cited: TUNING.SHIFT_SECONDS (300 s) × TICK_HZ (20) = 6000 ticks (prd §7, §11).
 const IDS = ['p1', 'p2', 'p3', 'p4']
 
 function runFullRound(seed: number, playerIds: string[]): SimEvent[] {
-  const sim = createRoundSim({ seed, playerIds })
+  const sim = new RoundSim({ seed, playerIds })
   const events: SimEvent[] = []
   for (let t = 0; t < RoundSim.TOTAL_TICKS; t++) events.push(...sim.tick())
   return events
@@ -16,7 +16,7 @@ function runFullRound(seed: number, playerIds: string[]): SimEvent[] {
 // Gate scenario `sim:role_deal` — spec DEAL-01, DEAL-06, CLK-01..04.
 describe('sim:role_deal', () => {
   it('emits round:started and one private role:dealt per player on the first tick', () => {
-    const sim = createRoundSim({ seed: 1234, playerIds: IDS })
+    const sim = new RoundSim({ seed: 1234, playerIds: IDS })
     const first = sim.tick()
     expect(first[0]).toEqual({ type: 'round:started', playerIds: IDS })
     const dealt = first.filter((e) => e.type === 'role:dealt')
@@ -27,7 +27,7 @@ describe('sim:role_deal', () => {
 
   it('yields exactly one saboteur across 1000 seeds (DEAL-01)', () => {
     for (let seed = 0; seed < 1000; seed++) {
-      const sim = createRoundSim({ seed, playerIds: IDS })
+      const sim = new RoundSim({ seed, playerIds: IDS })
       const dealt = sim.tick().filter((e) => e.type === 'role:dealt')
       const saboteurs = dealt.filter((e) => e.type === 'role:dealt' && e.role === 'saboteur')
       expect(saboteurs).toHaveLength(1)
@@ -41,13 +41,13 @@ describe('sim:role_deal', () => {
   })
 
   it('starts the clock at 300 s worth of ticks (TUNING.SHIFT_SECONDS × TICK_HZ)', () => {
-    const sim = createRoundSim({ seed: 1, playerIds: IDS })
+    const sim = new RoundSim({ seed: 1, playerIds: IDS })
     expect(sim.clockTicksRemaining).toBe(TUNING.SHIFT_SECONDS * TICK_HZ)
     expect(RoundSim.TOTAL_TICKS).toBe(6000)
   })
 
   it('decrements the clock by exactly one tick per tick (CLK-02: 0.05 s per tick)', () => {
-    const sim = createRoundSim({ seed: 1, playerIds: IDS })
+    const sim = new RoundSim({ seed: 1, playerIds: IDS })
     sim.tick()
     expect(sim.clockTicksRemaining).toBe(5999)
     sim.tick()
@@ -58,23 +58,23 @@ describe('sim:role_deal', () => {
     const events = runFullRound(42, IDS)
     const buzzers = events.filter((e) => e.type === 'round:buzzer')
     expect(buzzers).toHaveLength(1)
-    const sim = createRoundSim({ seed: 42, playerIds: IDS })
+    const sim = new RoundSim({ seed: 42, playerIds: IDS })
     for (let t = 1; t < RoundSim.TOTAL_TICKS; t++) sim.tick()
     const last = sim.tick()
     expect(last).toEqual([{ type: 'round:buzzer' }])
   })
 
   it('emits nothing from ticks past the buzzer', () => {
-    const sim = createRoundSim({ seed: 42, playerIds: IDS })
+    const sim = new RoundSim({ seed: 42, playerIds: IDS })
     for (let t = 0; t < RoundSim.TOTAL_TICKS; t++) sim.tick()
     expect(sim.clockTicksRemaining).toBe(0)
     expect(sim.tick()).toEqual([])
   })
 
   it('rejects deal sizes outside 4-6 players (TUNING.PLAYERS_MIN/MAX)', () => {
-    expect(() => createRoundSim({ seed: 1, playerIds: ['p1', 'p2', 'p3'] })).toThrow()
-    expect(() =>
-      createRoundSim({ seed: 1, playerIds: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'] }),
+    expect(() => new RoundSim({ seed: 1, playerIds: ['p1', 'p2', 'p3'] })).toThrow()
+    expect(
+      () => new RoundSim({ seed: 1, playerIds: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'] }),
     ).toThrow()
   })
 })
@@ -84,7 +84,7 @@ describe('sim:role_deal', () => {
 // (asserted by the CLK tests above); production never passes the override.
 describe('sim:shift_override (AD-004 test seam)', () => {
   it('fires the buzzer at exactly the overridden tick count and never before', () => {
-    const sim = createRoundSim({ seed: 42, playerIds: IDS, totalTicks: 100 })
+    const sim = new RoundSim({ seed: 42, playerIds: IDS, totalTicks: 100 })
     for (let t = 1; t < 100; t++) {
       expect(sim.tick().filter((e) => e.type === 'round:buzzer')).toHaveLength(0)
     }
@@ -94,14 +94,14 @@ describe('sim:shift_override (AD-004 test seam)', () => {
   })
 
   it('maps a 1-second override to 20 ticks (TICK_HZ)', () => {
-    const sim = createRoundSim({ seed: 1, playerIds: IDS, totalTicks: TICK_HZ })
+    const sim = new RoundSim({ seed: 1, playerIds: IDS, totalTicks: TICK_HZ })
     expect(sim.clockTicksRemaining).toBe(TICK_HZ)
   })
 
   it('rejects non-positive or non-integer overrides', () => {
-    expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: 0 })).toThrow()
-    expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: -5 })).toThrow()
-    expect(() => createRoundSim({ seed: 1, playerIds: IDS, totalTicks: 2.5 })).toThrow()
+    expect(() => new RoundSim({ seed: 1, playerIds: IDS, totalTicks: 0 })).toThrow()
+    expect(() => new RoundSim({ seed: 1, playerIds: IDS, totalTicks: -5 })).toThrow()
+    expect(() => new RoundSim({ seed: 1, playerIds: IDS, totalTicks: 2.5 })).toThrow()
   })
 })
 

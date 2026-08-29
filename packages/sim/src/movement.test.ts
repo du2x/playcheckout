@@ -176,7 +176,6 @@ describe('sim:motion', () => {
     sim.startMove('p1', 'left')
     for (let i = 0; i < 50; i++) sim.tick() // walk into the parked west car's zone
     expect(sim.viewOf('p1').car).toBe(1) // auto-boarded at 0.9 tiles out (AD-014)
-    sim.unlock()
     // In-car destination choice: press floor1 and ride (AD-014 press queue).
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
@@ -213,7 +212,7 @@ describe('sim:motion', () => {
     expect(lastX(sim, 'p2')).toBeLessThan(p2x)
   })
 
-  it('keeps the floor on lobby in lobby phase and persists positions across lock/unlock (MOVE-04, MOVE-07)', () => {
+  it('keeps the floor on lobby at join and runs identically across phases (MOVE-04)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.startMove('p1', 'right')
@@ -221,12 +220,12 @@ describe('sim:motion', () => {
     expect(sim.positionOf('p1')?.floor).toBe('lobby')
     const xBefore = lastX(sim, 'p1')
 
-    sim.unlock() // host start: positions persist, intents continue uninterrupted
+    // The movement layer is phase-free (AD-005 amendment): intents continue
+    // uninterrupted and positions never reset.
     const events = movedEvents(sim.tick())
     expect(lastX(sim, 'p1')).toBe(xBefore + 0.3)
     expect(events[0]).toMatchObject({ playerId: 'p1', floor: 'lobby' })
 
-    sim.lock() // buzzer: positions persist; movement still allowed
     sim.startMove('p1', 'left')
     const xAtLock = lastX(sim, 'p1')
     sim.tick()
@@ -275,7 +274,6 @@ describe('movement visibility (AD-008)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    sim.unlock()
     expect(
       sim
         .snapshotForFloor('lobby')
@@ -358,7 +356,7 @@ describe('sim:elevator', () => {
     // pickup floor — the caller (mid-hall, out of boarding range) never
     // boarded and nothing auto-proceeds (ELR P3 AC4).
     expect(carEvents(sim.tick())).toEqual([])
-    expect(sim.snapshot().cars).toEqual([
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
       { car: 1, floor: 'lobby' },
       { car: 2, floor: 'floor2' },
     ])
@@ -389,7 +387,7 @@ describe('sim:elevator', () => {
     expect(carEvents(sim.tick())).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
     // The flash tick above already counted toward the 60-tick arrival.
     expect(runUntilCarMoved(sim, 1, 'lobby')).toBe(59)
-    expect(sim.snapshot().cars).toEqual([
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
       { car: 1, floor: 'lobby' },
       { car: 2, floor: 'floor2' },
     ])
@@ -611,7 +609,7 @@ describe('sim:elevator', () => {
     expect(
       tail.some((e) => e.type === 'elevator:moved' && e.car === 1 && e.floor === 'lobby'),
     ).toBe(false)
-    expect(sim.snapshot().cars).toEqual([
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
       { car: 1, floor: 'floor3' },
       { car: 2, floor: 'lobby' },
     ])
@@ -629,15 +627,15 @@ describe('sim:elevator', () => {
     expect(sim.pressFloor('p3', 'floor1')).toBe('accepted')
     expect(sim.callElevator('p4')).toBe('dispatched') // queued: both cars busy
     sim.tick()
-    sim.lock() // buzzer while trips are in flight and a call is queued
-    // AD-011: the queue is NOT cleared. Car 2 frees, dispatches the queued
-    // lobby pickup (one post-buzzer flash), and completes the trip.
+    // AD-011: the queue is NOT cleared (it belongs to the car, never to the
+    // phase). Car 2 frees, dispatches the queued lobby pickup (one flash),
+    // and completes the trip.
     let flashes = 0
     for (let i = 0; i < 200; i++) {
       flashes += carEvents(sim.tick()).filter((e) => e.type === 'elevator:called').length
     }
     expect(flashes).toBe(1)
-    expect(sim.snapshot().cars).toEqual([
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
       { car: 1, floor: 'floor3' },
       { car: 2, floor: 'lobby' },
     ])
@@ -665,7 +663,7 @@ describe('sim:elevator', () => {
     ])
     for (let i = 1; i < DWELL_TICKS; i++) expect(carEvents(sim.tick())).toEqual([])
     expect(runUntilCarMoved(sim, 1, 'floor2')).toBe(RIDE_TICKS_PER_FLOOR) // floor1 → floor2: one floor
-    expect(sim.snapshot().cars).toEqual([
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([
       { car: 1, floor: 'floor2' },
       { car: 2, floor: 'lobby' },
     ])
@@ -858,13 +856,13 @@ describe('sim:elevator', () => {
     expect(run()).toBe(run())
   })
 
-  it('reports the full public movement state in the snapshot (MOVE-18)', () => {
+  it('reports the public movement state for a floor (MOVE-18, floor-scoped post-AD-008)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
     sim.startMove('p1', 'right')
     for (let i = 0; i < 10; i++) sim.tick()
-    expect(sim.snapshot()).toEqual({
+    expect(sim.snapshotForFloor('lobby')).toEqual({
       players: [
         { playerId: 'p1', floor: 'lobby', x: 18 },
         { playerId: 'p2', floor: 'lobby', x: 15 },
@@ -875,7 +873,9 @@ describe('sim:elevator', () => {
       ],
     })
     sim.leave('p1')
-    expect(sim.snapshot().players).toEqual([{ playerId: 'p2', floor: 'lobby', x: 15 }])
+    expect(sim.snapshotForFloor('lobby').players).toEqual([
+      { playerId: 'p2', floor: 'lobby', x: 15 },
+    ])
   })
 })
 

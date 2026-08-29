@@ -186,10 +186,6 @@ export class App {
   private dispatch(action: ViewAction): void {
     const previousView = this.state.view
     this.state = reduce(this.state, action)
-    // Mirror the phase into the world scene so own prediction applies the same
-    // confinement the server enforces (MOVE-08; lobby-phase elevators, AD-011).
-    if (action.type === 'round-started') this.world()?.setRound(true)
-    if (action.type === 'buzzer') this.world()?.setRound(false)
     this.syncScenes(previousView)
   }
 

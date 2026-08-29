@@ -97,7 +97,3 @@ export class RoundSim {
     this.work.leave(playerId)
   }
 }
-
-export function createRoundSim(config: RoundSimConfig): RoundSim {
-  return new RoundSim(config)
-}
