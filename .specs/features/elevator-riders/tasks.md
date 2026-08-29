@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/elevator-riders/design.md`
-**Status**: In Progress (batch 1: T1–T7)
+**Status**: In Progress (batch 2: T8–T12; batch 1 complete)
 
 ---
 
@@ -246,7 +246,7 @@ T8 -> T9 -> T10 -> T11 -> T12
 
 ### Phase 3: Server, client, harness, docs
 
-#### T8: TurnoverRoom wiring
+#### T8: TurnoverRoom wiring — ✅ Done
 
 **What**: Wire the room: `setViewContext` provides `{floor, roomKey, car}` from `movement.viewOf`; `onMessage('elevator:call', elevatorCallIntentSchema, ...)` calls `movement.callElevator(clientId)` (duplicate flashes via sim event; no room-level re-validation of target); `onMessage('elevator:press', elevatorPressIntentSchema, ...)` calls `movement.pressFloor`; use `router.route` for `elevator:pressed`/`elevator:riders` (no new `toSelf`/`toAll` bypasses); on `join` and buzzer (`lock()`) send the viewer-branch snapshot (`snapshotForRider` for riders, `snapshotForFloor` otherwise — fixing the `TurnoverRoom.ts:285` lobby-fallback leak for mid-car riders); `leave` forgets router seq and movement dirty-flush applies.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts`
@@ -259,10 +259,10 @@ T8 -> T9 -> T10 -> T11 -> T12
 - Skill: `turnover-protocol`
 
 **Done when**:
-- [ ] `elevator:call` without target dispatches once; duplicate same-floor call flashes via sim; `elevator:press` from non-rider rejected silently
-- [ ] `movement:snapshot` to a rider contains `carOccupants` with `queue`; to a non-rider contains no occupancy field; no occupant/queue field leaks to non-riders on any message
-- [ ] Bypass denylist test still passes (no raw `client.send` outside Router)
-- [ ] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `elevator:call` without target dispatches once; duplicate same-floor call flashes via sim; `elevator:press` from non-rider rejected silently
+- [x] `movement:snapshot` to a rider contains `carOccupants` with `queue`; to a non-rider contains no occupancy field; no occupant/queue field leaks to non-riders on any message
+- [x] Bypass denylist test still passes (no raw `client.send` outside Router)
+- [x] Gate check passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: integration
 **Gate**: quick

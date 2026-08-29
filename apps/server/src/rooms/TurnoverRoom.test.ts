@@ -757,6 +757,196 @@ describe('server:movement', () => {
   })
 })
 
+// Spec ELR-01..09 (gate scenario sim:elevator_riders, room half): the room
+// wires destination-free calls, silent non-rider press rejection, and the
+// AD-013 viewer-branch snapshot — riders get their car's occupants + queue,
+// non-riders never see occupancy or queue on any message.
+describe('server:elevator_riders', () => {
+  /** Records every message type+payload without consuming them. */
+  function feed(room: ClientRoom) {
+    const seen: { type: string; payload: Record<string, unknown> }[] = []
+    const off = room.onMessage('*', (messageType, envelope) => {
+      seen.push({
+        type: String(messageType),
+        payload: (envelope as { payload: Record<string, unknown> }).payload,
+      })
+    })
+    return {
+      seen,
+      stop() {
+        off()
+      },
+    }
+  }
+
+  function sleep(ms: number) {
+    return new Promise((r) => setTimeout(r, ms))
+  }
+
+  /** Board both players into the parked west car and press floor1 (car departs). */
+  async function boardAndPressFloor1(instance: TurnoverRoom, riders: ClientRoom[]) {
+    for (const rider of riders) {
+      rider.send('move:start', { type: 'move:start', dir: 'left' })
+    }
+    await sleep(50)
+    instance.__driveTicks(60) // walk from center; auto-boarding catches the car
+    for (const rider of riders) rider.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    riders[0]?.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+    await sleep(50)
+    instance.__driveTicks(2) // flush the press + riders announcements
+    await sleep(50)
+  }
+
+  it('delivers elevator:pressed/riders to the car riders only and snapshots carOccupants at the buzzer (ELR-01..04)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '1')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const feeds = [host, a, b, c].map((room) => feed(room))
+      const instance = TurnoverRoom.instances.at(-1)
+      if (instance === undefined) throw new Error('no room instance')
+
+      await boardAndPressFloor1(instance, [host, a])
+
+      // Rider-exclusive delivery: the presser's feed carries the press and the
+      // co-rider occupancy updates; the floor players' feeds carry neither.
+      const pressed = (feeds[0]?.seen ?? []).find((m) => m.type === 'elevator:pressed')?.payload
+      expect(pressed).toEqual({ playerId: host.sessionId, floor: 'floor1' })
+      const hostRidersUpdates = feeds[0]?.seen.filter((m) => m.type === 'elevator:riders') ?? []
+      const lastRiders = hostRidersUpdates.at(-1)?.payload
+      expect(lastRiders?.car).toBe(1)
+      expect(lastRiders?.queue).toEqual([])
+      expect((lastRiders?.riders as string[]).sort()).toEqual([host.sessionId, a.sessionId].sort())
+      for (const floorFeed of [feeds[2], feeds[3]]) {
+        const types = floorFeed?.seen.map((m) => m.type) ?? []
+        expect(types).not.toContain('elevator:pressed')
+        expect(types).not.toContain('elevator:riders')
+      }
+
+      // Round starts (1 s test shift); the car is mid-ride at the buzzer.
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      instance.__driveTicks(20)
+      await sleep(50) // envelope flush
+
+      // Rider snapshot: empty players list + their car's occupants and queue.
+      const riderSnaps = feeds[0]?.seen.filter((m) => m.type === 'movement:snapshot') ?? []
+      expect(riderSnaps).toHaveLength(1)
+      const riderSnap = riderSnaps[0]?.payload as Record<string, unknown>
+      expect(riderSnap.players).toEqual([])
+      expect(riderSnap.carOccupants).toEqual({
+        car: 1,
+        riders: expect.arrayContaining([host.sessionId, a.sessionId]),
+        queue: ['floor1'],
+      })
+      expect((riderSnap.carOccupants as { riders: string[] }).riders).toHaveLength(2)
+
+      // Non-rider snapshot: no occupancy field, floor stream without the riders.
+      const floorSnaps = feeds[2]?.seen.filter((m) => m.type === 'movement:snapshot') ?? []
+      expect(floorSnaps).toHaveLength(1)
+      const floorSnap = floorSnaps[0]?.payload as {
+        players: { playerId: string }[]
+        carOccupants?: unknown
+      }
+      expect(floorSnap.carOccupants).toBeUndefined()
+      const floorIds = floorSnap.players.map((p) => p.playerId)
+      expect(floorIds).toContain(b.sessionId)
+      expect(floorIds).not.toContain(host.sessionId)
+      expect(floorIds).not.toContain(a.sessionId)
+
+      // Ubiquitous: no occupancy/queue field reaches a non-rider on ANY message.
+      for (const message of feeds[2]?.seen ?? []) {
+        expect(message.payload).not.toHaveProperty('carOccupants')
+        expect(message.payload).not.toHaveProperty('riders')
+        expect(message.payload).not.toHaveProperty('queue')
+      }
+      for (const f of feeds) f.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('rejects a non-rider press silently: no press event, no error, queue untouched (ELR-06 AC3)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const feeds = [host, a, b, c].map((room) => feed(room))
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+
+    // Host stands on the lobby floor, in no car: the press is rejected with
+    // nothing on the wire — no elevator:pressed anywhere, no error back.
+    host.send('elevator:press', { type: 'elevator:press', floor: 'floor2' })
+    await sleep(50)
+    instance.__driveTicks(2)
+    await sleep(50)
+    for (const f of feeds) {
+      const types = f.seen.map((m) => m.type)
+      expect(types).not.toContain('elevator:pressed')
+      expect(types).not.toContain('error')
+    }
+    for (const f of feeds) f.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
+
+  it('flashes a duplicate same-floor call without a second dispatch (ELR-06 AC7, AD-012 narrowed)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const feeds = [host, a, b, c].map((room) => feed(room))
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+
+    // Both cars must be AWAY from the lobby for a lobby call to dispatch at
+    // all (a parked open-door car makes it a duplicate — pinned separately).
+    // Host rides car 1 to floor1; b rides car 2 to floor2 (AD-011: pre-round).
+    host.send('move:start', { type: 'move:start', dir: 'left' })
+    await sleep(50)
+    instance.__driveTicks(60)
+    host.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    host.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+    await sleep(50)
+    b.send('move:start', { type: 'move:start', dir: 'right' })
+    await sleep(50)
+    instance.__driveTicks(60) // host's ride completes; b auto-boards car 2
+    b.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    b.send('elevator:press', { type: 'elevator:press', floor: 'floor2' })
+    await sleep(50)
+    instance.__driveTicks(60) // b's ride completes; both cars idle, occupied
+    await sleep(50)
+
+    // c (alone in the lobby) dispatches car 1 (closest landing, tie → 1); the
+    // immediate re-call duplicates on the pickup floor: it flashes the panel
+    // but dispatches nothing.
+    c.send('elevator:call', { type: 'elevator:call' })
+    await sleep(50)
+    c.send('elevator:call', { type: 'elevator:call' })
+    await sleep(50)
+    instance.__driveTicks(65) // full 60-tick arrival + margin
+    await sleep(50)
+
+    const called = (feeds[3]?.seen ?? []).filter((m) => m.type === 'elevator:called')
+    expect(called).toHaveLength(2)
+    expect(called[0]?.payload).toEqual({ floor: 'lobby', car: 1 })
+    expect(called[1]?.payload).toEqual({ floor: 'lobby', car: 1 })
+    // Exactly ONE arrival: the duplicate produced no second dispatch.
+    const moved = (feeds[3]?.seen ?? []).filter(
+      (m) => m.type === 'elevator:moved' && m.payload.car === 1 && m.payload.floor === 'lobby',
+    )
+    expect(moved).toHaveLength(1)
+    for (const f of feeds) f.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
+})
+
 // Spec WORK-01..16 (gate scenarios sim:prep/sim:unprep/sim:fake_prep, server
 // halves): work intents through the room, positions feeding the sim (AD-005
 // seam), and positional delivery — interiors reach only segment occupants.

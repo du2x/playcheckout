@@ -167,13 +167,13 @@ export class TurnoverRoom extends Room {
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
-    // Personal movement snapshot: players on the joiner's own floor + both
-    // cars' public floors (AD-008/AD-009; fresh joiners always stand in the
-    // lobby, so this is the full lobby view).
+    // Personal movement snapshot (viewer-branch, AD-013): fresh joiners always
+    // stand in the lobby, so this resolves to the own-floor view — but the
+    // branch keeps join and buzzer on one rider-aware path.
     this.router.toSelf(
       'movement:snapshot',
       client.sessionId,
-      this.movement.snapshotForFloor('lobby'),
+      this.movement.snapshotForRider(client.sessionId),
     )
   }
 
@@ -281,16 +281,20 @@ export class TurnoverRoom extends Room {
       this.sim = null
       this.phase = 'lobby'
       // Re-confine walking to the grand lobby and refresh everyone's view of
-      // where players and cars now stand (MOVE-08 / MOVE-18).
+      // where players and cars now stand (MOVE-08 / MOVE-18). Viewer-branch
+      // snapshot (AD-013): a mid-car rider gets their car's occupants + queue
+      // with an EMPTY players list (AD-009 leak fix — a floor snapshot is not
+      // a legitimate rider view); every non-rider gets the byte-identical
+      // own-floor snapshot.
       this.movement.lock()
       for (const sessionId of this.players.keys()) {
-        // Own-floor snapshot per AD-008 (a rider's floor tracks their car);
-        // a snapshot generated for one connection is never visible to another.
-        const own = this.movement.positionOf(sessionId)
+        const view = this.movement.viewOf(sessionId)
         this.router.toSelf(
           'movement:snapshot',
           sessionId,
-          this.movement.snapshotForFloor(own?.floor ?? 'lobby'),
+          view.car !== null
+            ? this.movement.snapshotForRider(sessionId)
+            : this.movement.snapshotForFloor(view.floor ?? 'lobby'),
         )
       }
     }
