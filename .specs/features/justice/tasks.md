@@ -233,7 +233,7 @@ T6 → T7
 
 ---
 
-### T7: Harness — client:accuse_ui gate scenario
+### T7: Harness — client:accuse_ui gate scenario ✅
 
 **What**: Add the Playwright scenario: two pages, host start (AD-004 short shift), tap-E elevator call unchanged, hold-E menu naming the nearby player, cancel sends nothing, confirm fires and both pages show the name-only toast while the round continues.
 **Where**: `apps/client/harness/justice.spec.ts` (new)
