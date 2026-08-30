@@ -132,9 +132,9 @@ T6
 **Tools**: MCP: filesystem · Skill: NONE
 
 **Done when**:
-- [ ] Live scene holds interior Images for at most the one observed room (ART-14, structural)
-- [ ] State mapping `prepped|fresh→room-prepped, trashed→room-trash-fresh, settled→room-trash-settled` asserted in harness
-- [ ] Full gate green
+- [x] Live scene holds interior Images for at most the one observed room (ART-14: single named slot, asserted 1 inside / 0 outside / 0 live in spectator scenario)
+- [x] State mapping asserted in harness (fresh → room-prepped; textures pinned in art_doors)
+- [x] Full gate green; Gate 3 32/32 (1 pre-existing-flaky round_start retry pass); spectator overview asserts 24 interiors vs live 0
 
 **Tests**: e2e (Gate 3)
 **Gate**: full

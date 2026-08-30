@@ -162,6 +162,11 @@ export class WorldScene extends Phaser.Scene {
   /** Production door Images per room segment per guest floor (ART-06) —
    *  phase-free; the name `door:<floor>:<room>` drives harness filtering. */
   private doorImages = new Map<string, Phaser.GameObjects.Image>()
+  /** The own observed room's interior (ART-08): one slot — a live viewer can
+   *  stand in at most one segment, so structurally ≤1 interior exists (ART-14). */
+  private interiorImage: Phaser.GameObjects.Image | null = null
+  /** Spectator overview interiors (ART-12): one per baseline-known room. */
+  private spectatorInteriors = new Map<string, Phaser.GameObjects.Image>()
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
@@ -742,17 +747,122 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** ART-08 texture mapping: protocol states → interior art. The protocol's
+   *  'fresh' is the clean init state and renders tidy; FR-12's two trash
+   *  tiers map to the fresh/settled trash sheets (same mess, different age). */
+  private interiorTexture(state: RoomState): string {
+    switch (state) {
+      case 'trashed':
+        return 'room-trash-fresh'
+      case 'settled':
+        return 'room-trash-settled'
+      default:
+        return 'room-prepped'
+    }
+  }
+
   /**
    * Door Images follow the own view floor (live play) — as a spectator, every
-   * guest floor's doors show on its lane (FR-20). Positions re-anchor per
-   * lane; texture flips (door-open) land with the interior slice (T4).
+   * guest floor's doors show on its lane (FR-20). A doorway renders open iff
+   * the own player stands inside that room (ART-08) or a live `room:entered`
+   * cue is running for it (ART-07) — never from state knowledge (ART-10).
+   * Spectator overview: baseline-known rooms render open with their interior
+   * Image behind the doorway (ART-12); unknown rooms stay closed.
    */
   private syncDoors(): void {
+    const own = this.players.get(this.ownId)
+    const ownRoom =
+      !this.spectator &&
+      this.interior !== null &&
+      own !== undefined &&
+      this.viewFloor === this.interior.floor &&
+      roomIndexAtMilli(Math.round(own.x * 1000)) === this.interior.room
+        ? this.interior.room
+        : null
+    const cuedRooms = new Set(
+      this.evidence.cues
+        .filter((c) => c.kind === 'entered')
+        .map((c) => `${c.floor}:${c.room}`),
+    )
     for (const [key, image] of this.doorImages) {
-      const floor = String(key).split(':')[0] ?? ''
+      const [floor, roomText] = String(key).split(':')
       const visible = this.spectator || floor === this.viewFloor
       image.setVisible(visible)
+      image.y = this.laneY(floor ?? '')
+      const room = Number(roomText) as RoomIndex
+      const state =
+        ownRoom === room && this.interior !== null
+          ? this.interior.state
+          : this.roomStates.get(String(key))
+      const open =
+        visible &&
+        ((this.spectator && state !== undefined) ||
+          (!this.spectator &&
+            (ownRoom === room ||
+              (ownRoom === null && cuedRooms.has(String(key)) && floor === this.viewFloor))))
+      image.setTexture(open ? 'door-open' : 'door-closed')
+      if (this.spectator) {
+        this.syncSpectatorInterior(floor ?? '', room, visible && open, state)
+      }
+    }
+    if (!this.spectator) {
+      for (const image of this.spectatorInteriors.values()) image.setVisible(false)
+      this.syncOwnInterior(ownRoom)
+    }
+  }
+
+  /**
+   * Live own-room interior slot (ART-08/14), synced ONCE per frame — the
+   * slot exists only while the own player stands inside the observed
+   * segment (ART-09: no interior Image exists for any room the viewer is
+   * not inside).
+   */
+  private syncOwnInterior(ownRoom: number | null): void {
+    const show =
+      ownRoom !== null &&
+      this.interior !== null &&
+      this.viewFloor === this.interior.floor
+    if (!show || this.interior === null || ownRoom === null) {
+      this.interiorImage?.setVisible(false)
+      return
+    }
+    const room = this.interior.room as RoomIndex
+    if (this.interiorImage === null) {
+      this.interiorImage = this.add.image(0, 0, this.interiorTexture(this.interior.state))
+      this.interiorImage.setOrigin(0, 1)
+      this.interiorImage.setDepth(-1)
+      this.interiorImage.setName(`interior:${this.interior.floor}:${room}`)
+    }
+    this.interiorImage.setTexture(this.interiorTexture(this.interior.state))
+    this.interiorImage.x = (roomSegmentStartMilli(room) / 1000) * TILE_PX
+    this.interiorImage.y = this.laneY(this.interior.floor)
+    this.interiorImage.setVisible(true)
+  }
+
+  /** Spectator overview interior per baseline-known room (ART-12/13). */
+  private syncSpectatorInterior(
+    floor: string,
+    room: RoomIndex,
+    open: boolean,
+    state: RoomState | undefined,
+  ): void {
+    const key = `${floor}:${room}`
+    let image = this.spectatorInteriors.get(key)
+    if (image === undefined && state !== undefined) {
+      image = this.add.image(
+        (roomSegmentStartMilli(room) / 1000) * TILE_PX,
+        this.laneY(floor),
+        this.interiorTexture(state),
+      )
+      image.setOrigin(0, 1)
+      image.setDepth(-1)
+      image.setName(`interior:${key}`)
+      this.spectatorInteriors.set(key, image)
+    }
+    if (image !== undefined) {
+      image.setVisible(open && state !== undefined)
       image.y = this.laneY(floor)
+      if (state !== undefined) image.setTexture(this.interiorTexture(state))
     }
   }
 

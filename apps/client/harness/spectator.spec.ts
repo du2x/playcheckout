@@ -199,6 +199,39 @@ test.describe('client:spectator_view', () => {
     expect(liveRects.length).toBe(3)
     expect(liveRects.every((r) => r.visible)).toBe(true)
 
+    // ART-12/14 (cycle 2.10): the overview renders an interior Image per
+    // baseline-known room (24 rooms on the three guest floors), while the
+    // LIVE page — standing in the hallway — holds none (its at-most-one slot
+    // is empty outside a room segment).
+    const firedInteriors = await accuser.evaluate(() => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => {
+              children: { list: { name: string; visible: boolean; type: string }[] }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const list = t.scene('Round')?.children.list ?? []
+      return list.filter((c) => c.type === 'Image' && c.name.startsWith('interior:')).length
+    })
+    expect(firedInteriors).toBe(24)
+    const liveInteriors = await live.evaluate(() => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => {
+              children: { list: { name: string; type: string }[] }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const list = t.scene('Round')?.children.list ?? []
+      return list.filter((c) => c.type === 'Image' && c.name.startsWith('interior:')).length
+    })
+    expect(liveInteriors).toBe(0)
+
     // Both pages still receive the 'all' broadcasts (firing toasts ride both).
     for (const page of [accuser, live]) {
       const events = await turnover(page)

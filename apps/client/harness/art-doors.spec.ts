@@ -93,6 +93,99 @@ test.describe('client:art_doors', () => {
     // Live play shows the own floor only (AD-008): the host spawned on the
     // lobby floor, so no door is visible from there even mid-round.
     expect(summary.visible).toBe(0)
+
+    // --- Interior half (ART-07..09, ART-14) ---
+    // Ride to floor1 (walk west, board, press floor1, exit) — the exit must
+    // happen INSIDE the 1 s open-door dwell (arrival ≈ 2.3 s after the press,
+    // doors close ≈ 1 s later): a closed car cannot be exited.
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForTimeout(3000)
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('1')
+    await host.waitForTimeout(2400)
+    await host.keyboard.down('ArrowRight')
+    await host.waitForTimeout(400)
+    await host.keyboard.up('ArrowRight')
+    // Walk right off the landing into the first room segment and keep
+    // walking until the own-room interior renders (the FR-10 inside read).
+    await host.keyboard.down('ArrowRight')
+    await host.waitForFunction(
+      () => {
+        const label = document.querySelector('#room-state')
+        if (label === null || label.hasAttribute('hidden')) return false
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: {
+                  list: { type: string; name: string; visible: boolean }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const list = t.scene('Round')?.children.list ?? []
+        return (
+          list.filter(
+            (c) => c.type === 'Image' && c.name.startsWith('interior:') && c.visible,
+          ).length === 1
+        )
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+
+    function interiorsRead(): { visible: number; textures: string[]; openDoors: number } {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => {
+              children: {
+                list: {
+                  type: string
+                  name: string
+                  visible: boolean
+                  texture: { key: string }
+                }[]
+              }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const list = t.scene('Round')?.children.list ?? []
+      const interiors = list.filter((c) => c.type === 'Image' && c.name.startsWith('interior:'))
+      const openDoors = list.filter(
+        (c) => c.type === 'Image' && c.name.startsWith('door:') && c.texture.key === 'door-open',
+      ).length
+      return {
+        visible: interiors.filter((c) => c.visible).length,
+        textures: [...new Set(interiors.map((c) => c.texture.key))],
+        openDoors,
+      }
+    }
+
+    // ART-08: the own room's doorway is open with the tidy interior behind it
+    // (a never-prepped room is protocol-'fresh' → mapped to room-prepped);
+    // ART-14: exactly ONE interior Image exists in a live scene.
+    const inside = await host.evaluate(interiorsRead)
+    expect(inside.visible).toBe(1)
+    expect(inside.textures).toEqual(['room-prepped'])
+    expect(inside.openDoors).toBe(1)
+    const roomLabel = await host.textContent('#room-state')
+    expect(roomLabel).toMatch(/^room \d+: /)
+
+    // ART-09: stepping back out (past the room segments) removes the
+    // interior again.
+    await host.keyboard.up('ArrowRight')
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForFunction(
+      () => document.querySelector('#room-state')?.hasAttribute('hidden') === true,
+      undefined,
+      { timeout: 10_000 },
+    )
+    await host.keyboard.up('ArrowLeft')
+    const outside = await host.evaluate(interiorsRead)
+    expect(outside.visible).toBe(0)
     for (const page of pages.slice(1)) await page.context().close()
   })
 })
