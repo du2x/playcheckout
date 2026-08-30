@@ -10,7 +10,9 @@ import {
   type LobbySnapshot,
   lobbyStartIntentSchema,
   type RoleDealt,
+  type RoundResumed,
   type RoundStarted,
+  type SpectatorSnapshot,
 } from './messages.js'
 import { PROTOCOL_REGISTRY } from './registry.js'
 
@@ -115,6 +117,10 @@ describe('protocol registry', () => {
     'room:rustle': 'earshot',
     'room:entered': 'sameFloor',
     'player:fired': 'all',
+    'round:ended': 'all',
+    'round:recap': 'all',
+    'spectator:snapshot': 'self',
+    'round:resumed': 'self',
   } as const
 
   it('declares exactly the core, movement, and work types — riders rows included (REG-03, AD-013)', () => {
@@ -384,6 +390,39 @@ describe('protocol registry', () => {
     expect(keys).not.toContain('reason')
     expect(keys).not.toContain('valid')
     expect(keys).not.toContain('role')
+  })
+
+  it('projects round:ended to all players carrying the verdict + the post-round traitor reveal (FR-21)', () => {
+    const row = PROTOCOL_REGISTRY['round:ended']
+    expect(row.recipients).toBe('all')
+    const projected = row.fromSim({
+      type: 'round:ended',
+      winner: 'staff',
+      reason: 'saboteur-fired',
+      saboteurId: 'p2',
+    })
+    expect(projected.payload).toEqual({
+      winner: 'staff',
+      reason: 'saboteur-fired',
+      saboteurId: 'p2',
+    })
+    expect(Object.keys(projected.payload).sort()).toEqual(['reason', 'saboteurId', 'winner'])
+  })
+
+  it('declares round:recap all-policy and spectator:snapshot / round:resumed self-policy (cycle 2.9)', () => {
+    expect(PROTOCOL_REGISTRY['round:recap'].recipients).toBe('all')
+    expect(PROTOCOL_REGISTRY['round:recap'].fromSim).toBeUndefined()
+    expect(PROTOCOL_REGISTRY['spectator:snapshot'].recipients).toBe('self')
+    expect(PROTOCOL_REGISTRY['round:resumed'].recipients).toBe('self')
+    const snapshot: SpectatorSnapshot = {
+      players: [{ playerId: 'p1', floor: 'floor1', x: 0 }],
+      cars: [{ car: 1, floor: 'lobby' }],
+      rooms: [{ floor: 'floor1', room: 3, state: 'prepped' }],
+      cardedRooms: [{ floor: 'floor1', rooms: [3] }],
+    }
+    expect(Object.keys(snapshot).sort()).toEqual(['cardedRooms', 'cars', 'players', 'rooms'])
+    const resumed: RoundResumed = { remainingTicks: 100, playerIds: ['p1'], ownFired: false }
+    expect(Object.keys(resumed).sort()).toEqual(['ownFired', 'playerIds', 'remainingTicks'])
   })
 
   it('accuse intent accepts exactly a non-empty targetId and rejects the rest (FR-17)', () => {

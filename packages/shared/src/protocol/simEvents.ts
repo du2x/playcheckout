@@ -62,6 +62,16 @@ export type SimEvent =
       readonly playerId: string
       readonly reason: FireReason
     }
+  // --- Round end (cycle 2.9, §6.6): the winner reveal is legal ONLY because
+  // the round is over (FR-21). `saboteurId` must never appear on any
+  // pre-round payload — the sim's two-winner union is projected verbatim;
+  // the wire payload widens with 'aborted' for the room-originated path.
+  | {
+      readonly type: 'round:ended'
+      readonly winner: 'staff' | 'saboteur'
+      readonly reason: RoundEndReason
+      readonly saboteurId: string
+    }
 
 /**
  * Why a player was fired — server-internal only, never projected to the wire.
@@ -69,6 +79,13 @@ export type SimEvent =
  * grace) indistinguishably: validity is revealed only on the recap (FR-22).
  */
 export type FireReason = 'walkin' | 'wrong-accusation' | 'correct-accusation'
+
+/**
+ * Why the round ended — §6.6 paths only. The room-originated abort carries
+ * `saboteur-disconnected` directly on the wire payload (FR-25); the sim never
+ * emits it (disconnects are transport-shaped, AD-002).
+ */
+export type RoundEndReason = 'saboteur-fired' | 'staff-reduced' | 'coverage-met' | 'coverage-failed'
 
 /**
  * Movement events (cycle 2.4, AD-005): emitted by the room-owned MovementSim in

@@ -250,6 +250,99 @@ export interface PlayerFired {
   readonly playerId: string
 }
 
+// ---------------------------------------------------------------------------
+// Round end (cycle 2.9, §6.6/§6.7). Every payload here is legal ONLY because
+// the round is over: the traitor identity (FR-21), accusation validity and
+// ride occupancy (FR-22) are post-round reveals. Before `round:ended`, no
+// payload ever names the saboteur, a role, or a verdict.
+// ---------------------------------------------------------------------------
+
+/** How the round ended — `aborted` exists only on the room-originated path (FR-25). */
+export type RoundEndWinner = 'staff' | 'saboteur' | 'aborted'
+
+/**
+ * server → all players. The round's verdict (FR-21). `saboteurId` is the
+ * traitor reveal — null only on an aborted round (no winner, no reveal).
+ */
+export interface RoundEnded {
+  readonly winner: RoundEndWinner
+  readonly reason: string
+  readonly saboteurId: string | null
+}
+
+/** One recap timeline row (FR-22) — ids only; the client renders roster names. */
+export type RecapEntry =
+  | {
+      readonly kind: 'crime'
+      readonly tick: number
+      readonly floor: FloorId
+      readonly room: RoomIndex
+      /** Evidence still inside the freshness window at recap time (FR-12). */
+      readonly fresh: boolean
+    }
+  | {
+      readonly kind: 'catch'
+      readonly tick: number
+      readonly entrantId: string
+      readonly saboteurId: string
+    }
+  | {
+      readonly kind: 'accusation'
+      readonly tick: number
+      readonly accuserId: string
+      readonly targetId: string
+      readonly correct: boolean
+    }
+  | {
+      readonly kind: 'ride'
+      readonly tick: number
+      readonly car: CarId
+      readonly riderIds: readonly string[]
+      readonly from: FloorId
+      readonly to: FloorId
+    }
+
+/** server → all players. The FR-22 recap timeline, emitted right after round:ended. */
+export interface RoundRecap {
+  readonly entries: readonly RecapEntry[]
+}
+
+/** One room-state row of the spectator baseline. */
+export interface SpectatorRoomState {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly state: RoomState
+}
+
+/** One floor's carded rooms of the spectator baseline. */
+export interface SpectatorCarded {
+  readonly floor: FloorId
+  readonly rooms: readonly RoomIndex[]
+}
+
+/**
+ * server → one fired player (self). The full-world spectator baseline (FR-20):
+ * every player's position on every floor, car floors, every room's state, all
+ * carded rooms. Live deltas then arrive through the spectator over-delivery.
+ */
+export interface SpectatorSnapshot {
+  readonly players: readonly MovementSnapshotPlayer[]
+  readonly cars: readonly MovementSnapshotCar[]
+  readonly rooms: readonly SpectatorRoomState[]
+  readonly cardedRooms: readonly SpectatorCarded[]
+}
+
+/**
+ * server → one reconnected player (self, FR-25/§11). Restores the round view:
+ * the honest clock (remaining ticks), the round cast, and whether the
+ * recipient is a fired spectator (their snapshot path differs).
+ */
+export interface RoundResumed {
+  readonly remainingTicks: number
+  readonly playerIds: readonly string[]
+  readonly ownFired: boolean
+}
+
 /**
  * client → server intent: host starts the round (FR-2). Validated by zod in the
  * room's `validate()` handler; the server rejects, it never trusts. Intents are

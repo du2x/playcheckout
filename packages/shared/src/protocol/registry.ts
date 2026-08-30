@@ -22,7 +22,11 @@ import type {
   RoomSettled,
   RoomTrashed,
   RoundBuzzer,
+  RoundEnded,
+  RoundRecap,
+  RoundResumed,
   RoundStarted,
+  SpectatorSnapshot,
   WorkEnded,
   WorkStarted,
 } from './messages.js'
@@ -129,6 +133,15 @@ export interface Payloads {
   // --- Justice (cycle 2.8): firing is public but name-only (FR-18) ---
   /** server → all players. A firing resolved (walk-in or accusation); {playerId} exactly. */
   'player:fired': PlayerFired
+  // --- Round end (cycle 2.9, §6.6/§6.7): post-round reveals only ---
+  /** server → all players. The round's verdict + traitor reveal (FR-21). */
+  'round:ended': RoundEnded
+  /** server → all players. The FR-22 recap timeline, right after round:ended. */
+  'round:recap': RoundRecap
+  /** server → one fired player. The full-world spectator baseline (FR-20). */
+  'spectator:snapshot': SpectatorSnapshot
+  /** server → one reconnected player. Seat restore: honest clock + cast (FR-25). */
+  'round:resumed': RoundResumed
 }
 
 export type RegistryKey = keyof Payloads
@@ -354,6 +367,37 @@ export const PROTOCOL_REGISTRY = {
     fromSim: ((event) => ({
       payload: { playerId: event.playerId },
     })) as SimProjection<'player:fired'>,
+  },
+  // --- Round end (cycle 2.9, §6.6/§6.7). round:ended is the ONLY message that
+  // ever names the saboteur (FR-21) — legal because the round is over. The
+  // recap reveals accusation validity and ride occupancy for the same reason
+  // (FR-22). spectator:snapshot / round:resumed are self-policy room
+  // originals: FR-20's full-world baseline and the FR-25 seat restore.
+  'round:ended': {
+    payload: {} as RoundEnded,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: {
+        winner: event.winner,
+        reason: event.reason,
+        saboteurId: event.saboteurId,
+      },
+    })) as SimProjection<'round:ended'>,
+  },
+  'round:recap': {
+    payload: {} as RoundRecap,
+    recipients: 'all',
+    fromSim: undefined,
+  },
+  'spectator:snapshot': {
+    payload: {} as SpectatorSnapshot,
+    recipients: 'self',
+    fromSim: undefined,
+  },
+  'round:resumed': {
+    payload: {} as RoundResumed,
+    recipients: 'self',
+    fromSim: undefined,
   },
 } as const satisfies { [K in RegistryKey]: Entry<K> } & {
   [K in SimEvent['type'] | MovementEvent['type']]: unknown

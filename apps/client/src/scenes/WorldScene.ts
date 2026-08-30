@@ -8,6 +8,7 @@ import {
   roomIndexAtMilli,
   roomSegmentEndMilli,
   roomSegmentStartMilli,
+  type SpectatorSnapshot,
   TUNING,
 } from '@turnover/shared'
 import Phaser from 'phaser'
@@ -101,6 +102,10 @@ type MovementAction =
   // Justice (cycle 2.8): name-only firing — the fired player's rectangle is
   // removed; the toast/banner live in the App's accuse HUD.
   | { type: 'player-fired'; playerId: string }
+  // Round end (cycle 2.9): the fired player's full-world baseline (FR-20) —
+  // all-floor positions, car floors, room states, all carded rooms. Consumed
+  // by the spectator overview; live players never receive it.
+  | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
 
 interface PlayerDisplay {
   rect: Phaser.GameObjects.Rectangle
@@ -148,6 +153,10 @@ export class WorldScene extends Phaser.Scene {
   /** The App-owned accusation session (accuseSession.ts): the self-fired flag
    * gates every live-play intent — a fired player watches quietly (JUST-04). */
   private selfFired = false
+  /** The fired player's full-world baseline (FR-20, cycle 2.9). Public: the
+   * spectator overview (and the harness) read it; live clients never receive
+   * the message at all ('self' to the fired session). */
+  spectatorSnapshot: SpectatorSnapshot | null = null
 
   constructor() {
     super('Round')
@@ -358,6 +367,11 @@ export class WorldScene extends Phaser.Scene {
         // fired event itself is the removal signal (no player:left exists for
         // a firing; the session stays connected as a spectator, 2.9 scope).
         this.removePlayerDisplay(action.playerId)
+        break
+      case 'spectator-snapshot':
+        // FR-20 baseline: kept for the spectator overview (own client only —
+        // the server routes it 'self' to the fired session).
+        this.spectatorSnapshot = action.snapshot
         break
     }
   }

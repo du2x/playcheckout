@@ -43,4 +43,10 @@ export const MAPPERS: {
   'room:entered': (p) => [{ type: 'room-entered', ...p }],
   // Justice (cycle 2.8): name-only firing — {playerId} is the whole payload.
   'player:fired': ({ playerId }) => [{ type: 'player-fired', playerId }],
+  // Round end (cycle 2.9): verdict + recap drive the results view; the
+  // spectator baseline and the seat restore are scene/view state respectively.
+  'round:ended': (p) => [{ type: 'round-ended', ...p }],
+  'round:recap': (p) => [{ type: 'round-recap', ...p }],
+  'spectator:snapshot': (snapshot) => [{ type: 'spectator-snapshot', snapshot }],
+  'round:resumed': (p) => [{ type: 'round-resumed', ...p }],
 }

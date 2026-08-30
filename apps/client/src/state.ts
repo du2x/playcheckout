@@ -4,9 +4,11 @@ import {
   type FloorId,
   type LobbySnapshot,
   type MovementSnapshot,
+  type RecapEntry,
   type Role,
   type RoomIndex,
   type RoomState,
+  type SpectatorSnapshot,
   TUNING,
 } from '@turnover/shared'
 
@@ -16,7 +18,15 @@ import {
  * wrapper stay dumb; every view transition the spec defines is unit-tested.
  */
 
-export type ViewName = 'join' | 'lobby' | 'round' | 'lost'
+export type ViewName = 'join' | 'lobby' | 'round' | 'results' | 'lost'
+
+/** The round-end verdict + recap the results view renders (cycle 2.9). */
+export interface ResultsState {
+  winner: 'staff' | 'saboteur' | 'aborted'
+  reason: string
+  saboteurId: string | null
+  entries: readonly RecapEntry[]
+}
 
 export interface ViewState {
   /** Which overlay view is mounted. */
@@ -27,8 +37,16 @@ export interface ViewState {
   role: Role | null
   /** Wall-clock ms when round:started arrived; deadline = this + shift. */
   roundStartedAt: number | null
-  /** Ids from round:started, labeled by roster name in the round view. */
+  /**
+   * Wall-clock ms deadline for a RESUMED round (FR-25): receipt-stamped from
+   * round:resumed's remainingTicks. When set it is the honest clock — the
+   * receipt-time shift math never applies to a resumed seat.
+   */
+  roundEndsAtMs: number | null
+  /** Ids from round:started (or round:resumed), labeled by roster name in the round view. */
   roundPlayerIds: readonly string[]
+  /** Winner banner + traitor reveal + recap timeline (results view). */
+  results: ResultsState | null
   /** Latest public movement snapshot (join / buzzer); positions live in the scene. */
   movementSnapshot: MovementSnapshot | null
   /** Banner text (join rejections, intent errors). */
@@ -83,14 +101,32 @@ export type ViewAction =
   // Justice (cycle 2.8): firing is public but name-only (FR-18) — the scene
   // removes the rectangle; the accusation session renders the toast (T5).
   | { type: 'player-fired'; playerId: string }
+  // Round end (cycle 2.9, prd win conditions + results): verdict + recap drive
+  // the results view; the spectator baseline is scene state; the seat restore
+  // flips the view back to round with an honest clock.
+  | {
+      type: 'round-ended'
+      winner: 'staff' | 'saboteur' | 'aborted'
+      reason: string
+      saboteurId: string | null
+    }
+  | { type: 'round-recap'; entries: readonly RecapEntry[] }
+  | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
+  | {
+      type: 'round-resumed'
+      remainingTicks: number
+      playerIds: readonly string[]
+      ownFired: boolean
+    }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }
   | { type: 'intent-error'; message: string }
   | { type: 'connection-lost' }
   | { type: 'clear-error' }
 
-/** Shift deadline in ms from the round:started receipt (client-side, AD-003). */
+/** Shift deadline in ms: a resumed round uses its own stamped deadline (FR-25). */
 export function clockRemainingMs(state: ViewState, nowMs: number): number {
+  if (state.roundEndsAtMs !== null) return Math.max(0, state.roundEndsAtMs - nowMs)
   if (state.roundStartedAt === null) return 0
   return Math.max(0, state.roundStartedAt + TUNING.SHIFT_SECONDS * 1000 - nowMs)
 }
@@ -113,7 +149,9 @@ export function initialViewState(): ViewState {
     snapshot: null,
     role: null,
     roundStartedAt: null,
+    roundEndsAtMs: null,
     roundPlayerIds: [],
+    results: null,
     movementSnapshot: null,
     error: null,
     joining: false,
@@ -155,6 +193,10 @@ export const ACTION_ROUTES = {
   'room-rustle': 'scene',
   'room-entered': 'scene',
   'player-fired': 'scene',
+  'round-ended': 'view',
+  'round-recap': 'view',
+  'spectator-snapshot': 'scene',
+  'round-resumed': 'view',
   'role-dealt': 'view',
   buzzer: 'view',
   'intent-error': 'view',
@@ -194,14 +236,53 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
         view: 'round',
         // The reducer stamps receipt time — the mapper stays pure (REG-11).
         roundStartedAt: Date.now(),
+        roundEndsAtMs: null,
         roundPlayerIds: action.playerIds,
+        results: null,
         error: null,
         joining: false,
       }
     case 'role-dealt':
       return { ...state, role: action.role }
+    case 'round-ended':
+      // The results view (FR-21/22): verdict + traitor reveal; the recap
+      // entries may arrive in the same flush (round:recap follows round:ended).
+      return {
+        ...state,
+        view: 'results',
+        results: {
+          winner: action.winner,
+          reason: action.reason,
+          saboteurId: action.saboteurId,
+          entries: state.results?.entries ?? [],
+        },
+      }
+    case 'round-recap':
+      return {
+        ...state,
+        results:
+          state.results === null ? state.results : { ...state.results, entries: action.entries },
+      }
+    case 'round-resumed':
+      // Seat restore (FR-25): back into the round with an honest clock — the
+      // remaining ticks are the server's truth, stamped at receipt.
+      return {
+        ...state,
+        view: 'round',
+        roundPlayerIds: [...action.playerIds],
+        roundEndsAtMs: Date.now() + action.remainingTicks * 50,
+        results: null,
+        error: null,
+      }
     case 'buzzer':
-      return { ...state, view: 'lobby', role: null, roundStartedAt: null, roundPlayerIds: [] }
+      return {
+        ...state,
+        view: 'lobby',
+        role: null,
+        roundStartedAt: null,
+        roundEndsAtMs: null,
+        roundPlayerIds: [],
+      }
     case 'intent-error':
       return { ...state, error: action.message }
     case 'connection-lost':
@@ -230,6 +311,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'room-rustle':
     case 'room-entered':
     case 'player-fired':
+    case 'spectator-snapshot':
       return state
   }
 }
