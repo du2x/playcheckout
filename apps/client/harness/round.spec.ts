@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 
-// Spec LIGHT-09..12 (gate scenario client:round_start): rectangles with roster
+// Spec LIGHT-09..12 (gate scenario client:round_start): player sprites with roster
 // labels, client-side countdown, own role card only. Buzzer coverage joins in
 // the round.spec extension once the 5 s test shift is wired (T6).
 
@@ -31,7 +31,7 @@ async function fourPlayerRound(pages: Page[]): Promise<void> {
 }
 
 test.describe('client:round_start', () => {
-  test('renders four labeled rectangles with a counting-down clock (LIGHT-09, LIGHT-10)', async ({
+  test('renders four labeled player sprites with a counting-down clock (LIGHT-09, LIGHT-10)', async ({
     browser,
   }) => {
     const pages = await Promise.all(
@@ -45,7 +45,7 @@ test.describe('client:round_start', () => {
           window as unknown as {
             __TURNOVER__: {
               scene: (name: string) => {
-                children: { list: { type: string; text?: string }[] }
+                children: { list: { type: string; text?: string; texture?: { key?: string } }[] }
               } | null
             }
           }
@@ -53,12 +53,15 @@ test.describe('client:round_start', () => {
         const scene = t.scene('Round')
         if (scene === null) return null
         return {
-          rectangles: scene.children.list.filter((c) => c.type === 'Rectangle').length,
+          // ART contract (cycle 2.10): players are staff-walk Sprites.
+          players: scene.children.list.filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
+          ).length,
           labels: scene.children.list.filter((c) => c.type === 'Text').map((c) => c.text),
         }
       })
       expect(world).not.toBeNull()
-      expect(world?.rectangles).toBe(4)
+      expect(world?.players).toBe(4)
       expect(world?.labels).toEqual(['ada', 'bruno', 'caro', 'dina'])
 
       const clockStart = await page.textContent('#clock')

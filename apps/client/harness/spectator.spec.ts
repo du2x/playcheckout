@@ -42,16 +42,20 @@ interface SceneRect {
   y?: number
 }
 
-/** Read the world scene's rectangles IN-PAGE (functions do not serialize). */
+/** Read the world scene's player sprites IN-PAGE (functions do not serialize). */
 function readRects(page: Page): Promise<SceneRect[]> {
   return page.evaluate(() => {
     const hook = (window as unknown as { __TURNOVER__?: { scene?: (n: string) => unknown } })
       .__TURNOVER__
     const scene = hook?.scene?.('Round') as
-      | { children: { list: { type: string; y: number; visible: boolean }[] } | null }
+      | {
+          children: {
+            list: { type: string; y: number; visible: boolean; texture?: { key?: string } }[]
+          } | null
+        }
       | undefined
     return (scene?.children?.list ?? [])
-      .filter((c) => c.type === 'Rectangle')
+      .filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk')
       .map((c) => ({ visible: c.visible, y: c.y }))
   })
 }

@@ -21,7 +21,15 @@ async function readScene(page: Page): Promise<SceneRead> {
       window as unknown as {
         __TURNOVER__: {
           scene: (name: string) => {
-            children: { list: { type: string; text?: string; x: number; visible: boolean }[] }
+            children: {
+          list: {
+            type: string
+            text?: string
+            x: number
+            visible: boolean
+            texture?: { key?: string }
+          }[]
+        }
           } | null
         }
       }
@@ -33,7 +41,10 @@ async function readScene(page: Page): Promise<SceneRead> {
       labels: list
         .filter((c) => c.type === 'Text')
         .map((c) => ({ text: String(c.text), x: c.x, visible: c.visible })),
-      rectCount: list.filter((c) => c.type === 'Rectangle').length,
+      // ART contract (cycle 2.10): players are staff-walk Sprites.
+      rectCount: list.filter(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
+      ).length,
       carCount: list.filter((c) => c.type === 'Ellipse').length,
     }
   })
@@ -115,7 +126,7 @@ test.describe('client:movement', () => {
     await join(guest, code, 'bruno')
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 2)
 
-    // Both see exactly two player rectangles plus two car ellipses.
+    // Both see exactly two player sprites plus two car ellipses.
     for (const page of [host, guest]) {
       const scene = await readScene(page)
       expect(scene.rectCount).toBe(2)
@@ -254,13 +265,17 @@ test.describe('client:movement', () => {
         const t = (
           window as unknown as {
             __TURNOVER__: {
-              scene: (n: string) => { children: { list: { type: string }[] } } | null
+              scene: (n: string) => { children: { list: { type: string; texture?: { key?: string } }[] } } | null
             }
           }
         ).__TURNOVER__
         const scene = t.scene('Round')
         if (scene === null) return false
-        return scene.children.list.filter((c) => c.type === 'Rectangle').length === 3
+        return (
+          scene.children.list.filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
+          ).length === 3
+        )
       },
       undefined,
       { timeout: 5000 },
@@ -439,7 +454,15 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
           window as unknown as {
             __TURNOVER__: {
               scene: (n: string) => {
-                children: { list: { type: string; text?: string; x: number; visible: boolean }[] }
+                children: {
+          list: {
+            type: string
+            text?: string
+            x: number
+            visible: boolean
+            texture?: { key?: string }
+          }[]
+        }
               } | null
             }
           }

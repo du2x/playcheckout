@@ -17,7 +17,15 @@ async function readScene(page: Page): Promise<SceneRead> {
       window as unknown as {
         __TURNOVER__: {
           scene: (name: string) => {
-            children: { list: { type: string; text?: string; x: number; visible: boolean }[] }
+            children: {
+          list: {
+            type: string
+            text?: string
+            x: number
+            visible: boolean
+            texture?: { key?: string }
+          }[]
+        }
           } | null
         }
       }
@@ -29,7 +37,10 @@ async function readScene(page: Page): Promise<SceneRead> {
       labels: list
         .filter((c) => c.type === 'Text')
         .map((c) => ({ text: String(c.text), x: c.x, visible: c.visible })),
-      rectCount: list.filter((c) => c.type === 'Rectangle').length,
+      // ART contract (cycle 2.10): players are staff-walk Sprites.
+      rectCount: list.filter(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
+      ).length,
       carCount: list.filter((c) => c.type === 'Ellipse').length,
     }
   })
@@ -238,7 +249,7 @@ test.describe('client:work_channels', () => {
     expect(await guestPage.$('#room-state')).not.toBeNull()
     expect(await guestPage.$('#room-state:not([hidden])')).toBeNull()
 
-    // The scene contract is untouched: rectangles + car ellipses only.
+    // The scene contract is untouched: player sprites + car ellipses only.
     for (const page of pages) {
       const scene = await readScene(page)
       expect(scene.rectCount).toBe(4)

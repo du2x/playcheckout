@@ -20,7 +20,9 @@ async function readCars(page: Page): Promise<CarRead> {
       window as unknown as {
         __TURNOVER__: {
           scene: (name: string) => {
-            children: { list: { type: string; visible: boolean }[] }
+            children: {
+              list: { type: string; visible: boolean; texture?: { key?: string } }[]
+            }
           } | null
         }
       }
@@ -29,7 +31,10 @@ async function readCars(page: Page): Promise<CarRead> {
     if (scene === null) throw new Error('world scene missing')
     const list = scene.children.list
     return {
-      rectCount: list.filter((c) => c.type === 'Rectangle').length,
+      // ART contract (cycle 2.10): the player is a staff-walk Sprite.
+      rectCount: list.filter(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
+      ).length,
       visibleCarCount: list.filter((c) => c.type === 'Ellipse' && c.visible).length,
     }
   })
@@ -48,9 +53,9 @@ test.describe('client:elevator_doors', () => {
     await host.waitForTimeout(200) // let the scene mount and tick at least once
 
     // Harness rendering contract, unchanged by this cycle (spec Goal 4): one
-    // Rectangle for the lone player, and both cars start parked open at the
-    // lobby — both Ellipses render visible before any call happens (ELAN-01
-    // AC1/AC3).
+    // player sprite for the lone player, and both cars start parked open at
+    // the lobby — both Ellipses render visible before any call happens
+    // (ELAN-01 AC1/AC3).
     const baseline = await readCars(host)
     expect(baseline.rectCount).toBe(1)
     expect(baseline.visibleCarCount).toBe(2)

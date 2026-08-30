@@ -120,13 +120,15 @@ type MovementAction =
   | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
 
 interface PlayerDisplay {
-  rect: Phaser.GameObjects.Rectangle
+  sprite: Phaser.GameObjects.Sprite
   label: Phaser.GameObjects.Text
   x: number
   floor: string
   targetX: number | null
   /** True once the player departed our floor by elevator (AD-009). */
   left: boolean
+  /** Profile facing: the sheet faces right; left renders flipX (ART-02). */
+  facing: 'left' | 'right'
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -222,6 +224,14 @@ export class WorldScene extends Phaser.Scene {
       this.corridorBand.setOrigin(0, 0)
       this.corridorBand.setDepth(-2)
       this.corridorBand.setVisible(!this.spectator)
+    }
+    if (this.textures.exists('staff-walk') && !this.anims.exists('staff-walk')) {
+      this.anims.create({
+        key: 'staff-walk',
+        frames: this.anims.generateFrameNumbers('staff-walk', { start: 0, end: 7 }),
+        frameRate: 12,
+        repeat: -1,
+      })
     }
     if (this.textures.exists('fx-rustle') && !this.anims.exists('fx-rustle')) {
       this.anims.create({
@@ -400,6 +410,7 @@ export class WorldScene extends Phaser.Scene {
         display.floor = action.floor
         display.x = action.x
         display.left = false
+        display.facing = action.facing === 'left' ? 'left' : 'right'
         if (action.playerId === this.ownId) {
           display.targetX = null
           this.viewFloor = action.floor
@@ -415,15 +426,19 @@ export class WorldScene extends Phaser.Scene {
         this.updatePanel()
         break
       }
-      case 'elevator-called':
+      case 'elevator-called': {
+        // already standing at the called floor (the AD-019/023 decoy summons
+        // nothing) — it turns off on that car's next arrival.
+        const car = this.cars.get(action.car)
         this.elevatorPresenter?.onCalled(action.car, action.floor as FloorId)
         this.updatePanel()
         this.flashPanel()
         break
+      }
       case 'player-left': {
         const display = this.players.get(action.playerId)
         if (display !== undefined) {
-          display.rect.destroy()
+          display.sprite.destroy()
           display.label.destroy()
           this.players.delete(action.playerId)
         }
@@ -531,7 +546,7 @@ export class WorldScene extends Phaser.Scene {
   private removePlayerDisplay(playerId: string): void {
     const display = this.players.get(playerId)
     if (display === undefined) return
-    display.rect.destroy()
+    display.sprite.destroy()
     display.label.destroy()
     this.players.delete(playerId)
   }
@@ -556,7 +571,7 @@ export class WorldScene extends Phaser.Scene {
     const known = new Set(players.map((p) => p.id))
     for (const [id, display] of this.players) {
       if (known.has(id)) continue
-      display.rect.destroy()
+      display.sprite.destroy()
       display.label.destroy()
       this.players.delete(id)
     }
@@ -588,12 +603,24 @@ export class WorldScene extends Phaser.Scene {
 
   private addPlayerDisplay(id: string, name: string): void {
     const x = 15
-    const rect = this.add.rectangle(x * TILE_PX, GROUND_Y, 26, 60, 0x2f4f6f)
+    // ART-01: one staff-walk Sprite per player, bottom-center anchored on the
+    // lane ground line — identical texture/anim for every role (FR-9). The
+    // label stays a Text (harness label assertions unchanged).
+    const sprite = this.add.sprite(x * TILE_PX, GROUND_Y, 'staff-walk')
+    sprite.setOrigin(0.5, 1)
     const label = this.add.text(x * TILE_PX, GROUND_Y + 48, name.slice(0, 12), {
       color: '#ffffff',
     })
     label.setOrigin(0.5, 0.5)
-    this.players.set(id, { rect, label, x, floor: 'lobby', targetX: null, left: false })
+    this.players.set(id, {
+      sprite,
+      label,
+      x,
+      floor: 'lobby',
+      targetX: null,
+      left: false,
+      facing: 'right',
+    })
   }
 
   private beginMove(dir: 'left' | 'right'): void {
@@ -950,12 +977,28 @@ export class WorldScene extends Phaser.Scene {
         !display.left &&
         !(id === this.ownId && this.riderSession !== null) &&
         (this.spectator || display.floor === this.viewFloor)
-      display.rect.setVisible(visible)
+      display.sprite.setVisible(visible)
       display.label.setVisible(visible)
-      display.rect.x = display.x * TILE_PX
+      display.sprite.x = display.x * TILE_PX
       display.label.x = display.x * TILE_PX
-      display.rect.y = laneY
+      display.sprite.y = laneY
       display.label.y = laneY + 48
+      // ART-02/03: facing + walk cycle. The own player's facing follows the
+      // local prediction; remote players keep their last moved facing. The
+      // walk plays while the display is live (predicted own movement or an
+      // unsettled lerp target) and settles back to frame 0 when stopped —
+      // identical presentation for every role (FR-9).
+      if (id === this.ownId && this.ownMoving !== null) display.facing = this.ownMoving
+      const moving =
+        (id === this.ownId && this.ownMoving !== null) ||
+        (display.targetX !== null && Math.abs(display.targetX - display.x) > 0.01)
+      display.sprite.flipX = display.facing === 'left'
+      if (moving) {
+        if (!display.sprite.anims.isPlaying) display.sprite.play('staff-walk')
+      } else if (display.sprite.anims.isPlaying) {
+        display.sprite.anims.stop()
+        display.sprite.setFrame(0)
+      }
     }
     for (const car of this.cars.values()) {
       car.ellipse.y = this.laneY(car.floor) + 30

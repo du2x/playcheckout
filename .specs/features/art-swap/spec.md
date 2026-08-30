@@ -203,11 +203,11 @@ covers the visual-target approval before the manifest flips to `approved`.
 
 | Requirement ID | Story | Phase | Status |
 | -------------- | ----- | ----- | ------ |
-| ART-01 | P1: Players are staff sprites | Specify | Planned |
-| ART-02 | P1: Players are staff sprites | Specify | Planned |
-| ART-03 | P1: Players are staff sprites | Specify | Planned |
-| ART-04 | P1: Players are staff sprites | Specify | Planned |
-| ART-05 | P1: Players are staff sprites | Specify | Planned |
+| ART-01 | P1: Players are staff sprites | Execute | Done |
+| ART-02 | P1: Players are staff sprites | Execute | Done |
+| ART-03 | P1: Players are staff sprites | Execute | Done |
+| ART-04 | P1: Players are staff sprites | Execute | Done |
+| ART-05 | P1: Players are staff sprites | Execute | Done |
 | ART-06 | P1: Doors, doorways, and the interior read | Specify | Planned |
 | ART-07 | P1: Doors, doorways, and the interior read | Specify | Planned |
 | ART-08 | P1: Doors, doorways, and the interior read | Specify | Planned |
