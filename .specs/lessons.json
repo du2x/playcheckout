@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 20,
+  "next_id": 22,
   "lessons": [
     {
       "id": "L-001",
@@ -346,6 +346,42 @@
       ],
       "created": "2026-08-29T15:45:00Z",
       "last_seen": "2026-08-29T15:45:00Z"
+    },
+    {
+      "id": "L-020",
+      "key": "surviving_mutant::a negative assertion on a message stream needs a positive control in the same window make a live player emit the event type and assert it arrives or the absence check passes vacuously while nobody sends anything",
+      "text": "A negative assertion on a message stream needs a positive control in the same window - make a live player emit the event type and assert IT arrives, or the absence check passes vacuously while nobody sends anything.",
+      "signal": "surviving_mutant",
+      "scope": "apps/server",
+      "status": "candidate",
+      "features": [
+        "justice"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "TurnoverRoom.test.ts:1716-1730 (verifier Gap 2) (apps/server)"
+      ],
+      "created": "2026-08-30T01:03:31Z",
+      "last_seen": "2026-08-30T01:03:31Z"
+    },
+    {
+      "id": "L-021",
+      "key": "surviving_mutant::pin state machine timing boundaries against the real transition not just the endpoints accuse one tick before and one tick after the grace ending event or a start vs completion drift survives",
+      "text": "Pin state-machine timing boundaries against the real transition, not just the endpoints - accuse one tick BEFORE and one tick AFTER the grace-ending event, or a start-vs-completion drift survives.",
+      "signal": "surviving_mutant",
+      "scope": "packages/sim",
+      "status": "candidate",
+      "features": [
+        "justice"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "justice.test.ts grace-boundary (verifier Gap 1) (packages/sim)"
+      ],
+      "created": "2026-08-30T01:03:31Z",
+      "last_seen": "2026-08-30T01:03:31Z"
     }
   ]
 }

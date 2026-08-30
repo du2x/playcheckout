@@ -2337,6 +2337,41 @@ describe('server:reconnect', () => {
     }
   })
 
+  it('treats a results-phase drop as a plain leave — no seat, roster churn (REND-22)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '5')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance } = await startWithRoles2(clients)
+      const leaver = clients.find((cl) => cl !== host)
+      if (leaver === undefined) throw new Error('no leaver')
+      const observer = clients.find((cl) => cl !== host && cl !== leaver)
+      if (observer === undefined) throw new Error('no observer')
+      const observerCollector = collectorOf2(collectors, clients, observer)
+      // Run the zero-prep round to its buzzer → results.
+      instance.__driveTicks(99)
+      await observerCollector.waitFor('round:buzzer')
+      await vi.waitFor(() => expect(instance.__phase()).toBe('results'))
+
+      TurnoverRoom.reconnectSeconds = 5
+      dropRaw(leaver)
+      // Lobby-like: the removal is immediate — roster snapshots flow.
+      await observerCollector.waitFor('player:left')
+      await observerCollector.waitFor('lobby:snapshot')
+      expect(instance.__phase()).toBe('results')
+      // No seat was held: the old reconnection token is dead on arrival.
+      await expect(newClient().reconnect(leaver.reconnectionToken)).rejects.toThrow()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      TurnoverRoom.reconnectSeconds = 60
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('aborts the round when the saboteur window expires — no traitor reveal (REND-20)', async () => {
     vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
     try {

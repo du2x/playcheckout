@@ -1,4 +1,4 @@
-import { PROTOCOL_REGISTRY, type RegistryKey } from '@turnover/shared'
+import { PROTOCOL_REGISTRY, type RegistryKey, type SpectatorSnapshot } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { initialViewState, reduce, type ViewAction } from '../state'
 import { MAPPERS } from './mappers'
@@ -192,5 +192,64 @@ describe('work mappers (cycle 2.5)', () => {
     // The action's `type` tag is the mapper's own; the payload contributes no
     // role or channel-kind field (FR-9).
     expect(Object.keys(started).sort()).toEqual(['floor', 'playerId', 'room', 'seconds', 'type'])
+  })
+})
+
+// Spec REND-06..07/12/18 (cycle 2.9): the round-end payloads map 1:1 — a
+// routed-wrong or field-dropped verdict would silently corrupt the results
+// view (verifier Gap 1, sensor mutant M8b).
+describe('round-end mappers (cycle 2.9)', () => {
+  it('maps round:ended 1:1 with winner, reason, and the post-round traitor reveal (FR-21)', () => {
+    const action = first(
+      MAPPERS['round:ended']({ winner: 'staff', reason: 'saboteur-fired', saboteurId: 'p2' }),
+    )
+    expect(action).toEqual({
+      type: 'round-ended',
+      winner: 'staff',
+      reason: 'saboteur-fired',
+      saboteurId: 'p2',
+    })
+    const aborted = first(
+      MAPPERS['round:ended']({
+        winner: 'aborted',
+        reason: 'saboteur-disconnected',
+        saboteurId: null,
+      }),
+    )
+    expect(aborted).toEqual({
+      type: 'round-ended',
+      winner: 'aborted',
+      reason: 'saboteur-disconnected',
+      saboteurId: null,
+    })
+  })
+
+  it('maps round:recap 1:1 carrying the entries array (FR-22)', () => {
+    const entries = [{ kind: 'crime', tick: 4, floor: 'floor1', room: 2, fresh: true }] as const
+    const action = first(MAPPERS['round:recap']({ entries }))
+    expect(action).toEqual({ type: 'round-recap', entries })
+  })
+
+  it('wraps spectator:snapshot whole — every baseline row survives (FR-20)', () => {
+    const snapshotPayload: SpectatorSnapshot = {
+      players: [{ playerId: 'p1', floor: 'floor1', x: 1200 }],
+      cars: [{ car: 1, floor: 'lobby' }],
+      rooms: [{ floor: 'floor1', room: 2, state: 'prepped' }],
+      cardedRooms: [{ floor: 'floor1', rooms: [2] }],
+    }
+    const action = first(MAPPERS['spectator:snapshot'](snapshotPayload))
+    expect(action).toEqual({ type: 'spectator-snapshot', snapshot: snapshotPayload })
+  })
+
+  it('maps round:resumed 1:1 with the honest clock inputs (REND-18)', () => {
+    const action = first(
+      MAPPERS['round:resumed']({ remainingTicks: 500, playerIds: ['p1', 'p2'], ownFired: false }),
+    )
+    expect(action).toEqual({
+      type: 'round-resumed',
+      remainingTicks: 500,
+      playerIds: ['p1', 'p2'],
+      ownFired: false,
+    })
   })
 })

@@ -128,6 +128,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: apps/client/src/scenes/elevatorPresenter.ts:13 (apps/client)
 - last seen: 2026-08-29T15:45:00Z
 
+### L-020 - A negative assertion on a message stream needs a positive control in the same window - make a live player emit the event type and assert IT arrives, or the absence check passes vacuously while nobody sends anything.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `apps/server` · harmful: 0
+- features: justice
+- evidence: TurnoverRoom.test.ts:1716-1730 (verifier Gap 2) (apps/server)
+- last seen: 2026-08-30T01:03:31Z
+
+### L-021 - Pin state-machine timing boundaries against the real transition, not just the endpoints - accuse one tick BEFORE and one tick AFTER the grace-ending event, or a start-vs-completion drift survives.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `packages/sim` · harmful: 0
+- features: justice
+- evidence: justice.test.ts grace-boundary (verifier Gap 1) (packages/sim)
+- last seen: 2026-08-30T01:03:31Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
