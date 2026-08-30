@@ -233,9 +233,9 @@ test.describe('client:movement', () => {
     expect(adaX).toBeGreaterThan(TILE) // she left the landing
     expect(adaX).toBeLessThan(5 * TILE) // ~500 ms of walking
 
-    // Buzzer (30 s test shift, AD-004 seam): view returns to lobby; ada keeps
-    // floor1.
-    for (const page of pages) await page.waitForSelector('#lobby-view', { timeout: 45_000 })
+    // Buzzer (30 s test shift, AD-004 seam): the results view covers the
+    // world (cycle 2.9) — ada keeps floor1 beneath it.
+    for (const page of pages) await page.waitForSelector('#results-view', { timeout: 45_000 })
 
     // Post-buzzer movement is no longer confined to the lobby (AD-015): ada
     // remains on floor1 and can keep walking there.

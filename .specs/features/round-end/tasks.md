@@ -198,7 +198,7 @@ T7 → T8
 
 ---
 
-### T6: Client — results view + recap + client:round_end
+### T6: Client — results view + recap + client:round_end ✅
 
 **What**: `resultsView.ts` (winner banner, traitor line, `#recap-list` timeline with roster names, roster, host start control), app render/syncScenes wiring, roundHud clock reads the resumed deadline, harness scenario `client:round_end` (zero-prep short round → buzzer → saboteur-win banner + saboteur name + recap rows on every page; host start begins a new round).
 **Where**: `apps/client/src/ui/resultsView.ts` (new), `apps/client/src/app.ts`, `apps/client/src/ui/roundHud.ts`, `apps/client/harness/roundEnd.spec.ts` (new)
@@ -213,12 +213,14 @@ T7 → T8
 
 **Done when**:
 
-- [ ] `client:round_end` passes: all four pages show the banner, the saboteur's roster name, and recap rows; host start control yields a fresh `round:started`
-- [ ] Unit: results view renders aborted state with no traitor line and no banner side (reducer-level covered in T3; DOM-level smoke here or via harness assertions)
-- [ ] `pnpm typecheck` + biome clean; `pnpm test:client` green including the new scenario
+- [x] `client:round_end` passes: all four pages show the banner, the saboteur's roster name, and recap rows; host start control yields a fresh `round:started`
+- [x] Unit: results view renders aborted state with no traitor line and no banner side (reducer-level covered in T3; DOM-level smoke here or via harness assertions)
+- [x] `pnpm typecheck` + biome clean; `pnpm test:client` green including the new scenario
 
 **Tests**: unit + e2e (harness)
 **Gate**: build
+
+**SPEC NOTE**: the buzzer→lobby assertions in `client:round_start` (LIGHT-13/14) and `client:movement` were amended to the results view — the cycle changes that behavior by design (REND-06); the host re-deals from results.
 
 **Commit**: `feat(client): show the winner banner, traitor reveal, and recap timeline at round end`
 

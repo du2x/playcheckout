@@ -454,6 +454,8 @@ export class TurnoverRoom extends Room {
     this.roundTick = 0
     this.rideJournal = []
     this.lastRiders.clear()
+    // Seed the cars' known floors so the first ride leg has a real `from`.
+    for (const car of this.movement.carFloors()) this.carFloor.set(car.car, car.floor)
     // Positions persist across start/buzzer (MOVE-07): the movement layer is
     // phase-free and simply keeps running.
     const playerIds = [...this.players.values()]

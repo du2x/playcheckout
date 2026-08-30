@@ -130,18 +130,20 @@ test.describe('client:round_start', () => {
     )
     await fourPlayerRound(pages)
 
-    // Buzzer at ~8 s (dom clock still counts a 300 s display shift — accepted,
-    // AD-004 trade-off): every page lands back in the lobby view.
+    // Buzzer (cycle 2.9): every page lands in the RESULTS view — zero preps
+    // means the coverage check fails and the saboteur wins with a traitor
+    // reveal (FR-21). The round HUD is gone with the round.
     for (const page of pages) {
-      await page.waitForSelector('#lobby-view', { timeout: 45_000 })
+      await page.waitForSelector('#results-view', { timeout: 45_000 })
       expect(await page.$('#round-hud')).toBeNull()
-      expect(await page.$('#role-card')).toBeNull()
+      expect(await page.textContent('#results-banner')).toBe('SABOTEUR WINS')
+      expect(await page.textContent('#results-traitor')).toMatch(/^The saboteur was /)
     }
 
-    // Host re-deals: fresh round view, clock reset, new own-role deal.
+    // Host re-deals from results: fresh round view, clock reset, new deal.
     await pages[0]?.click('#start-button')
     for (const page of pages) {
-      await page.waitForSelector('#round-hud', { timeout: 5000 })
+      await page.waitForSelector('#round-hud', { timeout: 10_000 })
       expect(await page.textContent('#clock')).toBe('05:00')
     }
     let secondSaboteurs = 0

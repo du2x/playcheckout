@@ -24,6 +24,7 @@ import { syncCarScreen } from './ui/carScreen'
 import { el } from './ui/dom'
 import { renderJoin } from './ui/joinView'
 import { renderLobby } from './ui/lobbyView'
+import { renderResults } from './ui/resultsView'
 import { renderRoundHud } from './ui/roundHud'
 
 /**
@@ -311,6 +312,9 @@ export class App {
         break
       case 'round':
         this.stopClock = renderRoundHud(this.root, this.state)
+        break
+      case 'results':
+        renderResults(this.root, this.state, { onStart: () => this.startRound() })
         break
       case 'lost':
         this.root.append(el('div', { id: 'lost-view' }, ['connection lost']))
