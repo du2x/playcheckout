@@ -46,6 +46,18 @@ const TILE_PX = 832 / 30 // hall width in px per tile
 const GROUND_Y = 430
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
 
+/**
+ * Spectator lanes (cycle 2.9, FR-20): the full-building overview stacks all
+ * four floors vertically. Live players render the single own-floor lane at
+ * GROUND_Y exactly as before — the spectator privilege never widens their view.
+ */
+const SPECTATOR_LANE_Y: Partial<Record<FloorId, number>> = {
+  floor3: 80,
+  floor2: 210,
+  floor1: 340,
+  lobby: 470,
+}
+
 /** In-car press keymap (ELR-06): browser event.code → floor pressed. */
 const IN_CAR_FLOOR_BY_CODE: Record<string, FloorId> = {
   Digit1: 'floor1',
@@ -145,8 +157,8 @@ export class WorldScene extends Phaser.Scene {
   private cardMarkers = new Map<string, HTMLElement>()
   private cueNodes = new Map<number, HTMLElement>()
   private audio: AudioContext | null = null
-  /** Static door frames (one per room segment) — phase-free, visible from join. */
-  private doorNodes = new Map<RoomIndex, HTMLElement>()
+  /** Static door frames (one per room segment per guest floor) — phase-free. */
+  private doorNodes = new Map<string, HTMLElement>()
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
@@ -157,6 +169,14 @@ export class WorldScene extends Phaser.Scene {
    * spectator overview (and the harness) read it; live clients never receive
    * the message at all ('self' to the fired session). */
   spectatorSnapshot: SpectatorSnapshot | null = null
+  /** FR-20 spectator mode: the whole building renders as stacked lanes. */
+  private spectator = false
+  /** Current room states known to this client — own interior via room:observed,
+   * the whole building via the spectator baseline (door tints). */
+  private roomStates = new Map<string, RoomState>()
+  private hallLines: Phaser.GameObjects.Graphics | null = null
+  /** Roster names for the reconnection re-add (unknown-id player:moved). */
+  private rosterNames = new Map<string, string>()
 
   constructor() {
     super('Round')
@@ -184,13 +204,14 @@ export class WorldScene extends Phaser.Scene {
     this.buildEvidenceLayer()
     this.buildDoorsLayer()
 
-    // Hall line (Graphics — deliberately not a Rectangle/Text: harness contract).
-    this.add
-      .graphics()
-      .lineStyle(2, 0x556677, 1)
-      .lineBetween(0, GROUND_Y + 66, 832, GROUND_Y + 66)
+    // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
+    // contract). One lane live; one per floor for the spectator overview.
+    this.drawHallLines()
 
-    for (const player of data.players) this.addPlayerDisplay(player.id, player.name)
+    for (const player of data.players) {
+      this.rosterNames.set(player.id, player.name)
+      this.addPlayerDisplay(player.id, player.name)
+    }
 
     // One Ellipse per elevator car at its landing x (never a Rectangle: harness
     // counts player rectangles; and never an occupant list (privacy rule).
@@ -203,7 +224,7 @@ export class WorldScene extends Phaser.Scene {
       this,
       this.cars,
       (car) => this.carPx(car),
-      () => GROUND_Y + 30,
+      (car) => this.carLaneY(car),
     )
 
     const keyboard = this.input.keyboard
@@ -248,17 +269,100 @@ export class WorldScene extends Phaser.Scene {
     this.riderSession = session
   }
 
-  /** The self-fired flag arrives with every accusation-session change. */
+  /** The self-fired flag arrives with every accusation-session change; its
+   * flip toggles the FR-20 spectator overview (all-floor lanes). */
   setAccuseSession(session: AccuseSession): void {
+    const wasSpectator = this.spectator
     this.selfFired = session.selfFired
+    this.spectator = session.selfFired
+    if (wasSpectator !== this.spectator) this.applyViewMode()
+  }
+
+  /** Lane y for a floor: the own-floor lane in live play, stacked lanes as a spectator. */
+  private laneY(floor: string): number {
+    if (!this.spectator) return GROUND_Y
+    return SPECTATOR_LANE_Y[floor as FloorId] ?? GROUND_Y
+  }
+
+  /** y of a car's center on its floor's lane (the presenter draws doors here). */
+  private carLaneY(car: 1 | 2): number {
+    return this.laneY(this.cars.get(car)?.floor ?? 'lobby') + 30
+  }
+
+  /** Switch between the live single-floor view and the spectator overview. */
+  private applyViewMode(): void {
+    this.drawHallLines()
+    this.syncDoors()
+    if (this.spectator) this.seedFromSpectatorSnapshot()
+  }
+
+  /** Redraw the hall line(s): one lane live, one per floor as a spectator. */
+  private drawHallLines(): void {
+    if (this.hallLines === null) {
+      this.hallLines = this.add.graphics()
+      this.hallLines.lineStyle(2, 0x556677, 1)
+    }
+    this.hallLines.clear()
+    this.hallLines.lineStyle(2, 0x556677, 1)
+    if (!this.spectator) {
+      this.hallLines.lineBetween(0, GROUND_Y + 66, 832, GROUND_Y + 66)
+      return
+    }
+    for (const floor of ['lobby', 'floor1', 'floor2', 'floor3'] as const) {
+      const y = SPECTATOR_LANE_Y[floor] ?? GROUND_Y
+      this.hallLines.lineBetween(0, y + 66, 832, y + 66)
+    }
+  }
+
+  /** Seed the full-world view from the FR-20 baseline (fired client only). */
+  private seedFromSpectatorSnapshot(): void {
+    const snapshot = this.spectatorSnapshot
+    if (snapshot === null) return
+    for (const p of snapshot.players) {
+      const display = this.players.get(p.playerId)
+      if (display === undefined) continue
+      display.x = p.x
+      display.floor = p.floor
+      display.targetX = null
+      display.left = false
+    }
+    for (const c of snapshot.cars) {
+      const car = this.cars.get(c.car)
+      if (car !== undefined) car.floor = c.floor
+    }
+    this.roomStates.clear()
+    for (const room of snapshot.rooms) {
+      this.roomStates.set(`${room.floor}:${room.room}`, room.state)
+    }
+    // All carded rooms of every floor become card markers (FR-20: door cards
+    // are floor-public, and the spectator sees every floor).
+    let cards = this.evidence
+    for (const floorRow of snapshot.cardedRooms) {
+      for (const room of floorRow.rooms) {
+        cards = reduceEvidence(cards, { type: 'carded', floor: floorRow.floor, room }, Date.now())
+      }
+    }
+    this.evidence = cards
+    this.syncCardMarkers()
+    this.updatePanel()
   }
 
   /** Movement-kind ViewActions are routed here by the App (render state). */
   applyAction(action: MovementAction): void {
     switch (action.type) {
       case 'player-moved': {
-        const display = this.players.get(action.playerId)
-        if (display === undefined) return
+        let display = this.players.get(action.playerId)
+        if (display === undefined) {
+          // Reconnection re-announce (FR-25): one player:moved re-creates the
+          // display the player:left removed. Name from the roster, raw id
+          // fallback (LIGHT-12); the roster sync corrects it if needed.
+          this.addPlayerDisplay(
+            action.playerId,
+            this.rosterNames.get(action.playerId) ?? action.playerId,
+          )
+          display = this.players.get(action.playerId)
+          if (display === undefined) return
+        }
         display.floor = action.floor
         display.x = action.x
         display.left = false
@@ -318,11 +422,21 @@ export class WorldScene extends Phaser.Scene {
       case 'room-prepped':
       case 'room-trashed':
       case 'room-settled': {
-        // Only the room we are inside exists in our view (FR-10); a matching
-        // transition updates it, everything else is not for us.
+        // The state map feeds the door tints (whole building for a spectator,
+        // FR-20 baseline + over-delivered transitions).
+        this.roomStates.set(
+          `${action.floor}:${action.room}`,
+          action.type === 'room-prepped'
+            ? 'prepped'
+            : action.type === 'room-trashed'
+              ? 'trashed'
+              : 'settled',
+        )
+        // Live play: only the room we are inside exists in our view (FR-10); a
+        // matching transition updates it, everything else is not for us.
         const interior = this.interior
-        if (interior === undefined || interior === null) return
-        if (interior.floor !== action.floor || interior.room !== action.room) return
+        if (interior === undefined || interior === null) break
+        if (interior.floor !== action.floor || interior.room !== action.room) break
         interior.state =
           action.type === 'room-prepped'
             ? 'prepped'
@@ -368,11 +482,13 @@ export class WorldScene extends Phaser.Scene {
         // a firing; the session stays connected as a spectator, 2.9 scope).
         this.removePlayerDisplay(action.playerId)
         break
-      case 'spectator-snapshot':
+      case 'spectator-snapshot': {
         // FR-20 baseline: kept for the spectator overview (own client only —
         // the server routes it 'self' to the fired session).
         this.spectatorSnapshot = action.snapshot
+        if (this.spectator) this.seedFromSpectatorSnapshot()
         break
+      }
     }
   }
 
@@ -395,6 +511,7 @@ export class WorldScene extends Phaser.Scene {
       this.players.delete(id)
     }
     for (const player of players) {
+      this.rosterNames.set(player.id, player.name)
       if (this.players.has(player.id)) continue
       // Fresh joiners stand at the lobby center spawn until they move.
       this.addPlayerDisplay(player.id, player.name)
@@ -524,10 +641,11 @@ export class WorldScene extends Phaser.Scene {
 
   /**
    * Static door frames (client:doors_pre_round): one framed opening per room
-   * segment (AD-010 geometry), rendered from the moment the world mounts —
-   * phase-free, so pre-round free-roam (AD-015) shows room boundaries. DOM like
-   * every non-contract visual; the grand lobby floor has no rooms, so the
-   * frames hide there and on every other non-guest view floor.
+   * segment (AD-010 geometry) per guest floor, rendered from the moment the
+   * world mounts — phase-free, so pre-round free-roam (AD-015) shows room
+   * boundaries. Live play shows the own floor's frames only (AD-008 view);
+   * the spectator overview shows every floor's lane (FR-20). DOM like every
+   * non-contract visual; the grand lobby floor has no rooms.
    */
   private buildDoorsLayer(): void {
     document.querySelector('#doors-layer')?.remove()
@@ -538,39 +656,50 @@ export class WorldScene extends Phaser.Scene {
     layer.style.position = 'absolute'
     layer.style.inset = '0'
     layer.style.pointerEvents = 'none'
-    for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
-      const startPx = (roomSegmentStartMilli(room as RoomIndex) / 1000) * TILE_PX
-      const endPx = (roomSegmentEndMilli(room as RoomIndex) / 1000) * TILE_PX
-      const door = document.createElement('div')
-      door.dataset.doorRoom = String(room)
-      door.style.position = 'absolute'
-      door.style.left = `${startPx + 4}px`
-      door.style.top = `${GROUND_Y - 72}px`
-      door.style.width = `${endPx - startPx - 8}px`
-      door.style.height = '72px'
-      door.style.border = '2px solid #667788'
-      door.style.borderBottom = 'none'
-      door.style.boxSizing = 'border-box'
-      door.style.visibility = 'hidden'
-      door.textContent = String(room)
-      door.style.textAlign = 'center'
-      door.style.fontSize = '11px'
-      door.style.color = '#8899aa'
-      layer.appendChild(door)
-      this.doorNodes.set(room as RoomIndex, door)
+    for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
+      for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
+        const startPx = (roomSegmentStartMilli(room as RoomIndex) / 1000) * TILE_PX
+        const endPx = (roomSegmentEndMilli(room as RoomIndex) / 1000) * TILE_PX
+        const door = document.createElement('div')
+        door.dataset.doorRoom = String(room)
+        door.dataset.doorFloor = floor
+        door.style.position = 'absolute'
+        door.style.left = `${startPx + 4}px`
+        door.style.width = `${endPx - startPx - 8}px`
+        door.style.height = '72px'
+        door.style.border = '2px solid #667788'
+        door.style.borderBottom = 'none'
+        door.style.boxSizing = 'border-box'
+        door.style.visibility = 'hidden'
+        door.textContent = String(room)
+        door.style.textAlign = 'center'
+        door.style.fontSize = '11px'
+        door.style.color = '#8899aa'
+        layer.appendChild(door)
+        this.doorNodes.set(`${floor}:${room}`, door)
+      }
     }
     gameEl.appendChild(layer)
   }
 
-  /** Door frames follow the own view floor (guest floors only, phase-free). */
+  /**
+   * Door frames follow the own view floor (live play) — as a spectator, every
+   * guest floor's frames show, tinted by the known room state (FR-20).
+   */
   private syncDoors(): void {
-    const visible = this.viewFloor !== 'lobby'
-    for (const door of this.doorNodes.values()) {
+    for (const [key, door] of this.doorNodes) {
+      const floor = String(key).split(':')[0] ?? ''
+      const visible = this.spectator || floor === this.viewFloor
       door.style.visibility = visible ? 'visible' : 'hidden'
+      door.style.top = `${this.laneY(floor) - 72}px`
+      const state = this.roomStates.get(String(key))
+      door.style.borderColor =
+        state === 'prepped' ? '#7ac074' : state === 'trashed' ? '#d06a5a' : '#667788'
     }
   }
 
-  /** Create-on-demand card glyph per carded room; visible on the own floor only. */
+  /** Create-on-demand card glyph per carded room; own floor live, all floors
+   * as a spectator (the lane offset follows the card's floor). */
   private syncCardMarkers(): void {
     const layer = this.evidenceLayer
     if (layer === null) return
@@ -582,7 +711,6 @@ export class WorldScene extends Phaser.Scene {
       marker.textContent = 'CARD'
       marker.style.position = 'absolute'
       marker.style.left = `${this.roomCenterPx(room) - 24}px`
-      marker.style.top = `${GROUND_Y - 130}px`
       marker.style.width = '48px'
       marker.style.padding = '2px 0'
       marker.style.textAlign = 'center'
@@ -615,7 +743,6 @@ export class WorldScene extends Phaser.Scene {
       node.textContent = cue.kind === 'rustle' ? 'rustle' : 'door'
       node.style.position = 'absolute'
       node.style.left = `${this.roomCenterPx(cue.room) - 30}px`
-      node.style.top = cue.kind === 'rustle' ? `${GROUND_Y - 100}px` : `${GROUND_Y - 160}px`
       node.style.width = '60px'
       node.style.textAlign = 'center'
       node.style.fontSize = '12px'
@@ -766,20 +893,35 @@ export class WorldScene extends Phaser.Scene {
       // Riders are on NO floor (AD-009): the own rectangle never renders while
       // riding — the boarding events are routed while the boarder's view is a
       // rider's (no floor stream), so the chip is the in-car view instead.
+      // Live play shows the own floor only (AD-008); the spectator overview
+      // shows every live player on their floor's lane (FR-20).
+      const laneY = this.laneY(display.floor)
       const visible =
-        display.floor === this.viewFloor &&
         !display.left &&
-        !(id === this.ownId && this.riderSession !== null)
+        !(id === this.ownId && this.riderSession !== null) &&
+        (this.spectator || display.floor === this.viewFloor)
       display.rect.setVisible(visible)
       display.label.setVisible(visible)
       display.rect.x = display.x * TILE_PX
       display.label.x = display.x * TILE_PX
+      display.rect.y = laneY
+      display.label.y = laneY + 48
+    }
+    for (const car of this.cars.values()) {
+      car.ellipse.y = this.laneY(car.floor) + 30
     }
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
-    // Card glyph visibility follows the own floor; cue flashes expire here.
+    // Card glyph position/visibility follow the floor lanes; cues expire here.
     this.syncCardMarkers()
     for (const [key, marker] of this.cardMarkers) {
-      marker.style.visibility = key.split(':')[0] === this.viewFloor ? 'visible' : 'hidden'
+      const floor = key.split(':')[0] ?? ''
+      marker.style.top = `${this.laneY(floor) - 130}px`
+      marker.style.visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
+    }
+    for (const [cueId, node] of this.cueNodes) {
+      const cue = this.evidence.cues.find((c) => c.id === cueId)
+      if (cue === undefined) continue
+      node.style.top = `${this.laneY(cue.floor) - (cue.kind === 'rustle' ? 100 : 160)}px`
     }
     this.syncCues()
     this.syncDoors()

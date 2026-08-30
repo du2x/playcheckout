@@ -226,7 +226,7 @@ T7 → T8
 
 ---
 
-### T7: Client — spectator overview + client:spectator_view
+### T7: Client — spectator overview + client:spectator_view ✅
 
 **What**: WorldScene spectator mode on `selfFired`: four stacked floor lanes (lobby + 3), all players' rectangles at lane positions, door frames/cards/interior tints on every guest lane, car ellipses per lane; `spectator-snapshot` seeds the full-building baseline; `player-moved` re-adds displays for unknown ids; harness scenario `client:spectator_view` (wrong accusation fires the accuser → overview visible on the fired page, live page unchanged).
 **Where**: `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/spectator.spec.ts` (new)
@@ -241,12 +241,14 @@ T7 → T8
 
 **Done when**:
 
-- [ ] `client:spectator_view` passes: fired page renders rectangles on multiple floor lanes (a player on another floor visible), all door lanes present; live page's scene children remain exactly one rectangle per player on the own floor; both pages still receive firing toasts
-- [ ] Scene-children contract holds in spectator mode (one labeled Rectangle per player, one Ellipse per car — lanes are Graphics/DOM)
-- [ ] `pnpm typecheck` + biome clean; `pnpm test:client` green
+- [x] `client:spectator_view` passes: fired page renders rectangles on multiple floor lanes (a player on another floor visible), all door lanes present; live page's scene children remain exactly one rectangle per player on the own floor; both pages still receive firing toasts
+- [x] Scene-children contract holds in spectator mode (one labeled Rectangle per player, one Ellipse per car — lanes are Graphics/DOM)
+- [x] `pnpm typecheck` + biome clean; `pnpm test:client` green
 
 **Tests**: e2e (harness)
 **Gate**: build
+
+**SPEC NOTE**: `client:doors_pre_round` was amended — the doors layer now builds 24 frames (8 rooms × 3 floors, the per-floor lane data for FR-20); live visibility per floor is unchanged (AD-008), verified by the amended assertions.
 
 **Commit**: `feat(client): give fired players the full-building spectator overview`
 

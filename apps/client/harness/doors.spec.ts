@@ -32,14 +32,15 @@ test.describe('client:doors_pre_round', () => {
     const page = await browser.newContext().then((c) => c.newPage())
     await createRoom(page, 'ada')
 
-    // Lobby view: the layer exists with all 8 frames but every one is hidden
-    // (the grand lobby floor has no rooms).
+    // Lobby view: the layer exists with all 24 frames (8 rooms × 3 guest
+    // floors, cycle 2.9's per-floor lanes) but every one is hidden (the grand
+    // lobby floor has no rooms, and the live view shows the own floor only).
     await page.waitForSelector('#doors-layer')
     expect((await visibleDoorRooms(page)).length).toBe(0)
     const frameCount = await page.evaluate(
       () => document.querySelectorAll('#doors-layer [data-door-room]').length,
     )
-    expect(frameCount).toBe(8)
+    expect(frameCount).toBe(24)
 
     // Pre-round ride west (no host start — the world is phase-free), then exit
     // onto floor1: the own floor stream flips the view and the frames show.
@@ -59,7 +60,9 @@ test.describe('client:doors_pre_round', () => {
     await page.keyboard.up('ArrowRight')
     await page.waitForFunction(
       () => {
-        const doors = document.querySelectorAll('#doors-layer [data-door-room]')
+        const doors = document.querySelectorAll(
+          '#doors-layer [data-door-floor="floor1"][data-door-room]',
+        )
         return (
           doors.length === 8 &&
           [...doors].every((el) => getComputedStyle(el as HTMLElement).visibility === 'visible')
