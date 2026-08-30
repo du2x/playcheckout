@@ -123,9 +123,9 @@ T7 → T8
 
 ---
 
-### T3: Client state — results view, resumed clock, new actions
+### T3: Client state — results view, resumed clock, new actions ✅
 
-**What**: `ViewAction` grows `round-ended`/`round-recap`/`round-resumed`/`spectator-snapshot`; `ACTION_ROUTES` rows (spectator-snapshot → scene, rest → view); `MAPPERS` keys; reducer: `results` view state (winner/reason/saboteurId/entries), `round-resumed` (view round + `roundEndsAtMs` from remainingTicks), `clockRemainingMs` prefers the resumed deadline, buzzer keeps its transient behavior.
+**What**: `ViewAction` grows `round-ended`/`round-recap`/`round-resumed`/`spectator-snapshot`; `ACTION_ROUTES` rows (spectator-snapshot → scene, rest → view); `MAPPERS` keys; reducer: `results` view state (winner/reason/saboteurId/entries), `round-resumed` (view round + `roundEndsAtMs` from remainingTicks), `clockRemainingMs` prefers the resumed deadline, buzzer keeps its transient behavior. (The compile-forced plumbing half landed with T1; this task is the reducer behavior + tests.)
 **Where**: `apps/client/src/state.ts`, `apps/client/src/state.test.ts`, `apps/client/src/net/mappers.ts`, `apps/client/src/net/mappers.test.ts`
 **Depends on**: T1
 **Reuses**: reducer switch + `ACTION_ROUTES` satisfies table (state.ts), mapper table pattern
@@ -138,9 +138,9 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Reducer unit tests: round-ended → results (winner + saboteurId stored), round-recap merges entries, round-resumed → round view with honest clock override, aborted payload yields results with saboteurId null
-- [ ] Mapper tests: the four payloads map 1:1; `satisfies Record<RegistryKey, …>` exhaustiveness compiles
-- [ ] `pnpm typecheck` + biome clean; client unit suite green
+- [x] Reducer unit tests: round-ended → results (winner + saboteurId stored), round-recap merges entries, round-resumed → round view with honest clock override, aborted payload yields results with saboteurId null
+- [x] Mapper tests: the four payloads map 1:1; `satisfies Record<RegistryKey, …>` exhaustiveness compiles
+- [x] `pnpm typecheck` + biome clean; client unit suite green
 
 **Tests**: unit (reducer + mappers)
 **Gate**: quick

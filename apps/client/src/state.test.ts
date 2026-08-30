@@ -161,3 +161,94 @@ describe('first-light view reducer', () => {
     expect(roundPlayers(['p1'], null)).toEqual([{ id: 'p1', name: 'p1' }])
   })
 })
+
+// Spec REND-06..07 (cycle 2.9): round-end verdict, recap, and the resumed seat.
+describe('round-end reducer', () => {
+  it('enters the results view with the winner banner data on round:ended (REND-06)', () => {
+    const s = reduce(inRound(), {
+      type: 'round-ended',
+      winner: 'staff',
+      reason: 'saboteur-fired',
+      saboteurId: 'p2',
+    })
+    expect(s.view).toBe('results')
+    expect(s.results).toEqual({
+      winner: 'staff',
+      reason: 'saboteur-fired',
+      saboteurId: 'p2',
+      entries: [],
+    })
+  })
+
+  it('stores an aborted verdict with saboteurId null — no traitor reveal (REND-07)', () => {
+    const s = reduce(inRound(), {
+      type: 'round-ended',
+      winner: 'aborted',
+      reason: 'saboteur-disconnected',
+      saboteurId: null,
+    })
+    expect(s.view).toBe('results')
+    expect(s.results?.winner).toBe('aborted')
+    expect(s.results?.saboteurId).toBeNull()
+  })
+
+  it('merges recap entries into the stored result (REND-08)', () => {
+    const ended = reduce(inRound(), {
+      type: 'round-ended',
+      winner: 'saboteur',
+      reason: 'coverage-failed',
+      saboteurId: 'p2',
+    })
+    const entries = [
+      { kind: 'crime' as const, tick: 40, floor: 'floor1' as const, room: 2 as const, fresh: true },
+    ]
+    const s = reduce(ended, { type: 'round-recap', entries })
+    expect(s.results?.entries).toEqual(entries)
+    // A recap with no stored result is absorbed without creating one.
+    const stray = reduce(joinedLobby(), { type: 'round-recap', entries })
+    expect(stray.results).toBeNull()
+    expect(stray.view).toBe('lobby')
+  })
+
+  it('restores the round view from round:resumed with the honest stamped clock (REND-18)', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000_000)
+      const lost = reduce(inRound(), { type: 'connection-lost' })
+      const s = reduce(lost, {
+        type: 'round-resumed',
+        remainingTicks: 100,
+        playerIds: ['p1', 'p2'],
+        ownFired: false,
+      })
+      expect(s.view).toBe('round')
+      expect(s.roundPlayerIds).toEqual(['p1', 'p2'])
+      // Deadline = receipt + remainingTicks × 50 ms — server truth, not the
+      // full-shift receipt math.
+      expect(s.roundEndsAtMs).toBe(1_000_000 + 100 * 50)
+      expect(clockRemainingMs(s, 1_000_000 + 40 * 50)).toBe(60 * 50)
+      expect(clockRemainingMs(s, 1_000_000 + 200 * 50)).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the buzzer transient: lobby flip is overridden by the verdict in the same flush', () => {
+    let s = inRound()
+    // Server flush order: round:buzzer first, then round:ended.
+    s = reduce(s, { type: 'buzzer' })
+    expect(s.view).toBe('lobby')
+    s = reduce(s, {
+      type: 'round-ended',
+      winner: 'saboteur',
+      reason: 'coverage-failed',
+      saboteurId: 'p2',
+    })
+    expect(s.view).toBe('results')
+    // A fresh deal clears the previous result and the resumed clock.
+    s = reduce(s, { type: 'round-started', playerIds: ['p1', 'p2'] })
+    expect(s.view).toBe('round')
+    expect(s.results).toBeNull()
+    expect(s.roundEndsAtMs).toBeNull()
+  })
+})
