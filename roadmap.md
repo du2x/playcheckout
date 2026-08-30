@@ -46,20 +46,22 @@ Order is dependency-driven: each cycle's sim state machine extends the previous 
 | 2.7 | `evidence` | Door cards (permanent, hallway-readable, no timestamp), freshness tiers, rustle 3 tiles through walls, door-open visible+audible from hallway (FR-10–FR-13) | `sim:door_card`, `sim:rustle`, `sim:door_open_cue` |
 | 2.8 | `justice` | Walk-in conviction, hidden grace, name-only firing toasts, accusation range 2 tiles same floor (FR-14–FR-19) | `sim:walkin_conviction`, `sim:accuse`, `sim:firing_toast` |
 | 2.9 | `round-end` | Win checks + results + recap timeline (FR-20–FR-22); disconnect/abort handling, 60s reconnection with role restore (FR-25) | `sim:win_checks`, `server:reconnect` |
-| 2.10 | `telemetry` | JSONL telemetry with 1/s coverage sampling (FR-23); **exit-criteria bot sims** (a) staff vs. AFK saboteur ≥80% pre-buzzer, (b) last-60s blitz defeats spread bots at plausible rates | `sim:telemetry`, `sim:exit_a`, `sim:exit_b` |
+| 2.10 | `art-swap` | Gray-box → production art swap (AD-020 visual contract): player sprites + walk cycle, door sprites + doorway interiors, elevator car sprites + panel flash — rendering-only, zero protocol/sim/tuning changes; rewrites the harness count contract (Rectangle/Ellipse → texture filters). Interiors render only from `room:observed` or the FR-20 spectator baseline | `client:art_players`, `client:art_doors`, `client:art_elevator` |
+| 2.11 | `telemetry` | JSONL telemetry with 1/s coverage sampling (FR-23); **exit-criteria bot sims** (a) staff vs. AFK saboteur ≥80% pre-buzzer, (b) last-60s blitz defeats spread bots at plausible rates | `sim:telemetry`, `sim:exit_a`, `sim:exit_b` |
 
 Cycle rules:
 - Visibility-sensitive content (roles, grace state, interiors) never enters a
   client-bound payload — checked per cycle at design review (turnover-protocol skill).
 - Every cycle ends with gates 1–3 green + STATE.md handoff; gate ladder per AGENTS.md.
-- Cycle 2.10 is the phase exit: both bot sims must pass before Phase 3 starts.
+- Cycle 2.11 is the phase exit: both bot sims must pass before Phase 3 starts.
 
 Build the full round as a headless state machine in `packages/sim` — pure TypeScript,
 inputs + time in / events out, 20 Hz tick — before any rendering, testable via scripted
 bot inputs in vitest. Colyseus stays a thin transport shell; nothing visibility-sensitive
 ever uses Colyseus state sync (message-only protocol). Full FR mapping lives in each
-cycle's spec (items 1–8 of the original plan → cycles 2.1–2.10 above; 2.3
-`protocol-registry` is an inserted hardening cycle, AD-006).
+cycle's spec (items 1–8 of the original plan → cycles 2.1–2.11 above; 2.3
+`protocol-registry` is an inserted hardening cycle, AD-006; 2.10 `art-swap` is an
+inserted rendering cycle, AD-021).
 
 ## Phase 3 — Gray-box client
 
