@@ -227,7 +227,7 @@ confirm fires and both pages see the name-only toast while the round continues.
 | JUST-12 | P3: Firing feedback | Execute | Done |
 | JUST-13 | P3: Firing feedback | Execute | Done |
 | JUST-14 | P3: Firing feedback | Execute | Done |
-| JUST-15 | P3: Firing feedback | Execute | Pending |
+| JUST-15 | P3: Firing feedback | Execute | Done |
 | JUST-16 | P4: Accusation UI | Execute | Pending |
 | JUST-17 | P4: Accusation UI | Execute | Pending |
 | JUST-18 | P4: Accusation UI | Execute | Pending |

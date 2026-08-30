@@ -1,5 +1,12 @@
 import type { FloorId, GuestFloorId, RoomIndex } from '@turnover/shared'
 import type Phaser from 'phaser'
+import {
+  ACCUSE_TOAST_MS,
+  type AccuseSession,
+  initialAccuseSession,
+  pruneToasts,
+  reduceAccuse,
+} from './accuseSession'
 import { Connection } from './net/connection'
 import { initialRiderSession, type RiderUpdate, reduceRider } from './riderSession'
 import type { WorldScene } from './scenes/WorldScene'
@@ -12,6 +19,7 @@ import {
   type ViewName,
   type ViewState,
 } from './state'
+import { syncAccuseHud } from './ui/accuseHud'
 import { syncCarScreen } from './ui/carScreen'
 import { el } from './ui/dom'
 import { renderJoin } from './ui/joinView'
@@ -40,6 +48,9 @@ export class App {
    * in-car state, reduced purely in riderSession.ts — the chip renders from it
    * and the world scene receives it for its keymap gate + rider visibility. */
   private rider: RiderUpdate = initialRiderSession()
+  /** The accusation session (cycle 2.8, FR-18): menu, firing toasts, and the
+   * self-fired gate — reduced purely in accuseSession.ts. */
+  private accuse: AccuseSession = initialAccuseSession()
 
   constructor(
     private readonly root: HTMLElement,
@@ -103,6 +114,14 @@ export class App {
           if (this.rider !== riderBefore) {
             this.world()?.setRiderSession(this.rider)
             this.updateRiderChip()
+          }
+          // Justice facts reduce in lockstep (one state home, accuseSession.ts):
+          // firing toasts, the self-fired gate, and the hold-E menu.
+          const accuseBefore = this.accuse
+          this.accuse = reduceAccuse(this.accuse, action, ownId, Date.now())
+          if (this.accuse !== accuseBefore) {
+            this.world()?.setAccuseSession(this.accuse)
+            this.syncAccuseHud()
           }
           const route = ACTION_ROUTES[action.type]
           if (route === 'scene') {
@@ -187,6 +206,22 @@ export class App {
   }
 
   /**
+   * Surgical accuse-hud write (cycle 2.8, FR-18): one toast per firing —
+   * "X was fired", name-only because the payload is — and the fired banner.
+   * A timer re-renders when the oldest toast expires so it disappears without
+   * waiting for the next action.
+   */
+  private syncAccuseHud(): void {
+    this.accuse = pruneToasts(this.accuse, Date.now())
+    const names = new Map(this.state.snapshot?.roster.map((e) => [e.id, e.name] as const) ?? [])
+    syncAccuseHud(this.accuse, (id) => names.get(id) ?? id)
+    const oldest = this.accuse.toasts[0]
+    if (oldest !== undefined) {
+      window.setTimeout(() => this.syncAccuseHud(), ACCUSE_TOAST_MS + 100)
+    }
+  }
+
+  /**
    * Surgical chip write (AD-013): occupant names, the own car's queue as four
    * lit floor indicators (lit = queued or being served), and the last-press
    * line — visible only while the local player rides. The `#elevator-panel`
@@ -252,6 +287,8 @@ export class App {
         this.root.append(el('div', { id: 'lost-view' }, ['connection lost']))
         break
     }
+    // View re-renders rebuild the accuse HUD too: restore toasts/banner.
+    this.syncAccuseHud()
     // View re-renders rebuild the chip DOM: restore the rider-exclusive state.
     this.updateRiderChip()
   }

@@ -11,6 +11,7 @@ import {
   TUNING,
 } from '@turnover/shared'
 import Phaser from 'phaser'
+import type { AccuseSession } from '../accuseSession'
 import {
   dropCues,
   type EvidenceSession,
@@ -95,7 +96,7 @@ type MovementAction =
   | { type: 'room-rustle'; floor: string; room: number }
   | { type: 'room-entered'; playerId: string; floor: string; room: number }
   // Justice (cycle 2.8): name-only firing — the fired player's rectangle is
-  // removed and the accusation session renders the toast (accuseSession, T5).
+  // removed; the toast/banner live in the App's accuse HUD.
   | { type: 'player-fired'; playerId: string }
 
 interface PlayerDisplay {
@@ -140,6 +141,9 @@ export class WorldScene extends Phaser.Scene {
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
+  /** The App-owned accusation session (accuseSession.ts): the self-fired flag
+   * gates every live-play intent — a fired player watches quietly (JUST-04). */
+  private selfFired = false
 
   constructor() {
     super('Round')
@@ -213,6 +217,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** Send work:start when the own predicted position is inside a segment. */
   private startWorkHere(): void {
+    if (this.selfFired) return
     const own = this.players.get(this.ownId)
     if (own === undefined) return
     const floor = own.floor as FloorId
@@ -225,6 +230,11 @@ export class WorldScene extends Phaser.Scene {
   /** The App pushes the reduced rider session whenever it changes. */
   setRiderSession(session: RiderUpdate): void {
     this.riderSession = session
+  }
+
+  /** The self-fired flag arrives with every accusation-session change. */
+  setAccuseSession(session: AccuseSession): void {
+    this.selfFired = session.selfFired
   }
 
   /** Movement-kind ViewActions are routed here by the App (render state). */
@@ -337,11 +347,21 @@ export class WorldScene extends Phaser.Scene {
         this.beep(180)
         break
       case 'player-fired':
-        // Rectangle removal + fired state render with the accusation session
-        // slice (JUST-04/15, T5) — the protocol row lands first so the
-        // exhaustive dispatch compiles.
+        // JUST-04: the fired player's rectangle disappears everywhere — the
+        // fired event itself is the removal signal (no player:left exists for
+        // a firing; the session stays connected as a spectator, 2.9 scope).
+        this.removePlayerDisplay(action.playerId)
         break
     }
+  }
+
+  /** Destroy one player's rectangle + label (justice removal + churn reuse). */
+  private removePlayerDisplay(playerId: string): void {
+    const display = this.players.get(playerId)
+    if (display === undefined) return
+    display.rect.destroy()
+    display.label.destroy()
+    this.players.delete(playerId)
   }
 
   /** Track roster growth/shrink from lobby snapshots (players join over time). */
@@ -389,12 +409,14 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private beginMove(dir: 'left' | 'right'): void {
+    if (this.selfFired) return
     if (this.ownMoving === dir) return
     this.ownMoving = dir
     this.sendMoveStart(dir)
   }
 
   private endMove(dir: 'left' | 'right'): void {
+    if (this.selfFired) return
     if (this.ownMoving !== dir) return
     this.ownMoving = null
     this.sendMoveStop()
@@ -402,11 +424,13 @@ export class WorldScene extends Phaser.Scene {
 
   /** Destination-free elevator call (AD-014): the pickup floor is implicit. */
   private callElevator(): void {
+    if (this.selfFired) return
     this.sendElevatorCall()
   }
 
   /** In-car floor press — sent only while the local player rides a car. */
   private pressFloor(floor: FloorId): void {
+    if (this.selfFired) return
     if (this.riderSession === null) return
     this.sendElevatorPress(floor)
   }

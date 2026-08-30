@@ -179,7 +179,7 @@ T6 → T7
 
 ---
 
-### T5: Client — accusation session reducer, toast, rectangle removal
+### T5: Client — accusation session reducer, toast, rectangle removal ✅
 
 **What**: Create `apps/client/src/accuseSession.ts` (pure reducer: menu target, toasts, self-fired), register the `player:fired` mapper in the exhaustive client dispatch, remove the fired player's rectangle in WorldScene, and render the name-only toast + self-fired state.
 **Where**: `apps/client/src/accuseSession.ts` (new), `apps/client/src/accuseSession.test.ts` (new), `apps/client/src/app.ts`, `apps/client/src/scenes/WorldScene.ts`

@@ -1,4 +1,5 @@
 import type { LobbySnapshot } from '@turnover/shared'
+import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
 
@@ -71,6 +72,9 @@ export function renderLobby(
       ]),
       // In-car screen (AD-013): rides are possible pre-round (AD-011).
       buildCarScreen(),
+      // Accusation HUD (cycle 2.8): firing toasts + fired banner ride in both
+      // views so a firing is visible wherever the player is looking.
+      buildAccuseHud(),
     ]),
   )
 }

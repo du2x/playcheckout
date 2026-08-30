@@ -116,6 +116,11 @@ export class Connection {
     this.room.send('work:start', { type: 'work:start', floor, room })
   }
 
+  /** Accuse a nearby player (FR-17, cycle 2.8) — the server validates all of it. */
+  sendAccuse(targetId: string): void {
+    this.room.send('accuse', { type: 'accuse', targetId })
+  }
+
   leave(): void {
     this.room.leave()
   }

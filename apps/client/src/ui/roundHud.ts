@@ -1,4 +1,5 @@
 import { clockRemainingMs, type ViewState } from '../state'
+import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
 
@@ -55,6 +56,8 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       // In-car screen (AD-013): floor buttons over the world while riding —
       // lit = queued or being served; synced by the App from the rider session.
       buildCarScreen(),
+      // Accusation HUD (cycle 2.8): firing toasts + fired banner.
+      buildAccuseHud(),
       // Work channels (cycle 2.5): the own progress bar (world scene drives
       // the fill) and the interior label of the room currently stood in.
       el('div', { id: 'work-progress', hidden: '' }, [el('span', { id: 'work-progress-fill' })]),
