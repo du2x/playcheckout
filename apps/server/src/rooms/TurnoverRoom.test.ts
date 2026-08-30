@@ -1798,3 +1798,80 @@ describe('server:justice', () => {
     }
   })
 })
+
+// STATE deferred notes (1)+(2), closed with cycle 2.8 (JUST-21): the PASS-gap
+// assertions the room-shell and first-light verifiers left open.
+describe('server:deferred_gaps', () => {
+  it('creates NO room for an unknown code — the code stays free (LOBBY-02, LIGHT-02)', async () => {
+    const before = TurnoverRoom.instances.length
+    await expect(newClient().joinById('ZZZZ', { name: 'ada' })).rejects.toThrow(/not found/i)
+    expect(TurnoverRoom.instances.length).toBe(before)
+    // A room created under a consumed code would answer this join — it must not.
+    await expect(newClient().joinById('ZZZZ', { name: 'bruno' })).rejects.toThrow(/not found/i)
+    expect(TurnoverRoom.instances.length).toBe(before)
+  })
+
+  it('keeps the roster byte-identical when a join is rejected on its name (LOBBY-05)', async () => {
+    const host = await createRoom('ada')
+    const hostSnaps = collect(host)
+    const guest = await newClient().joinById(host.roomId, { name: 'bruno' })
+    const two = await hostSnaps.nextWhere((s) => s.roster.length === 2)
+    const guestSnaps = collect(guest)
+    guestSnaps.stop() // nothing further should arrive on a rejected join
+
+    await expect(newClient().joinById(host.roomId, { name: 'bruno' })).rejects.toThrow(
+      /name taken/i,
+    )
+    await expect(newClient().joinById(host.roomId, { name: 'bruno' })).rejects.toThrow(
+      /name taken/i,
+    )
+    // No ghost entry, no roster churn: the next snapshot (driven by a real
+    // join) still lists exactly the two members.
+    const third = await newClient().joinById(host.roomId, { name: 'caro' })
+    const after = await hostSnaps.nextWhere((s) => s.roster.length === 3)
+    expect(after.roster.map((p) => p.name)).toEqual(['ada', 'bruno', 'caro'])
+    void two
+    host.leave()
+    guest.leave()
+    third.leave()
+  })
+
+  it('accepts a 1-character name at the minimum boundary (LIGHT-04)', async () => {
+    const host = await createRoom('a')
+    expect(host.sessionId).toBeTruthy()
+    host.leave()
+  })
+
+  it('survives a rejected start: the non-host error does not corrupt the next start (LIGHT-08)', async () => {
+    const host = await createRoom('ada')
+    const clients = [host]
+    for (const name of ['bruno', 'caro', 'dina']) {
+      clients.push(await newClient().joinById(host.roomId, { name }))
+    }
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+    const guest = clients[1]
+    if (guest === undefined) throw new Error('no guest')
+    const guestCollector = collectAll(guest)
+    const hostCollector = collectAll(host)
+
+    // A non-host start is rejected — and must leave the room startable.
+    guest.send('lobby:start', { type: 'lobby:start' })
+    const err = await guestCollector.waitFor('error')
+    expect(err.payload.code).toBe('not-host')
+    expect(instance.__phase()).toBe('lobby')
+
+    // The host's valid start then works: the round begins and everyone sees it.
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+    // LIGHT-08's remaining clause: a start while the round is active answers
+    // 'round-already-active' — machine-readable, lobby untouched.
+    host.send('lobby:start', { type: 'lobby:start' })
+    const again = await hostCollector.waitFor('error')
+    expect(again.payload.code).toBe('round-already-active')
+    expect(instance.__phase()).toBe('round')
+
+    host.leave()
+    for (const g of clients.slice(1)) g.leave()
+  })
+})

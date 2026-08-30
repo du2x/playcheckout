@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/justice/design.md`
-**Status**: Approved
+**Status**: Done
 
 ---
 
@@ -258,7 +258,7 @@ T6 → T7
 
 ---
 
-### T8: Deferred gap assertions — room-shell + first-light PASS gaps
+### T8: Deferred gap assertions — room-shell + first-light PASS gaps ✅
 
 **What**: Add the six assertions STATE deferred to the next TurnoverRoom/client-touching cycle: LOBBY-02 "create no room" clause, reject-then-start mutant (rejected start intent then a valid start works), LOBBY-05 roster unchanged after name rejection, LIGHT-02 unknown-code message, LIGHT-04 1-char name minimum, LIGHT-08 "round already active" message.
 **Where**: `apps/server/src/rooms/TurnoverRoom.test.ts`

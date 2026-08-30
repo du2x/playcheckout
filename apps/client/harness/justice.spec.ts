@@ -180,7 +180,9 @@ test.describe('client:accuse_ui', () => {
       pages.map((p) =>
         p.evaluate(() => {
           const t = (window as unknown as { __TURNOVER__: TurnoverHandle }).__TURNOVER__
-          return t.scene('Round').children.list.filter((c) => c.type === 'Text').length
+          const scene = t.scene('Round')
+          if (scene === null) return 0
+          return scene.children.list.filter((c) => c.type === 'Text').length
         }),
       ),
     )

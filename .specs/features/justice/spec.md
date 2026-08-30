@@ -233,9 +233,9 @@ confirm fires and both pages see the name-only toast while the round continues.
 | JUST-18 | P4: Accusation UI | Execute | Done |
 | JUST-19 | P4: Accusation UI | Execute | Done |
 | JUST-20 | P4: Accusation UI | Execute | Done |
-| JUST-21 | Deferred gap assertions (STATE notes 1–2) | Execute | Pending |
+| JUST-21 | Deferred gap assertions (STATE notes 1–2) | Execute | Done |
 
-**Coverage:** 21 total, mapped in tasks.md, 0 unmapped.
+**Coverage:** 21 total, mapped in tasks.md, 0 unmapped, 21 Done.
 
 ---
 
