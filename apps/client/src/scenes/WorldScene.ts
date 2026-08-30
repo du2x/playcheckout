@@ -159,11 +159,15 @@ export class WorldScene extends Phaser.Scene {
   private cardMarkers = new Map<string, HTMLElement>()
   private cueNodes = new Map<number, HTMLElement>()
   private audio: AudioContext | null = null
-  /** Static door frames (one per room segment per guest floor) — phase-free. */
-  private doorNodes = new Map<string, HTMLElement>()
+  /** Production door Images per room segment per guest floor (ART-06) —
+   *  phase-free; the name `door:<floor>:<room>` drives harness filtering. */
+  private doorImages = new Map<string, Phaser.GameObjects.Image>()
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
+   *  until it arrives. Derived purely from public events — a decoy call
+   *  naming a car already parked at that floor never lights (nothing to
+   *  wait for). */
   /** The App-owned accusation session (accuseSession.ts): the self-fired flag
    * gates every live-play intent — a fired player watches quietly (JUST-04). */
   private selfFired = false
@@ -206,10 +210,10 @@ export class WorldScene extends Phaser.Scene {
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
     this.cueNodes.clear()
-    this.doorNodes.clear()
+    this.doorImages.clear()
     this.riderSession = data.riderSession
     this.buildEvidenceLayer()
-    this.buildDoorsLayer()
+    this.buildDoorImages()
 
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
     // contract). One lane live; one per floor for the spectator overview.
@@ -717,61 +721,38 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Static door frames (client:doors_pre_round): one framed opening per room
-   * segment (AD-010 geometry) per guest floor, rendered from the moment the
-   * world mounts — phase-free, so pre-round free-roam (AD-015) shows room
-   * boundaries. Live play shows the own floor's frames only (AD-008 view);
-   * the spectator overview shows every floor's lane (FR-20). DOM like every
-   * non-contract visual; the grand lobby floor has no rooms.
+   * Production door Images (client:doors_pre_round, ART-06): one door per
+   * room segment (AD-010 geometry) per guest floor, rendered from the moment
+   * the world mounts — phase-free, so pre-round free-roam (AD-015) shows room
+   * boundaries. Live play shows the own floor's doors only (AD-008 view);
+   * the spectator overview shows every floor's lane (FR-20). No state tint
+   * exists anywhere (ART-10): the hallway sees nothing of interiors except
+   * door cards; the grand lobby floor has no rooms.
    */
-  private buildDoorsLayer(): void {
-    document.querySelector('#doors-layer')?.remove()
-    const gameEl = document.querySelector('#game')
-    if (gameEl === null) return
-    const layer = document.createElement('div')
-    layer.id = 'doors-layer'
-    layer.style.position = 'absolute'
-    layer.style.inset = '0'
-    layer.style.pointerEvents = 'none'
+  private buildDoorImages(): void {
     for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
       for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
-        const startPx = (roomSegmentStartMilli(room as RoomIndex) / 1000) * TILE_PX
-        const endPx = (roomSegmentEndMilli(room as RoomIndex) / 1000) * TILE_PX
-        const door = document.createElement('div')
-        door.dataset.doorRoom = String(room)
-        door.dataset.doorFloor = floor
-        door.style.position = 'absolute'
-        door.style.left = `${startPx + 4}px`
-        door.style.width = `${endPx - startPx - 8}px`
-        door.style.height = '72px'
-        door.style.border = '2px solid #667788'
-        door.style.borderBottom = 'none'
-        door.style.boxSizing = 'border-box'
-        door.style.visibility = 'hidden'
-        door.textContent = String(room)
-        door.style.textAlign = 'center'
-        door.style.fontSize = '11px'
-        door.style.color = '#8899aa'
-        layer.appendChild(door)
-        this.doorNodes.set(`${floor}:${room}`, door)
+        if (!this.textures.exists('door-closed')) return
+        const image = this.add.image(this.roomCenterPx(room as RoomIndex), GROUND_Y, 'door-closed')
+        image.setOrigin(0.5, 1)
+        image.setName(`door:${floor}:${room}`)
+        image.setVisible(false)
+        this.doorImages.set(`${floor}:${room}`, image)
       }
     }
-    gameEl.appendChild(layer)
   }
 
   /**
-   * Door frames follow the own view floor (live play) — as a spectator, every
-   * guest floor's frames show, tinted by the known room state (FR-20).
+   * Door Images follow the own view floor (live play) — as a spectator, every
+   * guest floor's doors show on its lane (FR-20). Positions re-anchor per
+   * lane; texture flips (door-open) land with the interior slice (T4).
    */
   private syncDoors(): void {
-    for (const [key, door] of this.doorNodes) {
+    for (const [key, image] of this.doorImages) {
       const floor = String(key).split(':')[0] ?? ''
       const visible = this.spectator || floor === this.viewFloor
-      door.style.visibility = visible ? 'visible' : 'hidden'
-      door.style.top = `${this.laneY(floor) - 72}px`
-      const state = this.roomStates.get(String(key))
-      door.style.borderColor =
-        state === 'prepped' ? '#7ac074' : state === 'trashed' ? '#d06a5a' : '#667788'
+      image.setVisible(visible)
+      image.y = this.laneY(floor)
     }
   }
 

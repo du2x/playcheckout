@@ -112,9 +112,9 @@ T6
 **Tools**: MCP: filesystem · Skill: NONE
 
 **Done when**:
-- [ ] No `#doors-layer` element exists; `doors_pre_round` asserts Image counts (24 total, 0 visible in lobby, 8 visible on floor1)
-- [ ] No door element encodes room state for an unobserved room (ART-10)
-- [ ] Full gate green; `client:evidence_cues` still green (cue text nodes untouched)
+- [x] No `#doors-layer` element exists; `doors_pre_round` asserts Image counts (24 total, 0 visible in lobby, 8 visible on floor1)
+- [x] No door element encodes room state for an unobserved room (ART-10: texture set is exactly door-closed)
+- [x] Full gate green; Gate 3 32/32 incl. new client:art_doors phase-free half; `client:evidence_cues` still green
 
 **Tests**: e2e (Gate 3)
 **Gate**: full

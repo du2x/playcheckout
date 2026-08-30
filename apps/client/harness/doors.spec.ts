@@ -17,12 +17,42 @@ async function createRoom(page: Page, name: string): Promise<string> {
   return code
 }
 
+// ART contract (cycle 2.10): doors are Phaser Images named door:<floor>:<room>.
 function visibleDoorRooms(page: Page): Promise<string[]> {
-  return page.evaluate(() =>
-    [...document.querySelectorAll('#doors-layer [data-door-room]')]
-      .filter((el) => getComputedStyle(el as HTMLElement).visibility === 'visible')
-      .map((el) => el.getAttribute('data-door-room') as string),
-  )
+  return page.evaluate(() => {
+    const t = (
+      window as unknown as {
+        __TURNOVER__: {
+          scene: (name: string) => {
+            children: { list: { name: string; visible: boolean; type: string }[] }
+          } | null
+        }
+      }
+    ).__TURNOVER__
+    const scene = t.scene('Round')
+    if (scene === null) return []
+    return scene.children.list
+      .filter((c) => c.type === 'Image' && c.name.startsWith('door:') && c.visible)
+      .map((c) => (c.name.split(':')[2] as string))
+  })
+}
+
+function doorImageCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const t = (
+      window as unknown as {
+        __TURNOVER__: {
+          scene: (name: string) => {
+            children: { list: { name: string; type: string }[] }
+          } | null
+        }
+      }
+    ).__TURNOVER__
+    const scene = t.scene('Round')
+    if (scene === null) return 0
+    return scene.children.list.filter((c) => c.type === 'Image' && c.name.startsWith('door:'))
+      .length
+  })
 }
 
 test.describe('client:doors_pre_round', () => {
@@ -32,15 +62,13 @@ test.describe('client:doors_pre_round', () => {
     const page = await browser.newContext().then((c) => c.newPage())
     await createRoom(page, 'ada')
 
-    // Lobby view: the layer exists with all 24 frames (8 rooms × 3 guest
-    // floors, cycle 2.9's per-floor lanes) but every one is hidden (the grand
-    // lobby floor has no rooms, and the live view shows the own floor only).
-    await page.waitForSelector('#doors-layer')
+    // Lobby view: all 24 door Images exist (8 rooms × 3 guest floors, cycle
+    // 2.9's per-floor lanes) but none is visible (the grand lobby floor has
+    // no rooms, and the live view shows the own floor only).
+    await page.waitForSelector('#round-hud', { timeout: 5000 }).catch(() => {})
+    await page.waitForTimeout(300)
     expect((await visibleDoorRooms(page)).length).toBe(0)
-    const frameCount = await page.evaluate(
-      () => document.querySelectorAll('#doors-layer [data-door-room]').length,
-    )
-    expect(frameCount).toBe(24)
+    expect(await doorImageCount(page)).toBe(24)
 
     // Pre-round ride west (no host start — the world is phase-free), then exit
     // onto floor1: the own floor stream flips the view and the frames show.
@@ -60,13 +88,21 @@ test.describe('client:doors_pre_round', () => {
     await page.keyboard.up('ArrowRight')
     await page.waitForFunction(
       () => {
-        const doors = document.querySelectorAll(
-          '#doors-layer [data-door-floor="floor1"][data-door-room]',
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: { list: { name: string; visible: boolean; type: string }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = t.scene('Round')
+        if (scene === null) return false
+        const floor1Doors = scene.children.list.filter(
+          (c) => c.type === 'Image' && c.name.startsWith('door:floor1:'),
         )
-        return (
-          doors.length === 8 &&
-          [...doors].every((el) => getComputedStyle(el as HTMLElement).visibility === 'visible')
-        )
+        return floor1Doors.length === 8 && floor1Doors.every((c) => c.visible)
       },
       undefined,
       { timeout: 10_000 },

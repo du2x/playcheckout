@@ -146,18 +146,42 @@ test.describe('client:spectator_view', () => {
     // everyone shares the lobby lane.
     const rects = await readRects(accuser)
     expect(rects).toHaveLength(3) // one per live player — the fired one is gone
+    // ART contract (cycle 2.10): door lanes are door:<floor>:<room> Images.
     await accuser.waitForFunction(
-      () =>
-        document.querySelectorAll('#doors-layer [data-door-floor="floor3"][style*="visible"]')
-          .length > 0,
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: { list: { name: string; visible: boolean; type: string }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = t.scene('Round')
+        if (scene === null) return false
+        return scene.children.list.some(
+          (c) => c.type === 'Image' && c.name === 'door:floor3:1' && c.visible,
+        )
+      },
       undefined,
       { timeout: 5000 },
     )
     const visibleDoorLanes = await accuser.evaluate(() => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => {
+              children: { list: { name: string; visible: boolean; type: string }[] }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const scene = t.scene('Round')
       const floors = new Set(
-        [...document.querySelectorAll('#doors-layer [data-door-floor][style*="visible"]')].map(
-          (d) => (d as HTMLElement).dataset.doorFloor,
-        ),
+        (scene?.children.list ?? [])
+          .filter((c) => c.type === 'Image' && c.name.startsWith('door:') && c.visible)
+          .map((c) => (c.name.split(':')[1] as string)),
       )
       return [...floors].sort()
     })

@@ -208,12 +208,12 @@ covers the visual-target approval before the manifest flips to `approved`.
 | ART-03 | P1: Players are staff sprites | Execute | Done |
 | ART-04 | P1: Players are staff sprites | Execute | Done |
 | ART-05 | P1: Players are staff sprites | Execute | Done |
-| ART-06 | P1: Doors, doorways, and the interior read | Specify | Planned |
+| ART-06 | P1: Doors, doorways, and the interior read | Specify | Done |
 | ART-07 | P1: Doors, doorways, and the interior read | Specify | Planned |
 | ART-08 | P1: Doors, doorways, and the interior read | Specify | Planned |
 | ART-09 | P1: Doors, doorways, and the interior read | Specify | Planned |
-| ART-10 | P1: Doors, doorways, and the interior read | Specify | Planned |
-| ART-11 | P1: Doors, doorways, and the interior read | Specify | Planned |
+| ART-10 | P1: Doors, doorways, and the interior read | Specify | Done |
+| ART-11 | P1: Doors, doorways, and the interior read | Specify | Done |
 | ART-12 | P1: Spectator overview keeps its privilege | Specify | Planned |
 | ART-13 | P1: Spectator overview keeps its privilege | Specify | Planned |
 | ART-14 | P1: Spectator overview keeps its privilege | Specify | Planned |
