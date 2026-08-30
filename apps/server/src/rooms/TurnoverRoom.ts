@@ -19,8 +19,11 @@ import {
   workStartIntentSchema,
 } from '@turnover/shared'
 import { MovementSim, RoundSim, TICK_HZ } from '@turnover/sim'
-import { type Client, Room } from 'colyseus'
+import { type Client, CloseCode, Room } from 'colyseus'
 import { Router } from './router'
+
+/** Colyseus 0.18 close code for a deliberate `room.leave()` (verified in installed sources). */
+const CONSENTED_CLOSE_CODE: number = CloseCode.CONSENTED
 
 /**
  * The round container (cycle 2.1). Lobby half: join by 4-letter code with
@@ -60,6 +63,12 @@ interface LobbyPlayer {
   sessionId: string
   name: string
   joinedAt: number
+  /**
+   * FR-25 seat state: false while a mid-round disconnection holds a
+   * reconnection seat. A seat that expires ghosts (staff) or aborts
+   * (saboteur); the roster entry is purged at the next round start.
+   */
+  connected: boolean
 }
 
 export class TurnoverRoom extends Room {
@@ -68,6 +77,13 @@ export class TurnoverRoom extends Room {
 
   /** Production: 50 ms = 20 Hz (prd §11). Tests set 0 and drive ticks directly. */
   static tickMs = 50
+
+  /**
+   * Reconnection seat window (prd §11: 60 s `allowReconnection`, exact role
+   * restore). Static test seam — the same pattern as `tickMs` (AD-004
+   * precedent); production never overrides it.
+   */
+  static reconnectSeconds = 60
 
   private phase: 'lobby' | 'round' | 'results' = 'lobby'
   private players = new Map<string, LobbyPlayer>()
@@ -241,6 +257,7 @@ export class TurnoverRoom extends Room {
       sessionId: client.sessionId,
       name,
       joinedAt: this.joinedCounter++,
+      connected: true,
     })
     // Fresh-joiner placement (FR-2 spawn): lobby center (MOVE-18 snapshot ride-along).
     this.movement.join(client.sessionId)
@@ -257,7 +274,23 @@ export class TurnoverRoom extends Room {
     )
   }
 
-  override onLeave(client: Client) {
+  override onLeave(client: Client, code?: number) {
+    // Colyseus 0.18 delivers the numeric close code (CloseCode.CONSENTED =
+    // 4000); anything else is an unconsented drop. A drop DURING a round
+    // holds a reconnection seat (FR-25): roster entry + frozen movement slot
+    // kept, one player:left broadcast, and the round continues with or
+    // without them.
+    if (code !== CONSENTED_CLOSE_CODE && this.phase === 'round') {
+      const seat = this.players.get(client.sessionId)
+      if (seat !== undefined) seat.connected = false
+      // Public knowledge: the rectangle disappears everywhere (MOVE-19). The
+      // movement slot stays (frozen — a dead connection sends no intents), so
+      // a reconnect resumes at the exact position.
+      this.router.toAll('player:left', { playerId: client.sessionId })
+      this.router.forget(client.sessionId)
+      void this.holdSeat(client)
+      return
+    }
     this.players.delete(client.sessionId)
     // Remove from movement sim first: clears car.riders, marks dirty so the
     // next tick emits elevator:riders (disconnect row, design.md / ELR P1 AC2).
@@ -269,8 +302,8 @@ export class TurnoverRoom extends Room {
     // Counters are per-connection: a departed connection's counter dies with it.
     this.router.forget(client.sessionId)
     if (this.phase === 'round') {
-      // Mid-round: the leaver's sim slot idles until the buzzer (full FR-25 ghost
-      // machinery is cycle 2.9's T5). No lobby snapshot — rosters are a lobby concept.
+      // Mid-round: the leaver's sim slot idles until the buzzer. No lobby
+      // snapshot — rosters are a lobby concept.
       return
     }
     // Host is whoever joined earliest among the remaining players, so migration
@@ -278,6 +311,89 @@ export class TurnoverRoom extends Room {
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
+  }
+
+  /**
+   * Hold the leaver's seat for the reconnection window (REND-17). On
+   * reconnection the seat is restored exactly (REND-18); on expiry the FR-25
+   * resolution applies — ghost (staff, REND-19) or aborted round (saboteur,
+   * REND-20).
+   */
+  private async holdSeat(client: Client): Promise<void> {
+    try {
+      const reconnected = await this.allowReconnection(client, TurnoverRoom.reconnectSeconds)
+      this.restoreSeat(reconnected)
+    } catch {
+      this.expireSeat(client.sessionId)
+    }
+  }
+
+  /** Seat restored: exact role, honest resumed clock, re-announced position. */
+  private restoreSeat(client: Client): void {
+    const sessionId = client.sessionId
+    const sim = this.sim
+    const seat = this.players.get(sessionId)
+    // The round may have ended during the window — a fresh results-phase
+    // client re-enters like everyone else (join-shaped restore).
+    this.router.forget(sessionId) // fresh per-connection seq (REG-17)
+    if (seat !== undefined) seat.connected = true
+    if (this.phase !== 'round' || sim === null) {
+      this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
+      this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
+      return
+    }
+    // Re-add the rectangle everywhere: one player:moved re-announces the
+    // preserved position (clients re-create displays for unknown ids).
+    this.movement.announcePosition(sessionId)
+    this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
+    const role = sim.roleOf(sessionId)
+    if (role !== undefined) {
+      // Rule 3: the role card travels to its owner only — re-sent verbatim,
+      // saboteur card included (prd reconnection contract).
+      this.router.toSelf('role:dealt', sessionId, { role })
+    }
+    const ownFired = this.fired.has(sessionId)
+    this.router.toSelf('round:resumed', sessionId, {
+      remainingTicks: sim.clockTicksRemaining,
+      playerIds: sim.playerIds,
+      ownFired,
+    })
+    if (ownFired) {
+      this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
+    } else {
+      this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
+    }
+  }
+
+  /** The window closed without reconnection — FR-25 resolution (REND-19/20). */
+  private expireSeat(sessionId: string): void {
+    const sim = this.sim
+    const seat = this.players.get(sessionId)
+    if (this.phase !== 'round' || sim === null) {
+      // The round ended during the window: release the seat like a lobby leave.
+      this.movement.leave(sessionId)
+      if (seat !== undefined) this.players.delete(sessionId)
+      for (const id of this.players.keys()) {
+        this.router.toSelf('lobby:snapshot', id, this.buildSnapshot(id))
+      }
+      return
+    }
+    if (sim.saboteurId === sessionId) {
+      // REND-20: the saboteur is gone for good — the round aborts. No traitor
+      // reveal on an aborted round; the result is excluded from KPIs (FR-25).
+      this.movement.leave(sessionId)
+      this.router.toAll('round:ended', {
+        winner: 'aborted',
+        reason: 'saboteur-disconnected',
+        saboteurId: null,
+      })
+      this.finishRound()
+      return
+    }
+    // REND-19: an idle ghost — out of live play (win checks count them out),
+    // silently; the roster entry stays so the recap still resolves the name.
+    sim.ghost(sessionId)
+    this.movement.leave(sessionId)
   }
 
   private drawCode(): string {
@@ -329,6 +445,11 @@ export class TurnoverRoom extends Room {
   private startRound() {
     this.phase = 'round'
     this.fired.clear()
+    // FR-25 (cycle 2.9): expired seats' roster entries are purged at the next
+    // round start — ghosts free their slot exactly when a new deal begins.
+    for (const [sessionId, seat] of this.players) {
+      if (!seat.connected) this.players.delete(sessionId)
+    }
     // Round-end journal reset (cycle 2.9): a fresh deal starts a fresh recap.
     this.roundTick = 0
     this.rideJournal = []

@@ -17,7 +17,7 @@ const CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
  */
 export async function startServer(
   port = Number(process.env.PORT ?? 2567),
-  opts: { clientDist?: string } = {},
+  opts: { clientDist?: string; heartbeat?: boolean } = {},
 ): Promise<{ app: FastifyInstance; gameServer: Server }> {
   const app = Fastify()
   const clientDist = opts.clientDist ?? CLIENT_DIST
@@ -46,7 +46,12 @@ export async function startServer(
   })
 
   await matchMaker.setup()
-  const transport = new WebSocketTransport({ noServer: true })
+  // The ws heartbeat (3 s ping × 2 retries) terminates slow clients; tests run
+  // many real clients under parallel vitest load, so they disable it.
+  const transport = new WebSocketTransport({
+    noServer: true,
+    ...(opts.heartbeat === false ? { pingInterval: 0 } : {}),
+  })
   transport.attachToServer(app.server)
   setTransport(transport)
 

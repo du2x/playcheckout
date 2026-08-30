@@ -176,7 +176,7 @@ T7 → T8
 
 ---
 
-### T5: Server — reconnection seat, ghost, abort (FR-25)
+### T5: Server — reconnection seat, ghost, abort (FR-25) ✅
 
 **What**: `RECONNECT_SECONDS` seam (60 production), unconsented mid-round leave keeps roster + frozen movement slot with exactly one `player:left`, `allowReconnection` await; restore on resolve (forget seq, `movement.announce` re-add, `role:dealt`, snapshot or spectator snapshot, `round:resumed`); on expiry ghost staff (`sim.ghost` + movement.leave) or abort the saboteur's round; lobby/results-phase leaves unchanged.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts`, `apps/server/src/rooms/TurnoverRoom.test.ts`
@@ -186,10 +186,10 @@ T7 → T8
 
 **Done when**:
 
-- [ ] `server:reconnect` room tests pass with a real SDK client: raw ws close mid-round → exactly one `player:left`, seat held (no roster snapshot churn); `client.reconnect(token)` restores role card (saboteur card included), `round:resumed` remainingTicks, and the re-announced position reaches other clients
-- [ ] Staff expiry → ghost: intents rejected, win checks count them out (staff-to-1 → saboteur win via queued check); saboteur expiry → aborted `round:ended` + recap, no traitor identity
-- [ ] Lobby-phase drop behavior byte-identical to 2.8 (no seat held)
-- [ ] `pnpm test:sim` green, no existing test weakened
+- [x] `server:reconnect` room tests pass with a real SDK client: raw ws close mid-round → exactly one `player:left`, seat held (no roster snapshot churn); `client.reconnect(token)` restores role card (saboteur card included), `round:resumed` remainingTicks, and the re-announced position reaches other clients
+- [x] Staff expiry → ghost: intents rejected, win checks count them out (staff-to-1 → saboteur win via queued check); saboteur expiry → aborted `round:ended` + recap, no traitor identity
+- [x] Lobby-phase drop behavior byte-identical to 2.8 (no seat held)
+- [x] `pnpm test:sim` green, no existing test weakened
 
 **Tests**: integration (room)
 **Gate**: quick

@@ -326,6 +326,14 @@ export class RoundSim {
   }
 
   /**
+   * A round player's dealt role — the reconnection seat restore re-sends the
+   * exact role card, saboteur card included (prd reconnection contract).
+   */
+  roleOf(playerId: string): Role | undefined {
+    return this.deal.get(playerId)
+  }
+
+  /**
    * The sim half of the FR-22 recap: crimes, catches, accusations in tick
    * order, with crime freshness resolved NOW (still `trashed` = inside the
    * freshness window; `settled` = aged out). Rides are the room's half.

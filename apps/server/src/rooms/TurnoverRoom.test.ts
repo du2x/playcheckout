@@ -12,7 +12,7 @@ type ClientRoom = Awaited<ReturnType<Client['create']>>
 
 beforeAll(async () => {
   TurnoverRoom.tickMs = 0 // tests drive ticks deterministically via __driveTicks
-  const started = await startServer(0)
+  const started = await startServer(0, { heartbeat: false })
   app = started.app
   gameServer = started.gameServer
   const address = app.server.address()
@@ -230,6 +230,9 @@ function collectAll(room: ClientRoom) {
     },
     stop() {
       off()
+    },
+    types() {
+      return snaps.map((m) => m.type)
     },
   }
 }
@@ -2156,6 +2159,215 @@ describe('server:round_end', () => {
       b.leave()
       c.leave()
     } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Gate scenario `server:reconnect` (cycle 2.9, REND-17..22): the FR-25
+// reconnection seat — hold, exact restore, ghost, abort.
+// ---------------------------------------------------------------------------
+function collectorOf2(
+  collectors: ReturnType<typeof collectAll>[],
+  clients: readonly ClientRoom[],
+  client: ClientRoom,
+): ReturnType<typeof collectAll> {
+  const c = collectors[clients.indexOf(client)]
+  if (c === undefined) throw new Error('no collector for client')
+  return c
+}
+
+async function driveUntil2(
+  collector: ReturnType<typeof collectAll>,
+  type: string,
+  instance: TurnoverRoom,
+  maxTicks = 400,
+) {
+  for (let i = 0; i < maxTicks; i++) {
+    instance.__driveTicks(1)
+    await new Promise((resolve) => setTimeout(resolve, 8))
+    try {
+      return await collector.waitFor(type, 0)
+    } catch {
+      // not yet — drive again
+    }
+  }
+  throw new Error(
+    `driveUntil2: ${type} never arrived within ${maxTicks} ticks; seen: ${collector.types().slice(-40).join(',')}`,
+  )
+}
+
+async function startWithRoles2(
+  clients: ClientRoom[],
+): Promise<{ instance: TurnoverRoom; staff: ClientRoom[]; saboteur: ClientRoom }> {
+  const instance = TurnoverRoom.instances.at(-1)
+  if (instance === undefined) throw new Error('no room instance')
+  const collectors = clients.map((room) => collectAll(room))
+  clients[0]?.send('lobby:start', { type: 'lobby:start' })
+  await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+  instance.__driveTicks(1)
+  const roles = new Map<ClientRoom, string>()
+  for (const [i, collector] of collectors.entries()) {
+    const dealt = await collector.waitFor('role:dealt')
+    const client = clients[i]
+    if (client === undefined) throw new Error('client missing')
+    roles.set(client, dealt.payload.role as string)
+  }
+  const staff = clients.filter((c) => roles.get(c) === 'staff')
+  const saboteur = clients.find((c) => roles.get(c) === 'saboteur')
+  if (saboteur === undefined || staff.length < 2) throw new Error('unexpected deal')
+  return { instance, staff, saboteur }
+}
+
+describe('server:reconnect', () => {
+  async function sleep(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  /** Drop the raw connection (unconsented) with SDK auto-reconnect disabled. */
+  function dropRaw(room: ClientRoom) {
+    room.reconnection.enabled = false // the test drives the reconnect explicitly
+    room.connection.close()
+  }
+
+  it('holds the seat on an unconsented drop and restores it exactly (REND-17/18)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, staff, saboteur } = await startWithRoles2(clients)
+      // Never drop the host (its connection carries the counter below).
+      const leaver = staff.find((s) => s !== host)
+      if (leaver === undefined) throw new Error('no non-host staff player')
+      const hostCollector = collectors[0]
+      if (hostCollector === undefined) throw new Error('no collector')
+      const originalRole = (await collectorOf2(collectors, clients, leaver).waitFor('role:dealt'))
+        .payload.role as string
+
+      TurnoverRoom.reconnectSeconds = 5
+      // A side channel on a non-leaver client counts player:left broadcasts.
+      const counter = clients.find((c) => c !== leaver && c !== host)
+      if (counter === undefined) throw new Error('no counter client')
+      let leftCount = 0
+      const off = counter.onMessage('*', (messageType) => {
+        if (String(messageType) === 'player:left') leftCount++
+      })
+
+      dropRaw(leaver)
+      await sleep(300)
+      expect(leftCount).toBe(1) // exactly one broadcast (REND-17)
+      expect(instance.__phase()).toBe('round') // the round continues
+      // No roster churn while the seat is held: no lobby:snapshot flows.
+      // (Roster snapshots only exist on join/leave — the seat is not a leave.)
+
+      // Reconnect within the window: the SDK replays the seat restore.
+      const restored = (await newClient().reconnect(leaver.reconnectionToken)) as ClientRoom
+      const restoredCollector = collectAll(restored)
+      expect(restored.sessionId).toBe(leaver.sessionId)
+      const role = await restoredCollector.waitFor('role:dealt')
+      expect(role.payload.role).toBe(originalRole) // exact role restore (REND-18)
+      const resumed = await restoredCollector.waitFor('round:resumed')
+      expect(resumed.payload.ownFired).toBe(false)
+      expect((resumed.payload.playerIds as string[]).length).toBe(4)
+      expect(typeof resumed.payload.remainingTicks).toBe('number')
+      expect(resumed.payload.remainingTicks).toBeGreaterThan(0)
+      await restoredCollector.waitFor('movement:snapshot')
+      // Others see the rectangle come back: one re-announcing player:moved.
+      instance.__driveTicks(2)
+      const back = await hostCollector.waitFor('player:moved')
+      expect(back.payload.playerId).toBe(leaver.sessionId)
+      off()
+      restored.leave()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+      void saboteur
+    } finally {
+      TurnoverRoom.reconnectSeconds = 60
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('ghosts a staff leaver whose window expires — silently (REND-19)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, staff } = await startWithRoles2(clients)
+      // Never drop the host: its connection carries the observing collector.
+      const leaver = staff.find((s) => s !== host)
+      if (leaver === undefined) throw new Error('no non-host staff player')
+      const hostCollector = collectors[0]
+      if (hostCollector === undefined) throw new Error('no collector')
+
+      TurnoverRoom.reconnectSeconds = 1
+      dropRaw(leaver)
+      await sleep(300)
+      expect(instance.__phase()).toBe('round')
+      // The window expires: ghost — no firing, no verdict yet (staff = 2).
+      await sleep(1200)
+      instance.__driveTicks(2)
+      await sleep(50)
+      expect(instance.__phase()).toBe('round')
+      // The ghost's roster entry stays (no lobby:snapshot — the round is
+      // active), so the recap can still resolve their name later.
+
+      // A second staff ghost reduces live staff to 1 → saboteur win. Never
+      // drop the host: its collector must keep receiving the verdict.
+      const leaver2 = staff.find((s) => s !== host && s !== leaver)
+      if (leaver2 === undefined) throw new Error('no second staff leaver')
+      TurnoverRoom.reconnectSeconds = 1
+      dropRaw(leaver2)
+      // Generous tick budget: the 1 s expiry must land well inside it even
+      // under full-suite parallel load.
+      const ended = await driveUntil2(hostCollector, 'round:ended', instance, 1500)
+      expect(ended.payload).toMatchObject({ winner: 'saboteur', reason: 'staff-reduced' })
+      expect(instance.__phase()).toBe('results')
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      TurnoverRoom.reconnectSeconds = 60
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('aborts the round when the saboteur window expires — no traitor reveal (REND-20)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, saboteur } = await startWithRoles2(clients)
+      // Observe from a client that is NOT the saboteur (the drop must not
+      // kill the observer's connection).
+      const observer = clients.find((c) => c !== saboteur)
+      if (observer === undefined) throw new Error('no observer client')
+      const observerCollector = collectorOf2(collectors, clients, observer)
+      TurnoverRoom.reconnectSeconds = 1
+      dropRaw(saboteur)
+      await sleep(300)
+      expect(instance.__phase()).toBe('round') // the seat is held first
+      const ended = await driveUntil2(observerCollector, 'round:ended', instance, 1500)
+      expect(ended.payload).toEqual({
+        winner: 'aborted',
+        reason: 'saboteur-disconnected',
+        saboteurId: null,
+      })
+      const recap = await observerCollector.waitFor('round:recap')
+      expect(Array.isArray(recap.payload.entries)).toBe(true)
+      await vi.waitFor(() => expect(instance.__phase()).toBe('results'))
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      TurnoverRoom.reconnectSeconds = 60
       vi.unstubAllEnvs()
     }
   })
