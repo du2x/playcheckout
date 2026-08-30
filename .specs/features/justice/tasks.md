@@ -153,7 +153,7 @@ T6 → T7
 
 ---
 
-### T4: Server — accuse handler, fired teardown, live-ness guards
+### T4: Server — accuse handler, fired teardown, live-ness guards ✅
 
 **What**: Add the `accuse` validate handler with round-active + live-ness guards, the room-level fired set fed by `player:fired` routing (`movement.leave` teardown), live-ness rejection on every existing intent handler, and error replies for rejections.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts`, `apps/server/src/rooms/TurnoverRoom.test.ts`

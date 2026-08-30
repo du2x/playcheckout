@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto'
 import type { FloorId, RoomIndex } from '@turnover/shared'
 import {
+  accuseIntentSchema,
   elevatorCallIntentSchema,
   elevatorPressIntentSchema,
   type LobbySnapshot,
@@ -67,6 +68,8 @@ export class TurnoverRoom extends Room {
   private sim: RoundSim | null = null
   private router!: Router
   private movement!: MovementSim
+  /** Justice (cycle 2.8): sessions fired this round — out of live play, still connected. */
+  private fired = new Set<string>()
 
   override onCreate() {
     this.patchRate = null
@@ -91,6 +94,7 @@ export class TurnoverRoom extends Room {
     })
     // Movement intents (zod-validated, outside the registry — protocol rules).
     this.onMessage('move:start', moveStartIntentSchema, (client, intent) => {
+      if (!this.ensureLive(client.sessionId)) return
       const carBefore = this.movement.viewOf(client.sessionId).car
       this.movement.startMove(client.sessionId, intent.dir)
       if (carBefore !== null && this.movement.viewOf(client.sessionId).car === null) {
@@ -113,11 +117,13 @@ export class TurnoverRoom extends Room {
       }
     })
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {
+      if (!this.ensureLive(client.sessionId)) return
       this.movement.stopMove(client.sessionId)
     })
     // Destination-free call (ELR-06/AD-014): the target lives in the in-car
     // press intent; a duplicate call flashes via the sim event only.
     this.onMessage('elevator:call', elevatorCallIntentSchema, (client) => {
+      if (!this.ensureLive(client.sessionId)) return
       if (this.movement.callElevator(client.sessionId) === 'rejected') {
         this.router.toSelf('error', client.sessionId, {
           code: 'elevator-locked',
@@ -128,11 +134,42 @@ export class TurnoverRoom extends Room {
     // In-car floor press (ELR-08/AD-014): rider-only. A non-rider press is
     // rejected silently — nothing on the wire, no error message (ELR P2 AC3).
     this.onMessage('elevator:press', elevatorPressIntentSchema, (client, intent) => {
+      if (!this.ensureLive(client.sessionId)) return
       this.movement.pressFloor(client.sessionId, intent.floor)
+    })
+    // Accusation (cycle 2.8, FR-17): eligibility lives in the sim — staff-only,
+    // live players, same floor within TUNING.ACCUSATION_RANGE_TILES. The room
+    // maps rejections 1:1 to coarse errors; validity never becomes machine-
+    // readable on the wire (the fired event is name-only, FR-18).
+    this.onMessage('accuse', accuseIntentSchema, (client, intent) => {
+      const sim = this.sim
+      if (this.phase !== 'round' || sim === null) {
+        this.router.toSelf('error', client.sessionId, {
+          code: 'justice-rejected',
+          message: 'accusations are only possible during a round',
+        })
+        return
+      }
+      const result = sim.accuse(client.sessionId, intent.targetId)
+      if (result !== 'resolved') {
+        const messages: Record<typeof result, string> = {
+          'round-not-active': 'accusations are only possible during a round',
+          'accuser-not-live': 'you were fired — spectators cannot accuse',
+          'accuser-is-saboteur': 'you cannot accuse',
+          'self-target': 'you cannot accuse yourself',
+          'target-not-live': 'that player cannot be accused',
+          'out-of-range': 'get closer to accuse',
+        }
+        this.router.toSelf('error', client.sessionId, {
+          code: 'justice-rejected',
+          message: messages[result],
+        })
+      }
     })
     // Work intents (cycle 2.5, FR-7/8/9): the action matrix lives in the sim —
     // the room validates the phase and maps rejection reasons 1:1 to errors.
     this.onMessage('work:start', workStartIntentSchema, (client, intent) => {
+      if (!this.ensureLive(client.sessionId)) return
       const sim = this.sim
       if (this.phase !== 'round' || sim === null) {
         this.router.toSelf('error', client.sessionId, {
@@ -266,6 +303,7 @@ export class TurnoverRoom extends Room {
 
   private startRound() {
     this.phase = 'round'
+    this.fired.clear()
     // Positions persist across start/buzzer (MOVE-07): the movement layer is
     // phase-free and simply keeps running.
     const playerIds = [...this.players.values()]
@@ -296,7 +334,18 @@ export class TurnoverRoom extends Room {
         positions.set(sessionId, { floor: p.floor, x: Math.round(p.x * 1000) })
       }
     }
-    for (const event of sim.tick(positions)) this.router.route(event)
+    for (const event of sim.tick(positions)) {
+      this.router.route(event)
+      // Justice teardown (JUST-04/06/11): a fired session loses their movement
+      // slot (no further position streams; the Router's viewOf null-context
+      // drops them from every positional policy) — their sim-side channels
+      // were already cancelled by the sim. No player:left: the fired event
+      // itself removes the rectangle client-side.
+      if (event.type === 'player:fired') {
+        this.fired.add(event.playerId)
+        this.movement.leave(event.playerId)
+      }
+    }
     if (sim.clockTicksRemaining <= 0) {
       // Buzzer: roles were the sim's alone — dropping it wipes the deal (AD-002).
       this.sim = null
@@ -320,5 +369,19 @@ export class TurnoverRoom extends Room {
   /** Test hook: read the phase without poking private state from tests. */
   __phase(): 'lobby' | 'round' {
     return this.phase
+  }
+
+  /**
+   * Justice live-ness guard (cycle 2.8): a fired session cannot act — every
+   * intent handler rejects with a coarse justice error. One message, no
+   * validity or role information (FR-18).
+   */
+  private ensureLive(sessionId: string): boolean {
+    if (!this.fired.has(sessionId)) return true
+    this.router.toSelf('error', sessionId, {
+      code: 'justice-rejected',
+      message: 'you were fired — spectators cannot act',
+    })
+    return false
   }
 }

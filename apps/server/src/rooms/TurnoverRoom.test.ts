@@ -1531,3 +1531,270 @@ describe('server:evidence', () => {
     }
   })
 })
+
+// Spec JUST-04/06/09/12/13 server half (cycle 2.8): the accuse intent is
+// validated server-side, firing routes one name-only payload to ALL, fired
+// sessions are torn down (no positional streams, intents rejected), and the
+// round continues — win checks are cycle 2.9.
+describe('server:justice', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  function collectorOf(
+    collectors: ReturnType<typeof collectAll>[],
+    clients: readonly ClientRoom[],
+    client: ClientRoom,
+  ): ReturnType<typeof collectAll> {
+    const c = collectors[clients.indexOf(client)]
+    if (c === undefined) throw new Error('no collector for client')
+    return c
+  }
+
+  /** Records every message type+payload without consuming them (negative assertions). */
+  function record(room: ClientRoom) {
+    const seen: { type: string; payload: Record<string, unknown> }[] = []
+    const off = room.onMessage('*', (messageType, envelope) => {
+      seen.push({
+        type: String(messageType),
+        payload: (envelope as { payload: Record<string, unknown> }).payload,
+      })
+    })
+    return {
+      seen,
+      stop() {
+        off()
+      },
+    }
+  }
+
+  /** Drive ticks until the collector holds the event (work_channels pattern). */
+  async function driveUntil(
+    collector: ReturnType<typeof collectAll>,
+    type: string,
+    instance: TurnoverRoom,
+    maxTicks = 400,
+  ) {
+    for (let i = 0; i < maxTicks; i++) {
+      instance.__driveTicks(1)
+      await sleep(8)
+      try {
+        return await collector.waitFor(type, 0)
+      } catch {
+        // not yet — drive again
+      }
+    }
+    throw new Error(`driveUntil: ${type} never arrived within ${maxTicks} ticks`)
+  }
+
+  /**
+   * Ride a player to floor1 inside room 1 (x ≈ 3.6 tiles) — parked, still.
+   * The call is a decoy flash while both cars are home (AD-019) and summons
+   * the far car once one has left the lobby; walking into the landing zone
+   * auto-boards either way, and boarding still works on the open-doors idle
+   * the walk may arrive at (AD-016).
+   */
+  async function rideToRoom1(instance: TurnoverRoom, player: ClientRoom) {
+    player.send('elevator:call', { type: 'elevator:call' })
+    await sleep(50)
+    instance.__driveTicks(65) // summoned car arrives (or both-parked flash)
+    player.send('move:start', { type: 'move:start', dir: 'left' })
+    await sleep(50)
+    instance.__driveTicks(55) // walk into the west landing zone; auto-board
+    player.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    player.send('elevator:press', { type: 'elevator:press', floor: 'floor1' })
+    await sleep(50)
+    instance.__driveTicks(40) // lobby → floor1
+    player.send('move:start', { type: 'move:start', dir: 'right' }) // exit in dwell
+    await sleep(50)
+    instance.__driveTicks(12) // park at x ≈ 3.6 tiles (room 1: [1, 4.5))
+    player.send('move:stop', { type: 'move:stop' })
+    await sleep(50)
+    instance.__driveTicks(1)
+  }
+
+  /** Start a round and resolve each player's private role (rule 3: self only). */
+  async function startWithRoles(
+    clients: ClientRoom[],
+  ): Promise<{ instance: TurnoverRoom; staff: ClientRoom[]; saboteur: ClientRoom }> {
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+    const collectors = clients.map((room) => collectAll(room))
+    clients[0]?.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+    instance.__driveTicks(1)
+    const roles = new Map<ClientRoom, string>()
+    for (const [i, collector] of collectors.entries()) {
+      const dealt = await collector.waitFor('role:dealt')
+      const client = clients[i]
+      if (client === undefined) throw new Error('client missing')
+      roles.set(client, dealt.payload.role as string)
+    }
+    const staff = clients.filter((c) => roles.get(c) === 'staff')
+    const saboteur = clients.find((c) => roles.get(c) === 'saboteur')
+    if (saboteur === undefined || staff.length < 2) throw new Error('unexpected deal')
+    return { instance, staff, saboteur }
+  }
+
+  it('routes a correct accusation as one name-only payload to every connection (JUST-12/13)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, staff, saboteur } = await startWithRoles(clients)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+      const watcher = staff[1]
+      if (watcher === undefined) throw new Error('no second staff')
+
+      // Grace: staff preps room 1, the saboteur un-preps it.
+      await rideToRoom1(instance, worker)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
+      await rideToRoom1(instance, saboteur)
+      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(collectorOf(collectors, clients, saboteur), 'work:ended', instance)
+
+      // Both are parked at x ≈ 3 on floor1 — in range. The staff accuses.
+      worker.send('accuse', { type: 'accuse', targetId: saboteur.sessionId })
+      // One {playerId}-only payload reaches EVERY connection (all-policy).
+      for (const collector of collectors) {
+        const fired = await driveUntil(collector, 'player:fired', instance)
+        expect(Object.keys(fired.payload).sort()).toEqual(['playerId'])
+        expect(fired.payload.playerId).toBe(saboteur.sessionId)
+        expect(fired.payload).not.toHaveProperty('reason')
+        expect(fired.payload).not.toHaveProperty('valid')
+      }
+      // The round continues — win checks are cycle 2.9.
+      expect(instance.__phase()).toBe('round')
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('tears the fired session down: intents rejected, no positional streams (JUST-04)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, staff, saboteur } = await startWithRoles(clients)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+      const watcher = staff[1]
+      if (watcher === undefined) throw new Error('no second staff')
+
+      await rideToRoom1(instance, worker)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
+      await rideToRoom1(instance, saboteur)
+      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(collectorOf(collectors, clients, saboteur), 'work:ended', instance)
+
+      worker.send('accuse', { type: 'accuse', targetId: saboteur.sessionId })
+      await driveUntil(collectorOf(collectors, clients, host), 'player:fired', instance)
+
+      // The fired session's intents all reject with the coarse justice error.
+      const saboteurCollector = collectorOf(collectors, clients, saboteur)
+      saboteur.send('move:start', { type: 'move:start', dir: 'left' })
+      const moveErr = await saboteurCollector.waitFor('error')
+      expect(moveErr.payload.code).toBe('justice-rejected')
+      saboteur.send('elevator:call', { type: 'elevator:call' })
+      const callErr = await saboteurCollector.waitFor('error')
+      expect(callErr.payload.code).toBe('justice-rejected')
+      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      const workErr = await saboteurCollector.waitFor('error')
+      expect(workErr.payload.code).toBe('justice-rejected')
+
+      // No positional stream ever carries the fired player again, and a live
+      // floor1 walker's stream does NOT reach the fired viewer (viewOf null) —
+      // while 'all' rows (elevator:called) still do: they stay connected.
+      const saboteurRecord = record(saboteur)
+      const liveRecord = record(watcher)
+      watcher.send('elevator:call', { type: 'elevator:call' }) // an 'all' row
+      await driveUntil(collectorOf(collectors, clients, watcher), 'elevator:called', instance)
+      instance.__driveTicks(20)
+      await sleep(120)
+      expect(saboteurRecord.seen.some((m) => m.type === 'player:moved')).toBe(false)
+      expect(saboteurRecord.seen.some((m) => m.type === 'elevator:called')).toBe(true)
+      expect(
+        liveRecord.seen.some(
+          (m) => m.type === 'player:moved' && m.payload.playerId === saboteur.sessionId,
+        ),
+      ).toBe(false)
+      saboteurRecord.stop()
+      liveRecord.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('fires the accuser on a wrong accusation and rejects ineligible ones (JUST-09)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, staff, saboteur } = await startWithRoles(clients)
+      const worker = staff[0]
+      const watcher = staff[1]
+      if (worker === undefined || watcher === undefined) throw new Error('no staff players')
+
+      // Lobby phase: accuse before the round — wait, the round is already
+      // active here (startWithRoles). The lobby rejection is covered by the
+      // fresh-room leg at the bottom.
+
+      // Saboteur accuses: coarse rejection, nobody fires.
+      saboteur.send('accuse', { type: 'accuse', targetId: worker.sessionId })
+      const saboteurCollector = collectorOf(collectors, clients, saboteur)
+      const saboteurErr = await saboteurCollector.waitFor('error')
+      expect(saboteurErr.payload.code).toBe('justice-rejected')
+
+      // Out of range: watcher in the lobby, worker on floor1 after the ride.
+      await rideToRoom1(instance, worker)
+      watcher.send('accuse', { type: 'accuse', targetId: worker.sessionId })
+      const watcherCollector = collectorOf(collectors, clients, watcher)
+      const rangeErr = await watcherCollector.waitFor('error')
+      expect(rangeErr.payload.code).toBe('justice-rejected')
+      expect(rangeErr.payload.message).toContain('closer')
+
+      // Wrong accusation: worker and watcher both at x ≈ 3, worker accuses the
+      // innocent watcher → the ACCUSER is fired, name-only.
+      await rideToRoom1(instance, watcher)
+      worker.send('accuse', { type: 'accuse', targetId: watcher.sessionId })
+      for (const collector of collectors) {
+        const fired = await driveUntil(collector, 'player:fired', instance)
+        expect(fired.payload.playerId).toBe(worker.sessionId)
+        expect(Object.keys(fired.payload).sort()).toEqual(['playerId'])
+      }
+      // The fired accuser's intents now reject (live-ness guard).
+      worker.send('move:start', { type: 'move:start', dir: 'left' })
+      const workerCollector = collectorOf(collectors, clients, worker)
+      const firedErr = await workerCollector.waitFor('error')
+      expect(firedErr.payload.code).toBe('justice-rejected')
+      expect(instance.__phase()).toBe('round')
+
+      // Lobby-phase rejection: a fresh room rejects accusations pre-start.
+      const fresh = await createRoom('elin')
+      fresh.send('accuse', { type: 'accuse', targetId: 'x' })
+      const freshCollector = collectAll(fresh)
+      const lobbyErr = await freshCollector.waitFor('error')
+      expect(lobbyErr.payload.code).toBe('justice-rejected')
+      fresh.leave()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
