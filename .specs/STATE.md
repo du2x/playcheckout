@@ -521,12 +521,17 @@
 - **Feature**: `round-end` (cycle 2.9) — win checks (§6.6), results/recap
   (FR-21/22), FR-20 spectator overview, FR-25 reconnection seats with
   ghost/abort. Implemented autonomously per the spec-driven flow.
-- **Phase / Task**: Execute → T1–T8 complete (commits `feat(protocol)`…`feat(client): auto-reconnect…`).
-  Verifier: PASS — see `.specs/features/round-end/validation.md`.
+- **Phase / Task**: Execute → T1–T8 complete (commits 95d9aa2..4abb4ca);
+  independent Verifier PASS (sensor: 8 mutants, all killed after fix round 1 —
+  one genuine survivor M8b closed with mapper-shape tests; real-tree porcelain
+  verified byte-identical around the scratch). Fix round 1 (5cfc122) closed
+  verifier Gaps 1 (MEDIUM, mapper shapes) and 4 (results-phase drop branch);
+  Gaps 2–3 (LOW) accepted with indirect coverage. `validate_state.py round-end`
+  exit 0.
 - **Gates**:
   - `pnpm typecheck` ✅ 0 errors
   - `pnpm biome check apps/client apps/server packages` ✅ clean
-  - `pnpm test:sim` ✅ 312/312 (was 288 pre-2.9; +sim:win_checks, +server:round_end, +server:reconnect, +reducer suites)
+  - `pnpm test:sim` ✅ 317/317 (was 288 pre-2.9; +sim:win_checks, +server:round_end, +server:reconnect, +reducer suites)
   - `pnpm test:client` ✅ 29/29 incl. new `client:round_end` and `client:spectator_view`
 - **Amended legacy assertions** (behavior changes by design): buzzer→results
   instead of buzzer→lobby (`client:round_start` LIGHT-13/14, `client:movement`,
