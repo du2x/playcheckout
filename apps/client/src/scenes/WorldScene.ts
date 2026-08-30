@@ -175,6 +175,11 @@ export class WorldScene extends Phaser.Scene {
    * the whole building via the spectator baseline (door tints). */
   private roomStates = new Map<string, RoomState>()
   private hallLines: Phaser.GameObjects.Graphics | null = null
+  /** Corridor band backdrop (AD-020 art slice): live lane only, never a
+   *  Rectangle — the harness counts Rectangle/Ellipse per player/car. */
+  private corridorBand: Phaser.GameObjects.TileSprite | null = null
+  /** Cream wall fill above the band (same Graphics constraint as hallLines). */
+  private wallFill: Phaser.GameObjects.Graphics | null = null
   /** Roster names for the reconnection re-add (unknown-id player:moved). */
   private rosterNames = new Map<string, string>()
 
@@ -207,6 +212,25 @@ export class WorldScene extends Phaser.Scene {
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
     // contract). One lane live; one per floor for the spectator overview.
     this.drawHallLines()
+
+    // Corridor band backdrop (AD-020): one tileable strip behind the live
+    // lane (wainscot + carpet, y350..495). Live view only — the spectator
+    // overview's stacked lanes keep their plain backdrop. Additive visual:
+    // no Rectangle/Ellipse/Text is created or removed (LIGHT-09 contract).
+    if (this.textures.exists('corridor-band')) {
+      this.corridorBand = this.add.tileSprite(0, 350, 832, 146, 'corridor-band')
+      this.corridorBand.setOrigin(0, 0)
+      this.corridorBand.setDepth(-2)
+      this.corridorBand.setVisible(!this.spectator)
+    }
+    if (this.textures.exists('fx-rustle') && !this.anims.exists('fx-rustle')) {
+      this.anims.create({
+        key: 'fx-rustle',
+        frames: this.anims.generateFrameNumbers('fx-rustle', { start: 0, end: 3 }),
+        frameRate: 12,
+        hideOnComplete: true,
+      })
+    }
 
     for (const player of data.players) {
       this.rosterNames.set(player.id, player.name)
@@ -292,6 +316,7 @@ export class WorldScene extends Phaser.Scene {
   /** Switch between the live single-floor view and the spectator overview. */
   private applyViewMode(): void {
     this.drawHallLines()
+    this.corridorBand?.setVisible(!this.spectator)
     this.syncDoors()
     if (this.spectator) this.seedFromSpectatorSnapshot()
   }
@@ -304,7 +329,16 @@ export class WorldScene extends Phaser.Scene {
     }
     this.hallLines.clear()
     this.hallLines.lineStyle(2, 0x556677, 1)
+    if (this.wallFill === null) {
+      this.wallFill = this.add.graphics()
+      this.wallFill.setDepth(-3)
+    }
+    this.wallFill.clear()
     if (!this.spectator) {
+      // Cream wall above the corridor band (AD-020 brief: y48..350, flat
+      // quiet field so the door rhythm reads). Graphics, not a Rectangle.
+      this.wallFill.fillStyle(0xe8dcc0, 1)
+      this.wallFill.fillRect(0, 48, 832, 302)
       this.hallLines.lineBetween(0, GROUND_Y + 66, 832, GROUND_Y + 66)
       return
     }
@@ -475,6 +509,7 @@ export class WorldScene extends Phaser.Scene {
           Date.now(),
         )
         this.beep(180)
+        this.playRustleFx(action.floor, action.room as RoomIndex)
         break
       case 'player-fired':
         // JUST-04: the fired player's rectangle disappears everywhere — the
@@ -499,6 +534,21 @@ export class WorldScene extends Phaser.Scene {
     display.rect.destroy()
     display.label.destroy()
     this.players.delete(playerId)
+  }
+
+  /**
+   * Dust-puff FX at a rustling room's door front (AD-020 art slice, FR-13's
+   * visual half). Sprite-based: adds no Rectangle/Ellipse/Text (harness
+   * contract), no payload carries a role (FR-9 — the cue is location-only).
+   */
+  private playRustleFx(floor: string, room: RoomIndex): void {
+    if (!this.textures.exists('fx-rustle') || !this.anims.exists('fx-rustle')) return
+    const startPx = (roomSegmentStartMilli(room) / 1000) * TILE_PX
+    const endPx = (roomSegmentEndMilli(room) / 1000) * TILE_PX
+    const sprite = this.add.sprite((startPx + endPx) / 2, this.laneY(floor), 'fx-rustle')
+    sprite.setOrigin(0.5, 1)
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy())
+    sprite.play('fx-rustle')
   }
 
   /** Track roster growth/shrink from lobby snapshots (players join over time). */

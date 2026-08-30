@@ -10,6 +10,8 @@ const game = new Phaser.Game({
   width: 832,
   height: 576,
   backgroundColor: '#0f1419',
+  pixelArt: true,
+  roundPixels: true,
   scene: [BootScene, WorldScene],
 })
 

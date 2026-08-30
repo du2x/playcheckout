@@ -1,0 +1,401 @@
+{
+  "schema_version": 1,
+  "art_direction_brief": "docs/art/art-direction-brief.md",
+  "notes": "MVP set. Statuses: planned | greybox-replaced | wip | in-review | approved. Greybox placeholders (rectangles in WorldScene.ts) are disposable and NOT production assets. FR references are from prd.md.",
+  "assets": [
+    {
+      "id": "staff-walk",
+      "role": "player character walk cycle, all players identical uniform (no saboteur tell)",
+      "path": "apps/client/public/art/chars/staff-walk-8f.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "28x60",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 8,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "proportions",
+        "facing",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-staff-walk.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v3: near/far leg value separation, jacket hem y30, stride \u00b16, arm counter-swing fix; QA asset_report PASS (10 colors, full alpha)"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "staff-work-channel",
+      "role": "work channel loop; MUST be identical for every role (FR-9)",
+      "path": "apps/client/public/art/chars/staff-work-6f.png",
+      "status": "planned",
+      "technical": {
+        "dimensions": "28x60",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 6,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "proportions",
+        "facing",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "",
+        "creator": "",
+        "created_at": "",
+        "license": "",
+        "attribution": "",
+        "prompt_or_source_record": ""
+      },
+      "verification": {
+        "native_scale_reviewed": false,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": false,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "door-closed",
+      "role": "closed room door; hallway must see nothing of the interior (FR-10)",
+      "path": "apps/client/public/art/doors/door-closed.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "72x96",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "proportions",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "door-open",
+      "role": "open door frame; interior renders behind it (FR-10 open-on-entry cue)",
+      "path": "apps/client/public/art/doors/door-open.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "72x96",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "proportions",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "door-card",
+      "role": "permanent door status card, readable from hallway, no timestamp (FR-11)",
+      "path": "apps/client/public/art/doors/door-card.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "24x16",
+        "alpha": true,
+        "anchor": "top-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "room-interior-prepped",
+      "role": "tidy room interior seen through open door; warm light pool",
+      "path": "apps/client/public/art/rooms/room-prepped.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "~112x96",
+        "alpha": false,
+        "anchor": "bottom-left",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "light-direction",
+        "detail-density"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-room-interiors.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors)"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "room-interior-trashed-fresh",
+      "role": "fresh trash tier: scattered debris + sickly-green spill accents (FR-12)",
+      "path": "apps/client/public/art/rooms/room-trash-fresh.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "~112x96",
+        "alpha": false,
+        "anchor": "bottom-left",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "light-direction",
+        "silhouette-of-clutter"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-room-interiors.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors)"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "room-interior-trashed-settled",
+      "role": "settled trash tier: desaturated, dim (FR-12)",
+      "path": "apps/client/public/art/rooms/room-trash-settled.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "~112x96",
+        "alpha": false,
+        "anchor": "bottom-left",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "light-direction",
+        "silhouette-of-clutter"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-room-interiors.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors)"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "corridor-band",
+      "role": "repeatable hallway band: wall + wainscot + carpet strip, tiles seamlessly",
+      "path": "apps/client/public/art/rooms/corridor-band.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "32x146 (tile-width multiple, full strip height)",
+        "alpha": false,
+        "anchor": "top-left",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-corridor-band.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v1: 32px tile period (seam at x=0 only), diamond carpet motif w/ gold knot; QA PASS 6 colors; seamless in full-width tiled mock; wired in-engine (TileSprite y350..495 + Graphics wall fill y48..350)"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "elevator-car",
+      "role": "elevator car, open-shell look when doors open; panel shows position only (FR-6)",
+      "path": "apps/client/public/art/elevator/elevator-car.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "48x64",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 2,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "proportions",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "elevator-panel",
+      "role": "public panel flashing on call incl. decoys (FR-5/FR-6); occupants never shown",
+      "path": "apps/client/public/art/elevator/elevator-panel.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "16x32",
+        "alpha": true,
+        "anchor": "top-center",
+        "frames": 2,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
+    },
+    {
+      "id": "fx-sabotage-rustle",
+      "role": "visual accompaniment to rustle audio within ~3 tiles (FR-13); subtle dust puff at door",
+      "path": "apps/client/public/art/props/fx-rustle-4f.png",
+      "status": "planned",
+      "technical": {
+        "dimensions": "32x32",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 4,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "",
+        "creator": "",
+        "created_at": "",
+        "license": "",
+        "attribution": "",
+        "prompt_or_source_record": ""
+      },
+      "verification": {
+        "native_scale_reviewed": false,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": false,
+        "approved_by": ""
+      }
+    }
+  ]
+}
