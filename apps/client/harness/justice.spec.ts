@@ -80,7 +80,7 @@ test.describe('client:accuse_ui', () => {
 
     // Private roles (rule 3): each page reads its OWN deal only.
     const roles = await Promise.all(pages.map((p) => roleOf(p)))
-    const accuserIndex = roles.findIndex((r) => r === 'staff')
+    const accuserIndex = roles.indexOf('staff')
     const accuser = pages[accuserIndex]
     if (accuser === undefined) throw new Error('no staff dealt')
     const accuserName = NAMES[accuserIndex]
