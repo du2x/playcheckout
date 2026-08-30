@@ -145,6 +145,13 @@ export class App {
         }
         if (viewChanged) this.render()
       },
+      onDrop: () => {
+        // Unconsented drop (FR-25): the seat may be held — show the
+        // reconnecting state but KEEP the world mounted so the restore is
+        // seamless when the SDK lands the reconnection.
+        this.dispatch({ type: 'connection-dropped' })
+        this.render()
+      },
       onDisconnect: () => {
         this.dispatch({ type: 'connection-lost' })
         this.render()
@@ -184,7 +191,12 @@ export class App {
     if (this.state.view === previousView) return
     if (this.state.view === 'lobby' && previousView === 'join') {
       this.startWorld()
-    } else if (this.state.view === 'join' || this.state.view === 'lost') {
+    } else if (
+      this.state.view === 'join' ||
+      (this.state.view === 'lost' && !this.state.reconnecting)
+    ) {
+      // Terminal loss (or a back-to-join reset) tears the world down; a
+      // reconnecting drop keeps it mounted for the seamless restore (FR-25).
       this.game.scene.stop('Round')
     }
   }
@@ -317,7 +329,11 @@ export class App {
         renderResults(this.root, this.state, { onStart: () => this.startRound() })
         break
       case 'lost':
-        this.root.append(el('div', { id: 'lost-view' }, ['connection lost']))
+        this.root.append(
+          el('div', { id: 'lost-view' }, [
+            this.state.reconnecting ? 'connection lost — reconnecting…' : 'connection lost',
+          ]),
+        )
         break
     }
     // View re-renders rebuild the accuse HUD too: restore toasts/banner.

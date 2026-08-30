@@ -47,6 +47,13 @@ export interface ViewState {
   roundPlayerIds: readonly string[]
   /** Winner banner + traitor reveal + recap timeline (results view). */
   results: ResultsState | null
+  /**
+   * True between an unconsented drop and the reconnection outcome (FR-25
+   * client half): the lost view shows a reconnecting state and the world
+   * scene stays mounted; the next restore message (snapshot/round-resumed)
+   * clears it. A terminal connection-loss clears it too.
+   */
+  reconnecting: boolean
   /** Latest public movement snapshot (join / buzzer); positions live in the scene. */
   movementSnapshot: MovementSnapshot | null
   /** Banner text (join rejections, intent errors). */
@@ -112,6 +119,7 @@ export type ViewAction =
     }
   | { type: 'round-recap'; entries: readonly RecapEntry[] }
   | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
+  | { type: 'connection-dropped' }
   | {
       type: 'round-resumed'
       remainingTicks: number
@@ -152,6 +160,7 @@ export function initialViewState(): ViewState {
     roundEndsAtMs: null,
     roundPlayerIds: [],
     results: null,
+    reconnecting: false,
     movementSnapshot: null,
     error: null,
     joining: false,
@@ -196,6 +205,7 @@ export const ACTION_ROUTES = {
   'round-ended': 'view',
   'round-recap': 'view',
   'spectator-snapshot': 'scene',
+  'connection-dropped': 'view',
   'round-resumed': 'view',
   'role-dealt': 'view',
   buzzer: 'view',
@@ -227,8 +237,15 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
         ...state,
         snapshot: action.snapshot,
         joining: false,
-        // A stray mid-round snapshot must not yank the round view back.
-        view: state.view === 'join' || state.view === 'lobby' ? 'lobby' : state.view,
+        reconnecting: false,
+        // A stray mid-round snapshot must not yank the round view back — but
+        // a reconnecting client's restore snapshot lands it in the lobby
+        // (the results-phase reconnect path; a round resume follows with
+        // round:resumed when the round is still active).
+        view:
+          state.view === 'join' || state.view === 'lobby' || state.reconnecting
+            ? 'lobby'
+            : state.view,
       }
     case 'round-started':
       return {
@@ -272,6 +289,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
         roundPlayerIds: [...action.playerIds],
         roundEndsAtMs: Date.now() + action.remainingTicks * 50,
         results: null,
+        reconnecting: false,
         error: null,
       }
     case 'buzzer':
@@ -286,8 +304,13 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'intent-error':
       return { ...state, error: action.message }
     case 'connection-lost':
-      // Join-phase failures arrive as join-failed; this is post-join only.
-      return state.view === 'join' ? state : { ...state, view: 'lost' }
+      // Join-phase failures arrive as join-failed; this is post-join only,
+      // and terminal: no reconnection seat is being held for us.
+      return state.view === 'join' ? state : { ...state, view: 'lost', reconnecting: false }
+    case 'connection-dropped':
+      // An unconsented drop (FR-25): the seat may be held — show the
+      // reconnecting state; the restore messages bring the view back.
+      return state.view === 'join' ? state : { ...state, view: 'lost', reconnecting: true }
     case 'clear-error':
       return { ...state, error: null }
     // Render state, not view state: identity return keeps 20 Hz out of the DOM.

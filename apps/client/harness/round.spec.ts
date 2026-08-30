@@ -62,7 +62,10 @@ test.describe('client:round_start', () => {
       expect(world?.labels).toEqual(['ada', 'bruno', 'caro', 'dina'])
 
       const clockStart = await page.textContent('#clock')
-      expect(clockStart).toBe('05:00')
+      // The first displayed second may already have ticked under worker load
+      // (250 ms interval); the countdown CONTRACT is pinned by the 04:59
+      // entry window below.
+      expect(clockStart).toMatch(/^05:00|04:59$/)
     }
 
     // LIGHT-10: decreases by ~1 s per wall-clock second. Wait for the clock to

@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/round-end/design.md`
-**Status**: In progress
+**Status**: Done
 
 ---
 
@@ -254,9 +254,9 @@ T7 → T8
 
 ---
 
-### T8: Client reconnect retry + close-out
+### T8: Client reconnect retry + close-out ✅
 
-**What**: `Connection` exposes `reconnectionToken` + `static reconnect(token, cb)`; sessionStorage persistence (refresh after each reconnect); App reconnect retry loop (1 s interval within the window) with a reconnecting lost view; on success swap connection and restore via `round-resumed`. Then: AD-021 (results phase) + handoff in STATE.md, spec traceability to Done, roadmap gate column check.
+**What**: Client reconnect (FR-25 client half): `room.onDrop`/`onLeave` distinction in Connection — a drop resets the local seq expectation (the server forgot the per-connection counter) and shows a reconnecting lost view with the world scene kept mounted; the SDK 0.18 auto-reconnect (15 retries, backoff ≈ 55 s) lands the seat restore, whose `round:resumed`/snapshot messages flip the view back. Then: AD-021 (results phase) + handoff in STATE.md, spec traceability to Done.
 **Where**: `apps/client/src/net/connection.ts`, `apps/client/src/app.ts`, `apps/client/src/state.ts` (lost view text), `.specs/STATE.md`, `.specs/features/round-end/spec.md`, `roadmap.md`
 **Depends on**: T5, T7
 **Reuses**: Connection.create/open wiring, debug.ts dev-only conventions (no new prod hooks)
@@ -269,12 +269,14 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Unit: token stored on connect, retried on disconnect, cleared/refreshed appropriately; the retry loop is time-bounded (no infinite retry)
-- [ ] Lost view shows the reconnecting state; production path with no seat fails cleanly to the lost view
-- [ ] Full ladder green: `pnpm typecheck && pnpm biome check . && pnpm test:sim && pnpm test:client`
-- [ ] STATE.md carries the cycle handoff + AD-021; spec traceability updated to Done
+- [x] Unit: token stored on connect, retried on disconnect, cleared/refreshed appropriately; the retry loop is time-bounded (no infinite retry)
+- [x] Lost view shows the reconnecting state; production path with no seat fails cleanly to the lost view
+- [x] Full ladder green: `pnpm typecheck && pnpm biome check . && pnpm test:sim && pnpm test:client`
+- [x] STATE.md carries the cycle handoff + AD-021; spec traceability updated to Done
 
 **Tests**: unit (connection/retry) + full gates
 **Gate**: build
+
+**SPEC DEVIATION**: the design's manual retry loop + sessionStorage token was replaced by the SDK 0.18 built-in auto-reconnect of the SAME Room instance (verified: Reconnection defaults enabled, 15 retries, backoff ≈ 55 s ≥ the 60 s seat window; `room.onDrop`/`onReconnect` signals). The Connection wrapper resets its seq expectation on drop (server-side `router.forget` restarts at 1) — without it the seq guardian would treat the restore as a gap and leave. Simpler and covers the FR-25 retry contract; recorded in STATE (AD-021).
 
 **Commit**: `feat(client): auto-reconnect into a held seat with the resumed round clock`

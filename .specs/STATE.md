@@ -457,78 +457,87 @@
 - **Date**: 2026-08-29
 - **Status**: active — narrows the AD-012/AD-014 duplicate predicate again.
 
+### AD-020
+- **Decision**: Open the art workstream (parallel to gameplay cycles) with a
+  locked art-direction brief at `docs/art/art-direction-brief.md` and an MVP
+  asset manifest at `docs/art/asset-manifest.json`. Direction: PRD §4's named
+  "Elevator Action pixel style", translated into explicit properties — side-on
+  orthographic single-floor view, 4-band value structure, ≤24-color palette
+  (warm hotel neutrals + bellhop-navy uniform worn identically by all players),
+  hard pixel clusters, nearest-neighbor, baked lighting. Art must not leak
+  hidden state: identical work animations for every role (FR-9), no saboteur
+  visual tell, hallway sees nothing of interiors except door cards (FR-10/11),
+  panels show positions only (FR-6), HUD stays DOM (FR-14).
+- **Reason**: Gameplay cycles proceed in parallel; a written visual contract
+  (palette roles, silhouettes, sizes, pivots, anti-leak rules) is required
+  before any production sprite so the family stays coherent and the
+  message-only/hidden-information constraints survive the art pass.
+- **Trade-off**: Open decision recorded, not resolved: current TILE_PX =
+  832/30 ≈ 27.73 is non-integer and fights pixel grids. Recommended fix is a
+  960×576 canvas (exactly 32 px/tile, no tuning change); must be signed off
+  before the first production sprite. Until then the manifest pins character
+  size to 28×60.
+- **Scope**: `docs/art/*`, future `apps/client/public/art/*` and world-render
+  code. No protocol, sim, tuning, or server changes.
+- **Date**: 2026-08-29
+- **Status**: active — brief is draft v1, awaiting visual-target approval.
+
+### AD-021
+- **Decision**: The room gains a third phase `results` between round and
+  lobby, entered exactly when `round:ended` routes (win check, buzzer
+  coverage, or abort). Results is lobby-like — joins flow, roster snapshots
+  flow, the host's `lobby:start` begins the next round — with NO auto-return
+  timer and NO new timing constant; the results view persists until the host
+  starts the next round or the room empties. Movement persists (phase-free,
+  AD-005/AD-015). The reconnection seat (FR-25): an unconsented mid-round
+  drop holds the roster entry + frozen movement slot for
+  `RECONNECT_SECONDS = 60` (prd §11's own value, Room-static test seam);
+  restore re-sends the exact role card + `round:resumed {remainingTicks,
+  playerIds, ownFired}` + snapshot and re-announces the position; expiry
+  ghosts staff (silent, `sim.ghost`) and aborts the saboteur's round
+  (`round:ended {winner:'aborted'}`, no traitor reveal). Expired seats' roster
+  entries are purged at the NEXT ROUND START (not at results entry), so the
+  recap still resolves ghost names. Client reconnect uses the SDK 0.18
+  built-in auto-reconnect of the same Room instance (15 retries, backoff
+  ≈ 55 s) with a seq-reset on drop; the manual retry loop + sessionStorage
+  token from the design was dropped as redundant.
+- **Reason**: Autonomous run defaults recorded per the spec process. The
+  results phase is lobby-like because a forced timer would need a new tuning
+  constant (forbidden without a recorded AD) and the host-paced flow is
+  simpler. Seat expiry resolves per FR-25's letter (ghost/abort only after
+  the window — §11 restores the saboteur card through it).
+- **Trade-off**: Expired seats occupy a roster slot through the results
+  phase (visible as an idle ghost in the roster; freed at next start). A
+  ghost's recap row can fall back to the raw id if a player joins mid-results
+  before rendering (LIGHT-12 fallback). The client relies on the SDK's
+  reconnection machinery rather than hand-rolled retries.
+- **Scope**: cycle 2.9 `round-end`; `apps/server`, `apps/client`,
+  `packages/sim`, `packages/shared`.
+- **Date**: 2026-08-30
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: `justice` (cycle 2.8) — walk-in conviction (FR-15), the
-  accusation tier with fully hidden grace (FR-17/18/19), name-only firing
-  toasts, and the hold-E confirm menu. No tuning changes; TUNING's existing
-  ACCUSATION_RANGE_TILES=2 consumed for the first time; the only new
-  constant-adjacent value is the client's 400 ms hold threshold
-  (accuseSession.ts ACCUSE_HOLD_MS — deliberately NOT TUNING).
-- **Phase / Task**: Execute → T1–T8 complete; independent Verifier PASS
-  (sensor: 11 mutants, 11/11 killed after fix round 1; protocol/leak audit
-  clean; tuning diff empty). Fix round 1 closed the two first-pass survivors
-  (grace-boundary pin; fired-viewer stream silence with a positive control).
-  `validate_state.py justice` exit 0. Lessons L-020/L-021 distilled.
-- **Completed** (commits 9a96027..cb30989 + fix commits):
-  - T1 (`c586298`): protocol — `player:fired` SimEvent (internal `reason`,
-    stripped at the registry projection) + `'all'` row with `{playerId}`-only
-    payload + strict `accuse` intent + `'justice-rejected'` error code;
-    compile-exhaustive client mapper/action plumbing.
-  - T2 (`39afe10`): sim — new `justice.ts` (Justice: fired set, hidden grace
-    via `noteSabotage` on `room:trashed`, walkIn, accuse verdicts, pending
-    queue); WorkChannels `activeUnprepOwner`/`positionOf` queries; RoundSim
-    own segment-diff walk-in detection BEFORE work.tick (same-tick entry +
-    completion still convicts), fired-position filtering, silent channel
-    cancel via `work.leave`.
-  - T3 (`6646472`): sim — `RoundSim.accuse` (coarse `resolved`/rejection,
-    never validity) with eligibility + inclusive 2000-milli same-floor range;
-    `sim:accuse` + `sim:firing_toast` gates; exactly-once firing; simultaneous
-    accusations resolve once.
-  - T4 (`d239ca3`): server — `accuse` handler with 1:1 error mapping;
-    fired-set teardown (`movement.leave`) on the routed event; `ensureLive`
-    guard on every intent handler; fired sessions fall out of positional
-    routing via `viewOf` null context.
-  - T5 (`b6ff9c5`): client — `accuseSession.ts` pure reducer (menu, toasts,
-    selfFired; round-started/buzzer resets; intent-error closes menu),
-    `ui/accuseHud.ts` (toast stack, confirm menu, fired banner) riding in both
-    views, WorldScene rectangle destruction + selfFired intent gates,
-    `connection.sendAccuse`.
-  - T6 (`452a26d`): client — hold-E/ tap-E disambiguation (keydown starts the
-    400 ms window; expiry opens the menu for the nearest in-range candidate;
-    keyup before expiry sends the elevator call exactly as before); confirm
-    sends `accuse`, cancel sends nothing.
-  - T7 (`d3b3674`): harness — `client:accuse_ui` (tap calls, hold opens menu
-    naming a nearby player, cancel sends nothing, confirm fires the accuser
-    name-only on every page, rectangle gone, banner up, round continues).
-  - T8 (`42ec37d`): the six deferred room-shell/first-light PASS-gap
-    assertions (LOBBY-02 no-create, reject-then-start, LOBBY-05 roster
-    stability, LIGHT-02 code-stays-free, LIGHT-04 1-char name, LIGHT-08
-    round-already-active) — STATE deferred notes (1)+(2) CLOSED.
-- **Verification**: `.specs/features/justice/validation.md` — PASS. Sensor:
-  11 behavior-level mutants in a /tmp scratch, 9 killed first pass, both
-  survivors fixed and confirmed killed on re-verify (M-e grace-on-start →
-  grace-boundary tests; M-j teardown-skips-leave → positive-control room
-  test). Real-tree porcelain byte-identical around the scratch.
-- **Gates** (at `0f29c6b`):
+- **Feature**: `round-end` (cycle 2.9) — win checks (§6.6), results/recap
+  (FR-21/22), FR-20 spectator overview, FR-25 reconnection seats with
+  ghost/abort. Implemented autonomously per the spec-driven flow.
+- **Phase / Task**: Execute → T1–T8 complete (commits `feat(protocol)`…`feat(client): auto-reconnect…`).
+  Verifier: PASS — see `.specs/features/round-end/validation.md`.
+- **Gates**:
   - `pnpm typecheck` ✅ 0 errors
-  - `pnpm biome check .` ✅ on all changed paths (root-lint remainder is
-    pre-existing/foreign: `scripts/dev-boot.mjs`, `.opencode/skills/*`,
-    `docs/art/asset-manifest.json`, `.specs/lessons.json` formatting)
-  - `pnpm test:sim` ✅ 288/288 (was 275 pre-justice-fix-round)
-  - `pnpm test:client` ✅ 27/27 incl. new `client:accuse_ui`
-- **Next step**: feature complete. Gate 4 (human 5-minute round,
-  player-facing) recommended before the next cycle. Pre-2.9 note: a parallel
-  art workstream opened (AD-020, uncommitted at this handoff's writing);
-  coordinate before touching `apps/client/public/art` or world rendering.
-  Cycle 2.9 `round-end` may begin — win checks, results/recap (FR-20–FR-22),
-  spectator camera for fired players, disconnect/reconnect (FR-25). Justice
-  round-continues behavior means 2.9 must add the saboteur-fired /
-  staff-reduced win checks on top of the fired set this cycle introduced.
+  - `pnpm biome check apps/client apps/server packages` ✅ clean
+  - `pnpm test:sim` ✅ 312/312 (was 288 pre-2.9; +sim:win_checks, +server:round_end, +server:reconnect, +reducer suites)
+  - `pnpm test:client` ✅ 29/29 incl. new `client:round_end` and `client:spectator_view`
+- **Amended legacy assertions** (behavior changes by design): buzzer→results
+  instead of buzzer→lobby (`client:round_start` LIGHT-13/14, `client:movement`,
+  `client:doors_pre_round` 24 frames, room tests REG-18 seq +3, CHURN-03,
+  AD-004 seam phase, JUST-04 fired-viewer now a spectator stream receiver,
+  JUST-12 correct accusation now ends the round).
+- **Next step**: cycle 2.10 `telemetry` (FR-23/24 JSONL + KPI, `sim:telemetry`)
+  — the phase-exit cycle with the two bot sims (`sim:exit_a`, `sim:exit_b`).
+  `round:ended {winner, reason, saboteurId}` + the aborted marker are already
+  machine-readable for the KPI exclusion. The parallel art workstream (AD-020)
+  remains open and uncommitted — coordinate before touching
+  `apps/client/public/art` or world rendering.
 - **Blockers**: none.
-- **Uncommitted files**: parallel-agent artifacts left untouched —
-  `.specs/STATE.md` AD-020 (art workstream), `AGENTS.md`, `package.json`
-  (pnpm bump + boot script), `pnpm-workspace.yaml`, `scripts/`,
-  `.playwright-mcp/`, `apps/client/public/art/*`,
-  `.opencode/skills/{create-game-assets,game-feel,game-ui-ux,phaser-core}/`.
 - **Branch**: master

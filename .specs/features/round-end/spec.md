@@ -12,16 +12,16 @@ the player (no reconnection window, no ghost, no abort — FR-25).
 
 ## Goals
 
-- [ ] The round ends with a winner exactly per §6.6: saboteur fired → staff
+- [x] The round ends with a winner exactly per §6.6: saboteur fired → staff
       win; live staff reduced to 1 → saboteur win; buzzer coverage ≥80% →
       staff win, else saboteur win — verified by the `sim:win_checks` gate.
-- [ ] Every round end produces a results view: winner banner, traitor identity
+- [x] Every round end produces a results view: winner banner, traitor identity
       reveal, and the FR-22 recap timeline (crimes with freshness, rides,
       catches, accusations + validity), verified by `client:round_end`.
-- [ ] Fired players get the FR-20 spectator overview — all floors, all
+- [x] Fired players get the FR-20 spectator overview — all floors, all
       players, door cards, and room interiors — until round end, verified by
       `client:spectator_view`.
-- [ ] Mid-round disconnects hold a 60 s reconnection seat with exact role
+- [x] Mid-round disconnects hold a 60 s reconnection seat with exact role
       restore; after the window a staff leaver ghosts and a saboteur leaver
       aborts the round (FR-25), verified by the `server:reconnect` gate.
 
@@ -259,45 +259,45 @@ harness assertions on the reconnecting state.
 
 | Requirement ID | Story | Phase | Status |
 | -------------- | ----- | ----- | ------ |
-| REND-01 | P1: Win checks | Execute | Pending |
-| REND-02 | P1: Win checks | Execute | Pending |
-| REND-03 | P1: Win checks | Execute | Pending |
-| REND-04 | P1: Win checks | Execute | Pending |
-| REND-05 | P1: Win checks | Execute | Pending |
-| REND-06 | P2: Results & recap | Execute | Pending |
-| REND-07 | P2: Results & recap | Execute | Pending |
-| REND-08 | P2: Results & recap | Execute | Pending |
-| REND-09 | P2: Results & recap | Execute | Pending |
-| REND-10 | P2: Results & recap | Execute | Pending |
-| REND-11 | P2: Results & recap | Execute | Pending |
-| REND-12 | P3: Spectator overview | Execute | Pending |
-| REND-13 | P3: Spectator overview | Execute | Pending |
-| REND-14 | P3: Spectator overview | Execute | Pending |
-| REND-15 | P3: Spectator overview | Execute | Pending |
-| REND-16 | P3: Spectator overview | Execute | Pending |
-| REND-17 | P4: Disconnect & reconnection | Execute | Pending |
-| REND-18 | P4: Disconnect & reconnection | Execute | Pending |
-| REND-19 | P4: Disconnect & reconnection | Execute | Pending |
-| REND-20 | P4: Disconnect & reconnection | Execute | Pending |
-| REND-21 | P4: Disconnect & reconnection | Execute | Pending |
-| REND-22 | P4: Disconnect & reconnection | Execute | Pending |
-| REND-23 | P4: Disconnect & reconnection | Execute | Pending |
+| REND-01 | P1: Win checks | Execute | Done |
+| REND-02 | P1: Win checks | Execute | Done |
+| REND-03 | P1: Win checks | Execute | Done |
+| REND-04 | P1: Win checks | Execute | Done |
+| REND-05 | P1: Win checks | Execute | Done |
+| REND-06 | P2: Results & recap | Execute | Done |
+| REND-07 | P2: Results & recap | Execute | Done |
+| REND-08 | P2: Results & recap | Execute | Done |
+| REND-09 | P2: Results & recap | Execute | Done |
+| REND-10 | P2: Results & recap | Execute | Done |
+| REND-11 | P2: Results & recap | Execute | Done |
+| REND-12 | P3: Spectator overview | Execute | Done |
+| REND-13 | P3: Spectator overview | Execute | Done |
+| REND-14 | P3: Spectator overview | Execute | Done |
+| REND-15 | P3: Spectator overview | Execute | Done |
+| REND-16 | P3: Spectator overview | Execute | Done |
+| REND-17 | P4: Disconnect & reconnection | Execute | Done |
+| REND-18 | P4: Disconnect & reconnection | Execute | Done |
+| REND-19 | P4: Disconnect & reconnection | Execute | Done |
+| REND-20 | P4: Disconnect & reconnection | Execute | Done |
+| REND-21 | P4: Disconnect & reconnection | Execute | Done |
+| REND-22 | P4: Disconnect & reconnection | Execute | Done |
+| REND-23 | P4: Disconnect & reconnection | Execute | Done |
 
-**Coverage:** 23 total, mapped in tasks.md, 0 unmapped.
+**Coverage:** 23 total, mapped in tasks.md, 0 unmapped, 23 Done.
 
 ---
 
 ## Success Criteria
 
-- [ ] `sim:win_checks` passes under `pnpm test:sim`; `client:round_end` and
+- [x] `sim:win_checks` passes under `pnpm test:sim`; `client:round_end` and
       `client:spectator_view` pass under `pnpm test:client`; `server:reconnect`
       room tests pass under `pnpm test:sim` (server suite).
-- [ ] No payload names the saboteur, a role, or an accusation verdict before
+- [x] No payload names the saboteur, a role, or an accusation verdict before
       the round has ended (protocol registry audit clean; the only identity
       reveal travels on `round:ended`, post-round).
-- [ ] Live players' wire view is byte-identical to cycle 2.8 — the spectator
+- [x] Live players' wire view is byte-identical to cycle 2.8 — the spectator
       privilege exists only in the spectator context (fire a player, compare
       a live player's message log before/after).
-- [ ] No §7 tuning value changed; the only new server constant is
+- [x] No §7 tuning value changed; the only new server constant is
       RECONNECT_SECONDS = 60, which is prd §11's own value (not a §7 table
       row), overridable via the test seam.

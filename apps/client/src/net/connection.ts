@@ -21,7 +21,10 @@ import { MAPPERS } from './mappers'
 
 export interface ConnectionCallbacks {
   onActions: (actions: ViewAction[]) => void
+  /** Terminal: the session is over (consented leave, or retries exhausted). */
   onDisconnect: () => void
+  /** Unconsented drop (FR-25): the server may hold a reconnection seat. */
+  onDrop?: () => void
 }
 
 type ClientRoom = Room<unknown>
@@ -68,6 +71,15 @@ export class Connection {
       const mapper = MAPPERS[name as RegistryKey] as ((p: unknown) => ViewAction[]) | undefined
       if (mapper === undefined) return
       cb.onActions(mapper(envelope.payload))
+    })
+    // FR-25 client half: the SDK auto-reconnects this same Room instance
+    // (15 retries, backoff ≈ 55 s — the 60 s seat's window). On drop, the
+    // server forgets our per-connection seq counter, so the next envelope
+    // starts at 1: reset ours BEFORE the reconnect or the gap guardian would
+    // treat the restore as a gap and leave the seat (REG-16/REG-17).
+    room.onDrop(() => {
+      connection.lastSeq = 0
+      cb.onDrop?.()
     })
     room.onLeave(() => cb.onDisconnect())
 

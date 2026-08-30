@@ -252,3 +252,48 @@ describe('round-end reducer', () => {
     expect(s.roundEndsAtMs).toBeNull()
   })
 })
+
+// Spec REND-19/23 (cycle 2.9): the reconnecting client state machine —
+// drop → reconnecting lost view (scene kept) → restore clears the flag.
+describe('reconnecting client', () => {
+  it('marks a drop as reconnecting without tearing the round state down', () => {
+    const s = reduce(inRound(), { type: 'connection-dropped' })
+    expect(s.view).toBe('lost')
+    expect(s.reconnecting).toBe(true)
+    // The restore needs the roster + round cast — the drop keeps them.
+    expect(s.snapshot).toEqual(snapshot())
+    expect(s.roundPlayerIds).toEqual(['p1', 'p2'])
+  })
+
+  it('restores a mid-round seat via round:resumed and clears the flag', () => {
+    const dropped = reduce(inRound(), { type: 'connection-dropped' })
+    const s = reduce(dropped, {
+      type: 'round-resumed',
+      remainingTicks: 500,
+      playerIds: ['p1', 'p2'],
+      ownFired: false,
+    })
+    expect(s.view).toBe('round')
+    expect(s.reconnecting).toBe(false)
+  })
+
+  it('a results-phase reconnect lands in the lobby via the restore snapshot', () => {
+    const dropped = reduce(inRound(), { type: 'connection-dropped' })
+    const s = reduce(dropped, { type: 'snapshot', snapshot: snapshot() })
+    expect(s.view).toBe('lobby')
+    expect(s.reconnecting).toBe(false)
+  })
+
+  it('a terminal connection-loss clears the reconnecting flag', () => {
+    const dropped = reduce(inRound(), { type: 'connection-dropped' })
+    const s = reduce(dropped, { type: 'connection-lost' })
+    expect(s.view).toBe('lost')
+    expect(s.reconnecting).toBe(false)
+  })
+
+  it('never marks the join view as reconnecting', () => {
+    const s = reduce(initialViewState(), { type: 'connection-dropped' })
+    expect(s.view).toBe('join')
+    expect(s.reconnecting).toBe(false)
+  })
+})

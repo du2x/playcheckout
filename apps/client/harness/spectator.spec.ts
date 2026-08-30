@@ -50,7 +50,7 @@ function readRects(page: Page): Promise<SceneRect[]> {
     const scene = hook?.scene?.('Round') as
       | { children: { list: { type: string; y: number; visible: boolean }[] } | null }
       | undefined
-    return (scene?.children.list ?? [])
+    return (scene?.children?.list ?? [])
       .filter((c) => c.type === 'Rectangle')
       .map((c) => ({ visible: c.visible, y: c.y }))
   })
