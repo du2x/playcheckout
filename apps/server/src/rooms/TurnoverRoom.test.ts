@@ -1717,7 +1717,16 @@ describe('server:justice', () => {
       const liveRecord = record(watcher)
       watcher.send('elevator:call', { type: 'elevator:call' }) // an 'all' row
       await driveUntil(collectorOf(collectors, clients, watcher), 'elevator:called', instance)
+      // Live positional traffic: the surviving staff walker (still parked on
+      // floor1) walks — their own same-floor stream MUST arrive (driveUntil
+      // below is the positive control: the window is not simply silent),
+      // while the fired viewer — whose viewOf is null after the teardown —
+      // receives NOTHING.
+      const workerCollector = collectorOf(collectors, clients, worker)
+      worker.send('move:start', { type: 'move:start', dir: 'left' })
+      await driveUntil(workerCollector, 'player:moved', instance)
       instance.__driveTicks(20)
+      worker.send('move:stop', { type: 'move:stop' })
       await sleep(120)
       expect(saboteurRecord.seen.some((m) => m.type === 'player:moved')).toBe(false)
       expect(saboteurRecord.seen.some((m) => m.type === 'elevator:called')).toBe(true)

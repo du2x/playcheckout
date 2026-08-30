@@ -11,6 +11,8 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 **Design**: `.specs/features/justice/design.md`
 **Status**: Done
 
+**Verifier fix round 1 (post-PASS)**: Gap 1 (grace-boundary sim pin) + Gap 2 (live positional traffic positive control in the teardown room test) closed — see the two test commits after cb30989.
+
 ---
 
 ## Test Coverage Matrix

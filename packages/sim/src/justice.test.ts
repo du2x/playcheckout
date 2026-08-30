@@ -419,3 +419,54 @@ describe('sim:firing_toast', () => {
     }
   })
 })
+
+// Verifier Gap 1 fix (sensor survivor): grace must flip on un-prep COMPLETION
+// (`room:trashed`), not on channel start — an accusation landing mid-channel
+// is still in-grace and fires the accuser.
+describe('sim:accuse — grace boundary', () => {
+  it('treats a mid-un-prep accusation as in-grace (accuser fired), then correct after completion', () => {
+    const { sim, saboteur, staff } = startedRound(21)
+    const a = staff[0]
+    if (a === undefined) throw new Error('ids')
+    const feed = (map: Map<string, Pos>) => void sim.tick(map)
+    feed(positions(at(a, pos(F1, CENTER))))
+    expect(sim.startWork(a, F1, 1)).toBe('accepted')
+    for (let i = 0; i < PREP_TICKS; i++) feed(positions(at(a, pos(F1, CENTER))))
+
+    // Saboteur STARTS the un-prep — grace has NOT ended yet.
+    feed(positions(at(a, pos(F1, CENTER)), at(saboteur, pos(F1, CENTER))))
+    expect(sim.startWork(saboteur, F1, 1)).toBe('accepted')
+    for (let i = 0; i < UNPREP_TICKS - 1; i++) {
+      feed(positions(at(a, pos(F1, CENTER)), at(saboteur, pos(F1, CENTER))))
+    }
+    // a accuses one tick BEFORE completion: wrong, the accuser fires.
+    expect(sim.accuse(a, saboteur)).toBe('resolved')
+    const wrong = firedOf(
+      sim.tick(positions(at(a, pos(F1, CENTER)), at(saboteur, pos(F1, CENTER)))),
+    )
+    expect(wrong).toEqual([{ type: 'player:fired', playerId: a, reason: 'wrong-accusation' }])
+  })
+
+  it('fires the saboteur when the accusation lands on the completion tick (grace ends exactly there)', () => {
+    const { sim, saboteur, staff } = startedRound(22)
+    const a = staff[0]
+    const b = staff[1]
+    if (a === undefined || b === undefined) throw new Error('ids')
+    const feed = (map: Map<string, Pos>) => void sim.tick(map)
+    feed(positions(at(a, pos(F1, CENTER))))
+    expect(sim.startWork(a, F1, 1)).toBe('accepted')
+    for (let i = 0; i < PREP_TICKS; i++) feed(positions(at(a, pos(F1, CENTER))))
+    feed(positions(at(a, pos(F1, CENTER)), at(saboteur, pos(F1, CENTER))))
+    expect(sim.startWork(saboteur, F1, 1)).toBe('accepted')
+    for (let i = 0; i < UNPREP_TICKS; i++) {
+      feed(positions(at(a, pos(F1, CENTER)), at(saboteur, pos(F1, CENTER))))
+    }
+    // The un-prep has now COMPLETED: the next accusation is correct.
+    expect(sim.accuse(a, saboteur)).toBe('resolved')
+    const correct = firedOf(sim.tick(new Map()))
+    expect(correct).toEqual([
+      { type: 'player:fired', playerId: saboteur, reason: 'correct-accusation' },
+    ])
+    void b
+  })
+})
