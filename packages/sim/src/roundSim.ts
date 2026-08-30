@@ -1,4 +1,12 @@
-import { type GuestFloorId, type Role, roomIndexAtMilli, TUNING } from '@turnover/shared'
+import {
+  type GuestFloorId,
+  type RecapEntry,
+  ROOM_COUNT,
+  type Role,
+  type RoundEndReason,
+  roomIndexAtMilli,
+  TUNING,
+} from '@turnover/shared'
 import { dealRoles } from './deal.js'
 import type { SimEvent } from './events.js'
 import { Justice } from './justice.js'
@@ -55,7 +63,19 @@ export class RoundSim {
    *  interior-observation state — design decision, cycle 2.8). */
   private readonly justiceSegments = new Map<string, string | null>()
   private started = false
+  private readonly totalTicks: number
   private ticksLeft: number
+  // --- Round end (cycle 2.9, win conditions + FR-25): the round can now finish early.
+  private ended = false
+  /** Winner + reason of the single `round:ended`; null until `end()` fires. */
+  private result: { winner: 'staff' | 'saboteur'; reason: RoundEndReason } | null = null
+  private resultEmitted = false
+  /** Disconnected leavers past their reconnection window (FR-25) — out of
+   *  live play like fired players, but silently and without a firing event. */
+  private readonly ghosted = new Set<string>()
+  /** Crimes, catches, accusations in tick order — the FR-22 recap's sim half
+   *  (rides are the room's half; the sim never sees movement). */
+  private readonly journal: RecapEntry[] = []
 
   constructor(config: RoundSimConfig) {
     if (
@@ -72,6 +92,7 @@ export class RoundSim {
     if (!Number.isInteger(totalTicks) || totalTicks < 1) {
       throw new Error(`totalTicks must be a positive integer, got ${config.totalTicks}`)
     }
+    this.totalTicks = totalTicks
     this.ticksLeft = totalTicks
   }
 
@@ -90,8 +111,17 @@ export class RoundSim {
    * inside-segment validation, walk-out cancels, and room observation.
    */
   tick(positions?: RoundPositions): readonly SimEvent[] {
-    if (this.ticksLeft <= 0) return []
+    // A ghost-queued win check (FR-25) must flush once past the end; after the
+    // verdict is out, the round emits nothing.
+    if (this.resultEmitted || this.ticksLeft <= 0) return []
+    // 0-based tick index of the events produced here (deterministic journal
+    // stamp; identical under the AD-004 totalTicks override).
+    const tickIndex = this.totalTicks - this.ticksLeft
     const events: SimEvent[] = []
+    // A win check resolved from an intent-time call (ghost, FR-25) flushes at
+    // the top of the next tick (announce pattern).
+    this.emitResult(events)
+    if (this.ended) return events
     if (!this.started) {
       this.started = true
       events.push({ type: 'round:started', playerIds: this.playerIds })
@@ -99,13 +129,15 @@ export class RoundSim {
         events.push({ type: 'role:dealt', playerId, role })
       }
     }
-    // Fired players are out of live play: one stale position may arrive after
-    // the firing (the room tears them down on the event), so they are filtered
-    // before any justice or work processing reads them.
+    // Fired AND ghosted players are out of live play: one stale position may
+    // arrive after the removal (the room tears them down), so they are
+    // filtered before any justice or work processing reads them.
     const live = new Map<string, PositionSample>()
     if (positions !== undefined) {
       for (const [playerId, sample] of positions) {
-        if (!this.justice.isFired(playerId)) live.set(playerId, sample)
+        if (!this.justice.isFired(playerId) && !this.ghosted.has(playerId)) {
+          live.set(playerId, sample)
+        }
       }
     }
     // Walk-in conviction check (JUST-01..03, FR-15): segment diff against the
@@ -120,13 +152,32 @@ export class RoundSim {
       if (key === null) continue
       const [floor, room] = splitRoomKey(key)
       const owner = this.work.activeUnprepOwner(floor, room)
-      this.justice.walkIn(playerId, owner)
+      const caught = this.justice.walkIn(playerId, owner)
+      // REND-08: every walk-in conviction is a recap catch entry.
+      if (caught !== null) {
+        this.journal.push({
+          kind: 'catch',
+          tick: tickIndex,
+          entrantId: playerId,
+          saboteurId: caught,
+        })
+      }
     }
     for (const workEvent of this.work.tick(live)) {
       events.push(workEvent)
       // Grace (JUST-07/08): `room:trashed` can only come from a completed
-      // un-prep — attribute it to the deal's single saboteur.
-      if (workEvent.type === 'room:trashed') this.justice.noteSabotage()
+      // un-prep — attribute it to the deal's single saboteur. REND-08: it is
+      // also a recap crime entry (freshness resolved at recap time).
+      if (workEvent.type === 'room:trashed') {
+        this.justice.noteSabotage()
+        this.journal.push({
+          kind: 'crime',
+          tick: tickIndex,
+          floor: workEvent.floor,
+          room: workEvent.room,
+          fresh: true,
+        })
+      }
     }
     // Firing teardown (JUST-04/06/11): the fired player's channels are
     // cancelled silently (WORK-12) and their position memory is dropped, so
@@ -136,9 +187,62 @@ export class RoundSim {
       this.work.leave(fired.playerId)
       this.justiceSegments.delete(fired.playerId)
     }
+    // Win checks (REND-01/02): saboteur fired → staff win; live staff down to
+    // one → saboteur win. Checked after the drain so the `round:ended` lands
+    // in the same flush as its triggering `player:fired`.
+    if (this.justice.isFired(this.justice.saboteurId)) {
+      this.end('staff', 'saboteur-fired')
+    } else if (this.liveStaffCount() === 1) {
+      this.end('saboteur', 'staff-reduced')
+    }
+    this.emitResult(events)
+    if (this.ended) {
+      this.ticksLeft--
+      return events
+    }
     this.ticksLeft--
-    if (this.ticksLeft === 0) events.push({ type: 'round:buzzer' })
+    if (this.ticksLeft === 0) {
+      // Buzzer (REND-03): the clock-expiry event first, then the coverage
+      // verdict in the same flush — `prepped × 5 ≥ ROOM_COUNT × 4` is the
+      // integer-safe ≥80% of the locked 24 rooms.
+      events.push({ type: 'round:buzzer' })
+      if (this.work.preppedCount * 5 >= ROOM_COUNT * 4) {
+        this.end('staff', 'coverage-met')
+      } else {
+        this.end('saboteur', 'coverage-failed')
+      }
+      this.emitResult(events)
+    }
     return events
+  }
+
+  /** Live staff = round players − fired − ghosted − the saboteur (REND-02). */
+  private liveStaffCount(): number {
+    let count = 0
+    for (const playerId of this.playerIds) {
+      if (
+        playerId !== this.justice.saboteurId &&
+        !this.justice.isFired(playerId) &&
+        !this.ghosted.has(playerId)
+      ) {
+        count++
+      }
+    }
+    return count
+  }
+
+  /** Record the verdict once; the event is emitted by `emitResult`. */
+  private end(winner: 'staff' | 'saboteur', reason: RoundEndReason): void {
+    if (this.ended) return
+    this.ended = true
+    this.result = { winner, reason }
+  }
+
+  /** Push the single `round:ended` into the current flush (REND-05: exactly once). */
+  private emitResult(events: SimEvent[]): void {
+    if (this.result === null || this.resultEmitted) return
+    this.resultEmitted = true
+    events.push({ type: 'round:ended', ...this.result, saboteurId: this.justice.saboteurId })
   }
 
   /**
@@ -167,11 +271,15 @@ export class RoundSim {
    * carried only by the internal event's `reason`, which the Router strips.
    */
   accuse(accuserId: string, targetId: string): 'resolved' | AccuseRejection {
-    if (!this.started || this.ticksLeft <= 0) return 'round-not-active'
-    if (this.justice.isFired(accuserId)) return 'accuser-not-live'
+    if (!this.started || this.ended || this.ticksLeft <= 0) return 'round-not-active'
+    if (this.justice.isFired(accuserId) || this.ghosted.has(accuserId)) return 'accuser-not-live'
     if (accuserId === this.justice.saboteurId) return 'accuser-is-saboteur'
     if (accuserId === targetId) return 'self-target'
-    if (this.justice.isFired(targetId) || !this.playerIds.includes(targetId)) {
+    if (
+      this.justice.isFired(targetId) ||
+      this.ghosted.has(targetId) ||
+      !this.playerIds.includes(targetId)
+    ) {
       return 'target-not-live'
     }
     const accuser = this.work.positionOf(accuserId)
@@ -185,8 +293,56 @@ export class RoundSim {
     ) {
       return 'out-of-range'
     }
-    this.justice.accuse(accuserId, targetId)
+    const verdict = this.justice.accuse(accuserId, targetId)
+    // REND-08: every resolved accusation is a recap entry — accuser, target,
+    // and the validity verdict that is only ever revealed post-round (FR-22).
+    this.journal.push({
+      kind: 'accusation',
+      tick: this.totalTicks - this.ticksLeft,
+      accuserId,
+      targetId,
+      correct: verdict === 'correct',
+    })
     return 'resolved'
+  }
+
+  /**
+   * Mark a disconnected leaver as an idle ghost (FR-25, cycle 2.9): out of
+   * live play like a fired player — filtered positions, unreachable targets —
+   * but silently (no event, no journal entry). If the ghosting reduces live
+   * staff to one, the saboteur win check fires and flushes on the next tick.
+   */
+  ghost(playerId: string): void {
+    if (this.ended || this.justice.isFired(playerId)) return
+    this.ghosted.add(playerId)
+    this.work.leave(playerId)
+    this.justiceSegments.delete(playerId)
+    if (this.liveStaffCount() === 1) this.end('saboteur', 'staff-reduced')
+  }
+
+  /** The deal's single saboteur — the room needs it for the abort path (FR-25). */
+  get saboteurId(): string {
+    return this.justice.saboteurId
+  }
+
+  /**
+   * The sim half of the FR-22 recap: crimes, catches, accusations in tick
+   * order, with crime freshness resolved NOW (still `trashed` = inside the
+   * freshness window; `settled` = aged out). Rides are the room's half.
+   */
+  recapEntries(): readonly RecapEntry[] {
+    return this.journal.map((entry) => {
+      if (entry.kind !== 'crime') return entry
+      return {
+        ...entry,
+        fresh: this.work.stateOf(entry.floor as GuestFloorId, entry.room) === 'trashed',
+      }
+    })
+  }
+
+  /** True once a win check has fired — the room reads it after routing. */
+  get isEnded(): boolean {
+    return this.ended
   }
 
   /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */

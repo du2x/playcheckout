@@ -78,6 +78,30 @@ export class WorkChannels {
   }
 
   /**
+   * Current state of every room — the FR-20 spectator baseline and the recap's
+   * freshness read both consume this (cycle 2.9). Row order is deterministic:
+   * floors then rooms ascending.
+   */
+  roomStates(): { floor: GuestFloorId; room: RoomIndex; state: RoomState }[] {
+    const rows: { floor: GuestFloorId; room: RoomIndex; state: RoomState }[] = []
+    for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
+      for (let room = 1 as RoomIndex; room <= 8; room = (room + 1) as RoomIndex) {
+        rows.push({ floor, room, state: this.states.get(roomKey(floor, room)) ?? 'fresh' })
+      }
+    }
+    return rows
+  }
+
+  /** Rooms CURRENTLY in `prepped` state — the buzzer coverage check (win conditions). */
+  get preppedCount(): number {
+    let count = 0
+    for (const state of this.states.values()) {
+      if (state === 'prepped') count++
+    }
+    return count
+  }
+
+  /**
    * Justice query (cycle 2.8): the owner of the active un-prep channel in one
    * room, or null. At most one exists (exactly one saboteur, one channel per
    * player) — the walk-in conviction's channel lookup.

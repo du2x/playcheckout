@@ -96,7 +96,7 @@ T7 → T8
 
 ---
 
-### T2: Sim — win checks, ghost, round journal
+### T2: Sim — win checks, ghost, round journal ✅
 
 **What**: RoundSim win checks (saboteur-fired same-tick, staff-reduced incl. ghosts, buzzer coverage via `WorkChannels.preppedCount`), `ended` guard on intents, `ghost()`, the round journal (crimes/catches/accusations) with `recapEntries()`/`saboteurId` queries, and the `sim:win_checks` scenarios.
 **Where**: `packages/sim/src/roundSim.ts`, `packages/sim/src/justice.ts`, `packages/sim/src/work.ts`, `packages/sim/src/roundSim.test.ts`
@@ -111,10 +111,10 @@ T7 → T8
 
 **Done when**:
 
-- [ ] `sim:win_checks` passes: walk-in → staff win same tick (fired event precedes round:ended); wrong-accusation cascade to 1 staff → saboteur win; zero-prep short shift → buzzer then coverage-failed saboteur win (same tick, buzzer first); full-coverage run → coverage-met staff win; staff ghosted to 1 → saboteur win on the next tick flush
-- [ ] Exactly one `round:ended` per round on every path; intents after `ended` return `round-not-active`; no events after `ended`
-- [ ] Journal: crime (with fresh flag at journal time), catch (entrant+saboteur), accusation (accuser+target+correct) entries in tick order; `recapEntries()` returns them; ghost leaves no journal entry
-- [ ] `pnpm test:sim` green, no existing test weakened
+- [x] `sim:win_checks` passes: walk-in → staff win same tick (fired event precedes round:ended); wrong-accusation cascade to 1 staff → saboteur win; zero-prep short shift → buzzer then coverage-failed saboteur win (same tick, buzzer first); full-coverage run → coverage-met staff win; staff ghosted to 1 → saboteur win on the next tick flush
+- [x] Exactly one `round:ended` per round on every path; intents after `ended` return `round-not-active`; no events after `ended`
+- [x] Journal: crime (with fresh flag at journal time), catch (entrant+saboteur), accusation (accuser+target+correct) entries in tick order; `recapEntries()` returns them; ghost leaves no journal entry
+- [x] `pnpm test:sim` green, no existing test weakened
 
 **Tests**: unit (sim)
 **Gate**: quick

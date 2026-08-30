@@ -490,8 +490,9 @@ describe('server:protocol_registry', () => {
     await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
     instance?.__driveTicks(1)
     const reStarted = await collector.waitFor('round:started')
-    // Buzzer + buzzer-tick movement snapshot precede the re-deal's start.
-    expect(reStarted.seq).toBe(buzzer.seq + 2)
+    // Buzzer + its same-flush round:ended verdict + the movement snapshot
+    // precede the re-deal's start (cycle 2.9 adds the verdict event).
+    expect(reStarted.seq).toBe(buzzer.seq + 3)
     const reDealt = await collector.waitFor('role:dealt')
     expect(reDealt.seq).toBe(reStarted.seq + 1)
     collector.stop()
