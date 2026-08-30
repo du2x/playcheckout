@@ -228,11 +228,11 @@ confirm fires and both pages see the name-only toast while the round continues.
 | JUST-13 | P3: Firing feedback | Execute | Done |
 | JUST-14 | P3: Firing feedback | Execute | Done |
 | JUST-15 | P3: Firing feedback | Execute | Done |
-| JUST-16 | P4: Accusation UI | Execute | Pending |
-| JUST-17 | P4: Accusation UI | Execute | Pending |
-| JUST-18 | P4: Accusation UI | Execute | Pending |
-| JUST-19 | P4: Accusation UI | Execute | Pending |
-| JUST-20 | P4: Accusation UI | Execute | Pending |
+| JUST-16 | P4: Accusation UI | Execute | Done |
+| JUST-17 | P4: Accusation UI | Execute | Done |
+| JUST-18 | P4: Accusation UI | Execute | Done |
+| JUST-19 | P4: Accusation UI | Execute | Done |
+| JUST-20 | P4: Accusation UI | Execute | Done |
 | JUST-21 | Deferred gap assertions (STATE notes 1–2) | Execute | Pending |
 
 **Coverage:** 21 total, mapped in tasks.md, 0 unmapped.

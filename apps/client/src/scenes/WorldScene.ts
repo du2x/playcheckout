@@ -12,6 +12,7 @@ import {
 } from '@turnover/shared'
 import Phaser from 'phaser'
 import type { AccuseSession } from '../accuseSession'
+import { ACCUSE_HOLD_MS } from '../accuseSession'
 import {
   dropCues,
   type EvidenceSession,
@@ -65,6 +66,8 @@ export interface WorldStartData {
   sendElevatorCall: () => void
   sendElevatorPress: (floor: FloorId) => void
   sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
+  /** Hold-E expiry (JUST-16): opens the confirm menu for the nearest candidate. */
+  openAccuseMenu: (targetId: string) => void
   /** The App-reduced rider session at mount time (usually null on fresh join). */
   riderSession: RiderUpdate
 }
@@ -116,6 +119,7 @@ export class WorldScene extends Phaser.Scene {
   private sendElevatorCall: () => void = () => {}
   private sendElevatorPress: (floor: FloorId) => void = () => {}
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
+  private openAccuseMenu: (targetId: string) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
@@ -156,6 +160,7 @@ export class WorldScene extends Phaser.Scene {
     this.sendElevatorCall = data.sendElevatorCall
     this.sendElevatorPress = data.sendElevatorPress
     this.sendWorkStart = data.sendWorkStart
+    this.openAccuseMenu = data.openAccuseMenu
     this.players.clear()
     this.cars.clear()
     this.ownMoving = null
@@ -198,11 +203,13 @@ export class WorldScene extends Phaser.Scene {
       keyboard.on('keydown-RIGHT', () => this.beginMove('right'))
       keyboard.on('keyup-LEFT', () => this.endMove('left'))
       keyboard.on('keyup-RIGHT', () => this.endMove('right'))
-      // Elevator calls: up/down/E summons a car to this floor — destination-
+      // Elevator calls: up/down summons a car to this floor — destination-
       // free (AD-014): the destination is chosen inside the car via a press.
+      // E is the accusation key (FR-17): a tap calls, a hold opens the menu.
       keyboard.on('keydown-UP', () => this.callElevator())
       keyboard.on('keydown-DOWN', () => this.callElevator())
-      keyboard.on('keydown-E', () => this.callElevator())
+      keyboard.on('keydown-E', () => this.beginAccuseHold())
+      keyboard.on('keyup-E', () => this.endAccuseHold())
       // In-car floor presses (ELR-06): 1/2/3 press floor1..floor3, 0 presses
       // lobby — active only while the local player rides a car.
       keyboard.on('keydown', (event: KeyboardEvent) => {
@@ -426,6 +433,47 @@ export class WorldScene extends Phaser.Scene {
   private callElevator(): void {
     if (this.selfFired) return
     this.sendElevatorCall()
+  }
+
+  /**
+   * E is the accusation key (FR-17, cycle 2.8): keydown starts the hold
+   * window; expiry opens the confirm menu for the nearest in-range candidate.
+   * A keyup before expiry sends the elevator call exactly as the old tap did
+   * (JUST-17) — the hold swallows the call instead.
+   */
+  private accuseHoldTimer: number | null = null
+
+  private beginAccuseHold(): void {
+    if (this.selfFired || this.accuseHoldTimer !== null) return
+    this.accuseHoldTimer = window.setTimeout(() => {
+      this.accuseHoldTimer = null
+      // Riding players cannot accuse: the server sees no floor for them.
+      if (this.riderSession !== null) return
+      const target = this.nearestAccuseCandidate()
+      if (target !== undefined) this.openAccuseMenu(target)
+    }, ACCUSE_HOLD_MS)
+  }
+
+  private endAccuseHold(): void {
+    if (this.accuseHoldTimer === null) return
+    window.clearTimeout(this.accuseHoldTimer)
+    this.accuseHoldTimer = null
+    this.callElevator()
+  }
+
+  /** Nearest live player on the own floor within ACCUSATION_RANGE_TILES — a
+   * mirror of the server's range rule, never an authority (design pin). */
+  private nearestAccuseCandidate(): string | undefined {
+    const own = this.players.get(this.ownId)
+    if (own === undefined) return undefined
+    let best: { id: string; dist: number } | undefined
+    for (const [id, display] of this.players) {
+      if (id === this.ownId || display.left || display.floor !== own.floor) continue
+      const dist = Math.abs(display.x - own.x)
+      if (dist > TUNING.ACCUSATION_RANGE_TILES) continue
+      if (best === undefined || dist < best.dist) best = { id, dist }
+    }
+    return best?.id
   }
 
   /** In-car floor press — sent only while the local player rides a car. */

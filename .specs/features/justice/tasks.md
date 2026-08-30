@@ -206,7 +206,7 @@ T6 → T7
 
 ---
 
-### T6: Client — hold-E confirm menu and accuse sending
+### T6: Client — hold-E confirm menu and accuse sending ✅
 
 **What**: Wire the E key: keydown starts a 400 ms timer, expiry opens the confirm menu for the nearest live same-floor candidate within `TUNING.ACCUSATION_RANGE_TILES`, keyup before expiry sends `elevator:call`; confirm sends `accuse {targetId}`, cancel sends nothing; errors close the menu.
 **Where**: `apps/client/src/app.ts`, `apps/client/src/ui/` (menu DOM), `apps/client/src/connection` senders

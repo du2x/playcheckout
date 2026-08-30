@@ -12,6 +12,13 @@ import type { ViewAction } from './state'
 /** How long a name-only firing toast stays visible. */
 export const ACCUSE_TOAST_MS = 4000
 
+/**
+ * Hold-E threshold (JUST-17): a tap under this sends the elevator call, a
+ * hold past it opens the confirm menu. Client UI affordance — deliberately
+ * NOT a TUNING value (prd §7 is gameplay-only).
+ */
+export const ACCUSE_HOLD_MS = 400
+
 export interface AccuseToast {
   readonly playerId: string
   readonly at: number
@@ -72,6 +79,10 @@ export function reduceAccuse(
     case 'menu-cancel':
     case 'menu-confirm':
       // Confirm's intent send is the App's job — the session only closes.
+      return session.menu === null ? session : { ...session, menu: null }
+    case 'intent-error':
+      // JUST-18: a server rejection surfaces through the view state and closes
+      // the menu — the mirror was wrong (target moved, already fired, …).
       return session.menu === null ? session : { ...session, menu: null }
     default:
       return session

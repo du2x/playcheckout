@@ -201,24 +201,53 @@ export class App {
       sendElevatorPress: (floor: FloorId) => this.connection?.sendElevatorPress(floor),
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
         this.connection?.sendWorkStart(floor, room),
+      openAccuseMenu: (targetId: string) => this.openAccuseMenu(targetId),
       riderSession: this.rider,
     })
   }
 
   /**
    * Surgical accuse-hud write (cycle 2.8, FR-18): one toast per firing —
-   * "X was fired", name-only because the payload is — and the fired banner.
-   * A timer re-renders when the oldest toast expires so it disappears without
-   * waiting for the next action.
+   * "X was fired", name-only because the payload is — plus the confirm menu
+   * and the fired banner. A timer re-renders when the oldest toast expires so
+   * it disappears without waiting for the next action.
    */
   private syncAccuseHud(): void {
     this.accuse = pruneToasts(this.accuse, Date.now())
     const names = new Map(this.state.snapshot?.roster.map((e) => [e.id, e.name] as const) ?? [])
-    syncAccuseHud(this.accuse, (id) => names.get(id) ?? id)
+    syncAccuseHud(this.accuse, (id) => names.get(id) ?? id, {
+      onConfirm: () => this.confirmAccuse(),
+      onCancel: () => this.cancelAccuse(),
+    })
     const oldest = this.accuse.toasts[0]
     if (oldest !== undefined) {
       window.setTimeout(() => this.syncAccuseHud(), ACCUSE_TOAST_MS + 100)
     }
+  }
+
+  /** Menu confirm (JUST-18): send the accuse intent, close the menu. */
+  private confirmAccuse(): void {
+    const menu = this.accuse.menu
+    if (menu !== null) this.connection?.sendAccuse(menu.targetId)
+    this.reduceAccuseLocal({ type: 'menu-confirm' })
+  }
+
+  /** Menu cancel (JUST-18): send NOTHING — the accusation never happened. */
+  private cancelAccuse(): void {
+    this.reduceAccuseLocal({ type: 'menu-cancel' })
+  }
+
+  /** Menu opened by the scene's hold-E timer (JUST-16): name from the roster. */
+  private openAccuseMenu(targetId: string): void {
+    const name = this.state.snapshot?.roster.find((e) => e.id === targetId)?.name ?? targetId
+    this.reduceAccuseLocal({ type: 'menu-open', targetId, targetName: name })
+  }
+
+  /** Local menu facts flow through the same reducer — one state home. */
+  private reduceAccuseLocal(action: Parameters<typeof reduceAccuse>[1]): void {
+    const before = this.accuse
+    this.accuse = reduceAccuse(this.accuse, action, this.state.snapshot?.ownId, Date.now())
+    if (this.accuse !== before) this.syncAccuseHud()
   }
 
   /**

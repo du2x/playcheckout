@@ -69,6 +69,15 @@ describe('accuseSession — menu', () => {
     s = reduceAccuse(s, { type: 'menu-confirm' }, 'p1', 0)
     expect(s.menu).toBeNull()
   })
+
+  it('closes the menu when a server rejection arrives (JUST-18) — identity when clean', () => {
+    let s = initialAccuseSession()
+    s = reduceAccuse(s, { type: 'menu-open', targetId: 'p2', targetName: 'bruno' }, 'p1', 0)
+    s = reduceAccuse(s, { type: 'intent-error', message: 'get closer to accuse' }, 'p1', 0)
+    expect(s.menu).toBeNull()
+    const clean = initialAccuseSession()
+    expect(reduceAccuse(clean, { type: 'intent-error', message: 'x' }, 'p1', 0)).toBe(clean)
+  })
 })
 
 describe('accuseSession — resets', () => {
