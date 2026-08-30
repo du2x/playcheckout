@@ -2,9 +2,10 @@
 
 **Verifier**: independent (author ≠ verifier; all evidence re-derived from the tree).
 **Diff range**: `9a96027..cb30989` (spec docs commit 9a96027; 8 implementation commits c586298 protocol → 39afe10 sim walk-in → 6646472 sim accuse → d239ca3 server → b6ff9c5/452a26d client → d3b3674 harness → 42ec37d deferred gaps → cb30989 style). Prior state 56261e3. HEAD at verification: `cb30989`.
+**Fix round 1 (re-verification)**: commit `0f29c6b` (test-only: pins the grace completion boundary and the fired-viewer stream silence). HEAD at re-verification: `0f29c6b`.
 **Date**: 2026-08-29.
 
-## Verdict: **PASS** (2 MEDIUM test-coverage gaps found by the sensor — both test-only, neither a spec violation in shipped behavior; 2 INFO notes)
+## Verdict: **PASS** (re-verified after fix round 1 — both MEDIUM sensor survivors are now killed by the new tests; 2 INFO notes unchanged)
 **Result**: PASS
 
 ---
@@ -13,9 +14,9 @@
 
 | Gate | Command | Result |
 |---|---|---|
-| 1a | `pnpm typecheck` | exit 0 — 4 workspace projects compile |
-| 2 | `pnpm test:sim` | exit 0 — **286 tests / 21 files passed** (21.9 s), matches the expected 286/286 |
-| 3 | `pnpm test:client` | exit 0 — **27 passed** (1.4 m), matches the expected 27/27; includes `client:accuse_ui` |
+| 1a | `pnpm typecheck` | exit 0 — 4 workspace projects compile (re-run at `0f29c6b`: exit 0) |
+| 2 | `pnpm test:sim` | exit 0 — **288 tests / 21 files passed** (21.9 s) after fix round 1 (was 286 pre-fix; +2 = the new `sim:accuse — grace boundary` tests) |
+| 3 | `pnpm test:client` | exit 0 — **27 passed** (1.4 m) after fix round 1, unchanged; includes `client:accuse_ui` |
 | 4 | human 5-min round | **open** (player-facing change) — owner's responsibility, not verifier-runnable |
 
 **Tuning integrity**: `git diff 9a96027..cb30989 -- packages/shared/src/tuning.ts` is **empty**. `ACCUSATION_RANGE_TILES: 2` (tuning.ts:30) is consumed as `TUNING.ACCUSATION_RANGE_TILES * 1000` (roundSim.ts:179, server-side) and as a tile-integer client mirror only (WorldScene.ts:473). The 400 ms hold threshold lives in client code (`ACCUSE_HOLD_MS`, accuseSession.ts:23) and is **absent from TUNING** (grep confirms) — spec Success Criterion met.
@@ -107,20 +108,45 @@ Scratch: rsync to `/tmp/opencode/verifier-justice` (excl. node_modules/.git/.pla
 | M-b | Projection forwards `reason` into the payload | registry.ts:355 | `registry.test.ts:381-387` payload key walk (1 failure) | KILLED |
 | M-c | `walkIn` fires the ENTRANT instead of the channel owner | justice.ts:65 | `justice.test.ts:69-71` (fired playerId must be saboteur) + 2 more (3 failures) | KILLED |
 | M-d | Walk-in detection moved AFTER `work.tick` | roundSim.ts:115-124 relocated | `justice.test.ts:120-142` same-tick entry-then-completion edge (exactly 1 failure) | KILLED |
-| M-e | Grace flips on un-prep START instead of `room:trashed` completion | roundSim.ts:129 condition | — (full suite re-run: 286/286 still green) | **SURVIVED** |
+| M-e | Grace flips on un-prep START instead of `room:trashed` completion | roundSim.ts:129 condition | **(initially survived)** — fix round 1: `justice.test.ts:447` (new `sim:accuse — grace boundary` test 1: mid-un-prep accusation must fire the ACCUSER) | **SURVIVED → KILLED (fix round 1)** |
 | M-f1 | `accuse` drops the same-floor requirement | roundSim.ts:183 | `justice.test.ts:317-318` other-floor rejection at distance 0 (1 failure) | KILLED |
 | M-f2 | Range boundary exclusive (`>=`) | roundSim.ts:184 | `justice.test.ts:326-335` inclusive-boundary test at exactly 2000 milli (1 failure) | KILLED |
 | M-g | `ensureLive` guard removed from `move:start` | TurnoverRoom.ts:97 | `TurnoverRoom.test.ts:1679+` fired session's `move:start` must error `justice-rejected` (2 failures) | KILLED |
 | M-h | Tap-E no longer sends the elevator call (`endAccuseHold` sends nothing) | WorldScene.ts:464 | harness `justice.spec.ts:89-101` (client-only behavior; no sim/room cover exists — harness run) | KILLED |
 | M-i | `round-started` reset removed from accuseSession | accuseSession.ts:64 | `accuseSession.test.ts:84-90` (1 failure) | KILLED |
-| M-j | Server teardown skips `movement.leave` for the fired player | TurnoverRoom.ts:346 | — (server:justice 3/3, full room file 49/49, harness 1/1 all still green) | **SURVIVED** |
+| M-j | Server teardown skips `movement.leave` for the fired player | TurnoverRoom.ts:346 | **(initially survived)** — fix round 1: `TurnoverRoom.test.ts:1731` (fired viewer must see zero `player:moved`; the walker's own stream at `:1727` is the live-window positive control) | **SURVIVED → KILLED (fix round 1)** |
 
-**Sensor result: 11 injected / 9 killed / 2 survivors.** Both kills were by spec-anchored assertions (literal policy walks, exact payload keys, exact event arrays, boundary walks).
+**Sensor result: 11 injected / 9 killed / 2 survivors (initial pass); after fix round 1: 11/11 killed.** All kills were by spec-anchored assertions (literal policy walks, exact payload keys, exact event arrays, boundary walks).
 
-### Survivors → gaps (not fixed, per protocol)
+### Survivors → gaps → fix round 1 re-verification
 
-1. **Gap 1 — MEDIUM (test-only, spec-precision).** The spec's recorded decision pins grace to the un-prep's **completion** ("starting-but-incomplete un-prep stays inside grace", spec.md Assumptions row 3). No test accuses the saboteur in the window between `work:started` (un-prep) and `room:trashed`, so an implementation that ends grace at un-prep *start* passes all 286 sim tests. Suggested fix: one sim test — start the saboteur's un-prep, tick partway, `accuse(staff, saboteur)` must still be **wrong** (accuser fired, `reason` absent from any payload), then let it complete and assert a second accusation would be correct.
-2. **Gap 2 — MEDIUM (test-only, spec edge).** P1 AC4's "no further `player:moved` from them" and the occupants-projection edge case lean on the room-side `movement.leave` (`TurnoverRoom.ts:346`), but the only room assertion over fired-viewer traffic (`TurnoverRoom.test.ts:1710-1721`) runs while nobody moves — it cannot fail if the teardown is skipped (proven by M-j surviving the full room suite + harness). Suggested fix: in the teardown test, keep one live staff player walking on the fired player's floor after the firing, assert the fired viewer receives no `player:moved` and the live viewer's stream never contains the fired id.
+Both fix-round mutants were re-injected ONE AT A TIME into a fresh scratch
+(`/tmp/opencode/reverify-justice`, rsync excl. node_modules/.git, `pnpm install --prefer-offline --ignore-scripts`, baseline 288/288 green), each confirmed applied by grep before the run, and reverted byte-clean afterwards (diff vs real tree on all three touched files; scratch deleted).
+
+1. **Gap 1 — MEDIUM (test-only, spec-precision) → FIXED.** M-e re-injected
+   (`roundSim.ts:129` `room:trashed` → `work:started` condition). Result:
+   **KILLED** — full sim suite `1 failed / 287 passed`, the sole failure being
+   the new test `packages/sim/src/justice.test.ts:447`
+   (`expect(wrong).toEqual([{ ... reason: 'wrong-accusation' }])` inside
+   `sim:accuse — grace boundary`, describe at `:426`): an accusation landing one
+   tick before un-prep completion must stay in-grace. Test 2 (`:450-468`,
+   accusation on the post-completion tick → `correct-accusation`) pins the
+   positive side, so the boundary is discriminated from both directions.
+2. **Gap 2 — MEDIUM (test-only, spec edge) → FIXED.** M-j re-injected
+   (`movement.leave(event.playerId)` deleted from `TurnoverRoom.ts:346`).
+   Result: **KILLED** — `apps/server/src/rooms/TurnoverRoom.test.ts`
+   `1 failed / 48 passed`, sole failure the `tears the fired session down`
+   test (`:1679`) at `:1731`: with the teardown skipped, the fired viewer
+   retained a live position and received the walker's `player:moved` rows
+   (assertion got `true`, expected `false`). The new live-traffic positive
+   control (`worker` walks; `driveUntil(workerCollector, 'player:moved')` at
+   `:1727`) proves the window is not silent, and the live viewer's stream is
+   separately asserted free of the fired id (`:1733-1737`).
+3. **Regression spot-check on a previously-killed mutant: PASS.** M-b re-injected (registry.ts:355 projection forwards `reason` into the payload) — still **KILLED** by `registry.test.ts:379-387` (`1 failed / 24 passed`, sole failure the `{playerId}`-only payload key walk at `:379`). Kill chain intact.
+
+**Real-tree integrity (fix round 1)**: `git status --porcelain` captured before scratch work (md5 `f273de44...`) and re-captured after scratch deletion — **byte-identical**; HEAD unchanged at `0f29c6b`; the scratch's three touched files diffed clean against the real tree before deletion. The real tree itself was never mutated.
+
+**Line-number shift note**: fix commit `0f29c6b` inserts 9 lines into `TurnoverRoom.test.ts` inside the teardown test (at the old `:1720`), so per-AC references into that file beyond `:1717` are shifted **+9** at `0f29c6b` (e.g. e2e rejections now `:1755-1769`, JUST-21 assertions now `:1814-1877`). The per-AC tables below record evidence as verified at `cb30989` and are left intact.
 
 ### INFO notes
 
@@ -131,8 +157,8 @@ Scratch: rsync to `/tmp/opencode/verifier-justice` (excl. node_modules/.git/.pla
 
 ## Ranked gaps
 
-1. **Gap 1 — MEDIUM (sensor M-e survivor, test-only):** grace end not discriminated against "ends at un-prep start". Spec assumption explicitly chooses completion; one missing sim test.
-2. **Gap 2 — MEDIUM (sensor M-j survivor, test-only):** room-side fired-player movement teardown (`movement.leave`) not discriminated; the fired-viewer positional-silence edge is asserted only in a window with no traffic.
+1. ~~**Gap 1 — MEDIUM (sensor M-e survivor, test-only)**~~ **RESOLVED in fix round 1** (`0f29c6b`): killed by `justice.test.ts:426-447` (grace boundary, both directions pinned).
+2. ~~**Gap 2 — MEDIUM (sensor M-j survivor, test-only)**~~ **RESOLVED in fix round 1** (`0f29c6b`): killed by `TurnoverRoom.test.ts:1725-1731` (live-traffic positive control + fired-viewer silence assertion).
 3. **Note 1 — INFO:** walk-in-source variant of the in-flight-accusation rejection not directly asserted (same guard line pinned with an accusation-fired target).
 4. **Note 2 — INFO:** P4 AC4's menu-close-on-rejection leg not driven end-to-end in the harness (reducer-pinned + server-pinned).
 
@@ -142,4 +168,4 @@ Scratch: rsync to `/tmp/opencode/verifier-justice` (excl. node_modules/.git/.pla
 - The Router still never names a message type; `player:fired` is one more registry row; undeclared sim events remain compile errors (`registry.ts:358-361`).
 - Firing cleanup reuses WORK-12 (`work.leave`) rather than a parallel mechanism — no duplicated teardown semantics.
 - Client keeps the one-state-home pattern (accuseSession reducer, identity-preserving returns) and the DOM-over-canvas HUD; the scene contract change is limited to rectangle/label destruction via a shared `removePlayerDisplay`.
-- Buzzer path untouched by the diff (`roundSim.ts:140` unchanged; room still nulls the sim on buzzer) — Success Criterion "buzzer byte-identical to 2.7" holds structurally, and the 2.7 buzzer tests still pass inside 286/286.
+- Buzzer path untouched by the diff (`roundSim.ts:140` unchanged; room still nulls the sim on buzzer) — Success Criterion "buzzer byte-identical to 2.7" holds structurally, and the 2.7 buzzer tests still pass inside 288/288.
