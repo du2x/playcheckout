@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "phaser-sprites-and-images": {
+      "version": "1.0.0",
+      "installedAt": "2026-08-30T16:05:19.295Z",
+      "platform": "opencode"
+    },
+    "phaser-cameras": {
+      "version": "1.0.0",
+      "installedAt": "2026-08-30T16:05:47.171Z",
+      "platform": "opencode"
+    },
+    "phaser-graphics-and-shapes": {
+      "version": "1.0.0",
+      "installedAt": "2026-08-30T16:06:01.185Z",
+      "platform": "opencode"
+    }
+  }
+}
