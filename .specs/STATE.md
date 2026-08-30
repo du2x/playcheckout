@@ -459,75 +459,76 @@
 
 ## Handoff
 
-- **Feature**: `evidence` (cycle 2.7) — door cards (permanent, floor-public,
-  no timestamp, FR-11), the 75 s trash freshness window (FR-12), the sabotage
-  rustle delivered through a new server-side `earshot` recipient policy
-  (FR-13), and the door-open cue on segment entry (FR-10 cue half). No tuning
-  changes; the two §7 constants (FRESHNESS_WINDOW_SECONDS=75,
-  RUSTLE_RANGE_TILES=3) are consumed for the first time.
+- **Feature**: `justice` (cycle 2.8) — walk-in conviction (FR-15), the
+  accusation tier with fully hidden grace (FR-17/18/19), name-only firing
+  toasts, and the hold-E confirm menu. No tuning changes; TUNING's existing
+  ACCUSATION_RANGE_TILES=2 consumed for the first time; the only new
+  constant-adjacent value is the client's 400 ms hold threshold
+  (accuseSession.ts ACCUSE_HOLD_MS — deliberately NOT TUNING).
 - **Phase / Task**: Execute → T1–T8 complete; independent Verifier PASS
-  (10/10 mutants killed, 0 survivors, protocol audit clean). Gap 1 (LOW)
-  fixed post-verdict with a direct EVID-07 assertion; suite 248/248.
-- **Completed**:
-  - T1 (commit `5d89e2b`): protocol — four `SimEvent` variants + payload
-    interfaces + registry rows (`room:carded`/`room:entered` → `sameFloor`,
-    `room:settled` → `occupants`, `room:rustle` → new `'earshot'` policy);
-    `EventVisibility.room`; client mapper/action plumbing (compile-exhaustive).
-  - T2 (commit `6530100`): sim — `carded` set hung on every prep transition
-    (idempotent re-emission, fake touches nothing), `settleAt` deadlines with
-    exact 1500-tick window, prep-cancel + re-trash-restart + buzzer-silence
-    legs, `cardedOn` query + `RoundSim.cardedOn` delegate.
-  - T3 (commit `c25a511`): sim — `room:rustle` on trash transitions only;
-    `room:entered` on every segment entry (pass-through included) alongside
-    the private `room:observed`.
-  - T4 (commit `dbacd16`): server — `ViewContext.x` (millitiles, null for
-    riders) + `movement.viewOf` x + the Router `earshot` branch (same floor,
-    within RUSTLE_RANGE_TILES of the room's nearer segment edge, inclusive).
-  - T5 (commit `93a97a4`): server — `movement:snapshot.cardedRooms` (own
-    floor), AD-017 exit handler passes `sim.cardedOn(arrivalFloor)`, e2e
-    carded-exit-snapshot test.
-  - T6 (commit `2360444`): client — pure `evidenceSession` reducer
-    (idempotent cards, TTL'd cue buffer) + DOM evidence layer in WorldScene
-    (card glyphs per carded room, door-open/rustle cue markers, WebAudio
-    beeps, round-start reset via the App).
-  - T7 (commit `5a7d088`): harness — `client:evidence_cues` (role-adaptive:
-    reads private role cards, staff preps, saboteur un-preps; asserts carded
-    glyph on both floor1 pages, door-open + rustle cue nodes, card survives
-    re-trash, exactly one role:dealt on the saboteur's stream).
-- **Verification**: `.specs/features/evidence/validation.md` — PASS. Sensor:
-  10 behavior-level mutants in a /tmp scratch, all killed, scratch deleted,
-  real-tree porcelain identical to baseline. `validate_state.py evidence`
-  exit 0.
-- **Gates** (at T7 commit `5a7d088`):
+  (sensor: 11 mutants, 11/11 killed after fix round 1; protocol/leak audit
+  clean; tuning diff empty). Fix round 1 closed the two first-pass survivors
+  (grace-boundary pin; fired-viewer stream silence with a positive control).
+  `validate_state.py justice` exit 0. Lessons L-020/L-021 distilled.
+- **Completed** (commits 9a96027..cb30989 + fix commits):
+  - T1 (`c586298`): protocol — `player:fired` SimEvent (internal `reason`,
+    stripped at the registry projection) + `'all'` row with `{playerId}`-only
+    payload + strict `accuse` intent + `'justice-rejected'` error code;
+    compile-exhaustive client mapper/action plumbing.
+  - T2 (`39afe10`): sim — new `justice.ts` (Justice: fired set, hidden grace
+    via `noteSabotage` on `room:trashed`, walkIn, accuse verdicts, pending
+    queue); WorkChannels `activeUnprepOwner`/`positionOf` queries; RoundSim
+    own segment-diff walk-in detection BEFORE work.tick (same-tick entry +
+    completion still convicts), fired-position filtering, silent channel
+    cancel via `work.leave`.
+  - T3 (`6646472`): sim — `RoundSim.accuse` (coarse `resolved`/rejection,
+    never validity) with eligibility + inclusive 2000-milli same-floor range;
+    `sim:accuse` + `sim:firing_toast` gates; exactly-once firing; simultaneous
+    accusations resolve once.
+  - T4 (`d239ca3`): server — `accuse` handler with 1:1 error mapping;
+    fired-set teardown (`movement.leave`) on the routed event; `ensureLive`
+    guard on every intent handler; fired sessions fall out of positional
+    routing via `viewOf` null context.
+  - T5 (`b6ff9c5`): client — `accuseSession.ts` pure reducer (menu, toasts,
+    selfFired; round-started/buzzer resets; intent-error closes menu),
+    `ui/accuseHud.ts` (toast stack, confirm menu, fired banner) riding in both
+    views, WorldScene rectangle destruction + selfFired intent gates,
+    `connection.sendAccuse`.
+  - T6 (`452a26d`): client — hold-E/ tap-E disambiguation (keydown starts the
+    400 ms window; expiry opens the menu for the nearest in-range candidate;
+    keyup before expiry sends the elevator call exactly as before); confirm
+    sends `accuse`, cancel sends nothing.
+  - T7 (`d3b3674`): harness — `client:accuse_ui` (tap calls, hold opens menu
+    naming a nearby player, cancel sends nothing, confirm fires the accuser
+    name-only on every page, rectangle gone, banner up, round continues).
+  - T8 (`42ec37d`): the six deferred room-shell/first-light PASS-gap
+    assertions (LOBBY-02 no-create, reject-then-start, LOBBY-05 roster
+    stability, LIGHT-02 code-stays-free, LIGHT-04 1-char name, LIGHT-08
+    round-already-active) — STATE deferred notes (1)+(2) CLOSED.
+- **Verification**: `.specs/features/justice/validation.md` — PASS. Sensor:
+  11 behavior-level mutants in a /tmp scratch, 9 killed first pass, both
+  survivors fixed and confirmed killed on re-verify (M-e grace-on-start →
+  grace-boundary tests; M-j teardown-skips-leave → positive-control room
+  test). Real-tree porcelain byte-identical around the scratch.
+- **Gates** (at `0f29c6b`):
   - `pnpm typecheck` ✅ 0 errors
-  - `pnpm biome check` on changed paths ✅ (remaining root-lint errors are the
-    pre-existing untracked `scripts/dev-boot.mjs`, untouched this cycle)
-  - `pnpm test:sim` ✅ 248/248 (was 222 pre-cycle)
-  - `pnpm test:client` ✅ 25/25 incl. new `client:evidence_cues`
+  - `pnpm biome check .` ✅ on all changed paths (root-lint remainder is
+    pre-existing/foreign: `scripts/dev-boot.mjs`, `.opencode/skills/*`,
+    `docs/art/asset-manifest.json`, `.specs/lessons.json` formatting)
+  - `pnpm test:sim` ✅ 288/288 (was 275 pre-justice-fix-round)
+  - `pnpm test:client` ✅ 27/27 incl. new `client:accuse_ui`
 - **Next step**: feature complete. Gate 4 (human 5-minute round,
-  player-facing) recommended before the next cycle. Pre-2.8 addendum
-  (AD-018, 2026-08-29): static door frames render phase-free from join —
-  `client:doors_pre_round` added, suite 26/26, no sim/protocol changes.
-  Cycle 2.8 may begin. NOTE: commit `84e944b`
-  inadvertently included the pre-existing untracked
-  `.specs/features/elevator-riders/validation.md` (scope deviation, left in —
-  a legitimate prior-cycle artifact). Deferred notes (1)-(3) from the previous
-  handoff remain open.
+  player-facing) recommended before the next cycle. Pre-2.9 note: a parallel
+  art workstream opened (AD-020, uncommitted at this handoff's writing);
+  coordinate before touching `apps/client/public/art` or world rendering.
+  Cycle 2.9 `round-end` may begin — win checks, results/recap (FR-20–FR-22),
+  spectator camera for fired players, disconnect/reconnect (FR-25). Justice
+  round-continues behavior means 2.9 must add the saboteur-fired /
+  staff-reduced win checks on top of the fired set this cycle introduced.
 - **Blockers**: none.
-- **Uncommitted files**: none from this feature; pre-existing unrelated
-  working-tree changes remain untouched (`.specs/LESSONS.md`,
-  `.specs/lessons.json`, `package.json` `boot` script, `scripts/`,
-  `.playwright-mcp/`, `.specs/features/elevator-riders/validation.md`).
+- **Uncommitted files**: parallel-agent artifacts left untouched —
+  `.specs/STATE.md` AD-020 (art workstream), `AGENTS.md`, `package.json`
+  (pnpm bump + boot script), `pnpm-workspace.yaml`, `scripts/`,
+  `.playwright-mcp/`, `apps/client/public/art/*`,
+  `.opencode/skills/{create-game-assets,game-feel,game-ui-ux,phaser-core}/`.
 - **Branch**: master
-
-Deferred notes carried forward (still open, not yet folded into any cycle):
-(1) room-shell PASS gaps — LOBBY-02 "create no room" clause unasserted;
-rejected start intent lacks a lobby-phase re-assertion (reject-then-start
-mutant); LOBBY-05 "roster unchanged" after name rejection unasserted — fold
-into the next cycle touching `TurnoverRoom`.
-(2) first-light PASS gaps — LIGHT-02 unknown-code message, LIGHT-08 "round
-already active", LIGHT-04 1-char name minimum — fold into the next
-client-touching cycle.
-(3) protocol-registry PASS, low severity — `TurnoverRoom.test.ts:412-415`
-comment misattributes the collector-added `type` key to Colyseus transport;
-`registry.test.ts:66-70` pins policy membership, not literal per-key values.
