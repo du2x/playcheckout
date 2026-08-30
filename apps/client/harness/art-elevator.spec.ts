@@ -1,7 +1,7 @@
 import { type Page, expect, test } from '@playwright/test'
 
-// Gate scenario client:art_elevator (cycle 2.10, ART-15/16; the ART-17 panel
-// half lands with T5): elevator cars render as elevator-car Sprites —
+// Gate scenario client:art_elevator (cycle 2.10, ART-15/16): elevator cars
+// render as elevator-car Sprites —
 // doors-open cage frame while parked/dwelling, closed slab frame once the
 // doors close, hidden in transit (ELAN semantics unchanged).
 

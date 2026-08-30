@@ -185,6 +185,10 @@ export class WorldScene extends Phaser.Scene {
   /** Current room states known to this client — own interior via room:observed,
    * the whole building via the spectator baseline (door tints). */
   private roomStates = new Map<string, RoomState>()
+  /** Landing panel sprites (ART-17): west/east landings of the viewed floor;
+   * frame 0 idle, frame 1 during a call's flash window (decoys included). */
+  private panelImages = new Map<'west' | 'east', Phaser.GameObjects.Image>()
+  private panelFlash: { floor: string; until: number } | null = null
   private hallLines: Phaser.GameObjects.Graphics | null = null
   /** Corridor band backdrop (AD-020 art slice): live lane only, never a
    *  Rectangle — the harness counts Rectangle/Ellipse per player/car. */
@@ -262,6 +266,17 @@ export class WorldScene extends Phaser.Scene {
     for (const id of [1, 2] as const) {
       const sprite = this.add.sprite(this.carPx(id), GROUND_Y + 30, 'elevator-car')
       this.cars.set(id, { view: sprite, floor: 'lobby' })
+    }
+    // Landing panel sprites (ART-17): position-only panels — a call flashes
+    // them (decoys included); occupants are never rendered (privacy rule).
+    if (this.textures.exists('elevator-panel')) {
+      for (const side of ['west', 'east'] as const) {
+        const image = this.add.sprite(side === 'west' ? 16 : 832 - 16, GROUND_Y - 80, 'elevator-panel')
+        image.setFrame(0)
+        image.setName(`panel:${side}`)
+        image.setVisible(!this.spectator)
+        this.panelImages.set(side, image)
+      }
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
     this.elevatorPresenter = new ElevatorPresenter(
@@ -441,7 +456,9 @@ export class WorldScene extends Phaser.Scene {
         const car = this.cars.get(action.car)
         this.elevatorPresenter?.onCalled(action.car, action.floor as FloorId)
         this.updatePanel()
-        this.flashPanel()
+        // ART-17: the flash moves to the landing panel sprites — every call
+        // looks registered (AD-012), the data-only semantics are unchanged.
+        this.panelFlash = { floor: action.floor, until: Date.now() + 700 }
         break
       }
       case 'player-left': {
@@ -956,19 +973,21 @@ export class WorldScene extends Phaser.Scene {
     const e = panel.querySelector('#panel-east')
     if (w !== null) w.textContent = west
     if (e !== null) e.textContent = east
+    if (lightW instanceof HTMLElement)
+    if (lightE instanceof HTMLElement)
   }
 
-  /**
-   * Visible call acknowledgment (AD-012): the flash is data-only on the wire,
-   * so the panel pulses here — a call always looks registered (FR-5).
-   */
-  private flashPanel(): void {
-    const panel = document.querySelector('#elevator-panel')
-    if (panel === null || !(panel instanceof HTMLElement)) return
-    panel.style.backgroundColor = '#3a5a3a'
-    window.setTimeout(() => {
-      panel.style.backgroundColor = ''
-    }, 700)
+  /** Per-frame panel sprite sync: idle frame, flash frame inside the window. */
+  private syncPanelFlash(): void {
+    const flashing =
+      this.panelFlash !== null &&
+      Date.now() < this.panelFlash.until &&
+      this.panelFlash.floor === this.viewFloor
+    for (const [side, image] of this.panelImages) {
+      void side
+      image.setVisible(!this.spectator)
+      image.setFrame(flashing ? 1 : 0)
+    }
   }
 
   /** Current-floor sweep + state line for the in-car screen (every frame). */
@@ -1112,6 +1131,7 @@ export class WorldScene extends Phaser.Scene {
     // The elevator panel is self-healing: view re-renders rebuild the DOM
     // element, so refresh it every frame from scene state.
     this.updatePanel()
+    this.syncPanelFlash()
     // The in-car screen's readouts follow the own car's animation clock —
     // floor swept through transition floors mid-ride, state line naming the
     // door/motion phase. Both cleared when not riding.

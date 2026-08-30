@@ -1,14 +1,19 @@
 import { expect, type Page, test } from '@playwright/test'
 
 // Spec EL-01/EL-04 (AD-011, gate scenario client:elevator_lobby) rewritten for
-// the press model (AD-014): the full elevator machine runs BEFORE any round
-// starts — no host start, no test shift. A call with BOTH cars parked
-// open-doors is a decoy flash (AD-019 narrowed the duplicate predicate); a
-// single parked car would summon the other one. Walking to a landing
-// auto-boards; Digit1/Digit0 press the destination in-car; exit resumes the
-// floor stream. This is the fast Playwright entry point for elevator debugging.
+// the press model (AD-014) + hall-button rules (AD-022/023): the full elevator
+// machine runs BEFORE any round starts — no host start, no test shift. Walking
+// to a landing auto-boards; Digit1/Digit0 press the destination in-car; exit
+// resumes the floor stream. A call is only sendable AT a landing (AD-022) and
+// pins to that landing's car (AD-023): at the east landing with car 1 parked
+// on floor1, the flash names car 2 and car 1 is never summoned. The per-car
+// hall-call light (AD-024) lights on a real dispatch and turns off when the
+// car arrives; a decoy flash (car already parked here) stays dark. This is
+// the fast Playwright entry point for elevator debugging.
 
 const TILE = 832 / 30
+const LIGHT_OFF = 'rgb(74, 85, 104)' // #4a5568
+const LIGHT_LIT = 'rgb(232, 195, 74)' // #e8c34a
 
 async function readOwn(page: Page): Promise<{ x: number; visible: boolean }> {
   return page.evaluate(() => {
@@ -29,36 +34,55 @@ async function readOwn(page: Page): Promise<{ x: number; visible: boolean }> {
   })
 }
 
+function ownVisible(): boolean {
+  const t = (
+    window as unknown as {
+      __TURNOVER__: {
+        scene: (n: string) => {
+          children: { list: { type: string; text?: string; visible: boolean }[] }
+        } | null
+      }
+    }
+  ).__TURNOVER__
+  const scene = t.scene('Round')
+  if (scene === null) return false
+  return scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')?.visible === true
+}
+
 test.describe('client:elevator_lobby', () => {
-  test('decoy flash, auto-board, in-car presses ride floor1 and back (EL-01, EL-04, ELR-05/14)', async ({
+  test('auto-board, ride, hall-call light lifecycle, landing-pinned decoy (EL-01/04, ELR-05/14, AD-023/024)', async ({
     browser,
   }) => {
-    test.setTimeout(45_000)
+    test.setTimeout(60_000)
     const host = await browser.newContext().then((c) => c.newPage())
     await host.goto('/')
     await host.fill('#join-name', 'ada')
     await host.click('#create-button')
     await host.waitForSelector('#lobby-view')
 
-    // A call with a car parked open-doors at the lobby is a DUPLICATE
-    // (AD-014: duplicate predicate = pickup floor only): no dispatch, but the
-    // panel pulses — a call always looks registered (AD-012 acknowledgment).
+    // Landing gate (AD-022): a call from mid-hall (spawn x≈15) is a client
+    // no-op — no intent is sent, so the panel never flashes.
     await host.keyboard.press('ArrowUp')
-    await host.waitForFunction(
-      () =>
-        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style.backgroundColor ===
-        'rgb(58, 90, 58)',
-      undefined,
-      { timeout: 3000 },
-    )
-    await host.waitForFunction(
-      () =>
-        (document.querySelector('#elevator-panel') as HTMLElement | null)?.style.backgroundColor ===
-        '',
-      undefined,
-      { timeout: 3000 },
-    )
-    // The decoy dispatched nothing: the parked car is still at the lobby.
+    await host.waitForTimeout(600)
+    // ART contract (cycle 2.10): panels are elevator-panel Sprites; no
+    // intent means the sprite never leaves its idle frame 0.
+    const idleFrame = await host.evaluate(() => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => {
+              children: {
+                list: { name: string; type: string; frame: { name: string | number } }[]
+              }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const list = t.scene('Round')?.children.list ?? []
+      const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:west')
+      return panel === undefined ? 'missing' : Number(panel.frame.name)
+    })
+    expect(idleFrame).toBe(0)
     expect(await host.textContent('#panel-west')).toBe('lobby')
 
     // Walk to the west landing (15 tiles at 6 tiles/s ≈ 2.5 s): the parked car
@@ -84,39 +108,124 @@ test.describe('client:elevator_lobby', () => {
       { timeout: 10_000 },
     )
 
-    // Stay-in-car (ELR P2 AC2): press lobby (Digit0) — the car rides back.
+    // Walk off LEFT at the floor1 west landing (exit places her at x=0; the
+    // door-open-episode guard keeps the parked car from re-boarding her),
+    // then cross to the floor1 EAST landing (~30 tiles ≈ 5 s).
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForFunction(ownVisible, undefined, { timeout: 5000 })
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
+    await host.waitForTimeout(5600)
+    await host.keyboard.up('ArrowRight')
+
+    // A call at the east landing (AD-022 gate passes) pins to car 2 (AD-023):
+    // car 2 is idle at the lobby → a real dispatch. The hall-call light
+    // (AD-024) lights amber; the floor readout stays 'lobby' until arrival.
+    await host.keyboard.press('ArrowUp')
+    await host.waitForFunction(
+      (lit) =>
+        (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color === lit,
+      LIGHT_LIT,
+      { timeout: 5000 },
+    )
+    expect(await host.textContent('#panel-east')).toBe('lobby')
+
+    // Car 2 arrives at floor1 (~3 s): the readout updates and the light turns
+    // off — ada is standing at the east landing, so the open doors auto-board
+    // her (chip reappears).
+    await host.waitForFunction(
+      () => document.querySelector('#panel-east')?.textContent === 'floor1',
+      undefined,
+      { timeout: 10_000 },
+    )
+    expect(
+      await host.evaluate(
+        () => (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color,
+      ),
+    ).toBe(LIGHT_OFF)
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 5000 },
+    )
+
+    // Press lobby (Digit0): the car rides back (~2 s after its 1 s dwell).
     await host.keyboard.press('0')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'lobby',
+      () => document.querySelector('#panel-east')?.textContent === 'lobby',
       undefined,
       { timeout: 10_000 },
     )
 
-    // Exit through the open doors: the own floor stream resumes at the lobby
-    // landing (ELR P3 AC6) and she walks right — pre-round lobby walking is
-    // allowed, so prediction and server agree. Hold long enough to leave the
-    // landing before releasing.
-    await host.keyboard.down('ArrowRight')
+    // Exit LEFT at the lobby east landing (placed at x=30; the guard prevents
+    // instant re-boarding). A call pressed here pins to car 2 — parked open-
+    // doors at the lobby — so it is a DECOY flash: the panel pulses (AD-012)
+    // but the light stays DARK (nothing was summoned), and car 1 is never
+    // summoned from the east landing either (AD-023).
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForFunction(ownVisible, undefined, { timeout: 5000 })
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
+    // ART contract (cycle 2.10): the decoy call flashes the landing panel
+    // SPRITE (frame 1) then returns to idle — every call looks registered
+    // (AD-012), the light stays dark.
     await host.waitForFunction(
       () => {
-        const w = (
+        const t = (
           window as unknown as {
             __TURNOVER__: {
-              scene: (n: string) => {
-                children: { list: { type: string; text?: string; visible: boolean }[] }
+              scene: (name: string) => {
+                children: {
+                  list: { name: string; type: string; frame: { name: string | number } }[]
+                }
               } | null
             }
           }
         ).__TURNOVER__
-        const scene = w.scene('Round')
-        if (scene === null) return false
-        return (
-          scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')?.visible === true
-        )
+        const list = t.scene('Round')?.children.list ?? []
+        const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:west')
+        return panel !== undefined && Number(panel.frame.name) === 1
       },
       undefined,
-      { timeout: 5000 },
+      { timeout: 3000 },
     )
+    await host.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: {
+                  list: { name: string; type: string; frame: { name: string | number } }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const list = t.scene('Round')?.children.list ?? []
+        const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:west')
+        return panel !== undefined && Number(panel.frame.name) === 0
+      },
+      undefined,
+      { timeout: 3000 },
+    )
+    expect(
+      await host.evaluate(
+        () => (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color,
+      ),
+    ).toBe(LIGHT_OFF)
+    expect(
+      await host.evaluate(
+        () => (document.querySelector('#panel-light-west') as HTMLElement | null)?.style.color,
+      ),
+    ).toBe(LIGHT_OFF)
+    expect(await host.textContent('#panel-west')).toBe('floor1')
+
+    // Walk right — pre-round lobby walking is allowed, so prediction and
+    // server agree (she clamps at the east bound).
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(500) // keep walking while held
     await host.keyboard.up('ArrowRight')
     await host.waitForTimeout(300)

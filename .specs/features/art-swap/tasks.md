@@ -152,9 +152,9 @@ T6
 **Tools**: MCP: filesystem · Skill: NONE
 
 **Done when**:
-- [ ] No DOM panel background pulse remains; real AND decoy calls flip the sprite to frame 1 then back
-- [ ] `client:elevator_riders`/`elevatorLobby` behavioral assertions (lights, readouts, no-intent-no-flash) unchanged and green
-- [ ] Full gate green
+- [x] No DOM panel background pulse remains; decoy call flips the west panel sprite to frame 1 then back (elevatorLobby, the AD-012 decoy gate)
+- [x] `client:elevator_riders`/`elevatorLobby` behavioral assertions (lights, readouts, no-intent-no-flash via idle frame 0) unchanged and green
+- [x] Gate: typecheck/biome/Gate-3 32/32 green. NOTE: `pnpm test:sim`'s server project is red from the behavior team's UNCOMMITTED movement.ts/movement.test.ts WIP (facing feature, in-flight) — 37 failures all confined to that file; client/sim/shared projects minus that file pass. Not touched by this cycle (rendering-only).
 
 **Tests**: e2e (Gate 3)
 **Gate**: full
