@@ -349,4 +349,12 @@ export class RoundSim {
   cardedOn(floor: Parameters<WorkChannels['cardedOn']>[0]): ReturnType<WorkChannels['cardedOn']> {
     return this.work.cardedOn(floor)
   }
+
+  /**
+   * Current state of every room, deterministic order — the FR-20 spectator
+   * baseline (cycle 2.9). Round-scoped: the room reads it while the sim lives.
+   */
+  roomStates(): ReturnType<WorkChannels['roomStates']> {
+    return this.work.roomStates()
+  }
 }

@@ -46,9 +46,15 @@ export interface ViewContext {
    * unknown positions — the earshot-policy routing key (cycle 2.7, FR-13).
    */
   readonly x: number | null
+  /**
+   * FR-20 spectator (cycle 2.9): a fired player watches the whole building.
+   * Spectators receive every sameFloor/occupants/earshot event on every floor
+   * — the one prd-sanctioned over-delivery; live contexts never set this.
+   */
+  readonly spectator?: boolean
 }
 
-const NO_VIEW: ViewContext = { floor: null, roomKey: null, car: null, x: null }
+const NO_VIEW: ViewContext = { floor: null, roomKey: null, car: null, x: null, spectator: false }
 
 interface Projection {
   payload: unknown
@@ -117,7 +123,8 @@ export class Router {
     }
     if (recipients === 'sameFloor') {
       for (const client of this.liveClients()) {
-        if (this.viewContext(client.sessionId).floor === visibility?.floor) {
+        const vc = this.viewContext(client.sessionId)
+        if (vc.floor === visibility?.floor || vc.spectator) {
           this.deliver(client, key, payload, time)
         }
       }
@@ -125,7 +132,8 @@ export class Router {
     }
     if (recipients === 'occupants') {
       for (const client of this.liveClients()) {
-        if (this.viewContext(client.sessionId).roomKey === visibility?.roomKey) {
+        const vc = this.viewContext(client.sessionId)
+        if (vc.roomKey === visibility?.roomKey || vc.spectator) {
           this.deliver(client, key, payload, time)
         }
       }
@@ -153,6 +161,10 @@ export class Router {
       const end = roomSegmentEndMilli(room)
       for (const client of this.liveClients()) {
         const vc = this.viewContext(client.sessionId)
+        if (vc.spectator) {
+          this.deliver(client, key, payload, time)
+          continue
+        }
         if (vc.floor !== floor || vc.x === null) continue
         const dist = vc.x < start ? start - vc.x : vc.x > end ? vc.x - end : 0
         if (dist <= rangeMilli) this.deliver(client, key, payload, time)

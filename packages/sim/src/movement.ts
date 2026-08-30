@@ -136,6 +136,36 @@ export class MovementSim {
     }
   }
 
+  /**
+   * Re-announce a player's position on the next tick — the reconnection
+   * rectangle re-add (cycle 2.9, FR-25): other clients removed the display on
+   * player:left; one player:moved re-creates it at the preserved position.
+   */
+  announcePosition(playerId: string): void {
+    const p = this.players.get(playerId)
+    if (p === undefined) return
+    p.facingDirty = true
+  }
+
+  /**
+   * Full-building positions — the FR-20 spectator baseline (cycle 2.9). The
+   * room sends this to fired sessions only; live players' snapshots stay
+   * own-floor filtered (AD-008/AD-009).
+   */
+  allPositions(): { playerId: string; floor: FloorId; x: number }[] {
+    return [...this.players.entries()]
+      .filter(([, p]) => p.inCar === null)
+      .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI }))
+  }
+
+  /** Both cars' public floors — panels data is public everywhere. */
+  carFloors(): { car: 1 | 2; floor: FloorId }[] {
+    return [
+      { car: 1 as const, floor: this.cars[1].floor },
+      { car: 2 as const, floor: this.cars[2].floor },
+    ]
+  }
+
   /** Queue a rider-list update for the next tick — one per car, coalesced. */
   private markRidersDirty(carId: 1 | 2): void {
     if (!this.ridersDirty.includes(carId)) this.ridersDirty.push(carId)

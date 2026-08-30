@@ -1,5 +1,12 @@
 import { randomInt } from 'node:crypto'
-import type { FloorId, RoomIndex } from '@turnover/shared'
+import type {
+  CarId,
+  FloorId,
+  MovementEvent,
+  RecapEntry,
+  RoomIndex,
+  SpectatorSnapshot,
+} from '@turnover/shared'
 import {
   accuseIntentSchema,
   elevatorCallIntentSchema,
@@ -62,7 +69,7 @@ export class TurnoverRoom extends Room {
   /** Production: 50 ms = 20 Hz (prd §11). Tests set 0 and drive ticks directly. */
   static tickMs = 50
 
-  private phase: 'lobby' | 'round' = 'lobby'
+  private phase: 'lobby' | 'round' | 'results' = 'lobby'
   private players = new Map<string, LobbyPlayer>()
   private joinedCounter = 0
   private sim: RoundSim | null = null
@@ -70,6 +77,15 @@ export class TurnoverRoom extends Room {
   private movement!: MovementSim
   /** Justice (cycle 2.8): sessions fired this round — out of live play, still connected. */
   private fired = new Set<string>()
+  // --- Round end (cycle 2.9): the results phase + the FR-22 ride journal.
+  /** 0-based round tick stamp for room-journaled entries (matches the sim's). */
+  private roundTick = 0
+  /** Ride legs observed during the round — the recap's movement half. */
+  private rideJournal: RecapEntry[] = []
+  /** Last known rider list per car (elevator:riders events the room routes). */
+  private lastRiders = new Map<CarId, string[]>()
+  /** Last known floor per car — the `from` half of a ride leg. */
+  private carFloor = new Map<CarId, FloorId>()
 
   override onCreate() {
     this.patchRate = null
@@ -77,7 +93,15 @@ export class TurnoverRoom extends Room {
     this.movement = new MovementSim()
     // AD-008: the Router resolves positional policies (sameFloor/occupants)
     // against each viewer's legitimate view, derived from the movement sim.
-    this.router.setViewContext((sessionId) => this.movement.viewOf(sessionId))
+    // FR-20 (cycle 2.9): a session with NO position — a fired player (their
+    // slot was torn down) — is a spectator: they receive every floor's stream
+    // and interiors until the round ends and through the results phase.
+    this.router.setViewContext((sessionId) => {
+      const view = this.movement.viewOf(sessionId)
+      const slotless =
+        view.floor === null && view.roomKey === null && view.car === null && view.x === null
+      return { ...view, spectator: slotless }
+    })
     // Custom roomId = the shareable code (settable only during onCreate, verified
     // against installed 0.18.8 sources). Codes die with the room (FR-1: fresh
     // codes only for new groups).
@@ -199,7 +223,8 @@ export class TurnoverRoom extends Room {
   }
 
   override onJoin(client: Client, options: { name?: unknown }) {
-    if (this.phase !== 'lobby') {
+    // Results (cycle 2.9) is lobby-like: a new player may join between rounds.
+    if (this.phase === 'round') {
       throw new Error('round in progress')
     }
     if (this.players.size >= TUNING.PLAYERS_MAX) {
@@ -243,9 +268,9 @@ export class TurnoverRoom extends Room {
     this.router.toAll('player:left', { playerId: client.sessionId })
     // Counters are per-connection: a departed connection's counter dies with it.
     this.router.forget(client.sessionId)
-    if (this.phase !== 'lobby') {
+    if (this.phase === 'round') {
       // Mid-round: the leaver's sim slot idles until the buzzer (full FR-25 ghost
-      // machinery is a later cycle). No lobby snapshot — rosters are a lobby concept.
+      // machinery is cycle 2.9's T5). No lobby snapshot — rosters are a lobby concept.
       return
     }
     // Host is whoever joined earliest among the remaining players, so migration
@@ -276,7 +301,7 @@ export class TurnoverRoom extends Room {
   }
 
   private handleStartIntent(sessionId: string) {
-    if (this.phase !== 'lobby') {
+    if (this.phase === 'round') {
       this.router.toSelf('error', sessionId, {
         code: 'round-already-active',
         message: 'a round is already running',
@@ -304,6 +329,10 @@ export class TurnoverRoom extends Room {
   private startRound() {
     this.phase = 'round'
     this.fired.clear()
+    // Round-end journal reset (cycle 2.9): a fresh deal starts a fresh recap.
+    this.roundTick = 0
+    this.rideJournal = []
+    this.lastRiders.clear()
     // Positions persist across start/buzzer (MOVE-07): the movement layer is
     // phase-free and simply keeps running.
     const playerIds = [...this.players.values()]
@@ -321,7 +350,10 @@ export class TurnoverRoom extends Room {
   /** One fixed 0.05 s step; the production interval and the test hook share this path. */
   private advance() {
     // Movement runs in BOTH phases (AD-005); the round sim only in round.
-    for (const event of this.movement.tick()) this.router.route(event)
+    for (const event of this.movement.tick()) {
+      this.router.route(event)
+      this.journalMovement(event)
+    }
     const sim = this.sim
     if (sim === null || this.phase !== 'round') return
     // AD-005 seam: the work channels consume the movement layer's positions
@@ -334,30 +366,87 @@ export class TurnoverRoom extends Room {
         positions.set(sessionId, { floor: p.floor, x: Math.round(p.x * 1000) })
       }
     }
+    let roundEnded = false
     for (const event of sim.tick(positions)) {
       this.router.route(event)
       // Justice teardown (JUST-04/06/11): a fired session loses their movement
-      // slot (no further position streams; the Router's viewOf null-context
-      // drops them from every positional policy) — their sim-side channels
-      // were already cancelled by the sim. No player:left: the fired event
-      // itself removes the rectangle client-side.
+      // slot (no further position streams) — their sim-side channels were
+      // already cancelled by the sim. No player:left: the fired event itself
+      // removes the rectangle client-side. Cycle 2.9: the fired session also
+      // receives their FR-20 spectator baseline.
       if (event.type === 'player:fired') {
         this.fired.add(event.playerId)
         this.movement.leave(event.playerId)
+        this.router.toSelf('spectator:snapshot', event.playerId, this.spectatorSnapshot())
       }
+      if (event.type === 'round:ended') roundEnded = true
     }
-    if (sim.clockTicksRemaining <= 0) {
-      // Buzzer: roles were the sim's alone — dropping it wipes the deal (AD-002).
-      this.sim = null
-      this.phase = 'lobby'
-      // Refresh everyone's view of where players and cars now stand
-      // (MOVE-18): snapshotFor gives a mid-car rider their car's occupants +
-      // queue with an EMPTY players list (AD-013/AD-009 leak fix — a floor
-      // snapshot is not a legitimate rider view) and every non-rider the
-      // byte-identical own-floor snapshot.
-      for (const sessionId of this.players.keys()) {
-        this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
-      }
+    this.roundTick++
+    if (roundEnded) this.finishRound()
+  }
+
+  /**
+   * The results transition (REND-04/06, FR-21/22): the sim's verdict routed,
+   * so the roles die with the sim (AD-002) and everyone gets the recap + a
+   * fresh view of where players and cars stand (MOVE-18). The results phase
+   * is lobby-like — joins and the host's next `lobby:start` flow through.
+   */
+  private finishRound() {
+    const sim = this.sim
+    const entries: RecapEntry[] = sim
+      ? [...sim.recapEntries(), ...this.rideJournal]
+      : [...this.rideJournal]
+    entries.sort((a, b) => a.tick - b.tick)
+    this.rideJournal = []
+    this.router.toAll('round:recap', { entries })
+    this.phase = 'results'
+    // Roles were the sim's alone — dropping it wipes the deal (AD-002); the
+    // reveal already happened on the wire, so nothing is lost.
+    this.sim = null
+    this.fired.clear()
+    for (const sessionId of this.players.keys()) {
+      this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
+    }
+  }
+
+  /**
+   * FR-22 ride journal (cycle 2.9): the room observes the movement events it
+   * routes — `elevator:riders` refreshes the known occupant set, and every
+   * real floor change is one ride leg carrying the riders at that moment.
+   * Occupancy/validity on the recap is legal because the round is over.
+   */
+  private journalMovement(event: MovementEvent): void {
+    if (this.phase !== 'round') return
+    if (event.type === 'elevator:riders') {
+      this.lastRiders.set(event.car, [...event.riders])
+    } else if (event.type === 'elevator:moved') {
+      const from = this.carFloor.get(event.car) ?? event.floor
+      this.carFloor.set(event.car, event.floor)
+      if (from === event.floor) return
+      this.rideJournal.push({
+        kind: 'ride',
+        tick: this.roundTick,
+        car: event.car,
+        riderIds: this.lastRiders.get(event.car) ?? [],
+        from,
+        to: event.floor,
+      })
+    }
+  }
+
+  /** The FR-20 spectator baseline (fired sessions only): the whole world. */
+  private spectatorSnapshot(): SpectatorSnapshot {
+    const sim = this.sim
+    return {
+      players: this.movement.allPositions(),
+      cars: this.movement.carFloors(),
+      rooms: sim ? sim.roomStates() : [],
+      cardedRooms: sim
+        ? (['floor1', 'floor2', 'floor3'] as const).map((floor) => ({
+            floor,
+            rooms: sim.cardedOn(floor),
+          }))
+        : [],
     }
   }
 
@@ -367,7 +456,7 @@ export class TurnoverRoom extends Room {
   }
 
   /** Test hook: read the phase without poking private state from tests. */
-  __phase(): 'lobby' | 'round' {
+  __phase(): 'lobby' | 'round' | 'results' {
     return this.phase
   }
 

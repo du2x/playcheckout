@@ -149,7 +149,7 @@ T7 → T8
 
 ---
 
-### T4: Server — results phase, recap assembly, spectator routing
+### T4: Server — results phase, recap assembly, spectator routing ✅
 
 **What**: `results` phase (lobby-like joins, `lobby:start` accepted, round-end transition with MOVE-18 snapshots), ride journal from routed movement events + recap broadcast after `round:ended`, abort-path construction, spectator `ViewContext` + Router over-delivery (sameFloor/occupants/earshot), `spectator:snapshot` on firing, `round:resumed` restore payload builder, movement queries needed (`announce`, all-floors positions, riders-of tracking), `WorkChannels.roomStates` sim query.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts`, `apps/server/src/rooms/router.ts`, `packages/sim/src/movement.ts`, `packages/sim/src/work.ts`, `packages/sim/src/roundSim.ts` (queries), `apps/server/src/rooms/TurnoverRoom.test.ts`
@@ -164,10 +164,10 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Room tests: sim-driven staff win → phase results, `round:recap` follows `round:ended` in the same flush with crime/catch/accusation/ride entries (name-free ids), lobby-like join + host start in results begins a fresh round
-- [ ] Spectator routing: a fired session receives sameFloor/occupants events from ALL floors; a live session's message log is byte-identical to 2.8 (no spectator:snapshot, no cross-floor player:moved) — positive control
-- [ ] `spectator:snapshot` arrives on firing with all-floors players, cars, room states, all carded rooms
-- [ ] `pnpm test:sim` green (server suite), no existing test weakened
+- [x] Room tests: sim-driven staff win → phase results, `round:recap` follows `round:ended` in the same flush with crime/catch/accusation/ride entries (name-free ids), lobby-like join + host start in results begins a fresh round
+- [x] Spectator routing: a fired session receives sameFloor/occupants events from ALL floors; a live session's message log is byte-identical to 2.8 (no spectator:snapshot, no cross-floor player:moved) — positive control
+- [x] `spectator:snapshot` arrives on firing with all-floors players, cars, room states, all carded rooms
+- [x] `pnpm test:sim` green (server suite), no existing test weakened
 
 **Tests**: integration (room)
 **Gate**: quick
