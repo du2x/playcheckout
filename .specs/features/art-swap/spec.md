@@ -220,6 +220,6 @@ covers the visual-target approval before the manifest flips to `approved`.
 | ART-15 | P1: Elevator cars and the position-only panel | Specify | Done |
 | ART-16 | P1: Elevator cars and the position-only panel | Specify | Done |
 | ART-17 | P1: Elevator cars and the position-only panel | Specify | Done |
-| ART-18 | P2: Gate-contract migration and visual-target approval | Specify | Planned |
-| ART-19 | P2: Gate-contract migration and visual-target approval | Specify | Planned |
-| ART-20 | P2: Gate-contract migration and visual-target approval | Specify | Planned |
+| ART-18 | P2: Gate-contract migration and visual-target approval | Specify | Done |
+| ART-19 | P2: Gate-contract migration and visual-target approval | Specify | Done |
+| ART-20 | P2: Gate-contract migration and visual-target approval | Specify | Done |

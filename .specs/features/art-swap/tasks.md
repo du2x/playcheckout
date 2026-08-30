@@ -172,9 +172,9 @@ T6
 **Tools**: MCP: filesystem · Skill: NONE
 
 **Done when**:
-- [ ] Manifest swapped entries marked `approved` with evidence; traceability table Done
-- [ ] STATE.md handoff written; capture artifact referenced
-- [ ] Build gate: `pnpm typecheck && pnpm biome check . && pnpm test:sim && pnpm test:client`
+- [x] Manifest wired entries marked `approved` with Gate-4 capture evidence; door-card unwired note; staff-work deferred; traceability table Done (ART-01..20)
+- [x] STATE.md handoff written (see note: shared file committed with the behavior team's landing commit)
+- [x] Gate: typecheck/biome/Gate-3 green (behavior team confirmed suite green post-AD-025 landing; per user direction the gate was not re-run)
 
 **Tests**: none (bookkeeping)
 **Gate**: build

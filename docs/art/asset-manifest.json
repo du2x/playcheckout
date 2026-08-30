@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "art_direction_brief": "docs/art/art-direction-brief.md",
-  "notes": "MVP set. Statuses: planned | greybox-replaced | wip | in-review | approved. Greybox placeholders (rectangles in WorldScene.ts) are disposable and NOT production assets. FR references are from prd.md.",
+  "notes": "Cycle 2.10 art-swap landed: wired assets approved with in-engine evidence. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned.",
   "assets": [
     {
       "id": "staff-walk",
       "role": "player character walk cycle, all players identical uniform (no saboteur tell)",
       "path": "apps/client/public/art/chars/staff-walk-8f.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "28x60",
         "alpha": true,
@@ -33,16 +33,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "staff-work-channel",
       "role": "work channel loop; MUST be identical for every role (FR-9)",
       "path": "apps/client/public/art/chars/staff-work-6f.png",
-      "status": "planned",
+      "status": "deferred",
       "technical": {
         "dimensions": "28x60",
         "alpha": true,
@@ -63,7 +63,7 @@
         "created_at": "",
         "license": "",
         "attribution": "",
-        "prompt_or_source_record": ""
+        "prompt_or_source_record": "deferred to Phase 3 per art-swap spec assumption: the channel keeps the idle pose during work (safest FR-9 presentation); a shared work loop needs its own FR-9 audit"
       },
       "verification": {
         "native_scale_reviewed": false,
@@ -76,7 +76,7 @@
       "id": "door-closed",
       "role": "closed room door; hallway must see nothing of the interior (FR-10)",
       "path": "apps/client/public/art/doors/door-closed.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "72x96",
         "alpha": true,
@@ -101,16 +101,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "door-open",
       "role": "open door frame; interior renders behind it (FR-10 open-on-entry cue)",
       "path": "apps/client/public/art/doors/door-open.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "72x96",
         "alpha": true,
@@ -134,9 +134,9 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
@@ -162,7 +162,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+        "prompt_or_source_record": "authored v1, QA PASS; UNWIRED by cycle 2.10 scope \u2014 the DOM card glyph (evidence layer) remains the hallway card; swap belongs to a future evidence-presentation pass"
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -175,7 +175,7 @@
       "id": "room-interior-prepped",
       "role": "tidy room interior seen through open door; warm light pool",
       "path": "apps/client/public/art/rooms/room-prepped.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "~112x96",
         "alpha": false,
@@ -199,16 +199,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "room-interior-trashed-fresh",
       "role": "fresh trash tier: scattered debris + sickly-green spill accents (FR-12)",
       "path": "apps/client/public/art/rooms/room-trash-fresh.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "~112x96",
         "alpha": false,
@@ -232,16 +232,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "room-interior-trashed-settled",
       "role": "settled trash tier: desaturated, dim (FR-12)",
       "path": "apps/client/public/art/rooms/room-trash-settled.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "~112x96",
         "alpha": false,
@@ -265,16 +265,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "corridor-band",
       "role": "repeatable hallway band: wall + wainscot + carpet strip, tiles seamlessly",
       "path": "apps/client/public/art/rooms/corridor-band.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "32x146 (tile-width multiple, full strip height)",
         "alpha": false,
@@ -299,14 +299,14 @@
         "native_scale_reviewed": true,
         "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "elevator-car",
       "role": "elevator car, open-shell look when doors open; panel shows position only (FR-6)",
       "path": "apps/client/public/art/elevator/elevator-car.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "48x64",
         "alpha": true,
@@ -330,16 +330,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "elevator-panel",
       "role": "public panel flashing on call incl. decoys (FR-5/FR-6); occupants never shown",
       "path": "apps/client/public/art/elevator/elevator-panel.png",
-      "status": "in-review",
+      "status": "approved",
       "technical": {
         "dimensions": "16x32",
         "alpha": true,
@@ -361,16 +361,16 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": ""
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {
       "id": "fx-sabotage-rustle",
       "role": "visual accompaniment to rustle audio within ~3 tiles (FR-13); subtle dust puff at door",
       "path": "apps/client/public/art/props/fx-rustle-4f.png",
-      "status": "planned",
+      "status": "approved",
       "technical": {
         "dimensions": "32x32",
         "alpha": true,
@@ -383,18 +383,18 @@
       ],
       "source": {
         "kind": "authored",
-        "url_or_tool": "",
-        "creator": "",
-        "created_at": "",
-        "license": "",
+        "url_or_tool": "scripts/art/generate-fx-rustle.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-08-29",
+        "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": ""
+        "prompt_or_source_record": "v1: gather-rise-scatter-dissipate, 4 frames, 5 colors; QA PASS; wired in-engine on room:rustle (AD-020 slice)"
       },
       "verification": {
-        "native_scale_reviewed": false,
-        "in_engine_reviewed": false,
-        "technical_checks_passed": false,
-        "approved_by": ""
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (in-engine evidence-cues scenario + AD-020 slice commit 9e80b72)"
       }
     }
   ]
