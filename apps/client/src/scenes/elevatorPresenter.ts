@@ -194,41 +194,29 @@ export function carY(clock: CarClock, cfg: AnimationConfig, baseY: number): numb
 // Structural interfaces only (see module doc) — no `phaser` import, so this
 // class stays constructible with a fake scene/car pair in plain node tests.
 
-export interface GraphicsLike {
-  clear(): void
-  fillStyle(color: number, alpha?: number): void
-  fillRect(x: number, y: number, width: number, height: number): void
-  destroy(): void
-}
-
-export interface EllipseLike {
+export interface CarViewLike {
   x: number
   y: number
   setVisible(visible: boolean): void
   setAlpha(alpha: number): void
   setY(y: number): void
+  /** ART-15: frame 0 = doors-open cage, frame 1 = closed slab. */
+  setFrame(frame: number): void
 }
-
-export interface SceneLike {
-  add: { graphics(): GraphicsLike }
-}
-
-const DOOR_HALF_WIDTH = 23
-const DOOR_Y = 400
-const DOOR_HEIGHT = 60
 
 /**
- * Owns door/motion visuals for the building's two elevator cars. Consumes
+ * Owns car/motion visuals for the building's two elevator cars. Consumes
  * only plain facts (car id, floor, elapsed time via `tick`) — never a
  * `MovementAction`, never a protocol/registry type (spec ELAN-09/10).
+ * ART-15 (cycle 2.10): the sprite's own artwork carries the doors — the
+ * presenter drives the open/closed FRAME from the same clock that drove the
+ * gray-box door rectangles; no separate door objects exist.
  */
 export class ElevatorPresenter {
   private readonly clocks = new Map<CarId, CarClock>()
-  private readonly doors = new Map<CarId, GraphicsLike>()
 
   constructor(
-    private readonly scene: SceneLike,
-    private readonly cars: ReadonlyMap<CarId, { readonly ellipse: EllipseLike }>,
+    private readonly cars: ReadonlyMap<CarId, { readonly view: CarViewLike }>,
     private readonly carPx: (car: CarId) => number,
     private readonly carY: (car: CarId) => number,
     private readonly cfg: AnimationConfig = DEFAULT_ANIMATION_CONFIG,
@@ -238,12 +226,9 @@ export class ElevatorPresenter {
 
   /** Resets both cars to a fresh idle-open-at-lobby clock (scene restart). */
   reset(): void {
-    for (const g of this.doors.values()) g.destroy()
-    this.doors.clear()
     this.clocks.clear()
     for (const car of [1, 2] as const) {
       this.clocks.set(car, initialCarClock('lobby'))
-      this.doors.set(car, this.scene.add.graphics())
     }
   }
 
@@ -264,36 +249,23 @@ export class ElevatorPresenter {
     return this.clocks.get(car)
   }
 
-  /** Advances every car's clock and redraws door/car visuals for `viewFloor`. */
+  /** Advances every car's clock and drives car sprite visuals for `viewFloor`. */
   tick(dtMs: number, viewFloor: FloorId): void {
     for (const carId of [1, 2] as const) {
       const clock = this.clocks.get(carId)
-      const door = this.doors.get(carId)
       const entry = this.cars.get(carId)
-      if (clock === undefined || door === undefined || entry === undefined) continue
+      if (clock === undefined || entry === undefined) continue
       const advanced = advanceCarClock(clock, dtMs, this.cfg)
       this.clocks.set(carId, advanced)
 
       const onViewFloor = advanced.floor === viewFloor
       const visible = onViewFloor && carVisible(advanced)
-      entry.ellipse.setVisible(visible)
-      entry.ellipse.setAlpha(carAlpha(advanced, this.cfg))
-      entry.ellipse.setY(carY(advanced, this.cfg, this.carY(carId)))
-
-      if (!onViewFloor) {
-        door.clear()
-        continue
-      }
-      this.drawDoors(door, carId, doorsOpenAmount(advanced, this.cfg))
+      entry.view.setVisible(visible)
+      entry.view.setAlpha(carAlpha(advanced, this.cfg))
+      entry.view.setY(carY(advanced, this.cfg, this.carY(carId)))
+      // Frame follows the same open amount the gray-box doors used: any
+      // openness renders the doors-open cage, full closure the closed slab.
+      entry.view.setFrame(doorsOpenAmount(advanced, this.cfg) > 0 ? 0 : 1)
     }
-  }
-
-  private drawDoors(door: GraphicsLike, car: CarId, openAmount: number): void {
-    const x = this.carPx(car)
-    door.clear()
-    const gap = DOOR_HALF_WIDTH * openAmount
-    door.fillStyle(0x333333, 1)
-    door.fillRect(x - DOOR_HALF_WIDTH, DOOR_Y, DOOR_HALF_WIDTH - gap, DOOR_HEIGHT)
-    door.fillRect(x + gap, DOOR_Y, DOOR_HALF_WIDTH - gap, DOOR_HEIGHT)
   }
 }

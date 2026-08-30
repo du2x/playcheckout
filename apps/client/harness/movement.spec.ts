@@ -45,7 +45,9 @@ async function readScene(page: Page): Promise<SceneRead> {
       rectCount: list.filter(
         (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
       ).length,
-      carCount: list.filter((c) => c.type === 'Ellipse').length,
+      carCount: list.filter(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car',
+      ).length,
     }
   })
 }
@@ -126,7 +128,7 @@ test.describe('client:movement', () => {
     await join(guest, code, 'bruno')
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 2)
 
-    // Both see exactly two player sprites plus two car ellipses.
+    // Both see exactly two player sprites plus two car sprites.
     for (const page of [host, guest]) {
       const scene = await readScene(page)
       expect(scene.rectCount).toBe(2)

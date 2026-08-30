@@ -92,9 +92,9 @@ T6
 **Tools**: MCP: filesystem · Skill: NONE
 
 **Done when**:
-- [ ] No `Ellipse` car objects remain; presenter unit tests pass with frame assertions
-- [ ] ELAN assertions in `elevator-doors.spec` keep their behavioral semantics (visibility/alpha/y timing)
-- [ ] Full gate green
+- [x] No `Ellipse` car objects remain; presenter unit tests pass with frame assertions (17/17)
+- [x] ELAN assertions in `elevator-doors.spec` keep their behavioral semantics (visibility/alpha/y timing)
+- [x] Full gate green; Gate 3 31/31
 
 **Tests**: unit (presenter) + e2e (Gate 3)
 **Gate**: full

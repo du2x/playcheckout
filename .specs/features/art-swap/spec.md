@@ -217,8 +217,8 @@ covers the visual-target approval before the manifest flips to `approved`.
 | ART-12 | P1: Spectator overview keeps its privilege | Specify | Planned |
 | ART-13 | P1: Spectator overview keeps its privilege | Specify | Planned |
 | ART-14 | P1: Spectator overview keeps its privilege | Specify | Planned |
-| ART-15 | P1: Elevator cars and the position-only panel | Specify | Planned |
-| ART-16 | P1: Elevator cars and the position-only panel | Specify | Planned |
+| ART-15 | P1: Elevator cars and the position-only panel | Specify | Done |
+| ART-16 | P1: Elevator cars and the position-only panel | Specify | Done |
 | ART-17 | P1: Elevator cars and the position-only panel | Specify | Planned |
 | ART-18 | P2: Gate-contract migration and visual-target approval | Specify | Planned |
 | ART-19 | P2: Gate-contract migration and visual-target approval | Specify | Planned |

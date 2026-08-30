@@ -9,8 +9,7 @@ import {
   DEFAULT_ANIMATION_CONFIG,
   doorsOpenAmount,
   ElevatorPresenter,
-  type EllipseLike,
-  type GraphicsLike,
+  type CarViewLike,
   initialCarClock,
 } from './elevatorPresenter'
 
@@ -157,31 +156,16 @@ describe('elevator clock — decoy re-call does not restart the door animation (
 // Fake structural implementations — no `phaser` import needed (module design
 // goal: constructible and testable under plain node, spec ELAN-09/10).
 
-function fakeGraphics(): GraphicsLike & {
-  rects: { x: number; y: number; w: number; h: number }[]
+function fakeCarView(): CarViewLike & {
+  visible: boolean
+  alpha: number
+  y: number
+  frames: number[]
 } {
-  const rects: { x: number; y: number; w: number; h: number }[] = []
-  return {
-    clear: () => {
-      rects.length = 0
-    },
-    fillStyle: () => {},
-    fillRect: (x: number, y: number, w: number, h: number) => {
-      rects.push({ x, y, w, h })
-    },
-    destroy: () => {},
-    rects,
-  }
-}
-
-function fakeScene(graphics: ReturnType<typeof fakeGraphics>) {
-  return { add: { graphics: () => graphics } }
-}
-
-function fakeEllipse(): EllipseLike & { visible: boolean; alpha: number; y: number } {
   let visible = true
   let alpha = 1
   let y = 0
+  const frames: number[] = []
   return {
     x: 0,
     get y() {
@@ -196,27 +180,28 @@ function fakeEllipse(): EllipseLike & { visible: boolean; alpha: number; y: numb
     setY: (value: number) => {
       y = value
     },
+    setFrame: (frame: number) => {
+      frames.push(frame)
+    },
     get visible() {
       return visible
     },
     get alpha() {
       return alpha
     },
+    frames,
   }
 }
 
 describe('ElevatorPresenter — Phaser-facing wiring', () => {
   it('hides a car once its floor no longer matches the view floor (ELAN-04)', () => {
-    const graphics = fakeGraphics()
-    const scene = fakeScene(graphics)
-    const car1 = fakeEllipse()
-    const car2 = fakeEllipse()
+    const car1 = fakeCarView()
+    const car2 = fakeCarView()
     const cars = new Map([
-      [1 as const, { ellipse: car1 }],
-      [2 as const, { ellipse: car2 }],
+      [1 as const, { view: car1 }],
+      [2 as const, { view: car2 }],
     ])
     const presenter = new ElevatorPresenter(
-      scene,
       cars,
       () => 0,
       () => 460,
@@ -227,53 +212,32 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
 
     presenter.tick(0, 'floor1')
     expect(car1.visible).toBe(false)
-    expect(graphics.rects.length).toBe(0)
   })
 
-  it('draws doors with a real gap when open and no gap when closed (ELAN-01/02 render proof)', () => {
-    const graphics = fakeGraphics()
-    const scene = fakeScene(graphics)
-    const car1 = fakeEllipse()
-    const cars = new Map([[1 as const, { ellipse: car1 }]])
+  it('renders the doors-open cage frame while open and the closed slab frame once closed (ELAN-01/02, ART-15)', () => {
+    const car1 = fakeCarView()
+    const cars = new Map([[1 as const, { view: car1 }]])
     const presenter = new ElevatorPresenter(
-      scene,
       cars,
       () => 100,
       () => 460,
     )
 
-    // Fully open: two rects, each with a positive gap from the center.
+    // Fully open (arrival swing done): the doors-open cage frame (ART-15).
     presenter.onMoved(1, 'floor1')
     presenter.tick(cfg.doorAnimMs, 'floor1')
-    expect(graphics.rects.length).toBe(2)
-    const leftOpen = graphics.rects[0]
-    const rightOpen = graphics.rects[1]
-    if (leftOpen === undefined || rightOpen === undefined) {
-      throw new Error('expected two door rects')
-    }
-    expect(leftOpen.w).toBeLessThan(23)
-    expect(rightOpen.x).toBeGreaterThan(100)
+    expect(car1.frames.at(-1)).toBe(0)
 
-    // Closed: two rects that tile the full door width with zero center gap.
+    // Closed (public call dispatched the car elsewhere): the closed slab.
     presenter.onCalled(1, 'floor2')
     presenter.tick(cfg.doorAnimMs, 'floor1')
-    expect(graphics.rects.length).toBe(2)
-    const leftClosed = graphics.rects[0]
-    const rightClosed = graphics.rects[1]
-    if (leftClosed === undefined || rightClosed === undefined) {
-      throw new Error('expected two door rects')
-    }
-    expect(leftClosed.w).toBe(23)
-    expect(rightClosed.x).toBe(100)
+    expect(car1.frames.at(-1)).toBe(1)
   })
 
   it('does not render arrival/transit for elevator:moved on a different floor (ELAN-07)', () => {
-    const graphics = fakeGraphics()
-    const scene = fakeScene(graphics)
-    const car1 = fakeEllipse()
-    const cars = new Map([[1 as const, { ellipse: car1 }]])
+    const car1 = fakeCarView()
+    const cars = new Map([[1 as const, { view: car1 }]])
     const presenter = new ElevatorPresenter(
-      scene,
       cars,
       () => 100,
       () => 460,
@@ -283,18 +247,14 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
     presenter.onMoved(1, 'floor2')
     presenter.tick(cfg.doorAnimMs, 'floor1')
     expect(car1.visible).toBe(false)
-    expect(graphics.rects.length).toBe(0)
   })
 
   it('constructing and calling every public method does not throw', () => {
-    const graphics = fakeGraphics()
-    const scene = fakeScene(graphics)
     const cars = new Map([
-      [1 as const, { ellipse: fakeEllipse() }],
-      [2 as const, { ellipse: fakeEllipse() }],
+      [1 as const, { view: fakeCarView() }],
+      [2 as const, { view: fakeCarView() }],
     ])
     const presenter = new ElevatorPresenter(
-      scene,
       cars,
       () => 0,
       () => 460,

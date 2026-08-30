@@ -6,7 +6,7 @@ import { expect, type Page, test } from '@playwright/test'
 // AD-014) — single client, no round start needed (fast entry point, mirrors
 // elevatorLobby.spec.ts). P2 AC2's arrival tween/fade math is unit-tested
 // (elevatorPresenter.test.ts); this scenario proves the DOM/Phaser
-// integration: the harness Rectangle/Ellipse contract survives, and a real
+// integration: the harness ART children contract survives, and a real
 // browser actually renders/hides the car per the presenter's phase clock.
 
 interface CarRead {
@@ -35,7 +35,10 @@ async function readCars(page: Page): Promise<CarRead> {
       rectCount: list.filter(
         (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
       ).length,
-      visibleCarCount: list.filter((c) => c.type === 'Ellipse' && c.visible).length,
+      // ART contract (cycle 2.10): cars are elevator-car Sprites.
+      visibleCarCount: list.filter(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
+      ).length,
     }
   })
 }
@@ -54,7 +57,7 @@ test.describe('client:elevator_doors', () => {
 
     // Harness rendering contract, unchanged by this cycle (spec Goal 4): one
     // player sprite for the lone player, and both cars start parked open at
-    // the lobby — both Ellipses render visible before any call happens
+    // the lobby — both car Sprites render visible before any call happens
     // (ELAN-01 AC1/AC3).
     const baseline = await readCars(host)
     expect(baseline.rectCount).toBe(1)
@@ -97,13 +100,21 @@ test.describe('client:elevator_doors', () => {
             __TURNOVER__: {
               scene: (
                 n: string,
-              ) => { children: { list: { type: string; visible: boolean }[] } } | null
+              ) => {
+                children: {
+                  list: { type: string; visible: boolean; texture?: { key?: string } }[]
+                }
+              } | null
             }
           }
         ).__TURNOVER__
         const scene = t.scene('Round')
         if (scene === null) return false
-        return scene.children.list.filter((c) => c.type === 'Ellipse' && c.visible).length === 1
+        return (
+          scene.children.list.filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
+          ).length === 1
+        )
       },
       undefined,
       { timeout: 2000 },
@@ -113,7 +124,7 @@ test.describe('client:elevator_doors', () => {
     await host.waitForTimeout(300)
     await host.keyboard.up('ArrowRight')
 
-    // Still exactly one Rectangle while car1's door is open (Goal 4
+    // Still exactly one player sprite while car1's door is open (Goal 4
     // preserved through the new visual).
     expect((await readCars(host)).rectCount).toBe(1)
 
@@ -130,13 +141,21 @@ test.describe('client:elevator_doors', () => {
             __TURNOVER__: {
               scene: (
                 n: string,
-              ) => { children: { list: { type: string; visible: boolean }[] } } | null
+              ) => {
+                children: {
+                  list: { type: string; visible: boolean; texture?: { key?: string } }[]
+                }
+              } | null
             }
           }
         ).__TURNOVER__
         const scene = t.scene('Round')
         if (scene === null) return false
-        return scene.children.list.filter((c) => c.type === 'Ellipse' && c.visible).length === 0
+        return (
+          scene.children.list.filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
+          ).length === 0
+        )
       },
       undefined,
       { timeout: 5000 },

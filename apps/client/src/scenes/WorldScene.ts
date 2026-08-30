@@ -140,7 +140,7 @@ export class WorldScene extends Phaser.Scene {
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private openAccuseMenu: (targetId: string) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
-  private cars = new Map<1 | 2, { ellipse: Phaser.GameObjects.Ellipse; floor: string }>()
+  private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
   private ownMoving: 'left' | 'right' | null = null
@@ -247,15 +247,15 @@ export class WorldScene extends Phaser.Scene {
       this.addPlayerDisplay(player.id, player.name)
     }
 
-    // One Ellipse per elevator car at its landing x (never a Rectangle: harness
-    // counts player rectangles; and never an occupant list (privacy rule).
+    // One elevator-car Sprite per car at its landing x (ART-15: frame 0 =
+    // doors-open cage, frame 1 = closed slab; never an occupant list —
+    // privacy rule). The presenter drives frame/visibility from its clock.
     for (const id of [1, 2] as const) {
-      const ellipse = this.add.ellipse(this.carPx(id), GROUND_Y + 30, 46, 60, 0x775533)
-      this.cars.set(id, { ellipse, floor: 'lobby' })
+      const sprite = this.add.sprite(this.carPx(id), GROUND_Y + 30, 'elevator-car')
+      this.cars.set(id, { view: sprite, floor: 'lobby' })
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
     this.elevatorPresenter = new ElevatorPresenter(
-      this,
       this.cars,
       (car) => this.carPx(car),
       (car) => this.carLaneY(car),
@@ -1001,7 +1001,7 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     for (const car of this.cars.values()) {
-      car.ellipse.y = this.laneY(car.floor) + 30
+      car.view.y = this.laneY(car.floor) + 30
     }
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
     // Card glyph position/visibility follow the floor lanes; cues expire here.

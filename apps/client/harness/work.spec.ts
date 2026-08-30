@@ -41,7 +41,9 @@ async function readScene(page: Page): Promise<SceneRead> {
       rectCount: list.filter(
         (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
       ).length,
-      carCount: list.filter((c) => c.type === 'Ellipse').length,
+      carCount: list.filter(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car',
+      ).length,
     }
   })
 }
