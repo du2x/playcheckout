@@ -127,6 +127,13 @@ export class WorldScene extends Phaser.Scene {
   /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
   private evidence: EvidenceSession = initialEvidenceSession()
   private evidenceLayer: HTMLElement | null = null
+  /** Guest NPC markers (cycle 3.1): one Arc per guest — deliberately NOT a
+   *  player Sprite (GUEST-12). Created lazily, pruned on guest:left. */
+  private guestViews = new Map<string, Phaser.GameObjects.Arc>()
+  /** The desk-bell DOM line (GUEST-13) — visible while an impatient guest
+   *  queues on the viewed floor. */
+  private deskBell: HTMLElement | null = null
+  private tapPhase = 0
   private cardMarkers = new Map<string, HTMLElement>()
   private cueNodes = new Map<number, HTMLElement>()
   private audio: AudioContext | null = null
@@ -196,6 +203,7 @@ export class WorldScene extends Phaser.Scene {
     this.riderSession = data.riderSession
     this.calledLights = { 1: false, 2: false }
     this.buildEvidenceLayer()
+    this.buildGuestLayer()
     this.buildDoorImages()
 
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
@@ -408,10 +416,16 @@ export class WorldScene extends Phaser.Scene {
         break
       }
       case 'guest-impatient': {
+        // The tap/bell window runs from the impatience cue until the guest
+        // SETTLES — in 3.1 self-assignment is instant, so clearing at
+        // self_assigned would make the cue invisible.
         this.impatientGuests.add(action.guestId)
         break
       }
       case 'guest-self-assigned':
+        // The tap window deliberately persists past self-assignment (3.1
+        // self-assign is instant — clearing here would hide the cue).
+        break
       case 'guest-settled':
       case 'guest-checked-out': {
         this.impatientGuests.delete(action.guestId)
@@ -757,6 +771,60 @@ export class WorldScene extends Phaser.Scene {
   // --- Evidence rendering (cycle 2.7, EVID-19): DOM layer over the canvas ---
   // Scene children stay exactly rectangles+ellipses (harness contract); every
   // evidence visual is absolutely positioned DOM matched to canvas px.
+
+  /** The desk-bell DOM line + guest layer root (GUEST-13, AD-018 pattern). */
+  private buildGuestLayer(): void {
+    const gameEl = document.querySelector('#game')
+    if (gameEl === null) return
+    const bell = document.createElement('div')
+    bell.id = 'desk-bell'
+    bell.textContent = 'desk bell rings - a guest is waiting'
+    bell.style.position = 'absolute'
+    bell.style.left = '50%'
+    bell.style.transform = 'translateX(-50%)'
+    bell.style.top = '12px'
+    bell.style.padding = '4px 10px'
+    bell.style.fontSize = '14px'
+    bell.style.background = '#3a3a52'
+    bell.style.color = '#ffe9a8'
+    bell.style.borderRadius = '4px'
+    bell.style.visibility = 'hidden'
+    gameEl.appendChild(bell)
+    this.deskBell = bell
+  }
+
+  /** Guest marker sync (called every frame): one Arc per guest on the viewed
+   *  floor, bouncing while its free impatience cue is active (GUEST-12/13). */
+  private syncGuests(delta: number): void {
+    this.tapPhase += delta / 1000
+    for (const [id, g] of this.guests) {
+      let view = this.guestViews.get(id)
+      if (view === undefined) {
+        view = this.add.circle(g.x * TILE_PX, GROUND_Y - 10, 9, 0xbfe3ff)
+        this.guestViews.set(id, view)
+      }
+      const visible = this.spectator || g.floor === this.viewFloor
+      view.setVisible(visible)
+      view.x = g.x * TILE_PX
+      const tap = this.impatientGuests.has(id)
+        ? Math.abs(Math.sin(this.tapPhase * Math.PI * 2)) * 8
+        : 0
+      view.y = GROUND_Y - 10 - tap
+    }
+    for (const [id, view] of this.guestViews) {
+      if (!this.guests.has(id)) {
+        view.destroy()
+        this.guestViews.delete(id)
+      }
+    }
+    if (this.deskBell !== null) {
+      const anyImpatient = [...this.impatientGuests].some(
+        (id) => this.guests.get(id)?.floor === 'lobby',
+      )
+      this.deskBell.style.visibility =
+        anyImpatient && (this.spectator || this.viewFloor === 'lobby') ? 'visible' : 'hidden'
+    }
+  }
 
   private buildEvidenceLayer(): void {
     const gameEl = document.querySelector('#game')
@@ -1156,6 +1224,7 @@ export class WorldScene extends Phaser.Scene {
       car.view.y = this.laneY(car.floor) + 30
     }
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
+    this.syncGuests(delta)
     // Card glyph position/visibility follow the floor lanes; cues expire here.
     this.syncCardMarkers()
     for (const [key, marker] of this.cardMarkers) {

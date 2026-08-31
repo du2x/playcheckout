@@ -18,6 +18,31 @@ async function createRoom(page: Page, name: string): Promise<string> {
   return code
 }
 
+/** AD-028: guests are elevator citizens, so the car a player means to board
+ * may be away on ambient traffic. The landing press BOARDS when the car
+ * stands here (AD-025) and summons/pins otherwise — keep pressing until the
+ * rider chip shows, exactly what a real player does. */
+async function pressUntilRiderChip(page: Page, attempts = 15): Promise<void> {
+  const chipShown = () =>
+    page.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 2000 },
+    )
+  for (let i = 0; i < attempts; i++) {
+    await page.keyboard.press('ArrowUp')
+    try {
+      await chipShown()
+      return
+    } catch {
+      // The summoned car is still en route — press again when it arrives.
+    }
+  }
+  await chipShown()
+}
+
 async function join(page: Page, code: string, name: string) {
   await page.goto('/')
   await page.fill('#join-code', code)
@@ -38,26 +63,14 @@ function eventsOf(
   )
 }
 
-/** The rider chip confirms the server processed the boarding press — the
- * in-car floor press is only sendable once the client's rider session is set. */
-function waitForRiderChip(page: Page) {
-  return page.waitForFunction(
-    () =>
-      document.querySelector('#elevator-riders') !== null &&
-      !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
-    undefined,
-    { timeout: 8000 },
-  )
-}
-
 /** Walk to the west landing and board the parked car with the call press
- * (AD-025) — the rider chip confirms the board. No ride press. */
+ * (AD-025, retrying under AD-028 ambient guest traffic) — the rider chip
+ * confirms the board. No ride press. */
 async function boardWestCar(page: Page) {
   await page.keyboard.down('ArrowLeft')
   await page.waitForTimeout(3000)
   await page.keyboard.up('ArrowLeft')
-  await page.keyboard.press('ArrowUp')
-  await waitForRiderChip(page)
+  await pressUntilRiderChip(page)
 }
 
 test.describe('client:evidence_cues', () => {

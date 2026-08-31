@@ -6,6 +6,31 @@ import { expect, type Page, test } from '@playwright/test'
 // press-model elevator rides with position-only panels, the rider-exclusive
 // chip, post-buzzer re-confinement, and a leaver's rectangle disappearing.
 
+/** AD-028: guests are elevator citizens, so the car a player means to board
+ * may be away on ambient traffic. The landing press BOARDS when the car
+ * stands here (AD-025) and summons/pins otherwise — keep pressing until the
+ * rider chip shows, exactly what a real player does. */
+async function pressUntilRiderChip(page: Page, attempts = 15): Promise<void> {
+  const chipShown = () =>
+    page.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 2000 },
+    )
+  for (let i = 0; i < attempts; i++) {
+    await page.keyboard.press('ArrowUp')
+    try {
+      await chipShown()
+      return
+    } catch {
+      // The summoned car is still en route — press again when it arrives.
+    }
+  }
+  await chipShown()
+}
+
 const TILE = 832 / 30
 const SPEED = 6 // tiles per second (prd §7)
 
@@ -179,14 +204,7 @@ test.describe('client:movement', () => {
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
-    await host.keyboard.press('ArrowUp')
-    await host.waitForFunction(
-      () =>
-        document.querySelector('#elevator-riders') !== null &&
-        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
-      undefined,
-      { timeout: 5000 },
-    )
+    await pressUntilRiderChip(host)
     expect((await readChip(host)).names).toContain('ada')
 
     await host.click('#start-button')
@@ -311,8 +329,8 @@ test.describe('client:elevator_riders', () => {
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
     await rider2.keyboard.up('ArrowLeft')
-    await host.keyboard.press('ArrowUp')
-    await rider2.keyboard.press('ArrowUp')
+    await pressUntilRiderChip(host)
+    await pressUntilRiderChip(rider2)
     for (const page of [host, rider2]) {
       await page.waitForFunction(
         () => {
@@ -450,14 +468,7 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     await follower.keyboard.down('ArrowRight')
     await follower.waitForTimeout(3000)
     await follower.keyboard.up('ArrowRight')
-    await follower.keyboard.press('ArrowUp')
-    await follower.waitForFunction(
-      () =>
-        document.querySelector('#elevator-riders') !== null &&
-        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
-      undefined,
-      { timeout: 5000 },
-    )
+    await pressUntilRiderChip(follower)
     await follower.keyboard.press('1')
     await follower.waitForFunction(
       () => document.querySelector('#panel-east')?.textContent === 'floor1',

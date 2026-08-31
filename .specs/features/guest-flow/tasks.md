@@ -249,7 +249,7 @@ compile-coupled and land in one commit.)
 
 ---
 
-### T8: Client guest slice
+### T8: Client guest slice ✅
 
 **What**: Guest state + exhaustive mappers; distinct guest markers (own-floor only), desk queue rendering, foot-tap cue + `#desk-bell` line, no complaint counter; Playwright `client:guest_flow` scenario.
 **Where**: `apps/client/src/{state.ts,net/mappers.ts,scenes/WorldScene.ts,ui/lobbyView.ts,ui/roundHud.ts}` (+ `apps/client/harness/guestFlow.spec.ts`)

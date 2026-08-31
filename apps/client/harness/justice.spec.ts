@@ -94,7 +94,25 @@ test.describe('client:accuse_ui', () => {
     await accuser.keyboard.down('ArrowLeft')
     await accuser.waitForTimeout(3000) // walk to the west landing
     await accuser.keyboard.up('ArrowLeft')
-    await accuser.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
+    // AD-028: guests are elevator citizens, so car 1 is no longer guaranteed
+    // parked here — an ambient call may have it elsewhere. The landing press
+    // BOARDS when the car stands here (AD-025) and SUMMONS/pins otherwise;
+    // keep pressing until the rider chip shows (what a real player does).
+    for (let i = 0; i < 15; i++) {
+      await accuser.keyboard.press('ArrowUp')
+      try {
+        await accuser.waitForFunction(
+          () =>
+            document.querySelector('#elevator-riders') !== null &&
+            !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+          undefined,
+          { timeout: 2000 },
+        )
+        break
+      } catch {
+        // The summoned car is still en route — press again when it arrives.
+      }
+    }
     await accuser.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
@@ -147,7 +165,25 @@ test.describe('client:accuse_ui', () => {
     await accuser.keyboard.down('ArrowLeft')
     await accuser.waitForTimeout(3000) // walk back to the west landing
     await accuser.keyboard.up('ArrowLeft')
-    await accuser.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
+    // AD-028: guests are elevator citizens, so car 1 is no longer guaranteed
+    // parked here — an ambient call may have it elsewhere. The landing press
+    // BOARDS when the car stands here (AD-025) and SUMMONS/pins otherwise;
+    // keep pressing until the rider chip shows (what a real player does).
+    for (let i = 0; i < 15; i++) {
+      await accuser.keyboard.press('ArrowUp')
+      try {
+        await accuser.waitForFunction(
+          () =>
+            document.querySelector('#elevator-riders') !== null &&
+            !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+          undefined,
+          { timeout: 2000 },
+        )
+        break
+      } catch {
+        // The summoned car is still en route — press again when it arrives.
+      }
+    }
     await accuser.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
