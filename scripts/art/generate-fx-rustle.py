@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the Turnover sabotage rustle FX (AD-020).
+"""Generate the Turnover sabotage rustle FX (Deco Noir restyle, AD-029).
 
 4-frame 32x32 dust puff that accompanies the rustle audio cue at a door
-(FR-13). Subtle by design: cream/tan motes on transparent background,
+(FR-13). Subtle by design: ivory/brass motes on transparent background,
 anchored bottom-center on the door threshold. Plays once on room:rustle.
 
 Output:
@@ -21,10 +21,10 @@ from PIL import Image
 FRAME = 32
 FRAMES = 4
 
-CREAM = (242, 237, 226, 255)
-CREAM_DIM = (216, 206, 186, 255)
-TAN = (201, 178, 138, 255)
-TAN_DIM = (168, 152, 118, 255)
+IVORY = (246, 241, 230, 255)
+IVORY_DIM = (207, 195, 168, 255)
+BRASS_DIM = (179, 135, 58, 255)
+DUST = (90, 81, 72, 255)
 
 TRANSPARENT = (0, 0, 0, 0)
 
@@ -44,17 +44,17 @@ def frame(n: int) -> Image.Image:
     if n == 3:  # dissipating: only the far-drifted specks remain
         specks = [(11, 20), (17, 18), (21, 22)]
         for x, y in specks:
-            rect(px, x, y, x, y, TAN_DIM)
+            rect(px, x, y, x, y, DUST)
         return px
     for i, (sx, sy) in enumerate(SITES):
         dx, dy = DRIFT[i]
         x = sx + dx * n
         y = sy + dy * n
         size = 1 + (n + i) % 2  # alternating 1-2px motes
-        color = (CREAM, CREAM_DIM, TAN, TAN_DIM)[i % 4]
+        color = (IVORY, IVORY_DIM, BRASS_DIM, DUST)[i % 4]
         rect(px, x, y, x + size, y + size, color)
     if n == 0:
-        rect(px, 14, 27, 17, 28, CREAM_DIM)  # low puff where the mess starts
+        rect(px, 14, 27, 17, 28, IVORY_DIM)  # low puff where the mess starts
     return px
 
 

@@ -1,5 +1,12 @@
 # Turnover — Art direction brief
 
+> **SUPERSEDED (AD-029, 2026-08-30)**: the "Deco Noir" alternative direction
+> in [docs/art/alternative/art-direction-brief.md](alternative/art-direction-brief.md)
+> was approved and adopted as the production visual contract. The technical
+> contract below (sheet sizes, anchors, folders, budgets) still holds; the
+> visual system above (palette, shape language, outline rule) does not. Kept
+> for provenance.
+
 Status: Draft v1 (awaiting visual-target approval) · Owner: art workstream
 Source of truth for gameplay/design: `prd.md`. This brief translates it into
 visual constraints. Tuning values referenced here come from `prd.md` §7.

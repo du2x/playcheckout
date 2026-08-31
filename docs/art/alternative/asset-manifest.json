@@ -1,6 +1,6 @@
 {
-  "project": "Turnover — ALTERNATIVE art direction (Deco Noir)",
-  "status": "proposal-seed, NOT referenced by the client build",
+  "project": "Turnover \u2014 ALTERNATIVE art direction (Deco Noir)",
+  "status": "ADOPTED as production direction (AD-029, 2026-08-30); seeds retained as approval evidence \u2014 production sheets live in apps/client/public/art",
   "brief": "docs/art/alternative/art-direction-brief.md",
   "assets": [
     {
@@ -11,7 +11,7 @@
       "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
       "license": "original work, repo-owned",
       "qa": "asset_report ok: 9 colors, alpha 0-255, no problems",
-      "approval": "pending — judge at native scale over the seed corridor"
+      "approval": "pending \u2014 judge at native scale over the seed corridor"
     },
     {
       "path": "docs/art/alternative/seeds/styleboard-corridor-832x576.png",
@@ -21,7 +21,7 @@
       "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
       "license": "original work, repo-owned",
       "qa": "visual pass: ellipse-stepped glows, silhouette-first trash, ivory figure separates from wall and carpet",
-      "approval": "pending — art workstream + design owner"
+      "approval": "pending \u2014 art workstream + design owner"
     }
   ]
 }

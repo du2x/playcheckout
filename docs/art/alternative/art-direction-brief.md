@@ -1,11 +1,27 @@
 # Turnover — Art direction brief (ALTERNATIVE: "Deco Noir")
 
-Status: Proposal v1 (awaiting visual-target approval) · Owner: art workstream
-This is an **alternative** to `docs/art/art-direction-brief.md`, not a replacement.
-That brief anchors on an era of chunky arcade corridor action; this project drops
-that anchor entirely and rebuilds the visual system around a different reference
-mood: **a 1930s grand-hotel travel poster after dark** — elegant, geometric, quiet,
-and a little sinister. Gameplay frame (prd.md) is untouched; only the look changes.
+Status: **APPROVED + ADOPTED as production direction (AD-029, 2026-08-30)** ·
+Owner: art workstream
+This is an **alternative** to `docs/art/art-direction-brief.md` (now marked
+superseded for its visual system; its technical contract still holds). This
+project drops the old arcade anchor entirely and rebuilds the visual system
+around a different reference mood: **a 1930s grand-hotel travel poster after
+dark** — elegant, geometric, quiet, and a little sinister. Gameplay frame
+(prd.md) is untouched; only the look changes.
+
+## Adoption amendment (AD-029)
+
+Production landed over the AD-020 sheet contracts UNCHANGED (staff 28x60 8f,
+doors 72x96, car 96x64, panel 32x32, interiors 112x96, band 32x146) — a
+rendering-only restyle. Consequences:
+
+- The **34x64 elongated characters** below are DEFERRED until the open
+  960px-viewport (=32 px/tile) decision lands; until then the elongation is
+  approximated by slimmer silhouettes inside 28x60 frames.
+- The frieze band is a style-board element only; the in-game wall above the
+  corridor band stays a flat quiet slate field (same quiet-corridor rationale).
+- The outline rule below ("no outlines anywhere") replaces AD-020's
+  1px darker-self character outline.
 
 ## Why this direction (recorded choice)
 
