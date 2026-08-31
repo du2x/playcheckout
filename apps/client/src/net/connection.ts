@@ -133,6 +133,26 @@ export class Connection {
     this.room.send('accuse', { type: 'accuse', targetId })
   }
 
+  /** E at the front desk (cycle 3.2): the server derives receive-or-release. */
+  sendDeskInteract(): void {
+    this.room.send('desk:interact', { type: 'desk:interact' })
+  }
+
+  /** Complete the send flow (FR-27): destination (server truth) + announced
+   *  claim are INDEPENDENT choices — nothing validates that they match. */
+  sendDeskSend(
+    destination: { floor: GuestFloorId; room: RoomIndex },
+    announce: { floor: GuestFloorId; room: RoomIndex },
+  ): void {
+    this.room.send('desk:send', {
+      type: 'desk:send',
+      destinationFloor: destination.floor,
+      destinationRoom: destination.room,
+      announceFloor: announce.floor,
+      announceRoom: announce.room,
+    })
+  }
+
   leave(): void {
     this.room.leave()
   }

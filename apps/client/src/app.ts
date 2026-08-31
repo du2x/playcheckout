@@ -214,6 +214,11 @@ export class App {
       sendElevatorPress: (floor: FloorId) => this.connection?.sendElevatorPress(floor),
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
         this.connection?.sendWorkStart(floor, room),
+      sendDeskInteract: () => this.connection?.sendDeskInteract(),
+      sendDeskSend: (
+        destination: { floor: GuestFloorId; room: RoomIndex },
+        announce: { floor: GuestFloorId; room: RoomIndex },
+      ) => this.connection?.sendDeskSend(destination, announce),
       openAccuseMenu: (targetId: string) => this.openAccuseMenu(targetId),
       riderSession: this.rider,
     })

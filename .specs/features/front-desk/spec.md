@@ -187,9 +187,9 @@ the claimed room on all pages while the guest marker walks to the other floor
 | DESK-08 | P1 send | Design | Implemented (T3) |
 | DESK-09 | P1 send | Design | Implemented (T3) |
 | DESK-10 | P1 send | Design | Implemented |
-| DESK-11 | P2 client | Design | Pending |
+| DESK-11 | P2 client | Design | Implemented (T6) |
 | DESK-12 | P2 client | Design | Pending |
-| DESK-13 | P2 client | Design | Pending |
+| DESK-13 | P2 client | Design | Implemented (T6) |
 
 **Coverage:** 13 total, 0 unmapped.
 

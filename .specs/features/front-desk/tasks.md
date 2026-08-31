@@ -165,7 +165,7 @@ T5 → T6
 
 ---
 
-### T6: Client desk slice
+### T6: Client desk slice ✅
 
 **What**: Mapper rows + ViewActions (`guest-routed`, `walkie-broadcast`); contextual E (desk zone → `desk:interact`, accuse suppressed); `#desk-hint`; `#desk-menu` (destination list → announce list → confirm sends `desk:send`, closes on own routed/release, stays open on silent rejection).
 **Where**: `apps/client/src/net/mappers.ts`, `apps/client/src/state.ts`, `apps/client/src/scenes/WorldScene.ts`, `apps/client/src/net/connection.ts` (send helper)
@@ -175,8 +175,9 @@ T5 → T6
 
 **Done when**:
 
-- [ ] Mappers compile exhaustively; reducer no-ops scene kinds
-- [ ] Gate check passes: full
+- [x] Mappers compile exhaustively (mapper-for-every-key test holds); reducer no-ops the two scene kinds
+- [x] Contextual E: desk-zone tap sends desk:interact (menu open/close), accuse hold suppressed in-zone; walk-out closes the menu; own guest:routed closes it on a completed send; rejected sends keep it open
+- [x] Gate check passes: full (typecheck 4/4, lint clean, test:sim 377/377)
 
 **Tests**: unit (mappers/reducer if touched)
 **Gate**: full
