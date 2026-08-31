@@ -750,6 +750,37 @@
 - **Date**: 2026-08-30
 - **Status**: active.
 
+### AD-028
+- **Decision**: **Adopt the "Deco Noir" alternative art direction as the
+  production visual contract**, superseding the AD-020 era/mood anchor (the
+  chunky arcade corridor reference) for art only. Palette moves to slate-teal
+  architecture + burgundy carpet + brass trim with ivory-uniformed staff
+  (identical uniform for every player — no saboteur tell); edges stay hard
+  pixel clusters with NO outlines (value-separation gate replaces the outline
+  rule); ornament is geometric (stepped lintels, chevron/diamond chains).
+  Client grays that remain code-side change with it: `WorldScene` wall fill
+  `0xe8dcc0` → `0x33505a`, hall lane line `0x556677` → `0xb3873a`,
+  `BootScene` backdrop `0x223344` → `0x0f1b21`. Sheet contracts are
+  UNCHANGED from AD-020 (staff 28x60 8f, doors 72x96, car 96x64, panel
+  32x32, interiors 112x96, band 32x146) — this is a rendering-only restyle;
+  the alternative brief's taller 34x64 characters are deferred until the
+  open 960px-viewport decision lands.
+- **Reason**: User-approved direction change ("forget Elevator Action"). The
+  alternative brief (docs/art/alternative/) was built through the
+  create-game-assets workflow with an approved seed board; adopting it keeps
+  all gameplay-read gates (silhouette room states, hallway-readable cards,
+  grayscale separation) intact.
+- **Trade-off**: Visual identity change with zero protocol/sim/tuning churn;
+  the AD-020 brief is kept for provenance with a superseded pointer. Gate 3
+  re-run required since harness scenarios assert textures/frames (unchanged
+  keys, so expectation: pass).
+- **Scope**: `scripts/art/generate-{staff-walk,doors-elevator,corridor-band,room-interiors,fx-rustle}.py`,
+  `apps/client/public/art/**` (regenerated),
+  `apps/client/src/scenes/{WorldScene,BootScene}.ts` (fills only),
+  `docs/art/**` (briefs + manifests), `docs/art/alternative/**`.
+- **Date**: 2026-08-30
+- **Status**: active.
+
 ## Handoff
 
 - **Feature**: elevator playtest-fix strand (AD-023…AD-027) + AD-022

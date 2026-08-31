@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "art_direction_brief": "docs/art/art-direction-brief.md",
-  "notes": "Cycle 2.10 art-swap landed: wired assets approved with in-engine evidence. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned.",
+  "art_direction_brief": "docs/art/alternative/art-direction-brief.md (Deco Noir, AD-028)",
+  "notes": "Deco Noir restyle (AD-028) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned.",
   "assets": [
     {
       "id": "staff-walk",
@@ -23,7 +23,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v3: near/far leg value separation, jacket hem y30, stride \u00b16, arm counter-swing fix; QA asset_report PASS (10 colors, full alpha)"
+        "prompt_or_source_record": "v3: near/far leg value separation, jacket hem y30, stride \u00b16, arm counter-swing fix; QA asset_report PASS (10 colors, full alpha) Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -52,7 +52,7 @@
         "created_at": "",
         "license": "",
         "attribution": "",
-        "prompt_or_source_record": "deferred to Phase 3 per art-swap spec assumption: the channel keeps the idle pose during work (safest FR-9 presentation); a shared work loop needs its own FR-9 audit"
+        "prompt_or_source_record": "deferred to Phase 3 per art-swap spec assumption: the channel keeps the idle pose during work (safest FR-9 presentation); a shared work loop needs its own FR-9 audit Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": false,
@@ -81,7 +81,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -110,7 +110,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -139,7 +139,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "authored v1, QA PASS; UNWIRED by cycle 2.10 scope \u2014 the DOM card glyph (evidence layer) remains the hallway card; swap belongs to a future evidence-presentation pass"
+        "prompt_or_source_record": "authored v1, QA PASS; UNWIRED by cycle 2.10 scope \u2014 the DOM card glyph (evidence layer) remains the hallway card; swap belongs to a future evidence-presentation pass Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -168,7 +168,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors)"
+        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors) Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -197,7 +197,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors)"
+        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors) Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -226,7 +226,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors)"
+        "prompt_or_source_record": "v2: FR-12 shared-mess geometry (fresh/settled identical layout), soft-edged light pool, fallen lampshade, clean tilted frame; QA PASS (14/17/18 colors) Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -255,7 +255,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v1: 32px tile period (seam at x=0 only), diamond carpet motif w/ gold knot; QA PASS 6 colors; seamless in full-width tiled mock; wired in-engine (TileSprite y350..495 + Graphics wall fill y48..350)"
+        "prompt_or_source_record": "v1: 32px tile period (seam at x=0 only), diamond carpet motif w/ gold knot; QA PASS 6 colors; seamless in full-width tiled mock; wired in-engine (TileSprite y350..495 + Graphics wall fill y48..350) Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -284,7 +284,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -313,7 +313,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5"
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -342,7 +342,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v1: gather-rise-scatter-dissipate, 4 frames, 5 colors; QA PASS; wired in-engine on room:rustle (AD-020 slice)"
+        "prompt_or_source_record": "v1: gather-rise-scatter-dissipate, 4 frames, 5 colors; QA PASS; wired in-engine on room:rustle (AD-020 slice) Restyled to Deco Noir palette (AD-028); sheet contract unchanged."
       },
       "verification": {
         "native_scale_reviewed": true,
