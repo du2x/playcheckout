@@ -919,42 +919,79 @@
 - **Date**: 2026-08-31
 - **Status**: active.
 
-## Handoff
+### AD-033
+- **Decision**: Cycle 3.B constants + autonomous-run rulings for the suitcase
+  transport (all §7-external, recorded per the tuning rule):
+  (a) `ROOM_DOOR_RANGE_TILES = 1` — the E place/pickup range around a room's
+  door x (mirrors `ELEVATOR_LANDING_TILES`/`DESK_RANGE_TILES` scale).
+  (b) `GUEST_HOLD_START_TILES = 18` — the 3.B holding-area stub starts 3 tiles
+  east of the desk, slots extend eastward at `GUEST_QUEUE_SPACING_TILES`; the
+  3.C mezzanine restaurant replaces it.
+  (c) Wrong-delivery aftermath (the spec's assumed default): a guest who
+  complains at a wrong door RETURNS to the holding area and re-targets on the
+  suitcase's next rest event — correction after arrival stays possible; the
+  complaint is the cost (one per wrong arrival, no dedup).
+  (d) Earshot membership: receiver + every live non-spectator lobby-floor
+  player within `DESK_EARSHOT_TILES` at the check-in tick; the `deskEarshot`
+  policy deliberately EXCLUDES spectators (a fired player must not learn later
+  assignments), unlike the rustle `earshot` over-delivery.
+  (e) Reservation model: a check-in assignment RESERVES the room (vacancy
+  excludes tenanted AND reserved); settle converts reservation → tenancy;
+  teardown voids the assignment and releases the reservation.
+  (f) **SPEC_DEVIATION (roadmap letter)**: carrier loss rests the suitcase at
+  the desk only as shorthand — implemented as the desk ABSORBING it (removed
+  from play; guest re-queued front, assignment void). A rest-at-desk object
+  with a voided assignment has no game consequence, and a movable one could
+  dead-end the desk for its guest; the re-check-in issues the guest's luggage
+  afresh.
+- **Reason**: The spec's assumptions table resolved the v1.4 gray areas for
+  the autonomous run; constants mirror existing scale pins. (f) is recorded
+  because the roadmap/proposal wording ("suitcase rests at desk") described an
+  object with no remaining game function.
+- **Trade-off**: (f) loses the interception flavor of an abandoned desk
+  suitcase; if playtests miss it, a new AD can restore a bound desk-rest with
+  a re-check-in pickup path. (c) means repeated re-placing at the same wrong
+  room re-complains per arrival — the intended pressure; revisit via the 3.5
+  balance gate.
+- **Scope**: `packages/shared/src/tuning.ts`,
+  `packages/sim/src/guests.ts` (SPEC_DEVIATION comment at `dropCarry`),
+  cycle 3.B artifacts.
+- **Date**: 2026-08-31
+- **Status**: active.
 
-- **Feature**: `front-desk` (cycle 3.2) — the desk is the social-information
-  core: E in the 1-tile zone (AD-031 `DESK_RANGE_TILES`) receives the front
-  queued guest (leaves the queue without shifting the rest; impatience freezes
-  and resumes exactly); E-again / walking out / fired / ghosted / disconnect
-  releases to the queue front; completing the two-step send menu issues ONE
-  intent with TWO independent choices — destination (server truth, tenancy
-  commits at route) and announced room (the walkie claim, building-wide). The
-  lie is structurally possible and client-invisible: `guest:routed
-  {guestId, playerId}` and `walkie:broadcast {playerId, floor, room}` are the
-  only new wire surfaces (both 'all'); the walk (guest:moved/settled) is the
-  only ground truth.
-- **Phase / Task**: Execute → T1–T7 complete (commits d52e679..3bb9dde) plus
-  verifier fix iteration (3f1d45e: ROOM_INDEXES denylist fix, front-selection
-  + per-holder tests, key-auto-repeat guard on desk E). Independent Verifier
-  **PASS** (`.specs/features/front-desk/validation.md`): 13/13 ACs evidenced
-  file:line; discrimination sensor 3/3 mutants killed (iteration 1 was FAIL:
-  M1 queue-end mutant survived until selection was pinned; a literal 1–8 room
-  list tripped the §7-numeric denylist); `validate_state.py front-desk` exit 0.
+## Handoff
+- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — check-in
+  hands the queued guest's suitcase to the receiver (one per player; carrying
+  blocks work starts with a `carrying` intent error; accusation/elevators stay
+  available); the assignment is a one-shot desk-earshot snapshot (new
+  `deskEarshot` policy, spectators excluded); the suitcase is placed at room
+  doors / picked up by anyone (self-regrab included); the guest waits in the
+  lobby holding stub and follows the suitcase's last resting room; arrival is
+  the tribunal (correct → settle, wrong → door complaint, no personal
+  penalty); the 60s rolling carry clock fires the current carrier via the
+  justice teardown; the walkie became the server-generated lifecycle log
+  (`walkie:broadcast`/`guest:routed`/`desk:send` DELETED — placement silent);
+  client: suitcase markers, E priority ladder, blind-place one-step confirm,
+  assignment hint on the owned marker only.
+- **Phase / Task**: Execute → T1–T6 complete (commits ad0341e, e7385b8,
+  73cb60c, 99f537f, 7fae41e + T6). Independent Verifier: see
+  `.specs/features/suitcase-transport/validation.md`.
 - **Gates**:
   - `pnpm typecheck` ✅ 4/4 · `pnpm lint` ✅ (biome, 110 files)
-  - `pnpm test:sim` ✅ (shared+sim 218, apps/server 74; workspace 376+)
-  - `pnpm test:client` — `client:desk_walkie` ✅ (30s scenario: hint → E →
-    E-again/walk-out closes → re-receive → lie floor2:4/claim floor1:8 → walkie
-    line on all 4 pages → no destination on any client surface pre-settle →
-    settle at floor2:4). KNOWN: full-parallel `pnpm test:client` shows ROTATING
-    single-spec timing flakes on this loaded box (justice/lobby/round/
-    spectator across runs; e.g. clock sampled 04:59 vs 05:00, buzzer
-    overtaking a slow scenario) — every spec green in isolation/batched runs.
-    Pre-existing REG-18 seq-continuity load flake in apps/server, same class.
-- **Next step**: cycle 3.3 `complaint-budget` (FR-29/30/31 — two-stage
-  complaints, 8-complaint instant loss, HUD pulse at ≥6; a guest routed into a
-  trashed room still settles silently, that cost lands in 3.3). Also: triage
-  the gate-3 parallel-load flake class (stagger or serialize heavy specs) and
-  REG-18 separately; lessons L-025/L-026 recorded as candidates for
-  confirmation.
+  - `pnpm test:sim` ✅ 381 (new suites: `sim:suitcase_carry` (+ selection,
+    round integration), `sim:assignment_overhear`, `sim:carry_clock`
+    (+ round integration), `sim:wrong_delivery`, `sim:lifecycle_log`,
+    `server:suitcase_carry`)
+  - `pnpm test:client` ✅ `client:suitcase` (both scenarios) — the pre-existing
+    rotating load-flake class (justice/lobby/round/spectator) reproduced on
+    the PRE-3.B commit (worktree 131af9e): not a 3.B regression; triage
+    remains open as in the 3.2 handoff.
+  - Leak audit: the assignment rides the wire exactly once per guest
+    (`assignment:overheard` on `deskEarshot`); placement emits no walkie
+    surface; the resting room reaches only same-floor clients pre-settle.
+- **Next step**: cycle 3.C `restaurant-floor` (mezzanine above the lobby,
+  AD-010 re-pin, `dining` phase replaces the holding stub, art manifest
+  entries BEFORE authoring). Also: triage the gate-3 parallel-load flake class
+  (documented since 3.2, reproduced on pre-3.B) and REG-18 separately.
 - **Blockers**: none.
 - **Branch**: master

@@ -29,6 +29,36 @@ room-originated sends, and stamps the envelope. Owns the per-connection
 sequence counters.
 _Avoid_: dispatcher, message switch
 
+**Suitcase**:
+The physical object a checked-in guest's delivery revolves around (v1.4,
+AD-032): one per checked-in guest, either carried by a player (rides the
+carrier's position stream) or resting at a room doorway. E places it at a room
+door, E picks a resting one up — by anyone, saboteur included. Carrying blocks
+work-channel starts; placement is silent. The guest follows its last resting
+room.
+_Avoid_: luggage, bag, delivery item
+
+**Carrier**:
+The player currently holding a suitcase — set at check-in (receiver = first
+carrier), transferred by pickup, lost only to teardown (carry-clock expiry,
+firing, ghosting, disconnect). One suitcase per player; carrying is
+hands-full.
+_Avoid_: holder, bearer, courier
+
+**Earshot (desk)**:
+The check-in-tick snapshot set for a guest's room assignment: the receiver plus
+every live lobby-floor player within `DESK_EARSHOT_TILES` of the desk. The
+assignment is transmitted exactly once, to exactly that set — never repeated,
+never logged. The `deskEarshot` recipient policy encodes it; spectators are
+deliberately excluded.
+_Avoid_: overhear radius, hearing range, broadcast range
+
+**Holding area**:
+The lobby-lane stub east of the desk where checked-in guests wait (3.B) until
+their suitcase first rests; replaced by the 3.C mezzanine restaurant. Guests
+there are patient — impatience times only the check-in wait.
+_Avoid_: waiting room, lobby queue (the queue is the unchecked line)
+
 **Rider session**:
 The client's single derivation of the local player's in-car state — car,
 occupants, press queue, last press — reduced purely from the ViewAction

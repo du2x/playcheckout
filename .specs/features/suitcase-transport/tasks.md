@@ -201,9 +201,9 @@ T1 → T2 → T3 → T4 → T5 → T6
 
 **Done when**:
 
-- [ ] Gates 1–3 green with the named scenarios; leak audit (assignment once, resting room not off-floor) asserted
-- [ ] AD-033 + autonomous-default decisions recorded; CONTEXT.md vocabulary added
-- [ ] Handoff written; `validate_state.py suitcase-transport` passes (after the Verifier)
+- [x] Gates 1–3 green with the named scenarios; leak audit asserted at sim + server + client gates
+- [x] AD-033 + autonomous-default decisions recorded; CONTEXT.md vocabulary added
+- [x] Handoff written; `validate_state.py suitcase-transport` passes (after the Verifier)
 
 **Tests**: none
 **Gate**: build

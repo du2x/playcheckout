@@ -304,9 +304,9 @@ appears (`client:suitcase`).
 | --- | --- | --- | --- |
 | SUI-01 | P1 check-in | Design | Implemented (T2) |
 | SUI-02 | P1 check-in | Design | Implemented (T2) |
-| SUI-03 | P1 check-in | Design | Implemented (T1) |
-| SUI-04 | P1 check-in | Design | Implemented (T1) |
-| SUI-05 | P1 check-in | Design | — |
+| SUI-03 | P1 check-in | Design | Implemented (T1/T2) |
+| SUI-04 | P1 check-in | Design | Implemented (T1/T2) |
+| SUI-05 | P1 check-in | Design | Implemented (T2–T5) |
 | SUI-06 | P1 check-in | Design | Implemented (T2) |
 | SUI-07 | P1 carry/place | Design | Implemented (T2) |
 | SUI-08 | P1 carry/place | Design | Implemented (T2) |
