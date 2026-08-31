@@ -68,6 +68,20 @@ export class WorkChannels {
     return this.states.get(roomKey(floor, room)) ?? 'fresh'
   }
 
+  /**
+   * Checkout churn (cycle 3.1, spawn half of FR-32): a settled guest checking
+   * out re-trashes their room as `settled` — aged trash with no freshness
+   * window, no rustle, no card, and deliberately NO `room:trashed` event
+   * (that event is sabotage-shaped: grace and walk-in logic key off it,
+   * JUST-07/08). The client learns the room's fate from `guest:checked_out`;
+   * snapshots and `room:observed` surface the `settled` state. Excluded from
+   * coverage like any un-prepped room (preppedCount only counts `prepped`).
+   * Idempotent.
+   */
+  churnTrash(floor: GuestFloorId, room: RoomIndex): void {
+    this.states.set(roomKey(floor, room), 'settled')
+  }
+
   /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */
   cardedOn(floor: GuestFloorId): RoomIndex[] {
     const rooms: RoomIndex[] = []

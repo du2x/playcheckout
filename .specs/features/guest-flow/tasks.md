@@ -125,7 +125,7 @@ T7 → T8
 
 ---
 
-### T3: WorkSim trash origin mark
+### T3: WorkSim trash origin mark ✅
 
 **What**: `trash(origin: 'sabotage' | 'churn')` side-map so checkout churn spawns *settled* trash; existing sabotage path unchanged.
 **Where**: `packages/sim/src/work.ts` (+ `work.test.ts`)

@@ -121,6 +121,13 @@ This extends AD-005's read-only seam into read-and-command **for NPC movers only
   deferred to 3.4
 - **Reuses**: existing `trash()` path and room-state map
 
+> **Amendment (Execute, T3)**: the four-state room model already expresses the
+> spawn half of FR-32 — churn is `churnTrash(floor, room)` setting the existing
+> `settled` state (aged trash, no freshness window, no rustle, NO
+> sabotage-shaped `room:trashed` event: grace/walk-in logic keys off it,
+> JUST-07/08). No origin side-map exists; the author dimension remains 3.4
+> scope. Simpler and reuses the locked state machine.
+
 ### Seeded RNG
 
 - **Purpose**: Deterministic sampling for dwell + self-assign choice.

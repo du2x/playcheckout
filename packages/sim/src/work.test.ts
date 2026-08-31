@@ -672,3 +672,61 @@ describe('sim:door_open_cue', () => {
     expect(sim.tick(positions(['ada', pos('lobby', 500)]))).toEqual([])
   })
 })
+
+// Cycle 3.1 (GUEST-09, spawn half of FR-32): checkout churn re-trashes the
+// room as `settled` — silent, sabotage-event-free, coverage-relevant.
+describe('sim:checkout_churn', () => {
+  it('sets the room to settled with no events (no room:trashed, no rustle)', () => {
+    const sim = simWith([
+      ['ada', 'staff'],
+      ['vin', 'saboteur'],
+    ])
+    // Zero the position stream first so no observation events interfere.
+    sim.tick(positions(['ada', pos('lobby', LOBBY)], ['vin', pos('lobby', LOBBY)]))
+
+    sim.churnTrash('floor2', 3)
+    expect(sim.stateOf('floor2', 3)).toBe('settled')
+    // churnTrash itself emits nothing — the guest:checked_out event is the
+    // client's announcement; a settled room must never fire the sabotage-
+    // shaped room:trashed (grace/walk-in logic keys off it, JUST-07/08).
+    expect(sim.tick(positions(['ada', pos('lobby', LOBBY)], ['vin', pos('lobby', LOBBY)]))).toEqual(
+      [],
+    )
+  })
+
+  it('counts a churned room as un-prepped for coverage (preppedCount)', () => {
+    const sim = simWith([['ada', 'staff']])
+    sim.churnTrash('floor1', 8)
+    // Prepped baseline is 0; the churned room must not count as prepped.
+    expect(sim.preppedCount).toBe(0)
+  })
+
+  it('is idempotent and stays settled across ticks (no freshness window)', () => {
+    const sim = simWith([['ada', 'staff']])
+    sim.churnTrash('floor3', 5)
+    const before = sim.stateOf('floor3', 5)
+    for (let i = 0; i < FRESHNESS_TICKS + 10; i++) sim.tick(positions())
+    expect(sim.stateOf('floor3', 5)).toBe(before)
+    expect(sim.stateOf('floor3', 5)).toBe('settled')
+    sim.churnTrash('floor3', 5)
+    expect(sim.stateOf('floor3', 5)).toBe('settled')
+  })
+
+  it('reads as NOT fresh in the recap sense (stateOf !== trashed)', () => {
+    const sim = simWith([['ada', 'staff']])
+    sim.churnTrash('floor2', 1)
+    // roundSim recap resolves freshness as stateOf === 'trashed'; churn must
+    // never present as fresh sabotage evidence.
+    expect(sim.stateOf('floor2', 1) === 'trashed').toBe(false)
+  })
+
+  it('a later prep still cleans a churned room normally (last writer wins)', () => {
+    const sim = simWith([['ada', 'staff']])
+    sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    expect(sim.startWork('ada', 'floor1', R1)).toBe('accepted')
+    sim.churnTrash('floor1', R1)
+    expect(sim.stateOf('floor1', R1)).toBe('settled')
+    for (let i = 0; i < PREP_TICKS; i++) sim.tick(positions(['ada', pos('floor1', CENTER)]))
+    expect(sim.stateOf('floor1', R1)).toBe('prepped')
+  })
+})
