@@ -36,6 +36,11 @@ export const CAR_LANDING_MILLI: Record<1 | 2, number> = { 1: 0, 2: HALL_MAX_MILL
 export type MoveDir = 'left' | 'right'
 
 interface PlayerMoveState {
+  /** Cycle 3.1: `'guest'` movers share every walk/elevator rule and emit
+   *  `guest:moved` instead of `player:moved`; they never appear in player
+   *  snapshots, presses are not announced (guests are weather, not
+   *  testimony), and boarding emits no `player:left-floor`. */
+  kind: 'player' | 'guest'
   floor: FloorId
   x: number
   facing: MoveDir
@@ -128,11 +133,21 @@ export class MovementSim {
 
   // --- roster / lifecycle -------------------------------------------------
 
-  /** Fresh-joiner placement (FR-2 "spawn"): lobby center, facing right. */
-  join(playerId: string): void {
+  /**
+   * Fresh-joiner placement (FR-2 "spawn"): lobby center, facing right.
+   * Cycle 3.1: guest NPCs join with `{ kind: 'guest' }` and an optional
+   * deterministic spawn placement (`floor` + `xMilli` — the desk queue slots
+   * and the room-door re-entry on checkout). Every walk/elevator rule
+   * (AD-011…027) applies identically to both kinds.
+   */
+  join(
+    playerId: string,
+    opts?: { kind?: 'player' | 'guest'; floor?: FloorId; xMilli?: number },
+  ): void {
     this.players.set(playerId, {
-      floor: 'lobby',
-      x: HALL_MAX_MILLI / 2,
+      kind: opts?.kind ?? 'player',
+      floor: opts?.floor ?? 'lobby',
+      x: opts?.xMilli ?? HALL_MAX_MILLI / 2,
       facing: 'right',
       moving: null,
       inCar: null,
@@ -169,12 +184,18 @@ export class MovementSim {
   /**
    * Full-building positions — the FR-20 spectator baseline (cycle 2.9). The
    * room sends this to fired sessions only; live players' snapshots stay
-   * own-floor filtered (AD-008/AD-009).
+   * own-floor filtered (AD-008/AD-009). Guests are excluded (they ride the
+   * guest:moved stream / snapshot `guests` rows — never player rows).
    */
   allPositions(): { playerId: string; floor: FloorId; x: number }[] {
     return [...this.players.entries()]
-      .filter(([, p]) => p.inCar === null)
+      .filter(([, p]) => p.inCar === null && p.kind === 'player')
       .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI }))
+  }
+
+  /** Standing + riding guest NPC ids (cycle 3.1) — the round-end purge list. */
+  guestIds(): string[] {
+    return [...this.players.entries()].filter(([, p]) => p.kind === 'guest').map(([id]) => id)
   }
 
   /** Both cars' public floors — panels data is public everywhere. */
@@ -422,7 +443,10 @@ export class MovementSim {
       return 'accepted'
     }
     car.queue.push(floor)
-    this.announce({ kind: 'pressed', playerId, floor, car: carId })
+    // Guest presses are NOT announced: `elevator:pressed` is rider testimony
+    // naming a player (AD-013); guests are weather (cycle 3.1). The press
+    // still queues, and the queue rides `elevator:riders`/snapshots.
+    if (p.kind === 'player') this.announce({ kind: 'pressed', playerId, floor, car: carId })
     // A press into an idling car departs it immediately (ELR P2 AC5): the
     // parked doors are shut (AD-026), so the car leaves without opening.
     if (car.phase === 'idle') this.departRiding(carId)
@@ -519,16 +543,31 @@ export class MovementSim {
     players: { playerId: string; floor: FloorId; x: number }[]
     cars: { car: 1 | 2; floor: FloorId }[]
     cardedRooms: readonly RoomIndex[]
+    guests?: { guestId: string; floor: FloorId; x: number }[]
   } {
+    const guests = [...this.players.entries()].filter(
+      ([, p]) => p.kind === 'guest' && p.floor === floor && p.inCar === null,
+    )
     return {
       players: [...this.players.entries()]
-        .filter(([, p]) => p.floor === floor && p.inCar === null)
+        .filter(([, p]) => p.kind === 'player' && p.floor === floor && p.inCar === null)
         .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI })),
       cars: [
         { car: 1 as const, floor: this.cars[1].floor },
         { car: 2 as const, floor: this.cars[2].floor },
       ],
       cardedRooms: [...cardedRooms],
+      // Present ONLY when non-empty: floor snapshots without guests keep the
+      // exact pre-3.1 shape (existing payloads byte-identical).
+      ...(guests.length > 0
+        ? {
+            guests: guests.map(([guestId, p]) => ({
+              guestId,
+              floor: p.floor,
+              x: p.x / MILLI,
+            })),
+          }
+        : {}),
     }
   }
 
@@ -547,13 +586,20 @@ export class MovementSim {
     players: { playerId: string; floor: FloorId; x: number }[]
     cars: { car: 1 | 2; floor: FloorId }[]
     cardedRooms: readonly RoomIndex[]
-    carOccupants?: { car: 1 | 2; riders: string[]; queue: FloorId[] }
+    guests?: { guestId: string; floor: FloorId; x: number }[]
+    carOccupants?: {
+      car: 1 | 2
+      riders: string[]
+      queue: FloorId[]
+      guests?: string[]
+    }
   } {
     const p = this.players.get(playerId)
     if (p === undefined || p.inCar === null) {
       return this.snapshotForFloor(p?.floor ?? 'lobby', cardedRooms)
     }
     const car = this.cars[p.inCar]
+    const carGuests = car.riders.filter((rid) => this.players.get(rid)?.kind === 'guest')
     return {
       players: [],
       cars: [
@@ -563,7 +609,14 @@ export class MovementSim {
       // A rider's card set is empty: cards are floor knowledge and riders
       // have no floor while in a car (AD-009).
       cardedRooms: [],
-      carOccupants: { car: p.inCar, riders: [...car.riders], queue: [...car.queue] },
+      carOccupants: {
+        car: p.inCar,
+        riders: car.riders.filter((rid) => this.players.get(rid)?.kind === 'player'),
+        queue: [...car.queue],
+        // GUEST-07: guests are public NPCs and count toward capacity — rider
+        // knowledge includes them. Absent when no guests are aboard.
+        ...(carGuests.length > 0 ? { guests: carGuests } : {}),
+      },
     }
   }
 
@@ -604,11 +657,15 @@ export class MovementSim {
     // occupants AND press queue — the "lit buttons visible from inside" model.
     for (const id of this.ridersDirty.splice(0)) {
       const car = this.cars[id]
+      const guests = car.riders.filter((rid) => this.players.get(rid)?.kind === 'guest')
       events.push({
         type: 'elevator:riders',
         car: id,
-        riders: [...car.riders],
+        riders: car.riders.filter((rid) => this.players.get(rid)?.kind === 'player'),
         queue: [...car.queue],
+        // GUEST-07: present only when guests are aboard (pre-3.1 payloads
+        // keep their exact shape).
+        ...(guests.length > 0 ? { guests } : {}),
       })
     }
     for (const a of this.announced.splice(0)) {
@@ -791,13 +848,21 @@ export class MovementSim {
     }
     car.riders.push(playerId)
     this.callQueue = this.callQueue.filter((q) => q.playerId !== playerId)
-    this.pendingEvents.push({ type: 'player:left-floor', playerId, floor: car.floor })
+    // `player:left-floor` names a PLAYER's boarding (WORK-19/MOVE-16). A
+    // guest boarding is silent — their guest:moved stream simply stops
+    // (inference from stream-stop, same as players' silence rule).
+    if (p.kind === 'player') {
+      this.pendingEvents.push({ type: 'player:left-floor', playerId, floor: car.floor })
+    }
     this.markRidersDirty(carId) // AD-013: riders learn the new occupant list
     return true
   }
 }
 
 function moved(playerId: string, p: PlayerMoveState): MovementEvent {
+  if (p.kind === 'guest') {
+    return { type: 'guest:moved', guestId: playerId, floor: p.floor, x: p.x / MILLI }
+  }
   return {
     type: 'player:moved',
     playerId,

@@ -107,6 +107,8 @@ export class WorldScene extends Phaser.Scene {
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private openAccuseMenu: (targetId: string) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
+  /** Guest NPC positions (cycle 3.1 plumbing) — rendered by the guest slice. */
+  private guests = new Map<string, { floor: FloorId; x: number }>()
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
@@ -393,6 +395,12 @@ export class WorldScene extends Phaser.Scene {
    */
   applyAction(action: SceneAction): void {
     switch (action.type) {
+      case 'guest-moved': {
+        // T4 plumbing: the authoritative guest position lands here; the
+        // client guest slice (T8) renders markers/queue from this map.
+        this.guests.set(action.guestId, { floor: action.floor, x: action.x })
+        break
+      }
       case 'player-moved': {
         let display = this.players.get(action.playerId)
         if (display === undefined) {

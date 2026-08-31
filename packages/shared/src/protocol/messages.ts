@@ -128,6 +128,20 @@ export interface ElevatorRiders {
   readonly car: CarId
   readonly riders: readonly string[]
   readonly queue: readonly FloorId[]
+  /**
+   * Guests aboard (cycle 3.1, GUEST-07) — present ONLY when non-empty:
+   * guests are public NPCs (FR-33 tenancy is public) and count toward car
+   * capacity, so rider knowledge would lie without them. Player occupancy
+   * rules are unchanged (AD-013).
+   */
+  readonly guests?: readonly string[]
+}
+
+/** server → same-floor viewers (cycle 3.1). A guest NPC's public position. */
+export interface GuestMoved {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly x: number
 }
 
 /** server → all players. A player disconnected; remove their rectangle. */
@@ -157,11 +171,20 @@ export interface MovementSnapshotCar {
   readonly floor: FloorId
 }
 
+/** Movement snapshot row for one guest NPC (cycle 3.1) — public position. */
+export interface MovementSnapshotGuest {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly x: number
+}
+
 /**
  * server → one player. Public movement state on join and at the buzzer (MOVE-18).
  * `carOccupants` is present ONLY in a rider's personal snapshot (AD-013):
  * viewers standing on a floor get the byte-identical public shape — occupancy
  * and queue knowledge belongs exclusively to the people inside the car.
+ * `guests` (cycle 3.1) is present ONLY when the snapshot's floor has standing
+ * guest NPCs — public weather, never players.
  */
 export interface MovementSnapshot {
   readonly players: readonly MovementSnapshotPlayer[]
@@ -172,10 +195,12 @@ export interface MovementSnapshot {
    * snapshot; other floors' cards never appear (AD-009 filtering).
    */
   readonly cardedRooms: readonly RoomIndex[]
+  readonly guests?: readonly MovementSnapshotGuest[]
   readonly carOccupants?: {
     readonly car: CarId
     readonly riders: readonly string[]
     readonly queue: readonly FloorId[]
+    readonly guests?: readonly string[]
   }
 }
 

@@ -116,6 +116,15 @@ export type MovementEvent =
   // ONLY that she left — never the destination (cross-floor sightings stay
   // impossible for live players).
   | { readonly type: 'player:left-floor'; readonly playerId: string; readonly floor: FloorId }
+  // --- Guest NPCs (cycle 3.1): public weather. A guest's position is public
+  // same-floor info exactly like a player's (GUEST-12); guests are never
+  // players and never appear in player:* events.
+  | {
+      readonly type: 'guest:moved'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly x: number
+    }
   // --- Rider-exclusive knowledge (cycle 2.6, AD-013): occupancy and presses
   // are legitimate knowledge of the people inside the box — and only of them.
   // The event carries `car` for routing; the wire payload never names it.
@@ -130,4 +139,6 @@ export type MovementEvent =
       readonly car: CarId
       readonly riders: readonly string[]
       readonly queue: readonly FloorId[]
+      /** Guests aboard (cycle 3.1, GUEST-07) — present only when non-empty. */
+      readonly guests?: readonly string[]
     }

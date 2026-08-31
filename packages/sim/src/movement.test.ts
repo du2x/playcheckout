@@ -1577,3 +1577,113 @@ describe('movement snapshot: carded rooms', () => {
     expect(riderSnap.carOccupants).toBeDefined()
   })
 })
+
+// --- Cycle 3.1 (GUEST-06/07): guest movers share every walk/elevator rule,
+// emit guest:moved (never player:moved), count toward capacity, and appear
+// in rider knowledge. Guests are never in player rows or player:* events.
+describe('sim:guest_movers', () => {
+  const DESK_X = TUNING.DESK_X_TILES * 1000
+
+  it('a guest walking emits guest:moved — never player:moved (GUEST-06)', () => {
+    const sim = new MovementSim()
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: DESK_X })
+    sim.startMove('guest:1', 'right')
+    const events = sim.tick()
+    const guestMoves = events.filter((e) => e.type === 'guest:moved')
+    expect(guestMoves.length).toBeGreaterThan(0)
+    expect(guestMoves[0]).toMatchObject({ guestId: 'guest:1', floor: 'lobby' })
+    expect(events.some((e) => e.type === 'player:moved')).toBe(false)
+    // Milli-to-tile conversion: the x is in tiles on the wire.
+    expect((guestMoves[0] as { x: number }).x).toBeGreaterThan(TUNING.DESK_X_TILES)
+  })
+
+  it('guests never appear in player snapshot rows; standing guests ride the guests field', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: DESK_X })
+    sim.join('guest:2', { kind: 'guest', floor: 'floor1', xMilli: DESK_X })
+    sim.tick()
+    const snap = sim.snapshotFor('p1')
+    expect(snap.players.some((r) => r.playerId.startsWith('guest'))).toBe(false)
+    expect(snap.players.some((r) => r.playerId === 'p1')).toBe(true)
+    // Own-floor guests only (AD-009 filtering), and present only when non-empty.
+    expect(snap.guests).toEqual([{ guestId: 'guest:1', floor: 'lobby', x: TUNING.DESK_X_TILES }])
+    const noGuests = new MovementSim()
+    noGuests.join('p1')
+    expect(noGuests.snapshotFor('p1').guests).toBeUndefined()
+  })
+
+  it('a guest boarding counts toward capacity and rides in rider knowledge (GUEST-07)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: 0 })
+    sim.join('p2')
+    sim.tick()
+    // The guest boards car 1 via the parked-car landing press (AD-025).
+    sim.callElevator('guest:1')
+    for (let i = 0; i <= DOOR_TICKS && sim.viewOf('guest:1').car === null; i++) sim.tick()
+    expect(sim.viewOf('guest:1').car).toBe(1)
+    // Boarding a guest emits NO player:left-floor (that names a player).
+    expect(sim.guestIds()).toEqual(['guest:1'])
+    // p2 presses at the same landing: the car has 1 guest + 0 players = room
+    // for one more; a third candidate would be declined silently.
+    sim.join('p2', { floor: 'lobby', xMilli: 0 })
+    sim.callElevator('p2')
+    for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p2').car === null; i++) sim.tick()
+    expect(sim.viewOf('p2').car).toBe(1)
+    // Now the car is full (1 player + 1 guest = capacity 2): a third press declines.
+    sim.join('p3', { floor: 'lobby', xMilli: 0 })
+    const before = sim.viewOf('p3')
+    sim.callElevator('p3')
+    for (let i = 0; i <= DOOR_TICKS + 2; i++) sim.tick()
+    expect(sim.viewOf('p3')).toEqual(before) // still standing at the landing
+  })
+
+  it('riders learn about a guest co-rider via elevator:riders guests — absent when none', () => {
+    const sim = new MovementSim()
+    sim.join('p1', { floor: 'lobby', xMilli: 0 })
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: 0 })
+    sim.tick()
+    sim.callElevator('guest:1')
+    for (let i = 0; i <= DOOR_TICKS && sim.viewOf('guest:1').car === null; i++) sim.tick()
+    sim.callElevator('p1') // joins the dwelling car immediately (AD-025)
+    const events = sim.tick()
+    const riders = events.find((e) => e.type === 'elevator:riders') as
+      | { riders: string[]; guests?: string[] }
+      | undefined
+    expect(riders).toBeDefined()
+    expect(riders?.riders).toEqual(['p1'])
+    expect(riders?.guests).toEqual(['guest:1'])
+    // And the rider's personal snapshot carries the guest too.
+    const snap = sim.snapshotFor('p1')
+    expect(snap.carOccupants?.guests).toEqual(['guest:1'])
+    expect(snap.carOccupants?.riders).toEqual(['p1'])
+  })
+
+  it('a rider snapshot with no guests aboard keeps the pre-3.1 shape (no guests key)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    boardParkedCar(sim, 'p1', 1)
+    const snap = sim.snapshotFor('p1')
+    expect(snap.carOccupants).toBeDefined()
+    expect(snap.carOccupants?.guests).toBeUndefined()
+    expect(snap.carOccupants?.riders).toEqual(['p1'])
+  })
+
+  it('a guest press in-car queues silently — no elevator:pressed testimony event', () => {
+    const sim = new MovementSim()
+    sim.join('p1', { floor: 'lobby', xMilli: 0 })
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: 0 })
+    sim.tick()
+    sim.callElevator('guest:1')
+    for (let i = 0; i <= DOOR_TICKS && sim.viewOf('guest:1').car === null; i++) sim.tick()
+    sim.callElevator('p1')
+    sim.tick()
+    expect(sim.pressFloor('guest:1', 'floor2')).toBe('accepted')
+    const events = sim.tick()
+    expect(events.some((e) => e.type === 'elevator:pressed')).toBe(false)
+    // The queue still holds the floor (visible via the riders payload).
+    const snap = sim.snapshotFor('p1')
+    expect(snap.carOccupants?.queue).toEqual(['floor2'])
+  })
+})

@@ -149,7 +149,7 @@ T7 → T8
 
 ---
 
-### T4: MovementSim guest movers
+### T4: MovementSim guest movers ✅
 
 **What**: Mover-kind split (`'player' | 'guest'`): guest join with optional spawn placement, `guest-moved` movement events, capacity counting guests, rider payload gains `guests`, non-rider snapshots stay byte-identical.
 **Where**: `packages/sim/src/movement.ts` (+ `movement.test.ts`)

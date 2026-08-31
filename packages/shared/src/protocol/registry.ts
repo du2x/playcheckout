@@ -6,6 +6,7 @@ import type {
   ElevatorPressed,
   ElevatorRiders,
   FloorId,
+  GuestMoved,
   IntentError,
   LobbySnapshot,
   MovementSnapshot,
@@ -96,6 +97,8 @@ export interface Payloads {
   // name occupants (FR-6); panels remain public ---
   /** server → same-floor viewers. A player's position/floor/facing changed this tick. */
   'player:moved': PlayerMoved
+  /** server → same-floor viewers (cycle 3.1). A guest NPC's public position. */
+  'guest:moved': GuestMoved
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -225,6 +228,15 @@ export const PROTOCOL_REGISTRY = {
       visibility: { floor: event.floor },
     })) as SimProjection<'player:moved'>,
   },
+  /** server → same-floor viewers (cycle 3.1). A guest NPC's public position. */
+  'guest:moved': {
+    payload: {} as GuestMoved,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, x: event.x },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'guest:moved'>,
+  },
   'elevator:called': {
     payload: {} as ElevatorCalled,
     recipients: 'all',
@@ -258,7 +270,12 @@ export const PROTOCOL_REGISTRY = {
     payload: {} as ElevatorRiders,
     recipients: 'riders',
     fromSim: ((event) => ({
-      payload: { car: event.car, riders: event.riders, queue: event.queue },
+      payload: {
+        car: event.car,
+        riders: event.riders,
+        queue: event.queue,
+        ...(event.guests !== undefined && event.guests.length > 0 ? { guests: event.guests } : {}),
+      },
       visibility: { car: event.car },
     })) as SimProjection<'elevator:riders'>,
   },

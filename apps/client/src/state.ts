@@ -68,6 +68,7 @@ export type ViewAction =
   // Movement render-state actions (cycle 2.4): the reducer no-ops the four
   // high-frequency events — continuous positions live in the world scene.
   | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: Facing }
+  | { type: 'guest-moved'; guestId: string; floor: FloorId; x: number }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'elevator-doors'; car: CarId; floor: FloorId; open: boolean }
@@ -183,6 +184,7 @@ export const ACTION_ROUTES = {
   snapshot: 'view',
   'round-started': 'view',
   'player-moved': 'scene',
+  'guest-moved': 'scene',
   'elevator-called': 'scene',
   'elevator-moved': 'scene',
   'elevator-doors': 'scene',
@@ -314,6 +316,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
       return { ...state, error: null }
     // Render state, not view state: identity return keeps 20 Hz out of the DOM.
     case 'player-moved':
+    case 'guest-moved':
     case 'elevator-called':
     case 'elevator-moved':
     case 'elevator-doors':

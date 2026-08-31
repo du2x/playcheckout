@@ -100,6 +100,7 @@ describe('protocol registry', () => {
     'round:buzzer': 'all',
     error: 'self',
     'player:moved': 'sameFloor',
+    'guest:moved': 'sameFloor',
     'elevator:called': 'all',
     'elevator:moved': 'all',
     'elevator:doors': 'all',
@@ -296,6 +297,19 @@ describe('protocol registry', () => {
     })
     expect(projected.self).toBeUndefined()
     expect(projected.visibility).toEqual({ floor: 'floor2' })
+  })
+
+  it('projects guest:moved with sameFloor visibility — {guestId, floor, x} only (cycle 3.1)', () => {
+    const projected = PROTOCOL_REGISTRY['guest:moved'].fromSim({
+      type: 'guest:moved',
+      guestId: 'guest:1',
+      floor: 'lobby',
+      x: 15,
+    })
+    expect(projected.payload).toEqual({ guestId: 'guest:1', floor: 'lobby', x: 15 })
+    expect(projected.visibility).toEqual({ floor: 'lobby' })
+    expect(PROTOCOL_REGISTRY['guest:moved'].recipients).toBe('sameFloor')
+    expect(Object.keys(projected.payload).sort()).toEqual(['floor', 'guestId', 'x'])
   })
 
   it('projects work events to the actor only — no kind, no role in any payload (FR-9)', () => {
