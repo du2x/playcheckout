@@ -147,10 +147,10 @@ T7 → T8
 
 ---
 
-### T5: Client mezzanine view + rider affordances
+### T5: Client mezzanine view + rider affordances — ✅ DONE
 
 **What**: `SPECTATOR_LANE_Y.mezzanine`, panels + hall-call lights on the mezzanine view, `KeyM` in-car press + view switch, car screen `M` button/label/order, HUD+lobby `M` indicators, `floorLabel('mezzanine') = 'M'`; update `carScreen.test.ts` + harness floor constants.
-**Where**: `apps/client/src/scenes/WorldScene.ts`, `apps/client/src/ui/{carScreen,roundHud,lobbyView}.ts`, `apps/client/harness/{movement,elevatorLobby}.spec.ts` (constants only)
+**Where**: `apps/client/src/scenes/WorldScene.ts`, `apps/client/src/ui/{carScreen,roundHud,lobbyView}.ts`, `apps/client/harness/{justice.spec.ts,playwright.config.ts}` (3.C re-pins: deterministic approach walk replacing a drift-prone fixed sleep; the missing keyup after cancel; shift seam 30→60 s for the doubled lobby ride legs)
 **Depends on**: T3
 **Reuses**: existing lane/panel/chip paths
 **Requirement**: REST-14, REST-15, REST-17 (client half)

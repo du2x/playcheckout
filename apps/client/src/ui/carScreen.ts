@@ -15,23 +15,27 @@ import { el } from './dom'
  * already holds).
  */
 
-/** Car-panel order: top floor first, lobby last — like a real car station. */
+/** Car-panel order: top floor first, lobby last — like a real car station.
+ *  The 3.C mezzanine rides between floor1 and the lobby (its building order). */
 const CAR_BUTTONS: readonly { floor: FloorId; label: string }[] = [
   { floor: 'floor3', label: '3' },
   { floor: 'floor2', label: '2' },
   { floor: 'floor1', label: '1' },
+  { floor: 'mezzanine', label: 'M' },
   { floor: 'lobby', label: 'L' },
 ]
 
 const FLOOR_LABELS: Record<string, string> = {
   lobby: 'L',
+  mezzanine: 'M',
   floor1: '1',
   floor2: '2',
   floor3: '3',
 }
 
-/** Building floor order, ground up — the sweep path for transit readouts. */
-const FLOOR_ORDER: readonly FloorId[] = ['lobby', 'floor1', 'floor2', 'floor3']
+/** Building floor order, ground up — the sweep path for transit readouts.
+ *  Mirrors the sim's FLOOR_IDS order (mezzanine directly above the lobby). */
+const FLOOR_ORDER: readonly FloorId[] = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3']
 
 /** The short glyph for a floor id (`L` for the lobby). */
 export function floorLabel(floor: FloorId): string {

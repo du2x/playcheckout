@@ -51,14 +51,16 @@ const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
 
 /**
  * Spectator lanes (cycle 2.9, FR-20): the full-building overview stacks all
- * four floors vertically. Live players render the single own-floor lane at
- * GROUND_Y exactly as before — the spectator privilege never widens their view.
+ * five floors vertically — the 3.C mezzanine sits directly above the lobby.
+ * Live players render the single own-floor lane at GROUND_Y exactly as
+ * before — the spectator privilege never widens their view.
  */
 const SPECTATOR_LANE_Y: Partial<Record<FloorId, number>> = {
   floor3: 80,
-  floor2: 210,
-  floor1: 340,
-  lobby: 470,
+  floor2: 180,
+  floor1: 280,
+  mezzanine: 380,
+  lobby: 480,
 }
 
 /** In-car press keymap (ELR-06): browser event.code → floor pressed. */
@@ -66,6 +68,7 @@ const IN_CAR_FLOOR_BY_CODE: Record<string, FloorId> = {
   Digit1: 'floor1',
   Digit2: 'floor2',
   Digit3: 'floor3',
+  KeyM: 'mezzanine',
   Digit0: 'lobby',
 }
 
@@ -325,8 +328,9 @@ export class WorldScene extends Phaser.Scene {
         this.beginAccuseHold()
       })
       keyboard.on('keyup-E', () => this.endAccuseHold())
-      // In-car floor presses (ELR-06): 1/2/3 press floor1..floor3, 0 presses
-      // lobby — active only while the local player rides a car.
+      // In-car floor presses (ELR-06): 1/2/3 press floor1..floor3, M presses
+      // the mezzanine, 0 presses lobby — active only while the local player
+      // rides a car.
       keyboard.on('keydown', (event: KeyboardEvent) => {
         const floor = IN_CAR_FLOOR_BY_CODE[event.code]
         if (floor !== undefined) this.pressFloor(floor)
@@ -404,7 +408,7 @@ export class WorldScene extends Phaser.Scene {
       this.hallLines.lineBetween(0, GROUND_Y + 66, 960, GROUND_Y + 66)
       return
     }
-    for (const floor of ['lobby', 'floor1', 'floor2', 'floor3'] as const) {
+    for (const floor of ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as const) {
       const y = SPECTATOR_LANE_Y[floor] ?? GROUND_Y
       this.hallLines.lineBetween(0, y + 66, 960, y + 66)
     }

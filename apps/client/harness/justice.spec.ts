@@ -197,8 +197,35 @@ test.describe('client:accuse_ui', () => {
       undefined,
       { timeout: 10_000 },
     )
-    await accuser.keyboard.down('ArrowRight') // exit + walk to the center cluster
-    await accuser.waitForTimeout(2700) // ~16 tiles: within 2 of the spawn x=15
+    await accuser.keyboard.down('ArrowRight') // exit + walk to the approach zone
+    // 3.C: ride legs doubled, so a fixed walk-sleep drifted into the desk's
+    // E-suppression zone (AD-031) and the menu never opened. Walk until the
+    // own stream reports x ≥ 13.2 — within ACCUSATION_RANGE_TILES of the
+    // spawn cluster (15) but outside DESK_RANGE_TILES of the desk zone.
+    await accuser.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              events: { type: string; payload?: { playerId?: string; x?: number } }[]
+              local: { playerId: string | null }
+            }
+          }
+        ).__TURNOVER__
+        const own = t.local.playerId
+        // Backwards scan: the newest own moved event is within the last few
+        // ticks; a forward filter would lag behind the walk and overshoot.
+        for (let i = t.events.length - 1; i >= 0; i--) {
+          const e = t.events[i]!
+          if (e.type !== 'player:moved') continue
+          if (e.payload?.playerId !== own) continue
+          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) >= 13.2
+        }
+        return false
+      },
+      undefined,
+      { timeout: 15000 },
+    )
     await accuser.keyboard.up('ArrowRight')
 
     // --- Hold E (≥ 400 ms): the confirm menu opens naming a nearby player —
@@ -221,6 +248,7 @@ test.describe('client:accuse_ui', () => {
     await accuser.waitForFunction(
       () => document.querySelector('#accuse-menu')?.hasAttribute('hidden') === true,
     )
+    await accuser.keyboard.up('e') // release: a real player re-presses for the confirm hold
     await accuser.waitForTimeout(1000) // a stray intent would have fired by now
     const afterCancel = await turnover(accuser)
     expect(afterCancel.events.some((e) => e.type === 'player:fired')).toBe(false)
