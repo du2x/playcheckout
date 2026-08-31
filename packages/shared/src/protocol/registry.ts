@@ -1,4 +1,6 @@
+import { TUNING } from '../tuning.js'
 import type {
+  AssignmentOverheard,
   CarId,
   ElevatorCalled,
   ElevatorDoors,
@@ -8,6 +10,7 @@ import type {
   FloorId,
   GuestArrived,
   GuestCheckedOut,
+  GuestComplained,
   GuestImpatient,
   GuestLeft,
   GuestMoved,
@@ -36,6 +39,9 @@ import type {
   RoundResumed,
   RoundStarted,
   SpectatorSnapshot,
+  SuitcaseCarried,
+  SuitcasePickedUp,
+  SuitcasePlaced,
   WalkieBroadcast,
   WorkEnded,
   WorkStarted,
@@ -61,7 +67,14 @@ import type { MovementEvent, SimEvent } from './simEvents.js'
  * `riders` (cycle 2-6, AD-013) delivers ONLY to viewers riding the event's car
  * — occupancy and press knowledge belongs exclusively to the people inside.
  */
-export type RecipientPolicy = 'all' | 'self' | 'sameFloor' | 'occupants' | 'riders' | 'earshot'
+export type RecipientPolicy =
+  | 'all'
+  | 'self'
+  | 'sameFloor'
+  | 'occupants'
+  | 'riders'
+  | 'earshot'
+  | 'deskEarshot'
 
 /**
  * Positional selector a projection returns for the positional policies: the
@@ -76,6 +89,11 @@ export interface EventVisibility {
   readonly car?: CarId
   /** Which room segment the event concerns — the earshot range the Router matches against. */
   readonly room?: RoomIndex
+  /**
+   * Integer millitile x the deskEarshot policy ranges against (cycle 3.B) —
+   * the desk position on the lobby floor, set by the projection.
+   */
+  readonly x?: number
 }
 
 /**
@@ -125,6 +143,17 @@ export interface Payloads {
   /** server → all players (cycle 3.2). The walkie claim: the ANNOUNCED room,
    *  building-wide — the broadcaster's statement, not server truth (FR-27). */
   'walkie:broadcast': WalkieBroadcast
+  // --- Suitcase transport (cycle 3.B, AD-032) ---
+  /** server → the desk-earshot set ONLY. The guest's assignment, once. */
+  'assignment:overheard': AssignmentOverheard
+  /** server → all players. Check-in handoff lifecycle fact (no room named). */
+  'suitcase:carried': SuitcaseCarried
+  /** server → same-floor viewers. A suitcase rests at a doorway — silent, no walkie line. */
+  'suitcase:placed': SuitcasePlaced
+  /** server → all players. Pickup lifecycle fact (fresh carry leg). */
+  'suitcase:picked_up': SuitcasePickedUp
+  /** server → all players. Wrong-delivery door complaint (FR-29(a)). */
+  'guest:complained': GuestComplained
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -328,6 +357,49 @@ export const PROTOCOL_REGISTRY = {
     fromSim: ((event) => ({
       payload: { playerId: event.playerId, floor: event.floor, room: event.room },
     })) as SimProjection<'walkie:broadcast'>,
+  },
+  // --- Suitcase transport (cycle 3.B, AD-032). The assignment is the one
+  // hidden-by-position message: deskEarshot delivers it to live lobby viewers
+  // within DESK_EARSHOT_TILES of the desk at the check-in tick only — the
+  // receiver stands inside the 1-tile desk zone ⊂ the 3-tile earshot, so one
+  // policy covers the whole legitimate set. Spectators are deliberately
+  // EXCLUDED (a fired player must not learn later assignments).
+  'assignment:overheard': {
+    payload: {} as AssignmentOverheard,
+    recipients: 'deskEarshot',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+      visibility: { floor: 'lobby', x: TUNING.DESK_X_TILES * 1000 },
+    })) as SimProjection<'assignment:overheard'>,
+  },
+  'suitcase:carried': {
+    payload: {} as SuitcaseCarried,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, carrierId: event.carrierId },
+    })) as SimProjection<'suitcase:carried'>,
+  },
+  'suitcase:placed': {
+    payload: {} as SuitcasePlaced,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'suitcase:placed'>,
+  },
+  'suitcase:picked_up': {
+    payload: {} as SuitcasePickedUp,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, carrierId: event.carrierId },
+    })) as SimProjection<'suitcase:picked_up'>,
+  },
+  'guest:complained': {
+    payload: {} as GuestComplained,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+    })) as SimProjection<'guest:complained'>,
   },
   'elevator:called': {
     payload: {} as ElevatorCalled,

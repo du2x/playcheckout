@@ -158,6 +158,16 @@ export class WorldScene extends Phaser.Scene {
   /** The desk-bell DOM line (GUEST-13) — visible while an impatient guest
    *  queues on the viewed floor. */
   private deskBell: HTMLElement | null = null
+  /** The local player's own overheard assignments (cycle 3.B, SUI-26/27):
+   *  player-local knowledge fed only by `assignment:overheard` — the
+   *  deskEarshot policy already filtered delivery. Never redistributed. */
+  private heardAssignments = new Map<string, { floor: FloorId; room: RoomIndex }>()
+  /** Suitcase state per checked-in guest (cycle 3.B, SUI-24): carried rides
+   *  the carrier's position stream; rest pins the doorway marker. */
+  private suitcases = new Map<
+    string,
+    { carrierId: string | null; rest: { floor: FloorId; room: RoomIndex } | null }
+  >()
   private tapPhase = 0
   private cardMarkers = new Map<string, HTMLElement>()
   private cueNodes = new Map<number, HTMLElement>()
@@ -634,6 +644,32 @@ export class WorldScene extends Phaser.Scene {
         // fired event itself is the removal signal (no player:left exists for
         // a firing; the session stays connected as a spectator, 2.9 scope).
         this.removePlayerDisplay(action.playerId)
+        break
+      case 'assignment-overheard':
+        // SUI-03/04: the deskEarshot policy filtered the wire — receiving this
+        // action IS the local player's own knowledge. Stored for the
+        // owned-marker surface and the blind-place confirm (T5 slice).
+        this.heardAssignments.set(action.guestId, { floor: action.floor, room: action.room })
+        break
+      case 'suitcase-carried':
+        // SUI-24: carried — the marker rides the carrier's position stream.
+        this.suitcases.set(action.guestId, { carrierId: action.carrierId, rest: null })
+        break
+      case 'suitcase-placed':
+        // SUI-24: resting — pinned at the doorway until a pickup.
+        this.suitcases.set(action.guestId, {
+          carrierId: null,
+          rest: { floor: action.floor, room: action.room },
+        })
+        break
+      case 'suitcase-picked-up':
+        // SUI-24: fresh carry leg under the new carrier.
+        this.suitcases.set(action.guestId, { carrierId: action.carrierId, rest: null })
+        break
+      case 'guest-complained':
+        // SUI-14: wrong-delivery door complaint — audible cue; the walkie
+        // line lands with the lifecycle-log rework, the budget counter in 3.3.
+        this.beep(140)
         break
       case 'spectator-snapshot': {
         // FR-20 baseline: kept for the spectator overview (own client only —

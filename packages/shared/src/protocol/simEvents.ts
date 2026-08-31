@@ -111,12 +111,41 @@ export type SimEvent =
       readonly room: RoomIndex
     }
 
+  // --- Suitcase transport (cycle 3.B, AD-032): check-in hands the guest's
+  // suitcase to the receiver. The assignment rides the deskEarshot policy
+  // exactly ONCE (receiver + desk-earshot staff at the check-in tick) and
+  // nowhere else on the wire — overhearing is the only pre-placement source.
+  // pickup/carried are 'all' lifecycle facts (the walkie log renders them
+  // building-wide); placement is sameFloor and SILENT — no walkie line ever
+  // fires for it (FR-27 v1.4). guest:complained is the wrong-delivery door
+  // complaint (FR-29(a) trigger; the budget lands in cycle 3.3).
+  | {
+      readonly type: 'assignment:overheard'
+      readonly guestId: string
+      readonly floor: GuestFloorId
+      readonly room: RoomIndex
+    }
+  | { readonly type: 'suitcase:carried'; readonly guestId: string; readonly carrierId: string }
+  | {
+      readonly type: 'suitcase:placed'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
+  | { readonly type: 'suitcase:picked_up'; readonly guestId: string; readonly carrierId: string }
+  | {
+      readonly type: 'guest:complained'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
+
 /**
  * Why a player was fired — server-internal only, never projected to the wire.
  * `wrong-accusation` covers both wrong cases (innocent target, saboteur in
  * grace) indistinguishably: validity is revealed only on the recap (FR-22).
  */
-export type FireReason = 'walkin' | 'wrong-accusation' | 'correct-accusation'
+export type FireReason = 'walkin' | 'wrong-accusation' | 'correct-accusation' | 'carry-clock'
 
 /**
  * Why the round ended — §6.6 paths only. The room-originated abort carries

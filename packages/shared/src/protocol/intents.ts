@@ -109,3 +109,29 @@ export const deskSendIntentSchema = z
   })
   .strict()
 export type DeskSendIntent = z.infer<typeof deskSendIntentSchema>
+
+/**
+ * Place the sender's carried suitcase at a room door (cycle 3.B, AD-032).
+ * The floor is derived server-side from the carrier's position; the server
+ * validates the carrier is within ROOM_DOOR_RANGE_TILES of the named room's
+ * door x. Placement is silent — no walkie line exists for it.
+ */
+export const suitcasePlaceIntentSchema = z
+  .object({
+    type: z.literal('suitcase:place'),
+    room: z.number().int().min(1).max(8),
+  })
+  .strict()
+export type SuitcasePlaceIntent = z.infer<typeof suitcasePlaceIntentSchema>
+
+/**
+ * Pick up the nearest resting suitcase on the sender's floor within
+ * ROOM_DOOR_RANGE_TILES (cycle 3.B, AD-032) — by anyone, saboteur included;
+ * self-regrab allowed. Ties resolve to the lowest guestId (deterministic).
+ */
+export const suitcasePickupIntentSchema = z
+  .object({
+    type: z.literal('suitcase:pickup'),
+  })
+  .strict()
+export type SuitcasePickupIntent = z.infer<typeof suitcasePickupIntentSchema>

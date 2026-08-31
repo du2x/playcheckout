@@ -292,6 +292,59 @@ describe('router: earshot policy', () => {
   })
 })
 
+// Cycle 3.B (AD-032): the deskEarshot policy delivers the check-in assignment
+// ONLY to live lobby viewers within DESK_EARSHOT_TILES (3000 millitiles) of
+// the desk x — and deliberately excludes spectators (a fired player must not
+// learn later assignments) and riders (no floor in the car, AD-013).
+describe('router: deskEarshot policy', () => {
+  function deskEarshotContexts() {
+    const receiver = fakeClient('receiver') // at the desk: dist 0
+    const atBoundary = fakeClient('atBoundary') // exactly 3000 milli away
+    const tooFar = fakeClient('tooFar') // 3001 milli away
+    const otherFloor = fakeClient('otherFloor') // same x, guest floor
+    const rider = fakeClient('rider') // in a car: no floor, no x
+    const spectator = fakeClient('spectator') // fired, standing in earshot
+    const router = newRouter(receiver, atBoundary, tooFar, otherFloor, rider, spectator)
+    // DESK_X_TILES = 15 → desk x = 15000 milli; earshot 3000 milli.
+    const xBySession: Record<string, number | null> = {
+      receiver: 15000,
+      atBoundary: 12000,
+      tooFar: 11999,
+      otherFloor: 15000,
+      rider: null,
+      spectator: 15000,
+    }
+    router.setViewContext((sessionId) => {
+      if (sessionId === 'rider') return { floor: null, roomKey: null, car: 1, x: null }
+      return {
+        floor: sessionId === 'otherFloor' ? 'floor2' : 'lobby',
+        roomKey: null,
+        car: null,
+        x: xBySession[sessionId] ?? null,
+        spectator: sessionId === 'spectator',
+      }
+    })
+    return { receiver, atBoundary, tooFar, otherFloor, rider, spectator, router }
+  }
+
+  it('delivers assignment:overheard to exactly the live lobby earshot set (SUI-03)', () => {
+    const { receiver, atBoundary, tooFar, otherFloor, rider, spectator, router } =
+      deskEarshotContexts()
+    router.route({ type: 'assignment:overheard', guestId: 'g1', floor: 'floor2', room: 4 })
+
+    for (const heard of [receiver, atBoundary]) {
+      expect(heard.sent).toHaveLength(1)
+      expect(heard.sent[0]?.type).toBe('assignment:overheard')
+      expect(heard.sent[0]?.message.payload).toEqual({ guestId: 'g1', floor: 'floor2', room: 4 })
+    }
+    // Beyond range, on a guest floor, in a car, or spectating: silence.
+    expect(tooFar.sent).toEqual([])
+    expect(otherFloor.sent).toEqual([])
+    expect(rider.sent).toEqual([])
+    expect(spectator.sent).toEqual([])
+  })
+})
+
 // Spec REG-10: the Router is the only module allowed to send. Same fs-walk
 // pattern as packages/sim/src/literals.test.ts; *.test.ts files excluded so
 // this file's own literals don't self-match.

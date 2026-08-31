@@ -203,6 +203,63 @@ export interface WalkieBroadcast {
   readonly room: RoomIndex
 }
 
+/**
+ * server → the desk-earshot set ONLY (cycle 3.B, AD-032). The guest's room
+ * assignment — server truth seeded at check-in — delivered exactly once at
+ * the check-in tick to the receiver and staff within DESK_EARSHOT_TILES of
+ * the desk. Never repeated, never logged; overhearing is the only
+ * pre-placement assignment source (FR-27 v1.4, message-only via position).
+ */
+export interface AssignmentOverheard {
+  readonly guestId: string
+  readonly floor: GuestFloorId
+  readonly room: RoomIndex
+}
+
+/**
+ * server → all players (cycle 3.B). Check-in handoff lifecycle fact: the
+ * named player took the guest's suitcase (receiver = carrier). The walkie
+ * log renders it building-wide; no room is named.
+ */
+export interface SuitcaseCarried {
+  readonly guestId: string
+  readonly carrierId: string
+}
+
+/**
+ * server → same-floor viewers ONLY (cycle 3.B). A suitcase came to rest at
+ * the named room's doorway. PLACEMENT IS SILENT: no walkie line fires; the
+ * resting room is learnable only by being on that floor (or later via the
+ * settle/complaint lifecycle lines) — FR-27 v1.4.
+ */
+export interface SuitcasePlaced {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/**
+ * server → all players (cycle 3.B). Pickup lifecycle fact: the named player
+ * took a resting suitcase (fresh carry leg). The walkie log renders it
+ * building-wide; no room is named.
+ */
+export interface SuitcasePickedUp {
+  readonly guestId: string
+  readonly carrierId: string
+}
+
+/**
+ * server → all players (cycle 3.B). The wrong-delivery door complaint
+ * (FR-29(a) trigger): the guest arrived at a room that was not their
+ * assignment. Names the room + guest, never the assignment; counts toward
+ * the FR-31 budget from cycle 3.3. No personal penalty attaches.
+ */
+export interface GuestComplained {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
 /** server → all players. A player disconnected; remove their rectangle. */
 export interface PlayerLeft {
   readonly playerId: string

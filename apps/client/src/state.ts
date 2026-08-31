@@ -80,6 +80,14 @@ export type ViewAction =
   // on either payload (FR-27).
   | { type: 'guest-routed'; guestId: string; playerId: string }
   | { type: 'walkie-broadcast'; playerId: string; floor: FloorId; room: RoomIndex }
+  // Suitcase transport (cycle 3.B): scene-kind actions. The assignment rides
+  // the deskEarshot policy — receiving it IS the local player's own knowledge;
+  // no payload here is ever redistributed to another surface pre-settle.
+  | { type: 'assignment-overheard'; guestId: string; floor: FloorId; room: RoomIndex }
+  | { type: 'suitcase-carried'; guestId: string; carrierId: string }
+  | { type: 'suitcase-placed'; guestId: string; floor: FloorId; room: RoomIndex }
+  | { type: 'suitcase-picked-up'; guestId: string; carrierId: string }
+  | { type: 'guest-complained'; guestId: string; floor: FloorId; room: RoomIndex }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'elevator-doors'; car: CarId; floor: FloorId; open: boolean }
@@ -204,6 +212,11 @@ export const ACTION_ROUTES = {
   'guest-left': 'scene',
   'guest-routed': 'scene',
   'walkie-broadcast': 'scene',
+  'assignment-overheard': 'scene',
+  'suitcase-carried': 'scene',
+  'suitcase-placed': 'scene',
+  'suitcase-picked-up': 'scene',
+  'guest-complained': 'scene',
   'elevator-called': 'scene',
   'elevator-moved': 'scene',
   'elevator-doors': 'scene',
@@ -344,6 +357,11 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'guest-left':
     case 'guest-routed':
     case 'walkie-broadcast':
+    case 'assignment-overheard':
+    case 'suitcase-carried':
+    case 'suitcase-placed':
+    case 'suitcase-picked-up':
+    case 'guest-complained':
     case 'elevator-called':
     case 'elevator-moved':
     case 'elevator-doors':

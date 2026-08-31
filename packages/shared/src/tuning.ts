@@ -56,4 +56,20 @@ export const TUNING = {
    *  constant, not in prd §7): lobby-floor tiles from DESK_X_TILES within
    *  which E receives/releases a guest; the accuse hold is suppressed here. */
   DESK_RANGE_TILES: 1,
+  /** Desk-earshot range for the check-in assignment snapshot (prd §7 v1.4,
+   *  AD-032): lobby-floor tiles from DESK_X_TILES within which a live player
+   *  overhears the guest's room at the check-in tick. Provisional pending
+   *  the 3.5 balance gate. */
+  DESK_EARSHOT_TILES: 3,
+  /** Rolling carry clock per carry leg (prd §7 v1.4, AD-032): check-in →
+   *  first placement; fresh on every pickup. Expiry fires the current
+   *  carrier — the only personal foul. Provisional pending 3.5. */
+  CARRY_CLOCK_SECONDS: 60,
+  /** E range around a room's door x for suitcase place/pickup (cycle 3.B,
+   *  AD-033 — new constant, not in prd §7). */
+  ROOM_DOOR_RANGE_TILES: 1,
+  /** Holding-area slot start east of the desk (cycle 3.B, AD-033 — new
+   *  constant, not in prd §7): the 3.B stub for the 3.C restaurant; slots
+   *  extend eastward at GUEST_QUEUE_SPACING_TILES. */
+  GUEST_HOLD_START_TILES: 18,
 } as const

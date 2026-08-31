@@ -28,6 +28,14 @@ export const MAPPERS: {
   'guest:left': (p) => [{ type: 'guest-left', ...p }],
   'guest:routed': (p) => [{ type: 'guest-routed', ...p }],
   'walkie:broadcast': (p) => [{ type: 'walkie-broadcast', ...p }],
+  // Suitcase transport (cycle 3.B): scene-kind actions — the assignment is
+  // player-local knowledge (the deskEarshot policy filtered delivery), the
+  // suitcase states drive the markers, the complaint is the lifecycle cue.
+  'assignment:overheard': (p) => [{ type: 'assignment-overheard', ...p }],
+  'suitcase:carried': (p) => [{ type: 'suitcase-carried', ...p }],
+  'suitcase:placed': (p) => [{ type: 'suitcase-placed', ...p }],
+  'suitcase:picked_up': (p) => [{ type: 'suitcase-picked-up', ...p }],
+  'guest:complained': (p) => [{ type: 'guest-complained', ...p }],
   'elevator:called': (p) => [{ type: 'elevator-called', ...p }],
   'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
   'elevator:doors': (p) => [{ type: 'elevator-doors', ...p }],
