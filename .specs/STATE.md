@@ -959,39 +959,53 @@
 - **Date**: 2026-08-31
 - **Status**: active.
 
+### AD-034
+- **Decision**: PRD v1.4 amendment (user rulings, 2026-08-31, watching a headed
+  run of the 3.B gate scenarios): (a) the guest's room assignment becomes a
+  **building-wide notice** — announced to ALL players at the check-in tick
+  (walkie line "a guest announces: I'm in F:R"); the desk-earshot model is
+  removed (`deskEarshot` policy, `DESK_EARSHOT_TILES`, router branch). The
+  event is renamed `assignment:overheard` → `guest:assigned`. (b) The
+  blind-place confirm (SUI-26, "You haven't heard this guest's room") is
+  REMOVED — with public assignments it can never trigger. (c) The suitcase
+  rests in front of the door (segment center = the door visual) — pinned as a
+  requirement, already the shipped behavior. (d) The restaurant (~30 s guest
+  dwell on the mezzanine) stays deferred to cycle 3.C; the 3.B holding-area
+  stub remains. (e) Accepted consequence: the saboteur learns the assignment
+  for free — the contested gameplay is physical interception of the suitcase,
+  not information. The assignment reservation model, carry clock, carry-blocks-
+  work, guest-following and arrival outcomes are unchanged. Status: DECIDED —
+  implementation pending (see the cycle handoff doc).
+- **Reason**: User direction while spectating the gate run; simplifies the
+  information layer and removes the innocent-placer confirm (unreachable once
+  assignments are public).
+- **Trade-off**: The contested-overhear social moment (hover at the desk to
+  listen) is gone; interception/correction of suitcases is the counterplay. The
+  §7 `DESK_EARSHOT_TILES` row and the 3.5 balance-gate dependency on earshot
+  are dropped.
+- **Scope**: `packages/shared` (simEvents/messages/registry/tuning),
+  `apps/server` (router + tests), `packages/sim` (checkIn emit + suites),
+  `apps/client` (mappers/state/WorldScene confirm removal + announce line),
+  harness spec, spec/CONTEXT/roadmap amendments. Implementation checklist:
+  `.specs/features/suitcase-transport/HANDOFF.md`.
+- **Date**: 2026-08-31
+- **Status**: decided — pending implementation (next session).
+
 ## Handoff
-- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — check-in
-  hands the queued guest's suitcase to the receiver (one per player; carrying
-  blocks work starts with a `carrying` intent error; accusation/elevators stay
-  available); the assignment is a one-shot desk-earshot snapshot (new
-  `deskEarshot` policy, spectators excluded); the suitcase is placed at room
-  doors / picked up by anyone (self-regrab included); the guest waits in the
-  lobby holding stub and follows the suitcase's last resting room; arrival is
-  the tribunal (correct → settle, wrong → door complaint, no personal
-  penalty); the 60s rolling carry clock fires the current carrier via the
-  justice teardown; the walkie became the server-generated lifecycle log
-  (`walkie:broadcast`/`guest:routed`/`desk:send` DELETED — placement silent);
-  client: suitcase markers, E priority ladder, blind-place one-step confirm,
-  assignment hint on the owned marker only.
-- **Phase / Task**: Execute → T1–T6 complete (commits ad0341e, e7385b8,
-  73cb60c, 99f537f, 7fae41e + T6). Independent Verifier: see
-  `.specs/features/suitcase-transport/validation.md`.
-- **Gates**:
-  - `pnpm typecheck` ✅ 4/4 · `pnpm lint` ✅ (biome, 110 files)
-  - `pnpm test:sim` ✅ 381 (new suites: `sim:suitcase_carry` (+ selection,
-    round integration), `sim:assignment_overhear`, `sim:carry_clock`
-    (+ round integration), `sim:wrong_delivery`, `sim:lifecycle_log`,
-    `server:suitcase_carry`)
-  - `pnpm test:client` ✅ `client:suitcase` (both scenarios) — the pre-existing
-    rotating load-flake class (justice/lobby/round/spectator) reproduced on
-    the PRE-3.B commit (worktree 131af9e): not a 3.B regression; triage
-    remains open as in the 3.2 handoff.
-  - Leak audit: the assignment rides the wire exactly once per guest
-    (`assignment:overheard` on `deskEarshot`); placement emits no walkie
-    surface; the resting room reaches only same-floor clients pre-settle.
-- **Next step**: cycle 3.C `restaurant-floor` (mezzanine above the lobby,
-  AD-010 re-pin, `dining` phase replaces the holding stub, art manifest
-  entries BEFORE authoring). Also: triage the gate-3 parallel-load flake class
-  (documented since 3.2, reproduced on pre-3.B) and REG-18 separately.
+- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — PAUSED
+  mid-close-out. All six tasks implemented and committed
+  (`ad0341e`…`cccd67c`); Verifier iteration 2 = FAIL on ONE minor gap
+  (SUI-23 last-5 assertion non-discriminating). The user then issued
+  **AD-034** (assignment = building-wide notice; blind-place confirm
+  removed; suitcase rests in front of the door; restaurant stays in 3.C).
+- **Phase / Task**: Execute → rework per AD-034, then Verifier iteration 3.
+- **Next step**: implement the AD-034 checklist in
+  `.specs/features/suitcase-transport/HANDOFF.md` (file-by-file, includes the
+  SUI-23 discriminating fix and the verification ladder), then dispatch the
+  fresh Verifier and run `validate_state.py suitcase-transport`.
+- **Gates at pause**: typecheck 4/4 ✅ · lint ✅ · test:sim 385 ✅ ·
+  `client:suitcase` 3/3 green (scale 0.5) · leak audit clean ·
+  flake class (justice/lobby/round/spectator, REG-18) reproduced on pre-3.B
+  `131af9e` — pre-existing.
 - **Blockers**: none.
 - **Branch**: master
