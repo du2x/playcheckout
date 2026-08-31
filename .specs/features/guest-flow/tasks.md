@@ -225,7 +225,7 @@ compile-coupled and land in one commit.)
 
 ---
 
-### T7: Room wiring
+### T7: Room wiring ✅
 
 **What**: `TurnoverRoom` applies guest intents to `MovementSim` each tick (MOVE-10 flush), passes guest positions into `RoundSim.tick`, purges `guest:*` movers at round end (buzzer/abort/conviction), routing flows via registry.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts` (+ `TurnoverRoom.test.ts`)

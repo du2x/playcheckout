@@ -1,14 +1,18 @@
 import {
   type GuestFloorId,
+  type LobbySize,
   type RecapEntry,
   ROOM_COUNT,
   type Role,
+  type RoomIndex,
+  type RoomState,
   type RoundEndReason,
   roomIndexAtMilli,
   TUNING,
 } from '@turnover/shared'
 import { dealRoles } from './deal.js'
 import type { SimEvent } from './events.js'
+import { GuestSim, type GuestTiming, type MovementPort } from './guests.js'
 import { Justice } from './justice.js'
 import { TICK_HZ } from './tick.js'
 import { type PositionSample, type RoundPositions, WorkChannels } from './work.js'
@@ -22,6 +26,18 @@ export interface RoundSimConfig {
    * the shift is TUNING.SHIFT_SECONDS × TICK_HZ exactly as prd §7 locks it.
    */
   readonly totalTicks?: number
+  /**
+   * The room's NPC movement port (cycle 3.1, AD-028): when present, the sim
+   * runs the guest-traffic economy inside the round — guests spawn on the §7
+   * cadence, settle, and check out (churn re-trashes via churnTrash). Omitted
+   * (every pre-3.1 caller), no guests exist at all.
+   */
+  readonly movement?: MovementPort
+  /**
+   * Test-only guest-timing override (AD-028, AD-004 pattern) — passthrough to
+   * GuestSim. Production never supplies it.
+   */
+  readonly guestTiming?: GuestTiming
 }
 
 /** `\`${floor}:${room}\`` — the justice segment key (room 0 = open hall). */
@@ -59,6 +75,9 @@ export class RoundSim {
   private readonly deal: Map<string, Role>
   private readonly work: WorkChannels
   private readonly justice: Justice
+  /** The guest-traffic economy (cycle 3.1) — null when no movement port is
+   *  supplied (all pre-3.1 callers and their tests). */
+  private readonly guests: GuestSim | null
   /** Own segment tracking for walk-in detection (decoupled from work.ts's
    *  interior-observation state — design decision, cycle 2.8). */
   private readonly justiceSegments = new Map<string, string | null>()
@@ -88,6 +107,15 @@ export class RoundSim {
     this.deal = dealRoles(config.seed, this.playerIds)
     this.work = new WorkChannels(this.deal)
     this.justice = new Justice(this.deal)
+    this.guests =
+      config.movement === undefined
+        ? null
+        : new GuestSim(
+            config.seed,
+            this.playerIds.length as LobbySize,
+            config.movement,
+            config.guestTiming,
+          )
     const totalTicks = config.totalTicks ?? RoundSim.TOTAL_TICKS
     if (!Number.isInteger(totalTicks) || totalTicks < 1) {
       throw new Error(`totalTicks must be a positive integer, got ${config.totalTicks}`)
@@ -99,6 +127,15 @@ export class RoundSim {
   /** Shift ticks remaining; a full shift starts at TUNING.SHIFT_SECONDS × TICK_HZ. */
   get clockTicksRemaining(): number {
     return this.ticksLeft
+  }
+
+  /**
+   * Read-only work-channel state of one room (cycle 3.1 query hook): lets
+   * tests and the exit proofs pin checkout churn (`settled`) without poking
+   * private state.
+   */
+  roomState(floor: GuestFloorId, room: RoomIndex): RoomState {
+    return this.work.stateOf(floor, room)
   }
 
   /**
@@ -177,6 +214,20 @@ export class RoundSim {
           room: workEvent.room,
           fresh: true,
         })
+      }
+    }
+    // Guest traffic (cycle 3.1, GUEST-01..09): the economy ticks after the
+    // work channels, before justice teardown and win checks — a checkout
+    // churn this tick lands in the same flush, and a round that ends this
+    // tick takes its guests with it (GUEST-11). Checkout churn re-trashes
+    // the room as `settled` (spawn half of FR-32) — silently: no
+    // sabotage-shaped room:trashed ever comes from churn.
+    if (this.guests !== null) {
+      for (const guestEvent of this.guests.tick(tickIndex)) {
+        if (guestEvent.type === 'guest:checked_out') {
+          this.work.churnTrash(guestEvent.floor as GuestFloorId, guestEvent.room)
+        }
+        events.push(guestEvent)
       }
     }
     // Firing teardown (JUST-04/06/11): the fired player's channels are

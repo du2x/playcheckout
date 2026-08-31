@@ -60,6 +60,18 @@ function slotX(index: number): number {
 }
 
 /**
+ * Test-only timing override (AD-028, the AD-004 pattern): shortens the guest
+ * cadence/impatience/dwell so harness rounds observe full guest lifecycles
+ * inside the AD-004 shortened shift. Production never supplies it.
+ */
+export interface GuestTiming {
+  readonly cadenceTicks?: number
+  readonly impatienceTicks?: number
+  /** Scales the drawn dwell (45–90 s) — e.g. 0.02 → 0.9–1.8 s. */
+  readonly dwellScale?: number
+}
+
+/**
  * Guest lifecycle as weather (cycle 3.1, FR-26/FR-28 + spawn half of FR-32).
  * Round-scoped: constructed at round start with the round's seed, dies with
  * the sim (GUEST-11). All sampling — dwell and self-assign choice — draws
@@ -87,6 +99,8 @@ export class GuestSim {
   private readonly tenanted = new Map<string, string>()
   private readonly rng: Rng
   private readonly cadenceTicks: number
+  private readonly impatienceTicks: number
+  private readonly dwellScale: number
   private nextScheduleTick: number
   private backlog = 0
   private ordinal = 0
@@ -95,9 +109,12 @@ export class GuestSim {
     seed: number,
     playerCount: LobbySize,
     private readonly movement: MovementPort,
+    timing?: GuestTiming,
   ) {
     this.rng = new Rng(seed)
-    this.cadenceTicks = TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
+    this.cadenceTicks = timing?.cadenceTicks ?? TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
+    this.impatienceTicks = timing?.impatienceTicks ?? IMPATIENCE_TICKS
+    this.dwellScale = timing?.dwellScale ?? 1
     // The first arrival lands one full cadence interval after round start.
     this.nextScheduleTick = this.cadenceTicks
   }
@@ -136,8 +153,8 @@ export class GuestSim {
       this.spawn(tick, events)
     }
 
-    // Impatience (GUEST-04): the cue fires once, exactly IMPATIENCE_TICKS
-    // after spawn. Free — no complaint, no budget effect exists in 3.1.
+    // Impatience (GUEST-04): the cue fires once, exactly the impatience
+    // interval after spawn. Free — no complaint, no budget effect in 3.1.
     for (const id of this.queue) {
       const g = this.guests.get(id)
       if (g === undefined) continue
@@ -202,7 +219,7 @@ export class GuestSim {
       id,
       phase: 'queued',
       assigned: null,
-      impatientAt: tick + IMPATIENCE_TICKS,
+      impatientAt: tick + this.impatienceTicks,
       dwellEndsAt: null,
     }
     this.guests.set(id, guest)
@@ -267,7 +284,8 @@ export class GuestSim {
           TUNING.GUEST_DWELL_MIN_SECONDS,
           TUNING.GUEST_DWELL_MAX_SECONDS,
         )
-        g.dwellEndsAt = tick + Math.round(dwellSeconds * TICK_HZ)
+        const dwellTicks = Math.max(1, Math.round(dwellSeconds * this.dwellScale * TICK_HZ))
+        g.dwellEndsAt = tick + dwellTicks
         events.push({
           type: 'guest:settled',
           guestId: g.id,

@@ -2615,3 +2615,79 @@ describe('server:reconnect', () => {
     }
   })
 })
+
+// --- Cycle 3.1 (GUEST-01..09/11, AD-028): guests run inside a REAL room with
+// the test timing seam (TURNOVER_TEST_GUEST_SCALE), routes per the registry,
+// and die with the round.
+describe('server:guest_flow', () => {
+  it(
+    'runs guest lifecycles end-to-end, routes them to all players, and purges at the buzzer',
+    { timeout: 40000 },
+    async () => {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((room) => collectAll(room))
+      const instance = TurnoverRoom.instances.at(-1)
+      vi.stubEnv('TURNOVER_TEST_GUEST_SCALE', '0.1')
+      try {
+        host.send('lobby:start', { type: 'lobby:start' })
+        await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+        // Drive until two guests completed a full lifecycle (arrival → … →
+        // hotel exit): cadence 2.4 s, impatience 2 s, dwell 4.5–9 s.
+        const count = (types: string[], type: string) => types.filter((t) => t === type).length
+        let lefts = 0
+        let arrivals = 0
+        for (let driven = 0; driven < 2500 && lefts < 2; driven += 25) {
+          instance?.__driveTicks(25)
+          // Yield so the clients pump delivered messages into the collectors.
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          arrivals = Math.max(
+            arrivals,
+            ...collectors.map((col) => count(col.types(), 'guest:arrived')),
+          )
+          lefts = Math.max(lefts, ...collectors.map((col) => count(col.types(), 'guest:left')))
+        }
+        expect(arrivals).toBeGreaterThanOrEqual(2)
+        expect(lefts).toBeGreaterThanOrEqual(2)
+        // Guests reached a guest floor: guest:moved rode the sameFloor policy
+        // (no cross-floor assertion here — the AD-009 filter is pinned by the
+        // movement suite).
+        const anyMoved = collectors.some((col) => col.types().includes('guest:moved'))
+        expect(anyMoved).toBe(true)
+        // Buzzer: drive out the shift in yielded batches (the client must keep
+        // up with the guest:moved stream); the purge must remove every guest
+        // mover and guest events must stop at round end.
+        for (let driven = 0; driven < 7000; driven += 50) {
+          instance?.__driveTicks(50)
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        await vi.waitFor(() => expect(instance?.__phase()).toBe('results'))
+        const state = instance?.__movementDebug() as { positions: { playerId: string }[] }
+        expect(state.positions.some((p) => p.playerId.startsWith('guest'))).toBe(false)
+        // Non-consuming poll: waitFor splices its match, which would hide the
+        // ordering we are asserting.
+        const hasEnded = async (col: ReturnType<typeof collectAll>) => {
+          const deadline = Date.now() + 10000
+          for (;;) {
+            if (col.types().includes('round:ended')) return true
+            if (Date.now() > deadline) return false
+            await new Promise((resolve) => setTimeout(resolve, 20))
+          }
+        }
+        for (const col of collectors) {
+          expect(await hasEnded(col)).toBe(true)
+          const types = col.types()
+          const endedIdx = types.lastIndexOf('round:ended')
+          const guestAfterEnd = types.filter((t, i) => i > endedIdx && t.startsWith('guest:'))
+          expect(guestAfterEnd).toEqual([])
+        }
+      } finally {
+        vi.unstubAllEnvs()
+        for (const col of collectors) col.stop()
+        host.leave()
+        a.leave()
+        b.leave()
+        c.leave()
+      }
+    },
+  )
+})

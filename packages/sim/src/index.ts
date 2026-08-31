@@ -5,6 +5,7 @@
 
 export { dealRoles, mulberry32 } from './deal.js'
 export type { MovementEvent, SimEvent } from './events.js'
+export { GuestSim, type GuestTiming, type MovementPort } from './guests.js'
 export {
   ARRIVE_TICKS,
   CAR_LANDING_MILLI,

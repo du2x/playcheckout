@@ -18,7 +18,7 @@ import {
   TUNING,
   workStartIntentSchema,
 } from '@turnover/shared'
-import { MovementSim, RoundSim, TICK_HZ } from '@turnover/sim'
+import { type GuestTiming, type MovementPort, MovementSim, RoundSim, TICK_HZ } from '@turnover/sim'
 import { type Client, CloseCode, Room } from 'colyseus'
 import { Router } from './router'
 
@@ -57,6 +57,26 @@ function testShiftTicks(): number | undefined {
   const seconds = Number(raw)
   if (!Number.isFinite(seconds) || seconds <= 0) return undefined
   return Math.round(seconds * TICK_HZ)
+}
+
+/**
+ * AD-028 test seam (the AD-004 pattern): outside production,
+ * TURNOVER_TEST_GUEST_SCALE scales the guest cadence, impatience, and dwell so
+ * gate-3 harness rounds observe FULL guest lifecycles inside the shortened
+ * shift. Production ignores the variable entirely and always runs §7 v1.3
+ * guest timing.
+ */
+function testGuestTiming(): GuestTiming | undefined {
+  if (process.env.NODE_ENV === 'production') return undefined
+  const raw = process.env.TURNOVER_TEST_GUEST_SCALE
+  if (raw === undefined) return undefined
+  const scale = Number(raw)
+  if (!Number.isFinite(scale) || scale <= 0 || scale >= 1) return undefined
+  return {
+    cadenceTicks: Math.max(1, Math.round(TUNING.GUEST_CADENCE_SECONDS[5] * scale * TICK_HZ)),
+    impatienceTicks: Math.max(1, Math.round(TUNING.GUEST_IMPATIENCE_SECONDS * scale * TICK_HZ)),
+    dwellScale: scale,
+  }
 }
 
 interface LobbyPlayer {
@@ -451,8 +471,35 @@ export class TurnoverRoom extends Room {
     this.sim = new RoundSim({
       seed: randomInt(2 ** 31),
       playerIds,
+      // Guest-traffic economy (cycle 3.1, AD-028): the sim drives NPC guests
+      // through the room's movement layer via the NPC-only port.
+      movement: this.guestPort(),
+      ...(testGuestTiming() === undefined ? {} : { guestTiming: testGuestTiming() }),
       ...(shiftTicks === undefined ? {} : { totalTicks: shiftTicks }),
     })
+  }
+
+  /**
+   * The NPC-only seam into the movement layer (AD-028): guests issue the same
+   * intents players do, but through this narrow adapter and never through the
+   * network. Player intents still enter only via message handlers.
+   */
+  private guestPort(): MovementPort {
+    return {
+      joinGuest: (id, floor, xTiles) =>
+        this.movement.join(id, { kind: 'guest', floor, xMilli: Math.round(xTiles * 1000) }),
+      removeGuest: (id) => this.movement.leave(id),
+      announceGuest: (id) => this.movement.announcePosition(id),
+      positionOf: (id) => {
+        const p = this.movement.positionOf(id)
+        return p === undefined ? undefined : { floor: p.floor, x: p.x }
+      },
+      viewOf: (id) => this.movement.viewOf(id),
+      startMove: (id, dir) => this.movement.startMove(id, dir),
+      stopMove: (id) => this.movement.stopMove(id),
+      callElevator: (id) => this.movement.callElevator(id),
+      pressFloor: (id, floor) => this.movement.pressFloor(id, floor),
+    }
   }
 
   /** One fixed 0.05 s step; the production interval and the test hook share this path. */
@@ -523,6 +570,10 @@ export class TurnoverRoom extends Room {
     // reveal already happened on the wire, so nothing is lost.
     this.sim = null
     this.fired.clear()
+    // Guests are round-scoped weather (cycle 3.1, GUEST-11): the sim is dead,
+    // so their movers leave the phase-free movement layer — no guest state or
+    // position streams survive into results/lobby.
+    for (const guestId of this.movement.guestIds()) this.movement.leave(guestId)
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
     }
@@ -584,6 +635,7 @@ export class TurnoverRoom extends Room {
     return {
       positions: this.movement.allPositions(),
       cars: this.movement.carFloors(),
+      guestIds: this.movement.guestIds(),
     }
   }
 

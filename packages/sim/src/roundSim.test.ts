@@ -1,6 +1,7 @@
-import { type GuestFloorId, type SimEvent, TUNING } from '@turnover/shared'
+import { type FloorId, type GuestFloorId, type SimEvent, TUNING } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { RoundSim, TICK_HZ } from './index.js'
+import { MovementSim } from './movement.js'
 import { FRESHNESS_TICKS, PREP_TICKS, UNPREP_TICKS } from './work.js'
 
 // Tuning cited: TUNING.SHIFT_SECONDS (300 s) × TICK_HZ (20) = 6000 ticks (prd §7, §11).
@@ -338,5 +339,87 @@ describe('sim:win_checks', () => {
     expect(crimes).toHaveLength(1)
     if (crimes[0]?.kind !== 'crime') throw new Error('entry kind')
     expect(crimes[0].fresh).toBe(false)
+  })
+})
+
+// --- Cycle 3.1 (GUEST-01..09, AD-028): the guest economy inside the round —
+// churn lands as settled room state; guests are round-scoped. Uses the same
+// production-shaped port adapter the room builds.
+class PortAdapter {
+  constructor(private readonly sim: MovementSim) {}
+  joinGuest(id: string, floor: FloorId, xTiles: number): void {
+    this.sim.join(id, { kind: 'guest', floor, xMilli: Math.round(xTiles * 1000) })
+  }
+  removeGuest(id: string): void {
+    this.sim.leave(id)
+  }
+  announceGuest(id: string): void {
+    this.sim.announcePosition(id)
+  }
+  positionOf(id: string) {
+    const p = this.sim.positionOf(id)
+    return p === undefined ? undefined : { floor: p.floor, x: p.x }
+  }
+  viewOf(id: string) {
+    return this.sim.viewOf(id)
+  }
+  startMove(id: string, dir: 'left' | 'right'): void {
+    this.sim.startMove(id, dir)
+  }
+  stopMove(id: string): void {
+    this.sim.stopMove(id)
+  }
+  callElevator(id: string) {
+    return this.sim.callElevator(id)
+  }
+  pressFloor(id: string, floor: FloorId) {
+    return this.sim.pressFloor(id, floor)
+  }
+}
+
+describe('sim:checkout_churn (round integration)', () => {
+  it('a checked-out guest leaves their room settled — never sabotage-shaped', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      // Test timing (AD-028 seam): full lifecycles fit a short scripted run.
+      guestTiming: { cadenceTicks: 10, impatienceTicks: 10, dwellScale: 0.001 },
+    })
+    let checkedOut: { floor: FloorId; room: number } | null = null
+    for (let t = 0; t < 4000 && checkedOut === null; t++) {
+      movement.tick()
+      for (const e of sim.tick()) {
+        if (e.type === 'guest:checked_out') checkedOut = { floor: e.floor, room: e.room }
+      }
+    }
+    if (checkedOut === null) throw new Error('no guest checkout within 4000 ticks')
+    // The churned room is `settled`: re-trashed by churn, never fresh
+    // sabotage (no room:trashed event exists for it), excluded from coverage.
+    const state = sim.roomState(checkedOut.floor as GuestFloorId, checkedOut.room as 1)
+    expect(state).toBe('settled')
+  })
+
+  it('guest events never survive the round end (GUEST-11)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 10, impatienceTicks: 10, dwellScale: 0.001 },
+    })
+    let endedAt = -1
+    let guestEventsAfterEnd = 0
+    for (let t = 0; t < RoundSim.TOTAL_TICKS + 10; t++) {
+      movement.tick()
+      const events = sim.tick()
+      for (const e of events) {
+        if (e.type === 'round:ended') endedAt = t
+        if (endedAt >= 0 && e.type.startsWith('guest:')) guestEventsAfterEnd++
+      }
+    }
+    expect(endedAt).toBeGreaterThanOrEqual(0)
+    expect(guestEventsAfterEnd).toBe(0)
   })
 })
