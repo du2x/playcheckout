@@ -288,7 +288,7 @@ describe('sim:suitcase_carry', () => {
     ])
     // The checked-in guest waits in the holding area east of the desk.
     expect(movement.positionOf('guest:1')?.floor).toBe('lobby')
-    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_HOLD_START_TILES)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES)
   })
 
   it('the assignment RESERVES the room — vacancy excludes it until settle or void (SUI-01 reservation)', () => {
@@ -472,7 +472,7 @@ describe('sim:wrong_delivery', () => {
     expect(complained).toEqual({ floor: assignment.floor, room: wrongRoom })
     // The guest returned to the holding area (patient, awaiting correction).
     expect(movement.positionOf('guest:1')?.floor).toBe('lobby')
-    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_HOLD_START_TILES)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES)
     // Correction: the suitcase is re-carried to the ASSIGNED room and placed.
     movement.join('p2', { floor: assignment.floor, xMilli: roomDoorXMilli(wrongRoom) })
     expect(guests.pickupSuitcase('p2', t)).toBe('picked_up')

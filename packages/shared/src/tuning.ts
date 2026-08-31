@@ -63,8 +63,13 @@ export const TUNING = {
   /** E range around a room's door x for suitcase place/pickup (cycle 3.B,
    *  AD-033 — new constant, not in prd §7). */
   ROOM_DOOR_RANGE_TILES: 1,
-  /** Holding-area slot start east of the desk (cycle 3.B, AD-033 — new
-   *  constant, not in prd §7): the 3.B stub for the 3.C restaurant; slots
-   *  extend eastward at GUEST_QUEUE_SPACING_TILES. */
-  GUEST_HOLD_START_TILES: 18,
+  /** Restaurant dining-slot start x (cycle 3.C, AD-035 — renames 3.B's
+   *  GUEST_HOLD_START_TILES, value unchanged): dining slots extend eastward
+   *  at GUEST_QUEUE_SPACING_TILES on the mezzanine. */
+  GUEST_RESTAURANT_START_TILES: 18,
+  /** Dining dwell bounds (cycle 3.C, roadmap v1.4 dial — §7-external): the
+   *  seeded uniform wait in the mezzanine restaurant. A wait buffer, not a
+   *  schedule — a guest whose suitcase rests leaves immediately. */
+  GUEST_DINING_MIN_SECONDS: 15,
+  GUEST_DINING_MAX_SECONDS: 30,
 } as const

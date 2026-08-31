@@ -65,7 +65,7 @@ const DESK_X = TUNING.DESK_X_TILES
 const QUEUE_STEP = TUNING.GUEST_QUEUE_SPACING_TILES
 /** Holding-area stub (cycle 3.B, AD-033): checked-in guests wait east of the
  *  desk until their suitcase first rests (the 3.C restaurant replaces this). */
-const HOLD_START = TUNING.GUEST_HOLD_START_TILES
+const HOLD_START = TUNING.GUEST_RESTAURANT_START_TILES
 /** Walking is 0.3 tiles/tick; arrival tolerance is one step (gray-box: the
  *  guest settles/hotel-exits at the nearest deterministic point). */
 const ARRIVAL_TOLERANCE_TILES = 0.3
@@ -86,6 +86,10 @@ export interface GuestTiming {
   readonly impatienceTicks?: number
   /** Scales the drawn dwell (45–90 s) — e.g. 0.02 → 0.9–1.8 s. */
   readonly dwellScale?: number
+  /** Scales the drawn dining dwell (the 15–30 s restaurant wait, cycle 3.C)
+   *  the same way dwellScale scales the settled dwell. Production never
+   *  supplies it. */
+  readonly diningScale?: number
   /** Overrides the carry clock (§7: 60 s per leg) — e.g. 30 ticks for a
    *  round-integration test. Production never supplies it. */
   readonly carryClockTicks?: number

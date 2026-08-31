@@ -80,6 +80,7 @@ function testGuestTiming(): GuestTiming | undefined {
     cadenceTicks: Math.max(1, Math.round(TUNING.GUEST_CADENCE_SECONDS[5] * scale * TICK_HZ)),
     impatienceTicks: Math.max(1, Math.round(TUNING.GUEST_IMPATIENCE_SECONDS * scale * TICK_HZ)),
     dwellScale: scale,
+    diningScale: scale,
   }
 }
 

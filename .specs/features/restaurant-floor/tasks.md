@@ -84,7 +84,7 @@ T7 → T8
 
 ---
 
-### T2: Dining tuning constants + test seam
+### T2: Dining tuning constants + test seam — ✅ DONE
 
 **What**: Rename `GUEST_HOLD_START_TILES` → `GUEST_RESTAURANT_START_TILES` (value 18); add `GUEST_DINING_MIN_SECONDS = 15` / `GUEST_DINING_MAX_SECONDS = 30`; extend `GuestTiming` with `diningScale`.
 **Where**: `packages/shared/src/tuning.ts`, `packages/sim/src/guests.ts` (type only), `apps/server/src/rooms/TurnoverRoom.ts` (`testGuestTiming` wiring)
