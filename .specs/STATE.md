@@ -828,6 +828,29 @@
 - **Date**: 2026-08-30
 - **Status**: active.
 
+### AD-030
+- **Decision**: **Adopt the 960x576 client viewport** (canvas width 832 → 960),
+  resolving the open TILE_PX decision recorded in both art briefs. `TILE_PX`
+  becomes the integer 32 (960 / 30 hall tiles, unchanged); the corridor band
+  tileSprite, wall fill, lane lines, elevator panel x-positions and BootScene
+  backdrop widen to match. Purely client-rendering/layout: hall length stays
+  30 tiles, all sim/tuning values (speed in tiles/s, room segments in
+  milli-tiles) untouched — every world x remains derived from `x * TILE_PX`.
+  Unblocks the Deco Noir 34x64 character frames and all 3.A char-variants
+  sheets on an integer pixel grid (Deco ornament pitches: 16/32 px).
+- **Reason**: Non-integer 832/30 ≈ 27.73 px/tile fought the pixel-art grid on
+  every authored sheet; the Deco Noir adoption (AD-029) deferred character
+  geometry on exactly this decision. Landing it before 3.A authoring avoids
+  re-authoring the variant sheets.
+- **Trade-off**: 128 px more visible corridor per screen (mild framing change,
+  Gate 4 eye check recommended); harness tile constants updated in-place
+  (`832 / 30` → `32`). Zero protocol/sim churn.
+- **Scope**: `apps/client/src/main.ts`, `apps/client/src/scenes/{WorldScene,BootScene}.ts`,
+  `apps/client/harness/{movement,elevatorLobby}.spec.ts` (tile constants only),
+  `docs/art/alternative/art-direction-brief.md`.
+- **Date**: 2026-08-31
+- **Status**: active.
+
 ## Handoff
 
 - **Feature**: `guest-flow` (cycle 3.1) — guest lifecycle as weather:
