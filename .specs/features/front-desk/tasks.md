@@ -90,7 +90,7 @@ T5 → T6
 
 ---
 
-### T2: Desk intents
+### T2: Desk intents ✅
 
 **What**: Add `deskInteractIntentSchema` and `deskSendIntentSchema` (destination + announce, guest floors × rooms 1–8, strict zod).
 **Where**: `packages/shared/src/protocol/intents.ts`
@@ -100,8 +100,9 @@ T5 → T6
 
 **Done when**:
 
-- [ ] Schemas exported, strict, typed
-- [ ] Gate check passes: quick
+- [x] Schemas exported, strict, typed (desk:interact empty; desk:send two independent guest-floor choices)
+- [x] Schema tests in registry.test.ts (accept + reject paths)
+- [x] Gate check passes: quick (typecheck 4/4, 201 tests)
 
 **Tests**: unit
 **Gate**: quick

@@ -3,6 +3,8 @@ import { FLOOR_IDS } from '../layout.js'
 import { ROLES } from '../roles.js'
 import {
   accuseIntentSchema,
+  deskInteractIntentSchema,
+  deskSendIntentSchema,
   elevatorCallIntentSchema,
   elevatorPressIntentSchema,
 } from './intents.js'
@@ -84,6 +86,60 @@ describe('protocol payloads', () => {
     ).toThrow()
     expect(() =>
       elevatorPressIntentSchema.parse({ type: 'elevator:press', floor: 'lobby', extra: 1 }),
+    ).toThrow()
+  })
+
+  // Cycle 3.2 (FR-27): the desk intents. desk:interact is empty (the server
+  // derives receive vs release); desk:send carries the TWO independent
+  // choices — destination (server truth) and announce (the claim).
+  it('desk:interact intent schema accepts only the empty intent', () => {
+    expect(deskInteractIntentSchema.parse({ type: 'desk:interact' })).toEqual({
+      type: 'desk:interact',
+    })
+    expect(() => deskInteractIntentSchema.parse({})).toThrow()
+    expect(() => deskInteractIntentSchema.parse({ type: 'desk:interact', room: 3 })).toThrow()
+  })
+
+  it('desk:send intent schema accepts two independent guest-floor room choices', () => {
+    const parsed = deskSendIntentSchema.parse({
+      type: 'desk:send',
+      destinationFloor: 'floor2',
+      destinationRoom: 4,
+      announceFloor: 'floor1',
+      announceRoom: 8,
+    })
+    expect(parsed.destinationRoom).toBe(4)
+    expect(parsed.announceRoom).toBe(8)
+  })
+
+  it('desk:send intent schema rejects player floors, bad rooms, and extra fields', () => {
+    expect(() =>
+      deskSendIntentSchema.parse({
+        type: 'desk:send',
+        destinationFloor: 'lobby',
+        destinationRoom: 4,
+        announceFloor: 'floor1',
+        announceRoom: 8,
+      }),
+    ).toThrow()
+    expect(() =>
+      deskSendIntentSchema.parse({
+        type: 'desk:send',
+        destinationFloor: 'floor2',
+        destinationRoom: 9,
+        announceFloor: 'floor1',
+        announceRoom: 8,
+      }),
+    ).toThrow()
+    expect(() =>
+      deskSendIntentSchema.parse({
+        type: 'desk:send',
+        destinationFloor: 'floor2',
+        destinationRoom: 4,
+        announceFloor: 'floor1',
+        announceRoom: 8,
+        extra: 1,
+      }),
     ).toThrow()
   })
 })

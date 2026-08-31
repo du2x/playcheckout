@@ -182,7 +182,7 @@ the claimed room on all pages while the guest marker walks to the other floor
 | DESK-03 | P1 receive | Design | Pending |
 | DESK-04 | P1 receive | Design | Pending |
 | DESK-05 | P1 receive | Design | Pending |
-| DESK-06 | P1 send | Design | Implemented |
+| DESK-06 | P1 send | Design | Implemented (T2) |
 | DESK-07 | P1 send | Design | Implemented |
 | DESK-08 | P1 send | Design | Pending |
 | DESK-09 | P1 send | Design | Pending |
