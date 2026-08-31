@@ -40,7 +40,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.rectangle(416, 288, 832, 576, 0x0f1b21)
+    this.add.rectangle(480, 288, 960, 576, 0x0f1b21)
     this.add.text(416, 288, 'turnover', { color: '#ffffff' }).setOrigin(0.5, 0.5)
   }
 }

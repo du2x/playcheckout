@@ -11,13 +11,15 @@ dark** — elegant, geometric, quiet, and a little sinister. Gameplay frame
 
 ## Adoption amendment (AD-029)
 
+The 960x576 viewport decision has LANDED (AD-030, 2026-08-31): TILE_PX is
+the integer 32; the 34x64 character frames below are now unblocked for 3.A.
+
 Production landed over the AD-020 sheet contracts UNCHANGED (staff 28x60 8f,
 doors 72x96, car 96x64, panel 32x32, interiors 112x96, band 32x146) — a
 rendering-only restyle. Consequences:
 
-- The **34x64 elongated characters** below are DEFERRED until the open
-  960px-viewport (=32 px/tile) decision lands; until then the elongation is
-  approximated by slimmer silhouettes inside 28x60 frames.
+- The **34x64 elongated characters** below were deferred pending the viewport
+  decision — now landed (AD-030); they land with the 3.A `char-variants` cycle.
 - The frieze band is a style-board element only; the in-game wall above the
   corridor band stays a flat quiet slate field (same quiet-corridor rationale).
 - The outline rule below ("no outlines anywhere") replaces AD-020's

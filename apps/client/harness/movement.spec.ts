@@ -31,7 +31,7 @@ async function pressUntilRiderChip(page: Page, attempts = 15): Promise<void> {
   await chipShown()
 }
 
-const TILE = 832 / 30
+const TILE = 32
 const SPEED = 6 // tiles per second (prd §7)
 
 interface SceneRead {
@@ -504,7 +504,7 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
         const scene = t.scene('Round')
         if (scene === null) return false
         const ada = scene.children.list.find((c) => c.type === 'Text' && c.text === 'ada')
-        return ada?.visible === true && Math.abs(ada.x - adaX) < 2 * (832 / 30)
+        return ada?.visible === true && Math.abs(ada.x - adaX) < 2 * 32
       },
       { adaX },
       { timeout: 5000 },

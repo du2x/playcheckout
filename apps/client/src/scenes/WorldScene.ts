@@ -43,7 +43,7 @@ import { ElevatorPresenter } from './elevatorPresenter'
  * toward their last server position. The view shows the local player's floor.
  */
 
-const TILE_PX = 832 / 30 // hall width in px per tile
+const TILE_PX = 32 // hall width in px per tile (960 / 30, integer grid — AD-030)
 const GROUND_Y = 430
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
 
@@ -215,7 +215,7 @@ export class WorldScene extends Phaser.Scene {
     // overview's stacked lanes keep their plain backdrop. Additive visual:
     // no Rectangle/Ellipse/Text is created or removed (LIGHT-09 contract).
     if (this.textures.exists('corridor-band')) {
-      this.corridorBand = this.add.tileSprite(0, 350, 832, 146, 'corridor-band')
+      this.corridorBand = this.add.tileSprite(0, 350, 960, 146, 'corridor-band')
       this.corridorBand.setOrigin(0, 0)
       this.corridorBand.setDepth(-2)
       this.corridorBand.setVisible(!this.spectator)
@@ -254,7 +254,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.textures.exists('elevator-panel')) {
       for (const side of ['west', 'east'] as const) {
         const image = this.add.sprite(
-          side === 'west' ? 16 : 832 - 16,
+          side === 'west' ? 16 : 960 - 16,
           GROUND_Y - 80,
           'elevator-panel',
         )
@@ -354,13 +354,13 @@ export class WorldScene extends Phaser.Scene {
       // Slate wall above the corridor band (Deco Noir brief, AD-029: y48..350,
       // flat quiet field so the door rhythm reads). Graphics, not a Rectangle.
       this.wallFill.fillStyle(0x33505a, 1)
-      this.wallFill.fillRect(0, 48, 832, 302)
-      this.hallLines.lineBetween(0, GROUND_Y + 66, 832, GROUND_Y + 66)
+      this.wallFill.fillRect(0, 48, 960, 302)
+      this.hallLines.lineBetween(0, GROUND_Y + 66, 960, GROUND_Y + 66)
       return
     }
     for (const floor of ['lobby', 'floor1', 'floor2', 'floor3'] as const) {
       const y = SPECTATOR_LANE_Y[floor] ?? GROUND_Y
-      this.hallLines.lineBetween(0, y + 66, 832, y + 66)
+      this.hallLines.lineBetween(0, y + 66, 960, y + 66)
     }
   }
 

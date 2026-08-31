@@ -7,7 +7,7 @@ import { WorldScene } from './scenes/WorldScene'
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: 832,
+  width: 960,
   height: 576,
   backgroundColor: '#0f1419',
   pixelArt: true,
