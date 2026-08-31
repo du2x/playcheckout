@@ -72,6 +72,9 @@ Run as **6 tlc cycles**, each a full Specify → Execute pass with its feature d
 `.specs/features/`, named gate scenarios, and a STATE.md handoff commit. Dependency
 order: lifecycle first, then the desk/routing social layer, then the evidence + loss
 loop, then signage/provenance, then the rate-based exit proof, then telemetry last.
+One inserted art cycle (**3.A**, lettered so the locked 3.2–3.6 numbering — including
+the in-flight 3.2 Specify — stays stable; precedent: the inserted 2.3/2.10 cycles)
+runs **in parallel** with 3.2–3.3 and must land before any guest sprite is authored.
 
 Phase rules:
 - **Entry task (in 3.1's Specify phase): recompute the prd §8 throughput math** with
@@ -86,6 +89,9 @@ Phase rules:
 - Guest expressiveness (foot-tap, storm-out, anger cue, flip-sign) is load-bearing
   fun, not polish — each cycle's client slice renders it gray-box first and the art
   manifest (AD-020) gains guest entries before the art workstream touches them.
+- **Cosmetic variety (3.A) is identity, never role**: the `cosmeticSeed` stream is
+  decorrelated from the role deal, so no variant distribution can hint at the
+  saboteur (FR-9 boundary); the gate asserts the decorrelation, not just the render.
 - The former 2.11 exit bot sims (`exit_a`, `exit_b`) move to 3.6 and re-prove
   the v1.2 exit criteria under the full economy; 3.5's rate-based guest bots
   are the new-signal proof.
@@ -94,6 +100,7 @@ Phase rules:
 | Cycle | Feature | Scope | New gates (named scenarios) |
 |---|---|---|---|
 | 3.1 | `guest-flow` | Guest lifecycle as weather (FR-26, FR-28, half of FR-32): NPCs arrive at the lobby on the headcount-scaled cadence (30s/24s/18s), queue, wait 20s impatience (foot-tap + bell, no complaint cost), **self-assign** a uniform random vacant room, settle, dwell 45–90s (seeded), check out → room re-trashes spawning **settled** trash; 7 of 24 rooms trashed at t=0. Client: guest rectangles, queue + impatience cues | `sim:guest_arrival`, `sim:guest_impatience`, `sim:checkout_churn`, `client:guest_flow` |
+| 3.A | `char-variants` | **Visual variety without saboteur tells** (user direction 2026-08-31, Deco Noir AD-029). (0) Precursor: decide the open **960×576 viewport** (=32 px/tile, art brief recommendation) and land the integer-tile resize — unlocks the Deco Noir 34×64 elongation *before* new sheets are authored. (1) Protocol: `cosmeticSeed` per player and per guest, drawn from a **role-decorrelated Rng stream** (guests already use the AD-028 seeded-stream pattern); public info → registry-first entry with `'all'` policy. (2) Client: staff rendered in **two layers** (shared body sheet + head/accent variant sheet, ≈8 variants from skin × hair × accessory) — variety lives ONLY in idle/walk/head layer, the FR-9 work-channel frames stay identical for every role; guest archetypes (3–4 distinct silhouettes × 4 civil palette rotations) replace the 3.1 gray-box markers, class read enforced: **no ivory/brass on guests**, staff silhouette unchanged. Art manifest gains all new entries BEFORE authoring (phase rule). Client render-only besides the seed field — zero sim/tuning churn | `client:char_variants` (assert: variant ⊥ role — different roles may share a variant; guests never render staff uniform/brass; work-channel frames byte-identical), plus viewport smoke via existing `client:movement` |
 | 3.2 | `front-desk` | Desk station + mandatory walkie routing (FR-27): any player at the desk receives the queued guest; sending requires the canned walkie broadcast (building-wide, "«Marco»: guest going to 305") — the broadcast is a **claim, not server-truth**; routed guests walk/elevator to their room (guests as elevator citizens, panels stay position-only). Self-assign remains the fallback path from 3.1. Client: desk interaction + walkie broadcast line (DOM) | `sim:desk_receive`, `sim:walkie_broadcast`, `sim:walkie_lie`, `client:desk_walkie` |
 | 3.3 | `complaint-budget` | The evidence + loss loop (FR-29, FR-30, FR-31; FR-14 amendment): guests always enter their room — trash is discovered inside; entering mid-un-prep **flees, never convicts** (FR-15 stays staff-only); two-stage complaint (in-world anger cue at the room → fuzzy-timestamp desk report); one complaint then the guest leaves (no retry); HUD complaint counter (pulse ≥6); 8th complaint = **instant loss** wired into §6.6 win checks + results/recap plumbing. Client: anger cue + counter | `sim:complaint`, `sim:guest_never_convicts`, `sim:budget_instant_loss`, `client:complaint_cues` |
 | 3.4 | `provenance-signs` | Trash authorship + tenancy signage (FR-32, FR-33; FR-22 amendment): full provenance rules (sabotage spawns fresh, re-trash resets fresh, churn stays settled — laundering possible, hiding hits is not); recap complaint lines carry provenance (post-reveal only); Occupied/Vacant flip-signs on every guest door (tenancy, not presence; separate channel from FR-11 cards; at-a-distance walkie-lie verification). Client: door signs | `sim:trash_provenance`, `server:recap_provenance`, `client:tenancy_sign` |
