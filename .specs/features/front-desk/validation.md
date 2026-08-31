@@ -1,5 +1,6 @@
 # Front Desk — Independent Validation (cycle 3.2)
 
+- **Result**: PASS (final verdict, after fix iteration 2 — see §8; the superseded round-1 verdict is preserved in §7)
 - **Date**: 2026-08-31
 - **Spec**: `.specs/features/front-desk/spec.md` (source of truth) · Design: `design.md` · Tasks: `tasks.md`
 - **Diff range**: `d466edf..HEAD` (8 commits; `d466edf` = pre-feature merge)
@@ -110,7 +111,7 @@ Method: per instructions, `git status --porcelain` captured **empty** before sta
 
 | Requirement | Status | Basis |
 | --- | --- | --- |
-| DESK-01 (receive in zone) | **Verified** (with front-selection caveat, sensor M1) | AC1 evidence + roundSim zone test |
+| DESK-01 (receive in zone) | **Verified** | AC1 evidence + roundSim zone test; front-selection caveat **closed in iteration 2** (§8: new front-selection test + sensor M1 now killed) |
 | DESK-02 (silent ignore) | **Verified** | AC2 evidence, sim + round + server wire silence |
 | DESK-03 (release/E-again/walk-out, exact resume) | **Verified** | AC3 evidence (`firedAt === 881`) |
 | DESK-04 (held stands, no self-assign) | **Verified** | AC4 evidence |
@@ -120,13 +121,15 @@ Method: per instructions, `git status --porcelain` captured **empty** before sta
 | DESK-08 (no announce validation) | **Verified** | AC8 evidence |
 | DESK-09 (occupied destination silent) | **Verified** | AC9 evidence (sim; server mapping structural) |
 | DESK-10 (attributable claim, no destination on wire) | **Verified** | AC10 leak audit |
-| DESK-11 (hint/menu/receive UX) | **Verified** (close-on-E-again/walk-out client assertion missing) | P2-1 evidence |
+| DESK-11 (hint/menu/receive UX) | **Verified** | P2-1 evidence; close-on-E-again/walk-out client caveat **closed in iteration 2** (§8: `deskWalkie.spec.ts:70–83` asserts E-again close, walk-out close, re-receive) |
 | DESK-12 (building-wide walkie line) | **Verified** | P2-2 evidence (all 4 pages) |
 | DESK-13 (no client destination surface) | **Verified** | P2-3 evidence + payload audit |
 
 ---
 
-## 7. Summary Verdict: **FAIL** (conditional — one deterministic gate regression; feature logic itself well-evidenced)
+## 7. Summary Verdict: **FAIL** (round 1 — SUPERSEDED by §8 re-verification verdict: **PASS**)
+
+> Round-1 verdict preserved below for the record. Fix commit `3f1d45e` closed the gaps; see §8.
 
 The feature logic is solidly implemented and the leak rule holds at every level (10/13 requirements fully verified, 2 with precision caveats, client gate green). However:
 
@@ -134,3 +137,54 @@ The feature logic is solidly implemented and the leak rule holds at every level 
 2. **Discrimination sensor 2/3**: M1 survived — no test pins that `receiveAtDesk` hands over the **front** queued guest (AC1's "front" is SPEC-PRECISION-GAP); the mutation even orphans a queued guest undetected.
 3. **Pre-existing flake flagged**: `REG-18` (server seq continuity) fails under load both at baseline and HEAD; recommend triage separately.
 4. **Edge-case gaps (minor)**: per-holder same-tick independence and "routed to self-assign room" unpinned; client menu close-on-E-again/walk-out unasserted.
+
+---
+
+## 8. Re-verification (iteration 2) — Verdict: **PASS**
+
+- **Date**: 2026-08-31 (same day, after fix commit `3f1d45e` on top of the feature range `d466edf..HEAD`)
+- **Verifier**: same independent protocol (author ≠ verifier); baseline `git status --porcelain` captured **empty** before start; no source modified beyond sensor apply/restore.
+
+### 8.1 Gap → fix → evidence
+
+| Gap (round 1) | Fix claimed in `3f1d45e` | Evidence re-derived | Status |
+| --- | --- | --- | --- |
+| G1 (BLOCKING): literal `[1,2,3,4,5,6,7,8]` in `WorldScene.ts` tripped the §7-numeric denylist in `literals.test.ts` | Use shared `ROOM_INDEXES` | `apps/client/src/scenes/WorldScene.ts:5` (import) and `:889` `for (const room of ROOM_INDEXES)` — no numeric literal remains; `pnpm vitest run packages/shared packages/sim` passes `literals.test.ts` on every run this round | ✅ CLOSED |
+| G2: no test pinned queue-FRONT receive (sensor M1 survived) | New describe `sim:desk_receive (selection + per-holder independence)` | `packages/sim/src/guests.test.ts:469` describe; front-selection test `:471` routes `guest:1` while `guest:2` stays queued (`:483–487` routed payload names `guest:1`; `:489` `positionOf('guest:2')` still at `DESK_X_TILES + 1`; `:491` `p2` receives next) | ✅ CLOSED |
+| G3: menu close-on-E-again/walk-out unasserted client-side | Harness now exercises E-again close, walk-out close, re-receive before the lie flow; **real bug found**: key auto-repeat toggled the desk menu → `event.repeat` guard on keydown-E | `apps/client/harness/deskWalkie.spec.ts:70–83` (E-again → `#desk-menu` hidden; ArrowRight/Left walk-out → hidden; re-receive → visible); fix `apps/client/src/scenes/WorldScene.ts:310–312` `if (event.repeat) return` with comment; client gate passes end-to-end | ✅ CLOSED |
+| G4 (partial): per-holder same-tick edge case uncovered | Covered at sim level | `packages/sim/src/guests.test.ts:508–524`: p1 `routeHeld` + p2 `releaseHeld` same tick → both resolve (`:518–524` routed `guest:1`, released `guest:2` at queue front, `guest:1` begins walk) | ✅ CLOSED |
+| G5: REG-18 seq-continuity load flake (apps/server), pre-existing at baseline `d466edf` | Out of scope — document only | This round: `pnpm vitest run apps/server` passed **74/74 first try** (flake did not trigger; no retry needed). Remains a known pre-existing flake elevated under load — tracked separately, not attributable to this feature | 📋 DOCUMENTED |
+
+### 8.2 Fresh gate results
+
+| Gate | Command | Result | Counts |
+| --- | --- | --- | --- |
+| 1 | `pnpm typecheck` | ✅ 4/4 projects (shared, sim, server, client) | — |
+| 1 | `pnpm lint` (Biome) | ✅ clean (110 files, no fixes applied) | — |
+| 2 | `pnpm vitest run packages/shared packages/sim` | ✅ **218 passed / 218** (13 files) | Note: instructions said "expect 219". Arithmetic reconciles to 218: round 1 counted **216 total** (215 pass + 1 literals FAIL), and `3f1d45e` added exactly **2** vitest tests (verified via `git show 3f1d45e` — no tests removed). All pass; the "219" expectation is off by one against round 1's own count. Substantive gate (0 failures) met |
+| 2 | `pnpm vitest run apps/server` | ✅ **74 passed / 74** first try — REG-18 did not trigger this run | 74 (was 57 baseline) |
+| 3 | `pnpm exec playwright test …deskWalkie.spec.ts` | ✅ **1 passed** (30.8 s), no retry needed | Includes new E-again/walk-out/re-receive section |
+
+### 8.3 Sensor re-run (3/3 killed)
+
+Method identical to round 1: baseline porcelain **empty** → mutate `packages/sim/src/guests.ts` → `pnpm vitest run packages/sim/src/guests.test.ts` from repo root → `git checkout -- packages/sim/src/guests.ts` after each.
+
+| Mutation | Change | Result | Evidence |
+| --- | --- | --- | --- |
+| M1 | `receiveAtDesk`: `this.queue[0]` → `this.queue[this.queue.length - 1]` | **KILLED** (was SURVIVED) | 2 failed / 20 passed: front-selection test `guests.test.ts:471` fails (`guest:2` routed instead of `guest:1`) and the per-holder test `:508` also fails |
+| M2 | `routeHeld`: `{announce.floor, announce.room}` → `{destination.floor, destination.room}` | **KILLED** | 1 failed / 21 passed: `sim:walkie_lie` "routes to floor2:4 while claiming floor1:8" fails (claim payload now equals destination) |
+| M3 | `releaseHeld`: `tick + (g.impatienceRemaining ?? 0)` → `tick + this.impatienceTicks` | **KILLED** | 2 failed / 20 passed: "impatience resumes EXACTLY where it paused" (`guests.test.ts:295` `firedAt === 881`) and "a fired or disconnected holder releases" (`:325–341`) |
+
+**Sensor: 3/3 killed.**
+
+### 8.4 Tree hygiene
+
+- Sensor files restored byte-identical after each mutation; final `git status --porcelain` for all feature/sensor files clean.
+- One **external, concurrent edit** appeared during verification: `.specs/proposals/guest-transport-economy.md` (mtime 09:44:30, 137+/113− rewrite to "v2" of the suitcase proposal). **Not produced by the verifier and outside this feature's scope** — left untouched rather than reverted to avoid destroying in-flight work. Excluded from the verdict.
+
+### 8.5 Overall verdict: **PASS**
+
+- **ACs: 13/13 evidenced** (11 PASS + AC1 front-selection and P2-1 close-on-release both closed in iteration 2; 0 hard gaps remain; the "routed to self-assign room" edge case remains a minor, non-blocking observation).
+- Gates green (typecheck 4/4, lint clean, shared+sim 218/218, server 74/74, client gate 1/1), modulo the documented pre-existing REG-18 flake (G5, did not trigger this round).
+- Discrimination sensor **3/3 killed**.
+- DESK-01..13 all **Verified** (§6 updated).

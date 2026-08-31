@@ -872,42 +872,40 @@
 
 ## Handoff
 
-- **Feature**: `guest-flow` (cycle 3.1) — guest lifecycle as weather:
-  seeded arrival cadence → FIFO desk queue → free 20s impatience → seeded
-  uniform vacant self-assign → walk/elevator citizenship (capacity counts
-  guests) → settle 45–90s → checkout churn (`settled` trash) → hotel exit.
-  §8 recompute recorded in the spec (churn affordable in raw throughput; no
-  §7 dial changes).
-- **Phase / Task**: Execute → T1–T8 complete (commits 5faab4f..1b788bf; T6
-  merged into T5 — SimEvent additions are registry-compile-coupled).
-  Independent Verifier **PASS** (`.specs/features/guest-flow/validation.md`):
-  14/14 ACs evidenced file:line; discrimination sensor 7/8 mutants killed
-  (the survivor is the task-prescribed test-strength probe — dwell bounds
-  are pinned, uniformity is not: gap G1); `validate_state.py guest-flow`
-  exit 0.
+- **Feature**: `front-desk` (cycle 3.2) — the desk is the social-information
+  core: E in the 1-tile zone (AD-031 `DESK_RANGE_TILES`) receives the front
+  queued guest (leaves the queue without shifting the rest; impatience freezes
+  and resumes exactly); E-again / walking out / fired / ghosted / disconnect
+  releases to the queue front; completing the two-step send menu issues ONE
+  intent with TWO independent choices — destination (server truth, tenancy
+  commits at route) and announced room (the walkie claim, building-wide). The
+  lie is structurally possible and client-invisible: `guest:routed
+  {guestId, playerId}` and `walkie:broadcast {playerId, floor, room}` are the
+  only new wire surfaces (both 'all'); the walk (guest:moved/settled) is the
+  only ground truth.
+- **Phase / Task**: Execute → T1–T7 complete (commits d52e679..3bb9dde) plus
+  verifier fix iteration (3f1d45e: ROOM_INDEXES denylist fix, front-selection
+  + per-holder tests, key-auto-repeat guard on desk E). Independent Verifier
+  **PASS** (`.specs/features/front-desk/validation.md`): 13/13 ACs evidenced
+  file:line; discrimination sensor 3/3 mutants killed (iteration 1 was FAIL:
+  M1 queue-end mutant survived until selection was pinned; a literal 1–8 room
+  list tripped the §7-numeric denylist); `validate_state.py front-desk` exit 0.
 - **Gates**:
-  - `pnpm typecheck` ✅ 4/4 projects
-  - `pnpm lint` ✅ (biome, 109 files)
-  - `pnpm test:sim` ✅ 357/357 (was 323 pre-3.1; +rng, +guest lifecycle, +guest
-    movers, +churn, +round-integration churn; REG-18 is a known load flake —
-    isolated 57/57)
-  - `pnpm test:client` ✅ 34/34 incl. new `client:guest_flow` (justice got a
-    press-retry boarding pattern for AD-028 ambient traffic; harness server
-    runs `TURNOVER_TEST_GUEST_SCALE=0.5` so legacy specs' boarding windows
-    stay clean while guestFlow observes full lifecycles)
-- **Verifier hardening gaps (non-blocking, fold into 3.2/3.3)**: G1 dwell
-  uniformity unasserted (bounds only); G2 GUEST-02 FIFO pinned for one
-  backlog unit only; G3 edge cases room-tenanted-between-choice-and-arrival
-  and saboteur-fired-mid-round untested; G4 queue slot>0 x unasserted
-  (unreachable at §7 dials — impatience < cadence); G5 client marker count /
-  foot-tap bounce unasserted.
-- **Next step**: cycle 3.2 `front-desk` (FR-27) — desk station + mandatory
-  walkie routing: any player at the desk receives the queued guest; the
-  walkie broadcast is the broadcaster's claim, not server-truth; guests ride
-  as citizens (panels stay position-only). The desk interaction supersedes
-  3.1's impatience-only assignment path (self-assign remains the fallback).
-  Coordinate with the art workstream: guest expressiveness (foot-tap,
-  storm-out, anger cue) belongs in the AD-020 manifest before art touches
-  guests.
+  - `pnpm typecheck` ✅ 4/4 · `pnpm lint` ✅ (biome, 110 files)
+  - `pnpm test:sim` ✅ (shared+sim 218, apps/server 74; workspace 376+)
+  - `pnpm test:client` — `client:desk_walkie` ✅ (30s scenario: hint → E →
+    E-again/walk-out closes → re-receive → lie floor2:4/claim floor1:8 → walkie
+    line on all 4 pages → no destination on any client surface pre-settle →
+    settle at floor2:4). KNOWN: full-parallel `pnpm test:client` shows ROTATING
+    single-spec timing flakes on this loaded box (justice/lobby/round/
+    spectator across runs; e.g. clock sampled 04:59 vs 05:00, buzzer
+    overtaking a slow scenario) — every spec green in isolation/batched runs.
+    Pre-existing REG-18 seq-continuity load flake in apps/server, same class.
+- **Next step**: cycle 3.3 `complaint-budget` (FR-29/30/31 — two-stage
+  complaints, 8-complaint instant loss, HUD pulse at ≥6; a guest routed into a
+  trashed room still settles silently, that cost lands in 3.3). Also: triage
+  the gate-3 parallel-load flake class (stagger or serialize heavy specs) and
+  REG-18 separately; lessons L-025/L-026 recorded as candidates for
+  confirmation.
 - **Blockers**: none.
 - **Branch**: master

@@ -158,6 +158,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: spec Edge Cases 3/5 (packages/sim)
 - last seen: 2026-08-31T06:25:09Z
 
+### L-025 - Pin WHICH element a FIFO/queue operation selects (assert the specific guestId/routed event), not just that one was selected — a wrong-end selection is otherwise invisible.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `packages/sim` · harmful: 0
+- features: front-desk
+- evidence: mutant M1: guests.ts receiveAtDesk queue[0]→queue[end] (packages/sim)
+- last seen: 2026-08-31T12:49:54Z
+
+### L-026 - Never inline numeric room/floor lists in client code — derive them from shared layout constants (ROOM_INDEXES) or the §7-numeric denylist test fails the build.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `apps/client` · harmful: 0
+- features: front-desk
+- evidence: literals.test.ts denylist vs WorldScene.ts room list (apps/client)
+- last seen: 2026-08-31T12:49:54Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
