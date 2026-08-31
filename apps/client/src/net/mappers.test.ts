@@ -87,14 +87,16 @@ describe('protocol mappers', () => {
     expect(reduce(before, left as never)).toBe(before)
   })
 
-  it('maps movement:snapshot into view state (MOVE-18)', () => {
+  it('maps movement:snapshot into a scene render action (MOVE-18)', () => {
     const snap = {
       players: [{ playerId: 'p1', floor: 'lobby' as const, x: 15 }],
       cars: [{ car: 1 as const, floor: 'lobby' as const }],
       cardedRooms: [2 as const],
     }
-    const s = reduce(initialViewState(), first(MAPPERS['movement:snapshot'](snap)))
-    expect(s.movementSnapshot).toEqual(snap)
+    const action = first(MAPPERS['movement:snapshot'](snap))
+    expect(action).toEqual({ type: 'movement-snapshot', snapshot: snap })
+    const before = initialViewState()
+    expect(reduce(before, action as never)).toBe(before) // identity: render state
   })
 })
 

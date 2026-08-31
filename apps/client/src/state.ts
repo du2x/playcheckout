@@ -54,8 +54,6 @@ export interface ViewState {
    * clears it. A terminal connection-loss clears it too.
    */
   reconnecting: boolean
-  /** Latest public movement snapshot (join / buzzer); positions live in the scene. */
-  movementSnapshot: MovementSnapshot | null
   /** Banner text (join rejections, intent errors). */
   error: string | null
   /** True while a join attempt is in flight (duplicate-submit guard). */
@@ -161,7 +159,6 @@ export function initialViewState(): ViewState {
     roundPlayerIds: [],
     results: null,
     reconnecting: false,
-    movementSnapshot: null,
     error: null,
     joining: false,
   }
@@ -321,9 +318,10 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'elevator-riders':
     case 'player-left':
     case 'player-left-floor':
-      return state
+    // The scene consumes the snapshot itself (applySnapshot); storing it in
+    // ViewState too was a pre-AD-005 leftover — written, never rendered.
     case 'movement-snapshot':
-      return { ...state, movementSnapshot: action.snapshot }
+      return state
     case 'work-started':
     case 'work-ended':
     case 'room-observed':
