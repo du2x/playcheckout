@@ -187,16 +187,20 @@ the claimed room on all pages while the guest marker walks to the other floor
 | DESK-08 | P1 send | Design | Implemented (T3) |
 | DESK-09 | P1 send | Design | Implemented (T3) |
 | DESK-10 | P1 send | Design | Implemented |
-| DESK-11 | P2 client | Design | Implemented (T6) |
-| DESK-12 | P2 client | Design | Pending |
-| DESK-13 | P2 client | Design | Implemented (T6) |
+| DESK-11 | P2 client | Design | Implemented (T6/T7) |
+| DESK-12 | P2 client | Design | Implemented (T7) |
+| DESK-13 | P2 client | Design | Implemented (T6/T7) |
 
 **Coverage:** 13 total, 0 unmapped.
 
 ## Success Criteria
 
-- [ ] Gates 1–3 green: `pnpm typecheck` + `pnpm lint`, `pnpm test:sim` incl.
+- [x] Gates 1–3 green: `pnpm typecheck` + `pnpm lint`, `pnpm test:sim` incl.
       `sim:desk_receive` / `sim:walkie_broadcast` / `sim:walkie_lie`,
       `pnpm test:client` incl. `client:desk_walkie`.
-- [ ] No wire payload ever names a routed guest's destination (leak-rule audit).
-- [ ] New constant `DESK_RANGE_TILES` recorded as an AD; no §7 row changed.
+- [x] No wire payload ever names a routed guest's destination (leak-rule audit:
+      guest:routed payload is exactly {guestId, playerId}; the walkie claim
+      never names the destination — asserted at sim, server, and client gates).
+- [x] New constant `DESK_RANGE_TILES` recorded as AD-031 (the spec's AD-029/
+      AD-030 placeholder numbers were taken by Deco Noir and the 960x576
+      viewport respectively); no §7 row changed.

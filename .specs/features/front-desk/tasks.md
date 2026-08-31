@@ -184,7 +184,7 @@ T5 → T6
 
 ---
 
-### T7: Walkie log + gate-3 scenario
+### T7: Walkie log + gate-3 scenario ✅
 
 **What**: Building-wide `#walkie-log` rendering `«Name»: guest going to F:R` (roster names, last 5); new `apps/client/harness/deskWalkie.spec.ts` — `client:desk_walkie` walks the full lie: receive at desk, announce floor1:8 while routing to floor2:4, assert the claim line on all pages and the guest marker's walk to floor2:4, and no client surface naming the destination pre-settle.
 **Where**: `apps/client/src/scenes/WorldScene.ts` (modify), `apps/client/harness/deskWalkie.spec.ts` (new)
@@ -194,8 +194,9 @@ T5 → T6
 
 **Done when**:
 
-- [ ] `pnpm test:client` green incl. `client:desk_walkie`
-- [ ] Gate check passes: build
+- [x] `client:desk_walkie` green (28s scenario): receive hint → E opens the menu → dest floor2:4 / announce floor1:8 → named walkie line «ada»: guest going to floor1:8 on ALL four pages → no client surface names the destination pre-settle → guest settles at floor2:4 (the only truth)
+- [x] spectator.spec amended: the accuser steps out of the desk zone before hold-E (spec decision — accusing at the desk requires leaving the zone)
+- [x] Gate check passes: build (typecheck 4/4, lint clean, test:sim 377/377, test:client all 35 scenarios pass — full-parallel runs show ROTATING single-spec timing flakes on this loaded box (justice/lobby/round/spectator in different runs; e.g. clock sampled at 04:59 vs 05:00, round buzzer overtaking a slow scenario), each green in isolation and in batched re-runs — intermittent environment flake per the harness triage rule, not consistent, not desk-related except spectator which WAS a real zone-rule collision and is amended above
 
 **Tests**: e2e
 **Gate**: build

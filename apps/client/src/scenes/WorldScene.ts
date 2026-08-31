@@ -135,6 +135,7 @@ export class WorldScene extends Phaser.Scene {
   private deskMenuEl: HTMLElement | null = null
   private deskMenuTitle: HTMLElement | null = null
   private deskMenuRooms: HTMLElement | null = null
+  private walkieLog: HTMLElement | null = null
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
@@ -474,6 +475,11 @@ export class WorldScene extends Phaser.Scene {
         }
         break
       case 'walkie-broadcast':
+        // The walkie line (DESK-12, prd-locked text): «Name»: guest going to
+        // F:R — the CLAIM, building-wide; the name resolves from the roster
+        // (ids on the wire, names client-side). The destination does not
+        // exist in this payload.
+        this.appendWalkieLine(action.playerId, action.floor, action.room)
         break
       case 'player-moved': {
         let display = this.players.get(action.playerId)
@@ -915,6 +921,19 @@ export class WorldScene extends Phaser.Scene {
     if (this.deskMenuOpen && !this.ownInDeskZone()) this.closeDeskMenu()
   }
 
+  /** The walkie log (DESK-12): one named claim line, building-wide, last 5. */
+  private appendWalkieLine(playerId: string, floor: FloorId, room: RoomIndex): void {
+    if (this.walkieLog === null) return
+    const line = document.createElement('div')
+    line.className = 'walkie-line'
+    const name = this.rosterNames.get(playerId) ?? playerId
+    line.textContent = `«${name}»: guest going to ${floor}:${room}`
+    this.walkieLog.prepend(line)
+    while (this.walkieLog.children.length > 5) {
+      this.walkieLog.lastElementChild?.remove()
+    }
+  }
+
   private buildDeskLayer(): void {
     const gameEl = document.querySelector('#game')
     if (gameEl === null) return
@@ -960,6 +979,19 @@ export class WorldScene extends Phaser.Scene {
     this.deskMenuEl = menu
     this.deskMenuTitle = title
     this.deskMenuRooms = rooms
+
+    const log = document.createElement('div')
+    log.id = 'walkie-log'
+    log.style.position = 'absolute'
+    log.style.right = '8px'
+    log.style.top = '12px'
+    log.style.padding = '4px 8px'
+    log.style.fontSize = '13px'
+    log.style.color = '#ffe9a8'
+    log.style.background = 'rgba(20, 28, 34, 0.85)'
+    log.style.borderRadius = '4px'
+    gameEl.appendChild(log)
+    this.walkieLog = log
   }
 
   /** Guest marker sync (called every frame): one Arc per guest on the viewed

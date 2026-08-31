@@ -103,6 +103,15 @@ test.describe('client:spectator_view', () => {
     const accuserName = NAMES[accuserIndex]
     if (accuserName === undefined) throw new Error('no accuser name')
 
+    // Cycle 3.2: everyone spawns inside the desk zone (x=15 = DESK_X), where
+    // E is the desk key and the accuse hold is suppressed (spec decision) —
+    // accusing at the desk requires stepping out of the zone first. A short
+    // walk east clears the 1-tile zone and stays within the 2-tile accuse
+    // range of the players still at the desk.
+    await accuser.keyboard.down('ArrowRight')
+    await accuser.waitForTimeout(260)
+    await accuser.keyboard.up('ArrowRight')
+
     // Hold E → confirm menu → confirm: a WRONG accusation (innocent target or
     // in-grace saboteur — indistinguishable) fires the ACCUSER.
     await accuser.keyboard.down('e')
