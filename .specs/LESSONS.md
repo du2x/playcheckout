@@ -140,6 +140,24 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: justice.test.ts grace-boundary (verifier Gap 1) (packages/sim)
 - last seen: 2026-08-30T01:03:31Z
 
+### L-022 - Dwell tests assert only the [45,90] bounds — pin uniformity (e.g. min<max across a sampled batch) so a constant-dwell mutant cannot survive.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `packages/sim` · harmful: 0
+- features: guest-flow
+- evidence: guests.ts:283 dwell draw (packages/sim)
+- last seen: 2026-08-31T06:24:57Z
+
+### L-023 - Held-arrival tests exercise only one backlog unit; pin multi-unit FIFO release (one guest per tick) and queue-slot x for slot>0 guests.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `packages/sim` · harmful: 0
+- features: guest-flow
+- evidence: GUEST-02/GUEST-03 (packages/sim)
+- last seen: 2026-08-31T06:25:09Z
+
+### L-024 - Edge cases 'room tenanted between choice and arrival' and 'saboteur fired mid-round leaves guests unchanged' have no test; add cheap scripted assertions or record them as structural guarantees.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `packages/sim` · harmful: 0
+- features: guest-flow
+- evidence: spec Edge Cases 3/5 (packages/sim)
+- last seen: 2026-08-31T06:25:09Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

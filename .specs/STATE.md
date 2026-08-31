@@ -750,29 +750,87 @@
 - **Date**: 2026-08-30
 - **Status**: active.
 
+### AD-028
+- **Decision**: The guest-traffic economy lands as round-scoped, sim-owned NPC
+  weather (cycle 3.1). Guests live in `GuestSim` (`packages/sim/src/guests.ts`)
+  inside the `RoundSim`, seeded from the round seed via a dedicated `Rng`
+  stream (mulberry32 wrapper — no `Math.random` in the core). They move as
+  **second-class movers inside the room's `MovementSim`** (`join(id, {kind:
+  'guest'})`): both kinds share every walk/elevator rule (AD-011…027) — one
+  geometry/physics source — while the event surface splits: guests emit
+  `guest:moved` (`sameFloor` policy, AD-009 machinery), never `player:moved`;
+  guest boarding emits no `player:left-floor`; guest in-car presses queue
+  silently (not rider testimony). Rider knowledge includes guests
+  (`elevator:riders`/`carOccupants` gain a `guests` array, present only when
+  non-empty — pre-3.1 payloads keep their exact shape); capacity 2 counts
+  them. **AD-005 amended**: the sim→movement seam widens from read-only to
+  read-and-command through a narrow NPC-only `MovementPort` (the room builds
+  the adapter; player intents still enter only via the network). Checkout
+  churn is `WorkChannels.churnTrash` setting the existing `settled` state —
+  no sabotage-shaped `room:trashed` ever comes from churn (JUST-07/08 grace
+  safety); the FR-32 author dimension stays 3.4 scope. New §7-external
+  constants: `DESK_X_TILES = 15` (lobby center), `GUEST_QUEUE_SPACING_TILES =
+  1` (queue grows eastward, FIFO by arrival). Test seams (the AD-004
+  pattern): `RoundSimConfig.movement`/`guestTiming`, and the room's
+  `TURNOVER_TEST_GUEST_SCALE` env (non-production only) scaling cadence,
+  impatience, and dwell so gate-3 rounds observe full guest lifecycles.
+- **Reason**: Reuse — the movement layer is the most-amended code in the repo
+  (AD-012…027); guests re-deriving walking/elevators would drift on the next
+  elevator AD. The port keeps the AD-005 discipline for players while giving
+  the sim the only legitimate NPC control channel. Registry-first (AD-006):
+  all seven guest messages declared once with explicit policies.
+- **Trade-off**: The mover-kind split touches the core of `movement.ts`
+  (mitigated: kind defaults to `'player'`, keeping every existing path
+  byte-identical — the 323-test baseline held unchanged); ambient guest
+  traffic breaks harness scenarios that assumed static parked cars (the
+  boarding specs gained a press-retry pattern mirroring real AD-025 play);
+  the AD-004/AD-028 seams are test-only and production-inert.
+- **Scope**: `packages/shared` (tuning, layout door-x, protocol guest
+  messages), `packages/sim` (rng, guests, movement mover-kind, work
+  churnTrash, roundSim port), `apps/server` (guest port + purge + test seam),
+  `apps/client` (markers, queue, bell, mappers), `apps/client/harness`
+  (`client:guest_flow` + press-retry pattern), roadmap unchanged.
+- **Date**: 2026-08-31
+- **Status**: active.
+
 ## Handoff
 
-- **Feature**: elevator playtest-fix strand (AD-023…AD-027) + AD-022
-  guest-traffic design, recorded and reconciled after an interrupted session
-  (the ADs existed only in code/spec/doc references; reconstructed here
-  2026-08-30 and gate-verified against the working tree).
-- **Phase / Task**: reconciliation only — no new feature work. Gate ladder on
-  the uncommitted tree: `pnpm typecheck` ✅, `pnpm lint` ✅ (biome, 103 files),
-  `pnpm test:sim` ✅ 323/323, `pnpm test:client` ✅ 33/33 (one
-  `client:round_start` LIGHT-09/10 timeout under full-suite parallel load;
-  passes in isolation — flake, not a regression).
-- **Roadmap change (user direction, 2026-08-30)**: cycle 2.11 `telemetry` is
-  **postponed to the LAST cycle of Phase 3** (now 3.6, the phase exit).
-  Phase 2's exit is cycle 2.10 `art-swap` (closed). Phase 3 order:
-  3.1 `guest-flow` → 3.2 `front-desk` → 3.3 `complaint-budget` →
-  3.4 `provenance-signs` → 3.5 `guest-exit` (rate-based bots) →
-  3.6 `telemetry` (JSONL FR-23/24 + KPIs + the v1.2 exit bots re-proven under
-  the full economy).
-- **Next step**: cycle 3.1 `guest-flow` — Specify phase. Phase entry task per
-  roadmap: recompute prd §8 throughput math with churn as the third mess
-  source (AD-022 trade-off 4) inside 3.1's Specify. Seeded RNG only in
-  `packages/sim` (no `Math.random` in the deterministic core). The parallel
-  art workstream (AD-020) is committed; guest expressiveness sprites (foot-tap,
-  storm-out, anger cue) must enter the art manifest before art touches them.
+- **Feature**: `guest-flow` (cycle 3.1) — guest lifecycle as weather:
+  seeded arrival cadence → FIFO desk queue → free 20s impatience → seeded
+  uniform vacant self-assign → walk/elevator citizenship (capacity counts
+  guests) → settle 45–90s → checkout churn (`settled` trash) → hotel exit.
+  §8 recompute recorded in the spec (churn affordable in raw throughput; no
+  §7 dial changes).
+- **Phase / Task**: Execute → T1–T8 complete (commits 5faab4f..1b788bf; T6
+  merged into T5 — SimEvent additions are registry-compile-coupled).
+  Independent Verifier **PASS** (`.specs/features/guest-flow/validation.md`):
+  14/14 ACs evidenced file:line; discrimination sensor 7/8 mutants killed
+  (the survivor is the task-prescribed test-strength probe — dwell bounds
+  are pinned, uniformity is not: gap G1); `validate_state.py guest-flow`
+  exit 0.
+- **Gates**:
+  - `pnpm typecheck` ✅ 4/4 projects
+  - `pnpm lint` ✅ (biome, 109 files)
+  - `pnpm test:sim` ✅ 357/357 (was 323 pre-3.1; +rng, +guest lifecycle, +guest
+    movers, +churn, +round-integration churn; REG-18 is a known load flake —
+    isolated 57/57)
+  - `pnpm test:client` ✅ 34/34 incl. new `client:guest_flow` (justice got a
+    press-retry boarding pattern for AD-028 ambient traffic; harness server
+    runs `TURNOVER_TEST_GUEST_SCALE=0.5` so legacy specs' boarding windows
+    stay clean while guestFlow observes full lifecycles)
+- **Verifier hardening gaps (non-blocking, fold into 3.2/3.3)**: G1 dwell
+  uniformity unasserted (bounds only); G2 GUEST-02 FIFO pinned for one
+  backlog unit only; G3 edge cases room-tenanted-between-choice-and-arrival
+  and saboteur-fired-mid-round untested; G4 queue slot>0 x unasserted
+  (unreachable at §7 dials — impatience < cadence); G5 client marker count /
+  foot-tap bounce unasserted.
+- **Next step**: cycle 3.2 `front-desk` (FR-27) — desk station + mandatory
+  walkie routing: any player at the desk receives the queued guest; the
+  walkie broadcast is the broadcaster's claim, not server-truth; guests ride
+  as citizens (panels stay position-only). The desk interaction supersedes
+  3.1's impatience-only assignment path (self-assign remains the fallback).
+  Coordinate with the art workstream: guest expressiveness (foot-tap,
+  storm-out, anger cue) belongs in the AD-020 manifest before art touches
+  guests.
 - **Blockers**: none.
 - **Branch**: master
