@@ -12,14 +12,10 @@
       "signal": "ac_gap",
       "scope": "tests",
       "status": "candidate",
-      "features": [
-        "skeleton"
-      ],
+      "features": ["skeleton"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"
-      ],
+      "evidence": ["packages/sim/src/literals.test.ts (pre-commit T4 fix) (tests)"],
       "created": "2026-08-28T00:35:14Z",
       "last_seen": "2026-08-28T00:35:14Z"
     },
@@ -30,14 +26,10 @@
       "signal": "spec_precision_gap",
       "scope": "specs/decision-log",
       "status": "candidate",
-      "features": [
-        "first-light"
-      ],
+      "features": ["first-light"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)"
-      ],
+      "evidence": ["AD-004 / apps/client/harness/playwright.config.ts:20 (specs/decision-log)"],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -48,14 +40,10 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client/harness",
       "status": "candidate",
-      "features": [
-        "first-light"
-      ],
+      "features": ["first-light"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)"
-      ],
+      "evidence": ["LIGHT-02 / apps/client/harness/lobby.spec.ts:76 (apps/client/harness)"],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -66,14 +54,10 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client/harness",
       "status": "candidate",
-      "features": [
-        "first-light"
-      ],
+      "features": ["first-light"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)"
-      ],
+      "evidence": ["LIGHT-08 / apps/client/harness/lobby.spec.ts:218 (apps/client/harness)"],
       "created": "2026-08-28T11:43:49Z",
       "last_seen": "2026-08-28T11:43:49Z"
     },
@@ -84,14 +68,10 @@
       "signal": "gate_fail",
       "scope": "client",
       "status": "candidate",
-      "features": [
-        "first-light"
-      ],
+      "features": ["first-light"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "session: create-room dead click report (client)"
-      ],
+      "evidence": ["session: create-room dead click report (client)"],
       "created": "2026-08-28T11:57:37Z",
       "last_seen": "2026-08-28T11:57:37Z"
     },
@@ -102,14 +82,10 @@
       "signal": "surviving_mutant",
       "scope": "sim",
       "status": "candidate",
-      "features": [
-        "movement"
-      ],
+      "features": ["movement"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "M3 / packages/sim/src/movement.test.ts:255 (sim)"
-      ],
+      "evidence": ["M3 / packages/sim/src/movement.test.ts:255 (sim)"],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -120,14 +96,10 @@
       "signal": "surviving_mutant",
       "scope": "sim",
       "status": "candidate",
-      "features": [
-        "movement"
-      ],
+      "features": ["movement"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "M5b / packages/sim/src/movement.test.ts:87 (sim)"
-      ],
+      "evidence": ["M5b / packages/sim/src/movement.test.ts:87 (sim)"],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -138,14 +110,10 @@
       "signal": "ac_gap",
       "scope": "sim",
       "status": "candidate",
-      "features": [
-        "movement"
-      ],
+      "features": ["movement"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "MOVE-06 (sim)"
-      ],
+      "evidence": ["MOVE-06 (sim)"],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -156,14 +124,10 @@
       "signal": "spec_precision_gap",
       "scope": "specs",
       "status": "candidate",
-      "features": [
-        "movement"
-      ],
+      "features": ["movement"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "AD-008 / .specs/STATE.md (specs)"
-      ],
+      "evidence": ["AD-008 / .specs/STATE.md (specs)"],
       "created": "2026-08-28T15:56:44Z",
       "last_seen": "2026-08-28T15:56:44Z"
     },
@@ -174,14 +138,10 @@
       "signal": "spec_deviation",
       "scope": "protocol/routing",
       "status": "candidate",
-      "features": [
-        "work-channels"
-      ],
+      "features": ["work-channels"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "WORK-17/AD-009, movement.spec.ts:173 ghost rectangle (protocol/routing)"
-      ],
+      "evidence": ["WORK-17/AD-009, movement.spec.ts:173 ghost rectangle (protocol/routing)"],
       "created": "2026-08-28T17:56:28Z",
       "last_seen": "2026-08-28T17:56:28Z"
     },
@@ -192,14 +152,10 @@
       "signal": "ac_gap",
       "scope": "server/tests",
       "status": "candidate",
-      "features": [
-        "work-channels"
-      ],
+      "features": ["work-channels"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "TurnoverRoom.test.ts server:work_channels choreography (server/tests)"
-      ],
+      "evidence": ["TurnoverRoom.test.ts server:work_channels choreography (server/tests)"],
       "created": "2026-08-28T17:56:28Z",
       "last_seen": "2026-08-28T17:56:28Z"
     },
@@ -210,9 +166,7 @@
       "signal": "ac_gap",
       "scope": "apps/server,integration",
       "status": "candidate",
-      "features": [
-        "elevator-riders"
-      ],
+      "features": ["elevator-riders"],
       "recurrence": 1,
       "harmful": 0,
       "evidence": [
@@ -228,9 +182,7 @@
       "signal": "ac_gap",
       "scope": "packages/sim,test-churn",
       "status": "candidate",
-      "features": [
-        "elevator-riders"
-      ],
+      "features": ["elevator-riders"],
       "recurrence": 1,
       "harmful": 0,
       "evidence": [
@@ -246,9 +198,7 @@
       "signal": "gate_fail",
       "scope": "apps/client,harness,gate-3",
       "status": "candidate",
-      "features": [
-        "elevator-riders"
-      ],
+      "features": ["elevator-riders"],
       "recurrence": 1,
       "harmful": 0,
       "evidence": [
@@ -264,14 +214,10 @@
       "signal": "ac_gap",
       "scope": "apps/client",
       "status": "candidate",
-      "features": [
-        "elevator-animation"
-      ],
+      "features": ["elevator-animation"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "ELAN-02 (apps/client)"
-      ],
+      "evidence": ["ELAN-02 (apps/client)"],
       "created": "2026-08-29T15:45:00Z",
       "last_seen": "2026-08-29T15:45:00Z"
     },
@@ -282,14 +228,10 @@
       "signal": "ac_gap",
       "scope": "apps/client",
       "status": "candidate",
-      "features": [
-        "elevator-animation"
-      ],
+      "features": ["elevator-animation"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "ELAN-08 (apps/client)"
-      ],
+      "evidence": ["ELAN-08 (apps/client)"],
       "created": "2026-08-29T15:45:00Z",
       "last_seen": "2026-08-29T15:45:00Z"
     },
@@ -300,14 +242,10 @@
       "signal": "surviving_mutant",
       "scope": "apps/client",
       "status": "candidate",
-      "features": [
-        "elevator-animation"
-      ],
+      "features": ["elevator-animation"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "M6 (apps/client)"
-      ],
+      "evidence": ["M6 (apps/client)"],
       "created": "2026-08-29T15:45:00Z",
       "last_seen": "2026-08-29T15:45:00Z"
     },
@@ -318,14 +256,10 @@
       "signal": "spec_precision_gap",
       "scope": "apps/client",
       "status": "candidate",
-      "features": [
-        "elevator-animation"
-      ],
+      "features": ["elevator-animation"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "ELAN-06 (apps/client)"
-      ],
+      "evidence": ["ELAN-06 (apps/client)"],
       "created": "2026-08-29T15:45:00Z",
       "last_seen": "2026-08-29T15:45:00Z"
     },
@@ -336,14 +270,10 @@
       "signal": "spec_deviation",
       "scope": "apps/client",
       "status": "candidate",
-      "features": [
-        "elevator-animation"
-      ],
+      "features": ["elevator-animation"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "apps/client/src/scenes/elevatorPresenter.ts:13 (apps/client)"
-      ],
+      "evidence": ["apps/client/src/scenes/elevatorPresenter.ts:13 (apps/client)"],
       "created": "2026-08-29T15:45:00Z",
       "last_seen": "2026-08-29T15:45:00Z"
     },
@@ -354,14 +284,10 @@
       "signal": "surviving_mutant",
       "scope": "apps/server",
       "status": "candidate",
-      "features": [
-        "justice"
-      ],
+      "features": ["justice"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "TurnoverRoom.test.ts:1716-1730 (verifier Gap 2) (apps/server)"
-      ],
+      "evidence": ["TurnoverRoom.test.ts:1716-1730 (verifier Gap 2) (apps/server)"],
       "created": "2026-08-30T01:03:31Z",
       "last_seen": "2026-08-30T01:03:31Z"
     },
@@ -372,14 +298,10 @@
       "signal": "surviving_mutant",
       "scope": "packages/sim",
       "status": "candidate",
-      "features": [
-        "justice"
-      ],
+      "features": ["justice"],
       "recurrence": 1,
       "harmful": 0,
-      "evidence": [
-        "justice.test.ts grace-boundary (verifier Gap 1) (packages/sim)"
-      ],
+      "evidence": ["justice.test.ts grace-boundary (verifier Gap 1) (packages/sim)"],
       "created": "2026-08-30T01:03:31Z",
       "last_seen": "2026-08-30T01:03:31Z"
     }

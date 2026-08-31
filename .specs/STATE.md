@@ -516,33 +516,263 @@
 - **Date**: 2026-08-30
 - **Status**: active
 
+### AD-022
+- **Decision**: PRD v1.3 — the static task checklist becomes a guest-traffic economy
+  ("complaint economy"), designed in a grilling session 2026-08-30, all branches
+  user-confirmed. The round now runs on NPC guest flow: guests arrive at the lobby on a
+  headcount-scaled cadence, queue at the front desk, and must be routed to rooms; settled
+  guests check out after a random dwell and re-trash their room (spawning **settled**
+  trash — churn the staff must service forever). Core mechanics, in final confirmed
+  shape:
+  - **Routing (hybrid)**: any player at the desk receives the queued guest; a **walkie
+    broadcast is mandatory** to send the guest off (canned room-number menu, "«Marco»:
+    guest going to 305"). The broadcast is the broadcaster's *claim*, not server-truth —
+    the saboteur can lie; the guest's actual walk is the checkable ground truth. Guests
+    ride elevators as full citizens (panels still show cars, never occupants).
+  - **Impatience**: an unrouted guest waits ~20s visibly (foot-tap + desk bell, no
+    complaint cost), then **self-assigns** a uniform random vacant room. If that room is
+    trashed: one complaint, guest leaves the hotel (no retry).
+  - **Discovery inside rooms**: guests always *enter* their assigned/chosen room; trash
+    is discovered inside (this supersedes the drafted "balk at the door" beat). A guest
+    entering during an active un-prep **flees and complains — guests never trigger
+    walk-in conviction** (FR-15 stays staff-only).
+  - **Two-stage complaints**: in-world anger cue at the room (room-level, no detail) →
+    the guest walks to the desk and delivers a fuzzy-timestamp report ("someone hit 305,
+    maybe a minute ago"). One complaint fires per trashed discovery, assigned or
+    self-assigned alike.
+  - **Provenance tiers**: checkout trash spawns *settled*; sabotage spawns *fresh*;
+    re-trashing resets to fresh (churn can be laundered into "suspicious", the
+    saboteur's own hits cannot be hidden). FR-12 gains an author dimension.
+  - **Complaint budget**: 8 complaints = **instant staff loss**; HUD counter pulses red
+    at ≥6. Recap lines carry full provenance (sabotage + actor vs. churn), post-reveal.
+  - **Load dials (provisional)**: 7 of 24 rooms trashed at t=0 · cadence 30s/24s/18s at
+    4/5/6 players (≈10/12/16 guests per 5:00 shift; cadence is the 4-player-slack
+    lever, budget stays 8 for all lobbies) · dwell 45–90s random · peak occupancy ~10
+    rooms · impatience 20s.
+  Codified as new prd §6.9 (FR-26…FR-32); FR-14 (three HUD oracles), FR-22 (recap
+  provenance) and §6.6 (budget loss leg) amended; §5 loop, §7 tuning, §9 risks updated.
+- **Reason**: Brainstorm ("make it more realistic") + four grilling rounds. Structural
+  motivation: trash previously had a single possible author (the saboteur), so evidence
+  was nearly deductive; guest churn gives the saboteur camouflage, turns staff play from
+  a completion checklist into a response-time triage game, and makes the front desk the
+  social-information core (walkie, complaints, budget). Fun-perspective review flagged
+  desk-monopoly and passive-saboteur as the two watch-items; 4-player dead-time resolved
+  by the user with the cadence-scaling decision.
+- **Trade-offs**: (1) Passive-saboteur risk — doing nothing now erodes staff via churn;
+  deterrent is recap provenance exposing ghost play, first-playtest kill check. (2) Desk
+  monopoly risk — the best seat may pin one player all round; impatience + bell make
+  neglect socially visible, rotation must be earned socially. (3) Voice floor raised
+  (walkie lies, desk rotation, triage huddle — near-required, was merely load-bearing).
+  (4) §8's travel-budget throughput verdict is invalidated by churn; recompute at spec
+  time. (5) Sim determinism requires **seeded RNG** for dwell/arrival sampling — no
+  `Math.random` in `packages/sim`. (6) New §6.9 appended rather than renumbering FRs
+  (references across specs/skills/roadmap stay valid); FR ordering is therefore not
+  thematic. (7) Roadmap re-plan is a required follow-up — guest traffic needs new
+  cycles, none are scheduled yet; build order through cycle 2.10 (telemetry) is
+  unaffected.
+- **Scope**: `prd.md` (v1.3), future `.specs/features/guest-traffic/`,
+  `packages/sim`, `packages/shared` (tuning + protocol), `apps/server`, `apps/client`,
+  `roadmap.md` (re-plan pending), art brief (guest sprites are load-bearing
+  expressiveness: foot-tap, storm-out, anger cue).
+- **Date**: 2026-08-30
+- **Status**: active — design recorded and user-confirmed; **not yet implemented, no
+  cycle assigned**.
+- **Amendment (2026-08-30, user-confirmed)**: tenancy door signs added as FR-33 — an
+  Occupied/Vacant flip-sign per guest door, operated automatically by the building.
+  Shows **tenancy, not presence** (a settled guest flips it Occupied; checkout or
+  leaving the hotel flips it Vacant; a fled guest keeps it Occupied until they leave —
+  the empty-but-Occupied mismatch is a sabotage tell). Deliberately a separate channel
+  from FR-11 prep cards (prep history vs. tenancy; neither timestamped), readable from
+  the hallway, and the at-a-distance verifier for FR-27 walkie claims. Chosen over a
+  desk-only board (loses hallway prediction), a DND tag (implies unenforced "don't
+  clean" semantics), and a card-slot merge (would muddy the evidence language). No new
+  tuning constant; FR-29's "vacant but trashed" footprint cross-references it.
+- **Amendment (2026-08-30, roadmap re-plan)**: the "no cycle assigned" note is closed —
+  roadmap.md gains a dedicated **Phase 3 — Guest-traffic economy** of 5 tlc cycles
+  (`3.1 guest-flow` → `3.2 front-desk` → `3.3 complaint-budget` → `3.4 provenance-signs`
+  → `3.5 guest-exit`); former Phases 3–5 renumber to 4–6. Phase entry
+  task: recompute prd §8 throughput math with churn (3.1 Specify phase). Phase rules:
+  seeded RNG only in sim; registry-declared guest/walkie/complaint messages with
+  per-cycle recipient policies; guest expressiveness added to the AD-020 art manifest;
+  2.11's exit sims stay valid for v1.2, 3.5 re-proves them under the economy.
+- **Amendment (2026-08-30, user direction)**: the former cycle 2.11 `telemetry` is
+  postponed to **3.6** — the LAST Phase 3 cycle and phase exit (JSONL FR-23/24 +
+  KPIs + the v1.2 exit bots re-proven under the full economy). Phase 3 is now six
+  cycles: 3.1 → 3.6 as re-planned in roadmap.md; 3.5 keeps only the rate-based
+  guest bot sims (`sim:guest_exit_a/b`); the telemetry extension and the
+  `exit_a`/`exit_b` re-proof move to 3.6.
+
+### AD-023
+- **Decision**: Hall-button dispatch — a caller standing within
+  `ELEVATOR_LANDING_TILES` (1 tile) of a landing **pins** the call to THAT
+  landing's car. The pinned car dispatches if idle; if busy (arriving / riding
+  / dwelling elsewhere) the call queues pinned and is served when THAT car
+  frees; if the pinned car is parked at the caller's floor the call is the
+  decoy flash — the other car is never summoned for a landing call. Mid-hall
+  callers (unreachable for the stock client, whose call key only sends from a
+  landing) keep the AD-019 behavior: idle car whose landing is closest to the
+  caller's x, tie → car 1, empty-idle drafted first, overflow sim-level FIFO
+  (MOVE-15).
+- **Reason**: Playtest strand (2026-08-30) — under AD-019 a call pressed at the
+  far landing could summon the wrong car, and landing callers had no way to
+  address a specific car. The real-hall-button model ("the button you press is
+  the car you get") makes landing behavior deterministic and testimony-clean.
+- **Trade-off**: A busy pinned car can no longer be circumvented by the other
+  (idle) car for landing callers; both-cars-parked decoy semantics narrow to
+  the landing-press flash (mid-hall both-parked flash unchanged). Recorded
+  here rather than editing the locked prd — no FR changes, dispatch internals
+  only.
+- **Scope**: `packages/sim/src/movement.ts` (pinned-call state +
+  `callElevator`), `packages/sim/src/movement.test.ts`,
+  `.specs/features/elevator-riders/spec.md` (P2 AC7 / P3 AC5),
+  `docs/elevator-behavior.md`.
+- **Date**: 2026-08-30
+- **Status**: active — parking wording later amended by AD-026 (parked means
+  doors shut).
+
+### AD-024
+- **Decision**: Per-car **hall-call lights** on the client (rendering-only, no
+  protocol/sim change). The DOM panels (lobby view + round HUD) and the world
+  scene gain one hall-call light per car, lit amber when that named car owes
+  the caller's floor a stop (lit on accepted `elevator:called`, cleared on the
+  car's arrival), plus the existing floor readout that stays 'lobby' until
+  arrival. Panels remain strictly position-only (FR-6): no occupancy, no
+  queue, no press targets — the light reflects only what
+  `elevator:called`/`elevator:moved` already publish.
+- **Reason**: AD-012 (4) made an accepted call visible as a transient panel
+  pulse, but a call for a BUSY car (queued) produced no visible feedback at
+  all — callers could not distinguish "queued" from "swallowed". A persistent
+  per-car light closes that gap without widening the wire.
+- **Trade-off**: A queued call's light is derived from the same public events,
+  so "queued" and "arriving" render identically until the car moves —
+  accepted; distinguishing them would require new protocol surface for zero
+  gameplay knowledge gain.
+- **Scope**: `apps/client/src/scenes/WorldScene.ts`,
+  `apps/client/src/ui/lobbyView.ts`, `apps/client/src/ui/roundHud.ts`,
+  `apps/client/harness/elevatorLobby.spec.ts` (hall-call light scenario),
+  `docs/elevator-behavior.md`.
+- **Date**: 2026-08-30
+- **Status**: active.
+
+### AD-025
+- **Decision**: Boarding rework — **proximity auto-boarding is disabled**.
+  Standing in the landing zone never boards anyone. Boarding happens when a
+  non-rider presses the call (E / ArrowUp / ArrowDown, landing-gated in the
+  stock client) while a car stands at the caller's floor within
+  `ELEVATOR_LANDING_TILES` of its landing: the presser steps in at intent
+  time (flushed next tick, MOVE-10 pattern), capacity 2 still applies (a full
+  car declines the board silently, flash only). A call pressed at a landing
+  whose car stands at the caller's floor **outranks the duplicate predicate**
+  — it boards the caller rather than flashing. The door-open-episode guard
+  (AD-014 pin (a), amended AD-016) is **superseded**: with no proximity rule
+  there is no board/exit oscillation to guard — an exiter re-boards by
+  pressing again.
+- **Reason**: Playtest strand — auto-boarding made "wait near the car" and
+  "board the car" indistinguishable, silently swallowed callers who only
+  wanted to summon, and was the root of the AD-016/AD-019 stranded-player
+  chain. Explicit press-as-board matches the hall-button model of AD-023.
+- **Trade-off**: A player standing at the landing must actively press to board
+  (one extra input, but unambiguous); the old "closest-first, overflow queues"
+  candidate ordering applies to proximity candidates only, which no longer
+  exist. AD-016's three hysteresis scenarios are amended (guard deleted, not
+  narrowed).
+- **Scope**: `packages/sim/src/movement.ts` (intent-time boarding,
+  pendingBoarders), `packages/sim/src/movement.test.ts`,
+  `.specs/features/elevator-riders/spec.md` (P3 AC5, edge cases),
+  `docs/elevator-behavior.md`.
+- **Date**: 2026-08-30
+- **Status**: active — boarding-through-doors timing amended by AD-026.
+
+### AD-026
+- **Decision**: **Door stages.** Every stop plays a 0.5 s opening swing and a
+  0.5 s closing swing (new `TUNING.ELEVATOR_DOOR_SECONDS = 0.5`, not in §7);
+  hop-in and hop-off are gated on the doors being FULLY open (the dwell
+  window only) — nobody enters or leaves while the doors swing. The car
+  machine becomes six-phase: `idle(floor, doors shut)` → `arriving` (60
+  ticks) → `opening` (10 ticks) → `dwelling` (open-door stop, the only hop
+  window; pending boarders step in as it starts) → `closing` (10 ticks) →
+  `riding` (40 ticks per floor) → `idle(target)`. A parked (`idle`) car's
+  doors are **SHUT**: boarding a parked car queues the presser as a pending
+  boarder who steps in when the doors finish opening; a rider escapes a
+  parked car by pressing the car's current floor (reopens the doors, no queue
+  entry, no announce). A direction held through the opening swing applies the
+  hop-off the moment the doors are fully open (releasing cancels it). A
+  `dwelling` car with a queued floor counts as departed for the
+  parked-exclusion predicate (AD-019). At decision time public door state
+  rode `elevator:moved` — no protocol change.
+- **Reason**: Playtest strand — instant doors made boarding/exiting ambiguous
+  (who got in when?) and the always-open parked car made "parked" and
+  "stopped" indistinguishable on the panel. Physical door swings give every
+  stop a legible open/close rhythm and restore the decoy value of a parked
+  car.
+- **Trade-off**: Hop timing tightens (hop only through fully open doors);
+  the AD-019/AD-023 "parked open-doors" wording is amended — parked now means
+  doors shut, so both earlier decisions' parking clauses re-read through this
+  one. Amends AD-014's "doors open in idle + dwelling".
+- **Scope**: `packages/shared/src/tuning.ts`, `packages/sim/src/movement.ts`,
+  `packages/sim/src/movement.test.ts`, `apps/client/src/scenes/*` (presenter),
+  `apps/server/src/rooms/TurnoverRoom.test.ts`,
+  `docs/elevator-behavior.md`.
+- **Date**: 2026-08-30
+- **Status**: active — dwell length and door-event transport amended by
+  AD-027.
+
+### AD-027
+- **Decision**: **Stay-open dwell + first-class door events.**
+  `ELEVATOR_DWELL_SECONDS` is raised 1 → 3 s and redefined as the MINIMUM
+  open time: afterwards the doors stay open until the car has a call to
+  attend (a queued ride or a waiting hall call it can serve from another
+  floor); a car never moves spontaneously and closes only to attend. Public
+  door state becomes a first-class registry message, `elevator:doors {car,
+  floor, open}` ('all' recipients) — emitted when the doors begin their
+  opening swing (open: true) and when they begin closing to attend a call
+  (open: false). The client presenter's door phases are driven by
+  `elevator:doors` (an open car holds its doors open indefinitely until a
+  real close event, closing before any position change); `elevator:moved` is
+  position-only again. Amends AD-026's dwell auto-close and its
+  "door state rides elevator:moved" transport.
+- **Reason**: Playtest strand — the 1 s dwell + timer auto-close raced human
+  board/exit timing and produced phantom closes (car visibly shut its doors
+  and stood there). Keeping doors open until needed matches real elevator
+  feel and gives the hallway a truthful public signal (door state is
+  hallway-visible info per the turnover-protocol rule 2), without ever
+  exposing occupancy.
+- **Trade-off**: One new registry message (+ its sim event) for a state that
+  was briefly multiplexed onto `elevator:moved` — the registry entry is the
+  by-the-book home for it (AD-006). Doors-open idle cars are publicly
+  distinguishable from parked shut cars, which is intended legibility, not a
+  leak (both states are position-adjacent public facts).
+- **Scope**: `packages/shared/src/protocol/{messages,simEvents,registry}.ts`,
+  `packages/shared/src/tuning.ts`, `packages/sim/src/movement.ts`,
+  `packages/sim/src/movement.test.ts`, `apps/server/src/rooms/*`,
+  `apps/client/src/scenes/elevatorPresenter.ts` (+ tests),
+  `apps/client/harness/*`, `docs/elevator-behavior.md`.
+- **Date**: 2026-08-30
+- **Status**: active.
+
 ## Handoff
 
-- **Feature**: `round-end` (cycle 2.9) — win checks (§6.6), results/recap
-  (FR-21/22), FR-20 spectator overview, FR-25 reconnection seats with
-  ghost/abort. Implemented autonomously per the spec-driven flow.
-- **Phase / Task**: Execute → T1–T8 complete (commits 95d9aa2..4abb4ca);
-  independent Verifier PASS (sensor: 8 mutants, all killed after fix round 1 —
-  one genuine survivor M8b closed with mapper-shape tests; real-tree porcelain
-  verified byte-identical around the scratch). Fix round 1 (5cfc122) closed
-  verifier Gaps 1 (MEDIUM, mapper shapes) and 4 (results-phase drop branch);
-  Gaps 2–3 (LOW) accepted with indirect coverage. `validate_state.py round-end`
-  exit 0.
-- **Gates**:
-  - `pnpm typecheck` ✅ 0 errors
-  - `pnpm biome check apps/client apps/server packages` ✅ clean
-  - `pnpm test:sim` ✅ 317/317 (was 288 pre-2.9; +sim:win_checks, +server:round_end, +server:reconnect, +reducer suites)
-  - `pnpm test:client` ✅ 29/29 incl. new `client:round_end` and `client:spectator_view`
-- **Amended legacy assertions** (behavior changes by design): buzzer→results
-  instead of buzzer→lobby (`client:round_start` LIGHT-13/14, `client:movement`,
-  `client:doors_pre_round` 24 frames, room tests REG-18 seq +3, CHURN-03,
-  AD-004 seam phase, JUST-04 fired-viewer now a spectator stream receiver,
-  JUST-12 correct accusation now ends the round).
-- **Next step**: cycle 2.10 `telemetry` (FR-23/24 JSONL + KPI, `sim:telemetry`)
-  — the phase-exit cycle with the two bot sims (`sim:exit_a`, `sim:exit_b`).
-  `round:ended {winner, reason, saboteurId}` + the aborted marker are already
-  machine-readable for the KPI exclusion. The parallel art workstream (AD-020)
-  remains open and uncommitted — coordinate before touching
-  `apps/client/public/art` or world rendering.
+- **Feature**: elevator playtest-fix strand (AD-023…AD-027) + AD-022
+  guest-traffic design, recorded and reconciled after an interrupted session
+  (the ADs existed only in code/spec/doc references; reconstructed here
+  2026-08-30 and gate-verified against the working tree).
+- **Phase / Task**: reconciliation only — no new feature work. Gate ladder on
+  the uncommitted tree: `pnpm typecheck` ✅, `pnpm lint` ✅ (biome, 103 files),
+  `pnpm test:sim` ✅ 323/323, `pnpm test:client` ✅ 33/33 (one
+  `client:round_start` LIGHT-09/10 timeout under full-suite parallel load;
+  passes in isolation — flake, not a regression).
+- **Roadmap change (user direction, 2026-08-30)**: cycle 2.11 `telemetry` is
+  **postponed to the LAST cycle of Phase 3** (now 3.6, the phase exit).
+  Phase 2's exit is cycle 2.10 `art-swap` (closed). Phase 3 order:
+  3.1 `guest-flow` → 3.2 `front-desk` → 3.3 `complaint-budget` →
+  3.4 `provenance-signs` → 3.5 `guest-exit` (rate-based bots) →
+  3.6 `telemetry` (JSONL FR-23/24 + KPIs + the v1.2 exit bots re-proven under
+  the full economy).
+- **Next step**: cycle 3.1 `guest-flow` — Specify phase. Phase entry task per
+  roadmap: recompute prd §8 throughput math with churn as the third mess
+  source (AD-022 trade-off 4) inside 3.1's Specify. Seeded RNG only in
+  `packages/sim` (no `Math.random` in the deterministic core). The parallel
+  art workstream (AD-020) is committed; guest expressiveness sprites (foot-tap,
+  storm-out, anger cue) must enter the art manifest before art touches them.
 - **Blockers**: none.
 - **Branch**: master

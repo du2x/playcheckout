@@ -1,8 +1,8 @@
 # Roadmap — Turnover
 
-Companion to `prd.md` v1.2 (all decisions locked). Stack per prd §11: TypeScript,
-Phaser 4 client, Node 24 + Colyseus 0.18 (message-only), pure sim package,
-Railway single-container deploy.
+Companion to `prd.md` v1.3 (decisions locked; v1.3 = guest-traffic economy, AD-022).
+Stack per prd §11: TypeScript, Phaser 4 client, Node 24 + Colyseus 0.18 (message-only),
+pure sim package, Railway single-container deploy.
 
 ---
 
@@ -31,7 +31,7 @@ prep 5s / un-prep 3s, elevator arrive 3s + ride 2s/floor + cap 2.
 
 ## Phase 2 — Authoritative server sim (headless-first)
 
-Run as **9 tlc cycles**, each a full Specify → Execute pass with its own feature dir
+Run as **10 tlc cycles**, each a full Specify → Execute pass with its own feature dir
 under `.specs/features/`, named gate scenarios, and a STATE.md handoff commit.
 Order is dependency-driven: each cycle's sim state machine extends the previous one.
 
@@ -47,38 +47,83 @@ Order is dependency-driven: each cycle's sim state machine extends the previous 
 | 2.8 | `justice` | Walk-in conviction, hidden grace, name-only firing toasts, accusation range 2 tiles same floor (FR-14–FR-19) | `sim:walkin_conviction`, `sim:accuse`, `sim:firing_toast` |
 | 2.9 | `round-end` | Win checks + results + recap timeline (FR-20–FR-22); disconnect/abort handling, 60s reconnection with role restore (FR-25) | `sim:win_checks`, `server:reconnect` |
 | 2.10 | `art-swap` | Gray-box → production art swap (AD-020 visual contract): player sprites + walk cycle, door sprites + doorway interiors, elevator car sprites + panel flash — rendering-only, zero protocol/sim/tuning changes; rewrites the harness count contract (Rectangle/Ellipse → texture filters). Interiors render only from `room:observed` or the FR-20 spectator baseline | `client:art_players`, `client:art_doors`, `client:art_elevator` |
-| 2.11 | `telemetry` | JSONL telemetry with 1/s coverage sampling (FR-23); **exit-criteria bot sims** (a) staff vs. AFK saboteur ≥80% pre-buzzer, (b) last-60s blitz defeats spread bots at plausible rates | `sim:telemetry`, `sim:exit_a`, `sim:exit_b` |
 
 Cycle rules:
 - Visibility-sensitive content (roles, grace state, interiors) never enters a
   client-bound payload — checked per cycle at design review (turnover-protocol skill).
 - Every cycle ends with gates 1–3 green + STATE.md handoff; gate ladder per AGENTS.md.
-- Cycle 2.11 is the phase exit: both bot sims must pass before Phase 3 starts.
+- Cycle 2.10 is the phase exit (the rendering contract proven over the full
+  v1.2 sim). The former 2.11 `telemetry` cycle (FR-23/24 JSONL + KPI + exit
+  bot sims) is **postponed to 3.6** — the last Phase 3 cycle — per user
+  direction (2026-08-30); the v1.2 exit proof moves there and re-runs under
+  the full economy.
 
 Build the full round as a headless state machine in `packages/sim` — pure TypeScript,
 inputs + time in / events out, 20 Hz tick — before any rendering, testable via scripted
 bot inputs in vitest. Colyseus stays a thin transport shell; nothing visibility-sensitive
 ever uses Colyseus state sync (message-only protocol). Full FR mapping lives in each
-cycle's spec (items 1–8 of the original plan → cycles 2.1–2.11 above; 2.3
+cycle's spec (items 1–8 of the original plan → cycles 2.1–2.10 above; 2.3
 `protocol-registry` is an inserted hardening cycle, AD-006; 2.10 `art-swap` is an
-inserted rendering cycle, AD-021).
+inserted rendering cycle, AD-021; telemetry postponed to 3.6).
 
-## Phase 3 — Gray-box client
+## Phase 3 — Guest-traffic economy (prd v1.3, AD-022)
+
+Run as **6 tlc cycles**, each a full Specify → Execute pass with its feature dir under
+`.specs/features/`, named gate scenarios, and a STATE.md handoff commit. Dependency
+order: lifecycle first, then the desk/routing social layer, then the evidence + loss
+loop, then signage/provenance, then the rate-based exit proof, then telemetry last.
+
+Phase rules:
+- **Entry task (in 3.1's Specify phase): recompute the prd §8 throughput math** with
+  churn as a third mess source (AD-022 trade-off) — the dials in §7 v1.3 rows are
+  provisional until this lands.
+- **Seeded RNG only** in `packages/sim` for dwell/arrival sampling (AD-022) — no
+  `Math.random` anywhere in the deterministic core.
+- Every guest/complaint/walkie message enters the protocol registry with an explicit
+  recipient policy (turnover-protocol skill); guests are NPCs whose tenancy is public
+  (FR-33) but whose *reports* are diegetic — policy per message decided in each
+  cycle's Design phase, never defaulted to `'all'`.
+- Guest expressiveness (foot-tap, storm-out, anger cue, flip-sign) is load-bearing
+  fun, not polish — each cycle's client slice renders it gray-box first and the art
+  manifest (AD-020) gains guest entries before the art workstream touches them.
+- The former 2.11 exit bot sims (`exit_a`, `exit_b`) move to 3.6 and re-prove
+  the v1.2 exit criteria under the full economy; 3.5's rate-based guest bots
+  are the new-signal proof.
+- No dial changes without a recorded AD; v1.3 §7 rows are the reserve list.
+
+| Cycle | Feature | Scope | New gates (named scenarios) |
+|---|---|---|---|
+| 3.1 | `guest-flow` | Guest lifecycle as weather (FR-26, FR-28, half of FR-32): NPCs arrive at the lobby on the headcount-scaled cadence (30s/24s/18s), queue, wait 20s impatience (foot-tap + bell, no complaint cost), **self-assign** a uniform random vacant room, settle, dwell 45–90s (seeded), check out → room re-trashes spawning **settled** trash; 7 of 24 rooms trashed at t=0. Client: guest rectangles, queue + impatience cues | `sim:guest_arrival`, `sim:guest_impatience`, `sim:checkout_churn`, `client:guest_flow` |
+| 3.2 | `front-desk` | Desk station + mandatory walkie routing (FR-27): any player at the desk receives the queued guest; sending requires the canned walkie broadcast (building-wide, "«Marco»: guest going to 305") — the broadcast is a **claim, not server-truth**; routed guests walk/elevator to their room (guests as elevator citizens, panels stay position-only). Self-assign remains the fallback path from 3.1. Client: desk interaction + walkie broadcast line (DOM) | `sim:desk_receive`, `sim:walkie_broadcast`, `sim:walkie_lie`, `client:desk_walkie` |
+| 3.3 | `complaint-budget` | The evidence + loss loop (FR-29, FR-30, FR-31; FR-14 amendment): guests always enter their room — trash is discovered inside; entering mid-un-prep **flees, never convicts** (FR-15 stays staff-only); two-stage complaint (in-world anger cue at the room → fuzzy-timestamp desk report); one complaint then the guest leaves (no retry); HUD complaint counter (pulse ≥6); 8th complaint = **instant loss** wired into §6.6 win checks + results/recap plumbing. Client: anger cue + counter | `sim:complaint`, `sim:guest_never_convicts`, `sim:budget_instant_loss`, `client:complaint_cues` |
+| 3.4 | `provenance-signs` | Trash authorship + tenancy signage (FR-32, FR-33; FR-22 amendment): full provenance rules (sabotage spawns fresh, re-trash resets fresh, churn stays settled — laundering possible, hiding hits is not); recap complaint lines carry provenance (post-reveal only); Occupied/Vacant flip-signs on every guest door (tenancy, not presence; separate channel from FR-11 cards; at-a-distance walkie-lie verification). Client: door signs | `sim:trash_provenance`, `server:recap_provenance`, `client:tenancy_sign` |
+| 3.5 | `guest-exit` | Rate-based bot sims, the new-signal proof: (a) staff bots hold the budget against pure churn at the 6p cadence, (b) walkie-lie saboteur bot wins at plausible rates against verification-shaped staff | `sim:guest_exit_a`, `sim:guest_exit_b` |
+| 3.6 | `telemetry` | Phase exit (postponed from 2.11): JSONL telemetry with 1/s coverage sampling (FR-23) + guest extension (FR-23/24 — guest arrivals/checkouts, complaint events with source + provenance, bleed-vs-throughput KPIs) + KPI computation from JSONL; the v1.2 exit bot sims re-proven under the full economy: (a) staff vs. AFK saboteur ≥80% pre-buzzer, (b) last-60s blitz defeats spread bots at plausible rates | `sim:telemetry`, `sim:telemetry_guests`, `sim:exit_a`, `sim:exit_b` |
+
+Cycle rules (inherited from Phase 2):
+- Visibility-sensitive content (roles, grace state, interiors) never enters a
+  client-bound payload — checked per cycle at design review (turnover-protocol skill).
+- Every cycle ends with gates 1–3 green + STATE.md handoff; gate ladder per AGENTS.md.
+- Cycle 3.6 is the phase exit: all bot sims must pass before Phase 4 starts.
+
+## Phase 4 — Gray-box client
 
 - Rectangles + floor labels; no art, no audio polish (non-goal).
 - DOM overlay for lobby / HUD / firing toasts / results / recap; Phaser 4 renders only
   the game world.
 - Local playback of server events; door-open/rustle as simple cues; HUD = coverage % +
-  timer only (FR-14); spectator overview camera incl. interiors (FR-20).
-- Results screen: winner banner, traitor reveal, recap timeline with validity flags.
+  timer + complaint counter (FR-14 as amended by v1.3); spectator overview camera incl.
+  interiors (FR-20).
+- Results screen: winner banner, traitor reveal, recap timeline with validity flags
+  and complaint provenance (FR-22 as amended).
 
-## Phase 4 — Playtest harness
+## Phase 5 — Playtest harness
 
 - KPI computation from JSONL (FR-24) + a tiny viewer script.
 - 10 recorded sessions (5–6 players, Discord voice, rotating groups) against the §8 table.
 - Railway deploy (auto from git) live before the first remote playtest.
 
-## Phase 5 — Evaluate & tune
+## Phase 6 — Evaluate & tune
 
 - Spend dials in prd §7 reserve order only, one at a time, retest each.
 - Onboarding check: time-to-first-correct-deduction tracked before any tutorial UI.

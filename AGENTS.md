@@ -1,63 +1,65 @@
-# Turnover — Agent Guide
+# Turnover — AI agent guide
 
-Social-deduction browser game: 4–6 players, hidden saboteur, physical evidence.
-Design truth: `prd.md` (v1.2, decisions locked). Build order + verified API facts:
-`roadmap.md` (incl. "References — mined, not forked").
+This repo is a 4–6 player social-deduction game with hidden roles, physical evidence, and a message-only protocol. The design source of truth is [prd.md](prd.md); the build and API plan is [roadmap.md](roadmap.md). Treat both as authoritative unless a task explicitly says otherwise.
 
-## Stack (locked — do not swap)
+## Repo map
 
-pnpm workspaces: `packages/sim` (pure TS round sim, no I/O, 20 Hz tick) ·
-`packages/shared` (message protocol types + tuning) · `apps/server` (Node 24,
-Colyseus 0.18 message-only, Fastify static hosting) · `apps/client` (Phaser 4 +
-DOM overlay, Vite). References to mine, never fork: see roadmap.md.
+- [packages/shared](packages/shared): protocol types, tuning constants, shared layout/state contracts.
+- [packages/sim](packages/sim): authoritative game logic, pure TypeScript, deterministic round simulation at 20 Hz.
+- [apps/server](apps/server): Node 24 + Colyseus 0.18 room server, message transport, Fastify static hosting.
+- [apps/client](apps/client): Phaser 4 world + DOM overlay, Vite app.
+- [docs/agents](docs/agents): repo-specific agent and workflow docs.
+- [CONTEXT.md](CONTEXT.md): domain vocabulary and project framing.
 
-## Workflow
+## Working rules
 
-Every feature runs through the `tlc-spec-driven` skill (Specify → Design → Tasks →
-Execute, EARS acceptance criteria, atomic conventional commits). Artifacts live in
-`.specs/`. Resuming work = read `.specs/STATE.md` first, reconcile against git.
+- Follow the spec-driven workflow: use the `tlc-spec-driven` process for features and keep artifacts under `.specs/`.
+- Read `.specs/STATE.md` before resuming work; reconcile it with the current repo state.
+- User-facing acceptance criteria must be gate-testable and map to named scenarios like `sim:<name>` or `client:<name>`.
+- Prefer the existing references in [roadmap.md](roadmap.md); do not fork public seeds or reimplement architecture from scratch.
 
-- Spec acceptance criteria must be gate-testable: every user-facing AC maps to a
-  named gate scenario (`sim:<name>` or `client:<name>`) — see the `turnover-gates`
-  skill.
-- Feature >~8 tasks → tlc offers batch workers; workers run as the `implementer`
-  agent.
-- After the last task, tlc dispatches the `verifier` agent automatically
-  (author ≠ verifier, evidence-or-zero, discrimination sensor).
-- Research questions → the `explorer` agent.
+## Verification ladder
 
-## Gate ladder (mandatory; every task names its gates)
+Every feature should name its gates and run the relevant checks before claiming success:
 
-1. `pnpm typecheck` + `pnpm lint` — tsc --noEmit + Biome
-2. `pnpm test:sim` — vitest bot scenarios against `packages/sim`
-3. `pnpm test:client` — headless-Chromium harness: real server + client, asserts
-   via `window.__TURNOVER__` (see `turnover-client-harness` skill)
-4. Human 5-minute round — player-facing changes only
+1. `pnpm typecheck` and `pnpm lint`
+2. `pnpm test:sim`
+3. `pnpm test:client`
+4. Human 5-minute round check for player-facing changes
 
-Compile ≠ runs: Gate 1 proves nothing about Gate 3. A gate passes only when its
-runner exits zero — never self-assessed. CI (`.github/workflows/ci.yml`) re-runs
-gates 1–3 on every push via the same root scripts; keep script names stable.
+Do not treat compile output as proof that gameplay or client behavior is correct. Gate 1 is not equivalent to Gate 3.
 
-## Hard rules
+Gotchas:
 
-- **Message-only protocol.** The server never transmits full state, and never
-  sends anything a player cannot legitimately know. See the `turnover-protocol`
-  skill before creating or changing any message type. If a task seems to require
-  sending hidden state, STOP — that is a spec bug.
-- **Tuning values** come from prd §7 only. Changing one is a recorded decision
-  in `.specs/STATE.md` (AD-NNN), never an incidental edit.
-- **Hidden information is the product.** Roles, saboteur identity, grace state,
-  room interiors — absent from every client-bound payload and every debug
-  surface. Production builds ship no `window.__TURNOVER__`.
-- **Blast radius:** local commits only unless the user explicitly approves
-  push/deploy/force operations.
+- `pnpm test:sim` runs vitest over ALL workspace projects (`packages/*` and `apps/*`), including server transport-shell tests — not just `packages/sim`. Project names/order in `vitest.config.ts` are the CI contract; keep them stable.
+- Run one suite with `pnpm vitest run <path-or-pattern>` (e.g. `pnpm vitest run packages/sim/src/movement.test.ts`).
+- Gate 3 needs a one-time `pnpm exec playwright install --with-deps chromium` per machine before `pnpm test:client` works. The harness boots the real server + client in headless Chromium with `TURNOVER_TEST_SHIFT_SECONDS=8` so rounds finish in seconds — don't be surprised the in-game clock differs from the 300 s prd shift.
+- Lint is Biome (`pnpm lint` = `biome check .`), not ESLint/Prettier. Fix with `pnpm exec biome check --write .`.
 
-## Agent skills
+## Hard constraints
 
-### Issue tracker
+- Message-only protocol: the server never sends hidden state or anything a player cannot legitimately know. If a task requires transmitting hidden info, stop and treat it as a spec bug.
+- Tuning values come from [prd.md](prd.md) section 7 only. Any change needs a recorded decision in `.specs/STATE.md`.
+- Hidden information is the product: roles, saboteur identity, grace state, room interiors, and debug surfaces must not leak into client-bound payloads.
+- Production builds must not ship browser debug hooks like `window.__TURNOVER__`.
+- Keep the change local unless the user explicitly asks for push/deploy/force operations.
 
-Issues are tracked as GitHub issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+## Dev workflow
 
-### Domain docs
+- `pnpm boot` starts the server (:2567) + Vite client (:5173), waits for both, and kills stale port owners first; override with `PORT`/`CLIENT_PORT`. One Fastify process hosts both static client and the Colyseus endpoint (`noServer` transport + `attachToServer`) — never run a separate server port.
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+## Project conventions
+
+- Use the domain vocabulary from [CONTEXT.md](CONTEXT.md); avoid drift to synonyms the repo explicitly rejects.
+- For protocol changes, review `.opencode/skills/turnover-protocol/SKILL.md` and the message registry in `packages/shared/src/protocol/` first: every server→client message is declared exactly once (payload type + recipient policy); adding a message means adding a registry entry, not a new switch case.
+- Prefer small, well-scoped edits over broad refactors. This repo already documents the intended architecture in [roadmap.md](roadmap.md) and [docs/agents/domain.md](docs/agents/domain.md).
+
+## Helpful references
+
+- Repo-local `.opencode/skills/turnover-*`: [turnover-gates](.opencode/skills/turnover-gates/SKILL.md) (gate ladder + evidence), [turnover-protocol](.opencode/skills/turnover-protocol/SKILL.md) (leak rules), [turnover-sim-harness](.opencode/skills/turnover-sim-harness/SKILL.md) (Gate 2 scenario format), [turnover-client-harness](.opencode/skills/turnover-client-harness/SKILL.md) (Gate 3 + `window.__TURNOVER__` hook contract).
+- [docs/agents/domain.md](docs/agents/domain.md): how to consume repo domain docs while exploring.
+- [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md): issue workflow (`gh` CLI).
+- [.specs/STATE.md](.specs/STATE.md): recorded architecture decisions (AD-001+). Read the ADs touching your area before changing room/sim/protocol seams.
+- [package.json](package.json): root scripts and toolchain.
+
+When in doubt, follow the repo’s locked product contract rather than intuition: hidden state, message policy, and gate-based verification are the primary guardrails here.
