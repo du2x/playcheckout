@@ -2697,36 +2697,16 @@ describe('server:guest_flow', () => {
 // error message, no event. Guest traffic rides the AD-028 scale seam so a
 // guest is queued within a few driven ticks.
 describe('server:suitcase_carry', () => {
-  it('check-in over the wire: the receiver hears the assignment once, a player beyond desk earshot never does (SUI-01/03/04)', async () => {
+  it('check-in over the wire: EVERY page receives the building-wide assignment notice once (SUI-01/03/04, AD-034)', async () => {
     process.env.TURNOVER_TEST_GUEST_SCALE = '0.05'
     try {
       const [host, a, b, c] = await roomWithFour()
       const collectors = [host, a, b, c].map((r) => collectAll(r))
       const instance = TurnoverRoom.instances.at(-1)
       if (instance === undefined) throw new Error('no room instance')
-      // Stage `a` beyond desk earshot (x 23 is 8 tiles from the desk) PRE-ROUND
-      // (movement is phase-free, AD-005/AD-015) — the earshot set is sampled
-      // at the check-in tick, and the walk must not eat into the guest cadence.
-      for (let i = 0; i < 12; i += 1) {
-        const debug = instance.__movementDebug() as {
-          positions: { playerId: string; x: number }[]
-        }
-        const own = debug.positions.find((p) => p.playerId === a.sessionId)
-        if (own === undefined) break
-        if (own.x >= TUNING.DESK_X_TILES + TUNING.DESK_EARSHOT_TILES + 0.5) break
-        a.send('move:start', { type: 'move:start', dir: 'right' })
-        await new Promise((r) => setTimeout(r, 60))
-        instance.__driveTicks(4)
-        a.send('move:stop', { type: 'move:stop' })
-        await new Promise((r) => setTimeout(r, 60))
-      }
       host.send('lobby:start', { type: 'lobby:start' })
       await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
       instance.__driveTicks(1)
-      const aX = (
-        instance.__movementDebug() as { positions: { playerId: string; x: number }[] }
-      ).positions.find((p) => p.playerId === a.sessionId)?.x
-      expect(aX).toBeGreaterThan(TUNING.DESK_X_TILES + TUNING.DESK_EARSHOT_TILES)
       // Deterministic staging: the scaled cadence is 24 ticks — exactly ONE
       // guest is queued now, no ambient traffic self-assigns mid-flow.
       instance.__driveTicks(24)
@@ -2736,22 +2716,19 @@ describe('server:suitcase_carry', () => {
       host.send('desk:interact', { type: 'desk:interact' })
       await new Promise((r) => setTimeout(r, 150))
       instance.__driveTicks(1)
-      const hostCollector = collectors[0]
-      const aCollector = collectors[1]
-      if (hostCollector === undefined || aCollector === undefined) {
-        throw new Error('missing collector')
+      // AD-034: the assignment is a building-wide notice — ALL four pages
+      // (near, far, and any phase) receive guest:assigned with the room named
+      // (waitFor consumes its match; the exactly-once count lives in the sim
+      // suites, sim:assignment_announce).
+      for (const collector of collectors) {
+        if (collector === undefined) throw new Error('missing collector')
+        const assigned = await collector.waitFor('guest:assigned')
+        expect(Object.keys(assigned.payload).sort()).toEqual(['floor', 'guestId', 'room'])
       }
-      // The receiver hears the assignment exactly once — and the payload
-      // names the room (it is their legitimate knowledge now).
-      const overheard = await hostCollector.waitFor('assignment:overheard')
-      expect(Object.keys(overheard.payload).sort()).toEqual(['floor', 'guestId', 'room'])
       // `suitcase:carried` is an 'all' lifecycle fact — everyone gets it.
+      const aCollector = collectors[1]
+      if (aCollector === undefined) throw new Error('missing collector')
       await aCollector.waitFor('suitcase:carried')
-      // The far player NEVER receives the assignment: drive a while, then
-      // assert their collector holds no overheard row at all.
-      instance.__driveTicks(50)
-      await new Promise((r) => setTimeout(r, 150))
-      expect(aCollector.types()).not.toContain('assignment:overheard')
       for (const collector of collectors) collector.stop()
       host.leave()
       a.leave()
@@ -2799,7 +2776,7 @@ describe('server:suitcase_carry', () => {
       host.send('suitcase:pickup', { type: 'suitcase:pickup' })
       await new Promise((r) => setTimeout(r, 150))
       instance.__driveTicks(2)
-      expect(collector.types()).not.toContain('assignment:overheard')
+      expect(collector.types()).not.toContain('guest:assigned')
       expect(collector.types()).not.toContain('suitcase:carried')
       expect(collector.types()).not.toContain('suitcase:placed')
       expect(collector.types()).not.toContain('error')

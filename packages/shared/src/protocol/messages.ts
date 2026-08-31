@@ -182,13 +182,13 @@ export interface GuestLeft {
 }
 
 /**
- * server → the desk-earshot set ONLY (cycle 3.B, AD-032). The guest's room
- * assignment — server truth seeded at check-in — delivered exactly once at
- * the check-in tick to the receiver and staff within DESK_EARSHOT_TILES of
- * the desk. Never repeated, never logged; overhearing is the only
- * pre-placement assignment source (FR-27 v1.4, message-only via position).
+ * server → all players (cycle 3.B, AD-032; amended AD-034). The guest's room
+ * assignment — server truth seeded at check-in — announced BUILDING-WIDE at
+ * the check-in tick (walkie line "a guest announces: I'm in F:R"). Announced
+ * exactly once per guest; the saboteur learns it for free (AD-034(e)) — the
+ * contested gameplay is physical interception of the suitcase.
  */
-export interface AssignmentOverheard {
+export interface GuestAssigned {
   readonly guestId: string
   readonly floor: GuestFloorId
   readonly room: RoomIndex

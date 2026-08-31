@@ -75,10 +75,11 @@ export type ViewAction =
   | { type: 'guest-settled'; guestId: string; floor: FloorId; room: number }
   | { type: 'guest-checked-out'; guestId: string; floor: FloorId; room: number }
   | { type: 'guest-left'; guestId: string }
-  // Suitcase transport (cycle 3.B): scene-kind actions. The assignment rides
-  // the deskEarshot policy — receiving it IS the local player's own knowledge;
-  // no payload here is ever redistributed to another surface pre-settle.
-  | { type: 'assignment-overheard'; guestId: string; floor: FloorId; room: RoomIndex }
+  // Suitcase transport (cycle 3.B; amended AD-034): scene-kind actions. The
+  // assignment is a building-wide notice ('all' policy) — every client hears
+  // it and the WorldScene renders the announce line; no payload here is ever
+  // redistributed to another surface pre-settle.
+  | { type: 'guest-assigned'; guestId: string; floor: FloorId; room: RoomIndex }
   | { type: 'suitcase-carried'; guestId: string; carrierId: string }
   | { type: 'suitcase-placed'; guestId: string; floor: FloorId; room: RoomIndex }
   | { type: 'suitcase-picked-up'; guestId: string; carrierId: string }
@@ -205,7 +206,7 @@ export const ACTION_ROUTES = {
   'guest-settled': 'scene',
   'guest-checked-out': 'scene',
   'guest-left': 'scene',
-  'assignment-overheard': 'scene',
+  'guest-assigned': 'scene',
   'suitcase-carried': 'scene',
   'suitcase-placed': 'scene',
   'suitcase-picked-up': 'scene',
@@ -348,7 +349,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'guest-settled':
     case 'guest-checked-out':
     case 'guest-left':
-    case 'assignment-overheard':
+    case 'guest-assigned':
     case 'suitcase-carried':
     case 'suitcase-placed':
     case 'suitcase-picked-up':

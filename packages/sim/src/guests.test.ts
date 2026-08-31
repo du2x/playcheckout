@@ -277,10 +277,10 @@ describe('sim:suitcase_carry', () => {
     run(movement, guests, CADENCE_5P + 1) // guest:1 queued at the desk
     expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
     const flushed = flush(movement, guests, CADENCE_5P + 2)
-    const overheard = of(flushed, 'assignment:overheard')
+    const overheard = of(flushed, 'guest:assigned')
     expect(overheard).toHaveLength(1)
     const o = overheard[0]
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     expect(o.guestId).toBe('guest:1')
     expect(GUEST_FLOOR_IDS).toContain(o.floor)
     expect(of(flushed, 'suitcase:carried')).toEqual([
@@ -296,8 +296,8 @@ describe('sim:suitcase_carry', () => {
     run(movement, guests, CADENCE_5P + 1)
     guests.checkIn('p1', CADENCE_5P + 1)
     const flushed = flush(movement, guests, CADENCE_5P + 2)
-    const o = of(flushed, 'assignment:overheard')[0]
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    const o = of(flushed, 'guest:assigned')[0]
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     // White-box: exactly the assigned room is reserved (the self-assign and
     // later check-in rolls cannot pick it — spec assumption).
     const reserved = (guests as unknown as { reserved: Set<string> }).reserved
@@ -395,7 +395,7 @@ describe('sim:suitcase_carry', () => {
 })
 
 describe('sim:suitcase_carry (selection)', () => {
-  it('check-in takes the FRONT guest: the overheard assignment names guest:1 while guest:2 stays queued (front-selection pin)', () => {
+  it('check-in takes the FRONT guest: the announced assignment names guest:1 while guest:2 stays queued (front-selection pin)', () => {
     const movement = new MovementSim()
     const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
       impatienceTicks: 100000,
@@ -403,8 +403,8 @@ describe('sim:suitcase_carry (selection)', () => {
     run(movement, guests, CADENCE_5P * 2 + 1) // guest:1 front, guest:2 behind
     expect(guests.checkIn('p1', CADENCE_5P * 2 + 1)).toBe('accepted')
     const flushed = flush(movement, guests, CADENCE_5P * 2 + 2)
-    const o = of(flushed, 'assignment:overheard')[0]
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    const o = of(flushed, 'guest:assigned')[0]
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     // Receiving queue[length-1] (the M1 mutation shape) would name guest:2.
     expect(o.guestId).toBe('guest:1')
     // The checked-in guest LEFT the queue: the rest shifts forward into their
@@ -415,8 +415,8 @@ describe('sim:suitcase_carry (selection)', () => {
   })
 })
 
-describe('sim:assignment_overhear', () => {
-  it('the assignment is overheard EXACTLY ONCE — never repeated, never logged, through carries and rests (SUI-03)', () => {
+describe('sim:assignment_announce', () => {
+  it('the assignment is announced EXACTLY ONCE — never repeated, through carries and rests (SUI-03)', () => {
     const { movement, guests } = deskScenario()
     run(movement, guests, CADENCE_5P + 1)
     // EVERY flush from check-in onward lands in the stream — the count below
@@ -438,10 +438,10 @@ describe('sim:assignment_overhear', () => {
     stream.push(...flush(movement, guests, t++))
     // Run a while longer — still exactly one overhear in the WHOLE stream.
     for (; t < CADENCE_5P + 210; t++) stream.push(...flush(movement, guests, t))
-    const overheard = of(stream, 'assignment:overheard')
+    const overheard = of(stream, 'guest:assigned')
     expect(overheard).toHaveLength(1)
     const o = overheard[0]
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     expect(o.guestId).toBe('guest:1')
   })
 })
@@ -452,8 +452,8 @@ describe('sim:wrong_delivery', () => {
     run(movement, guests, CADENCE_5P + 1)
     expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
     const flushed = flush(movement, guests, CADENCE_5P + 2)
-    const o = of(flushed, 'assignment:overheard')[0]
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    const o = of(flushed, 'guest:assigned')[0]
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     const assignment = { floor: o.floor, room: o.room }
     // Place at a WRONG room on the assignment's floor (index shifted by one,
     // wrapping 8 → 1 — guaranteed different from the assignment).
@@ -501,8 +501,8 @@ describe('sim:suitcase_carry (door-waiting)', () => {
     expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
     let t = CADENCE_5P + 2
     const stream = flush(movement, guests, t++)
-    const o = stream.find((e) => e.type === 'assignment:overheard')
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    const o = stream.find((e) => e.type === 'guest:assigned')
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     // Place at the assignment's door, let the guest commit to the walk, then
     // pick the suitcase back up MID-WALK.
     movement.join('p1', { floor: o.floor, xMilli: roomDoorXMilli(o.room) })
@@ -591,8 +591,8 @@ describe('sim:lifecycle_log (walkie feed sim half)', () => {
     expect(lifecycle.checkIn('q1', t2)).toBe('accepted')
     t2 += 1
     stream.push(...flush(movement, lifecycle, t2))
-    const first = stream.find((e) => e.type === 'assignment:overheard')
-    if (first === undefined || first.type !== 'assignment:overheard') {
+    const first = stream.find((e) => e.type === 'guest:assigned')
+    if (first === undefined || first.type !== 'guest:assigned') {
       throw new Error('missing overheard')
     }
     movement.join('q1', { floor: first.floor, xMilli: roomDoorXMilli(first.room) })

@@ -141,7 +141,7 @@ describe('protocol registry', () => {
     'guest:settled': 'all',
     'guest:checked_out': 'all',
     'guest:left': 'all',
-    'assignment:overheard': 'deskEarshot',
+    'guest:assigned': 'all',
     'suitcase:carried': 'all',
     'suitcase:placed': 'sameFloor',
     'suitcase:picked_up': 'all',
@@ -186,7 +186,7 @@ describe('protocol registry', () => {
   it('declares a valid recipient policy on every entry (REG-19)', () => {
     for (const [key, entry] of Object.entries(PROTOCOL_REGISTRY)) {
       expect(
-        ['all', 'self', 'sameFloor', 'occupants', 'riders', 'earshot', 'deskEarshot'],
+        ['all', 'self', 'sameFloor', 'occupants', 'riders', 'earshot'],
         `policy of ${key}`,
       ).toContain(entry.recipients)
     }

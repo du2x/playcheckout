@@ -130,9 +130,8 @@ export class WorldScene extends Phaser.Scene {
    *  carried rides the carrier, rest pins the doorway (never a Sprite —
    *  scene-children contract). */
   private suitcaseViews = new Map<string, Phaser.GameObjects.Rectangle>()
-  /** The blind-place confirm (SUI-26) + the owned-assignment hint (SUI-27). */
-  private placeConfirm: HTMLElement | null = null
-  private placeConfirmRoom: RoomIndex | null = null
+  /** The blind-place confirm is REMOVED (AD-034) — kept only the
+   *  owned-assignment hint (SUI-27, convenience surface). */
   private assignmentHint: HTMLElement | null = null
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
@@ -156,9 +155,10 @@ export class WorldScene extends Phaser.Scene {
   /** The desk-bell DOM line (GUEST-13) — visible while an impatient guest
    *  queues on the viewed floor. */
   private deskBell: HTMLElement | null = null
-  /** The local player's own overheard assignments (cycle 3.B, SUI-26/27):
-   *  player-local knowledge fed only by `assignment:overheard` — the
-   *  deskEarshot policy already filtered delivery. Never redistributed. */
+  /** Assignments announced building-wide (cycle 3.B, SUI-27; amended
+   *  AD-034): every client receives `guest:assigned` — the announce line
+   *  renders for all, and this map feeds the owned-marker hint
+   *  (convenience surface only). Never redistributed. */
   private heardAssignments = new Map<string, { floor: FloorId; room: RoomIndex }>()
   /** Suitcase state per checked-in guest (cycle 3.B, SUI-24): carried rides
    *  the carrier's position stream; rest pins the doorway marker. */
@@ -644,12 +644,14 @@ export class WorldScene extends Phaser.Scene {
         }
         break
       }
-      case 'assignment-overheard':
-        // SUI-03/04: the deskEarshot policy filtered the wire — receiving this
-        // action IS the local player's own knowledge. Stored for the
-        // owned-marker surface and the blind-place confirm (T5 slice).
+      case 'guest-assigned': {
+        // SUI-03/04 (amended AD-034): the assignment is a building-wide
+        // notice — every client hears it. Render the announce walkie line
+        // and store it for the owned-marker hint.
         this.heardAssignments.set(action.guestId, { floor: action.floor, room: action.room })
+        this.appendWalkieLine(`a guest announces: I'm in ${action.floor}:${action.room}`)
         break
+      }
       case 'suitcase-carried': {
         // SUI-24: carried — the marker rides the carrier's position stream.
         this.suitcases.set(action.guestId, { carrierId: action.carrierId, rest: null })
@@ -864,21 +866,6 @@ export class WorldScene extends Phaser.Scene {
     return null
   }
 
-  /** SUI-26: the one-step confirm for placing at a room whose assignment the
-   *  local player never overheard — own-knowledge only, one click, not a
-   *  refusal. */
-  private openPlaceConfirm(room: RoomIndex): void {
-    this.placeConfirmRoom = room
-    if (this.placeConfirm !== null) this.placeConfirm.style.visibility = 'visible'
-  }
-
-  private closePlaceConfirm(send: boolean): void {
-    const room = this.placeConfirmRoom
-    this.placeConfirmRoom = null
-    if (this.placeConfirm !== null) this.placeConfirm.style.visibility = 'hidden'
-    if (send && room !== null) this.sendSuitcasePlace(room)
-  }
-
   private beginAccuseHold(): void {
     if (this.selfFired || this.accuseHoldTimer !== null) return
     // SUI-25 ladder: desk receive → place (carrying, at a door) → pickup
@@ -893,13 +880,9 @@ export class WorldScene extends Phaser.Scene {
     if (carried !== null) {
       const door = this.ownDoorRoom()
       if (door !== null) {
-        // SUI-26: confident only for a guest whose assignment we overheard;
-        // otherwise the one-step confirm gates the gamble.
-        if (this.heardAssignments.has(carried)) {
-          this.sendSuitcasePlace(door)
-        } else {
-          this.openPlaceConfirm(door)
-        }
+        // AD-034: assignments are building-wide — a carrier at a door always
+        // places directly (the blind-place confirm was removed with it).
+        this.sendSuitcasePlace(door)
         return
       }
     } else if (this.ownNearRestingSuitcase() !== null) {
@@ -1021,32 +1004,6 @@ export class WorldScene extends Phaser.Scene {
     log.style.borderRadius = '4px'
     gameEl.appendChild(log)
     this.walkieLog = log
-
-    const confirm = document.createElement('div')
-    confirm.id = 'place-confirm'
-    confirm.style.position = 'absolute'
-    confirm.style.left = '50%'
-    confirm.style.top = '40px'
-    confirm.style.transform = 'translateX(-50%)'
-    confirm.style.padding = '8px'
-    confirm.style.fontSize = '14px'
-    confirm.style.background = '#3a3a52'
-    confirm.style.color = '#ffe9a8'
-    confirm.style.borderRadius = '4px'
-    confirm.style.visibility = 'hidden'
-    confirm.textContent = "You haven't heard this guest's room"
-    const yes = document.createElement('button')
-    yes.id = 'place-confirm-yes'
-    yes.textContent = 'place anyway'
-    yes.addEventListener('click', () => this.closePlaceConfirm(true))
-    const no = document.createElement('button')
-    no.id = 'place-confirm-no'
-    no.textContent = 'cancel'
-    no.addEventListener('click', () => this.closePlaceConfirm(false))
-    confirm.appendChild(yes)
-    confirm.appendChild(no)
-    gameEl.appendChild(confirm)
-    this.placeConfirm = confirm
 
     const assignment = document.createElement('div')
     assignment.id = 'suitcase-assignment'

@@ -98,10 +98,12 @@ export type SimEvent =
     }
   | { readonly type: 'guest:left'; readonly guestId: string }
 
-  // --- Suitcase transport (cycle 3.B, AD-032): check-in hands the guest's
-  // suitcase to the receiver. The assignment rides the deskEarshot policy
-  // exactly ONCE (receiver + desk-earshot staff at the check-in tick) and
-  // nowhere else on the wire — overhearing is the only pre-placement source.
+  // --- Suitcase transport (cycle 3.B, AD-032; amended AD-034): check-in
+  // hands the guest's suitcase to the receiver. The assignment is a
+  // BUILDING-WIDE NOTICE (AD-034) — announced to ALL players at the check-in
+  // tick ('all' policy; walkie line "a guest announces: I'm in F:R"); the
+  // desk-earshot model is gone and the saboteur learns the assignment for
+  // free — the contested gameplay is physical interception of the suitcase.
   // pickup/carried are 'all' lifecycle facts (the walkie log renders them
   // building-wide); placement is sameFloor and SILENT — no walkie line ever
   // fires for it (FR-27 v1.4). guest:complained is the wrong-delivery door
@@ -111,7 +113,7 @@ export type SimEvent =
   // can author a walkie line, and the walk is no longer commanded at the
   // desk: the suitcase's resting room is the only ground truth.
   | {
-      readonly type: 'assignment:overheard'
+      readonly type: 'guest:assigned'
       readonly guestId: string
       readonly floor: GuestFloorId
       readonly room: RoomIndex

@@ -457,7 +457,7 @@ function runToArrival(
 }
 
 describe('sim:suitcase_carry (round integration)', () => {
-  it('check-in through the round sim flushes the assignment overhear + carried next tick (SUI-01/03)', () => {
+  it('check-in through the round sim flushes the assignment notice + carried next tick (SUI-01/03)', () => {
     const movement = new MovementSim()
     const sim = new RoundSim({
       seed: 7,
@@ -468,11 +468,11 @@ describe('sim:suitcase_carry (round integration)', () => {
     const positions = lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 })
     const t = runToArrival(movement, sim, positions)
     expect(sim.deskInteract('p1')).toBe('accepted')
-    // MOVE-10 announce pattern: the overheard assignment + handoff flush next.
+    // MOVE-10 announce pattern: the assignment notice + handoff flush next.
     const flushed = sim.tick(positions)
-    const overheard = flushed.find((e) => e.type === 'assignment:overheard')
-    if (overheard === undefined || overheard.type !== 'assignment:overheard') {
-      throw new Error('missing assignment:overheard')
+    const overheard = flushed.find((e) => e.type === 'guest:assigned')
+    if (overheard === undefined || overheard.type !== 'guest:assigned') {
+      throw new Error('missing guest:assigned')
     }
     expect(overheard.guestId).toBe('guest:1')
     expect(flushed).toContainEqual({
@@ -585,8 +585,8 @@ describe('sim:suitcase_carry (round integration — SUI-11/16/20 sub-clauses)', 
     // Read the assignment, trash that room via the saboteur-shaped path
     // (white-box: WorkChannels state), then deliver the suitcase there.
     const flushed = sim.tick(positions)
-    const o = flushed.find((e) => e.type === 'assignment:overheard')
-    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    const o = flushed.find((e) => e.type === 'guest:assigned')
+    if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
     ;(
       sim as unknown as {
         work: { stateOf: (f: GuestFloorId, r: number) => string; trashRoom?: unknown }

@@ -989,23 +989,27 @@
   harness spec, spec/CONTEXT/roadmap amendments. Implementation checklist:
   `.specs/features/suitcase-transport/HANDOFF.md`.
 - **Date**: 2026-08-31
-- **Status**: decided — pending implementation (next session).
+- **Status**: active — implemented 2026-08-31 (registry-first rename,
+  `deskEarshot` policy + `DESK_EARSHOT_TILES` + `EventVisibility.x` deleted,
+  blind-place confirm removed, announce walkie line rendered on every page;
+  harness SUI-23 close-out: discriminating last-5 assertion driven by wire
+  event volume at `TURNOVER_TEST_GUEST_SCALE=0.2`; gates typecheck/lint/
+  test:sim 385/`client:suitcase` 2× green).
 
 ## Handoff
-- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — PAUSED
-  mid-close-out. All six tasks implemented and committed
-  (`ad0341e`…`cccd67c`); Verifier iteration 2 = FAIL on ONE minor gap
-  (SUI-23 last-5 assertion non-discriminating). The user then issued
-  **AD-034** (assignment = building-wide notice; blind-place confirm
-  removed; suitcase rests in front of the door; restaurant stays in 3.C).
-- **Phase / Task**: Execute → rework per AD-034, then Verifier iteration 3.
-- **Next step**: implement the AD-034 checklist in
-  `.specs/features/suitcase-transport/HANDOFF.md` (file-by-file, includes the
-  SUI-23 discriminating fix and the verification ladder), then dispatch the
-  fresh Verifier and run `validate_state.py suitcase-transport`.
+- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — CLOSE-OUT
+  rework landed. All six tasks + the AD-034 rework implemented; Verifier
+  iteration 2's single gap (SUI-23 non-discriminating) closed with a
+  wire-event-volume-driven last-5 assertion at `TURNOVER_TEST_GUEST_SCALE=0.2`
+  (test 3 deleted with SUI-26). Next: Verifier iteration 3.
+- **Phase / Task**: Execute → Validate (Verifier iteration 3).
+- **Next step**: dispatch the fresh Verifier sub-agent (iteration 3) with the
+  `tlc-spec-driven` skill's `references/validate.md`, then
+  `python3 <skill-dir>/scripts/validate_state.py suitcase-transport` must
+  exit 0.
 - **Gates at pause**: typecheck 4/4 ✅ · lint ✅ · test:sim 385 ✅ ·
-  `client:suitcase` 3/3 green (scale 0.5) · leak audit clean ·
-  flake class (justice/lobby/round/spectator, REG-18) reproduced on pre-3.B
-  `131af9e` — pre-existing.
+  `client:suitcase` 2/2 green ×2 consecutive (scale 0.2) · leak audit
+  pending iteration 3 · flake class (justice/lobby/round/spectator, REG-18)
+  pre-existing (reproduced on `131af9e`).
 - **Blockers**: none.
 - **Branch**: master

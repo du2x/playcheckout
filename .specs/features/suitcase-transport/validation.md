@@ -199,3 +199,68 @@ The spec's Success Criteria checkboxes remain **untouched** (verdict is not PASS
 **What works**: every iteration-1 gap except the SUI-23 assertion strength; the overhear "exactly once" invariant is now mutant-proven; the earshot policy is mutant-proven from both sides (delivery set and range); the snapshot wiring is leak-safe.
 
 **Next steps**: route gap 1 to an implementer; re-verify iteration 3 by re-injecting mutation E only.
+
+---
+
+# Implementer close-out (2026-08-31, post-iteration-2) — AD-034 rework + SUI-23 fix
+
+## AD-034 rework (building-wide assignment notice; confirm removed)
+
+- `assignment:overheard` → `guest:assigned` (`GuestAssigned`), registry row
+  `recipients: 'all'`; `deskEarshot` policy value, `EventVisibility.x`, the
+  router dispatch branch, and `TUNING.DESK_EARSHOT_TILES` are DELETED.
+  Registry-first: the rename forced mappers/state/scene/tests in the same
+  changeset (compile-exhaustive).
+- Sim: `GuestSim.checkIn` emits `guest:assigned` (same payload shape, same
+  exactly-once semantics — `sim:assignment_announce` suite unchanged in
+  assertion strength, rename only).
+- Server: `router.test.ts` deskEarshot describe replaced by an all-policy
+  test (lobby viewer + guest-floor viewer + rider + spectator ALL receive);
+  `TurnoverRoom.test.ts` `server:suitcase_carry` now asserts `guest:assigned`
+  with the room named on ALL FOUR pages (the pre-walk staging is gone — the
+  earshot predicate no longer exists).
+- Client: mapper/state action `guest-assigned` (scene-routed); WorldScene
+  renders the announce walkie line `a guest announces: I'm in F:R` on every
+  page; the blind-place confirm (`#place-confirm`, `openPlaceConfirm`,
+  `closePlaceConfirm`, the E-ladder confirm branch) is REMOVED — a carrier
+  at a door places directly. The owned marker hint stays (SUI-27
+  convenience surface).
+- Harness: test 3 (SUI-26 confirm) DELETED; test 1 asserts the announce
+  line on all pages; test 2 drops the `#place-confirm` probe.
+- Docs: spec.md SUI-03/04 amended building-wide, SUI-26 dropped, SUI-27
+  rewritten, SUI-24 pins "rests in front of the door"; assumptions table +
+  §7 deltas + edge cases + traceability updated; CONTEXT.md earshot entry →
+  "Room notice (assignment)"; roadmap.md 3.B row amended;
+  STATE.md AD-034 → active.
+
+## SUI-23 close-out (the iteration-2 surviving mutant)
+
+The last-5 assertion is now volume-driven and discriminating: the harness
+counts walkie-producing events on the wire (`guest:arrived/settled/
+checked_out`, `guest:assigned`, `suitcase:carried/picked_up`,
+`guest:complained`), takes a baseline right after ada's takes line, waits
+until **five MORE** lifecycle events have flowed (the 5-slot DOM log must
+have evicted it), then asserts `count === 5` AND the early
+`«ada» takes a guest's suitcase` line is gone AND newer lifecycle lines
+remain. Volume comes from `TURNOVER_TEST_GUEST_SCALE=0.2` (harness webServer,
+AD-028 seam — arrivals ≈ every 6 s plus self-assign settles), which
+reachable because the confirm test's choreography (its flake carrier) was
+deleted by AD-034. Removing the trim (`while (false && …)`) leaves 7+
+concurrent lines → `count === 5` fails; the mutant can no longer survive.
+
+**Gate evidence (real tree, post-rework):**
+
+- `pnpm typecheck` 4/4 ✅ · `pnpm lint` (biome) ✅
+- `pnpm test:sim` ✅ 385/385 (23 files)
+- `pnpm test:client suitcase` ✅ 2/2, two consecutive runs (23.3+17.2 s;
+  21.5+18.6 s) at scale 0.2
+- `pnpm test:client` full: 32 passed / 4 failed — the known rotating flake
+  class (art-doors, justice, lobby, round). **Isolation evidence this
+  session**: the 4 failing specs re-run alone pass (16/16 → 2 rotate out);
+  `justice` failed 3× in a row — and ALSO fails on a clean worktree at the
+  pre-rework HEAD (`d242c72`) at scale 0.5 (worktree `/tmp/opencode/co-head`,
+  removed after). The flake class is pre-existing and environment-shaped
+  (30 s shift vs choreography under load), not introduced by this rework.
+  Documented, not chased, per the handoff.
+
+Verifier iteration 3: dispatched as a fresh sub-agent.

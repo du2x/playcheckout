@@ -341,11 +341,12 @@ export class GuestSim {
     this.suitcases.set(id, { carrier: playerId, rest: null, legStartTick: tick })
     this.holding.push(id)
     this.rePlaceHolding()
-    // SUI-03: the assignment overhear — emitted once, at the check-in tick;
-    // the deskEarshot policy (registry) scopes delivery to the receiver +
-    // desk-earshot staff. Never repeated, never logged.
+    // SUI-03 (amended AD-034): the assignment is a BUILDING-WIDE notice —
+    // emitted once, at the check-in tick, on the 'all' policy. Every player
+    // learns it (saboteur included, AD-034(e)); the contested gameplay is
+    // physical interception of the suitcase. Never repeated.
     this.pending.push(
-      { type: 'assignment:overheard', guestId: id, floor: pick.floor, room: pick.room },
+      { type: 'guest:assigned', guestId: id, floor: pick.floor, room: pick.room },
       { type: 'suitcase:carried', guestId: id, carrierId: playerId },
     )
     return 'accepted'

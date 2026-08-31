@@ -26,10 +26,10 @@ export const MAPPERS: {
   'guest:settled': (p) => [{ type: 'guest-settled', ...p }],
   'guest:checked_out': (p) => [{ type: 'guest-checked-out', ...p }],
   'guest:left': (p) => [{ type: 'guest-left', ...p }],
-  // Suitcase transport (cycle 3.B): scene-kind actions — the assignment is
-  // player-local knowledge (the deskEarshot policy filtered delivery), the
-  // suitcase states drive the markers, the complaint is the lifecycle cue.
-  'assignment:overheard': (p) => [{ type: 'assignment-overheard', ...p }],
+  // Suitcase transport (cycle 3.B; amended AD-034): scene-kind actions —
+  // the assignment is a building-wide notice ('all' policy), the suitcase
+  // states drive the markers, the complaint is the lifecycle cue.
+  'guest:assigned': (p) => [{ type: 'guest-assigned', ...p }],
   'suitcase:carried': (p) => [{ type: 'suitcase-carried', ...p }],
   'suitcase:placed': (p) => [{ type: 'suitcase-placed', ...p }],
   'suitcase:picked_up': (p) => [{ type: 'suitcase-picked-up', ...p }],

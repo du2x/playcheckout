@@ -45,13 +45,13 @@ firing, ghosting, disconnect). One suitcase per player; carrying is
 hands-full.
 _Avoid_: holder, bearer, courier
 
-**Earshot (desk)**:
-The check-in-tick snapshot set for a guest's room assignment: the receiver plus
-every live lobby-floor player within `DESK_EARSHOT_TILES` of the desk. The
-assignment is transmitted exactly once, to exactly that set — never repeated,
-never logged. The `deskEarshot` recipient policy encodes it; spectators are
-deliberately excluded.
-_Avoid_: overhear radius, hearing range, broadcast range
+**Room notice (assignment)**:
+The building-wide announcement of a guest's room assignment at the check-in
+tick (AD-034): every connected player receives `guest:assigned` exactly once
+and the walkie renders "a guest announces: I'm in F:R". There is no earshot —
+the saboteur learns the assignment for free; the contested gameplay is
+physical interception of the suitcase, not information.
+_Avoid_: earshot, overhear radius, hearing range, desk-earshot
 
 **Holding area**:
 The lobby-lane stub east of the desk where checked-in guests wait (3.B) until

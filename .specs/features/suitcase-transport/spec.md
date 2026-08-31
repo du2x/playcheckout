@@ -6,11 +6,12 @@ Cycle 3.2 made the desk a two-choice lie machine: the holder picks a silent
 destination and a broadcast claim. Grilling (AD-032, prd v1.4) rejected the
 model — it parks one staff member at the desk and gives the lie no
 verification surface. The suitcase redesign makes the receiver a mobile
-**carrier**, the assignment a **contested overhear** (verification and
-sabotage intel in one), and the suitcase a **re-grabbable physical object**
-whose last resting room is the ground truth the guest walks to. The walkie
-becomes the building's automatic, lie-free lifecycle log; the announce lie is
-deleted with its framing surface.
+**carrier**, the assignment a server-seeded fact announced **building-wide**
+at the check-in tick (AD-034 amendment — the contested gameplay is physical
+interception of the suitcase, not information), and the suitcase a
+**re-grabbable physical object** whose last resting room is the ground truth
+the guest walks to. The walkie becomes the building's automatic, lie-free
+lifecycle log; the announce lie is deleted with its framing surface.
 
 ## Goals
 
@@ -24,8 +25,8 @@ deleted with its framing surface.
       penalty, no entry).
 - [ ] The 60s carry clock (fresh per pickup) fires the current carrier —
       the only personal foul.
-- [ ] The assignment is overhearable exactly once — receiver + desk-earshot
-      staff at the check-in tick — and appears nowhere else on the wire.
+- [ ] The assignment is announced building-wide exactly once — every player
+      at the check-in tick (AD-034) — and never repeated.
 - [ ] The walkie becomes a server-generated truthful lifecycle log;
       `walkie:broadcast` and the desk send flow are deleted.
 
@@ -37,7 +38,7 @@ deleted with its framing surface.
 | Trash discovery inside a room (anger cue, fuzzy desk report, guest leaves) | Cycle 3.3 (FR-29(b) path) — untouched from 3.2's scope note |
 | Mezzanine restaurant floor, `dining` phase, 15–30s dwell | Cycle 3.C — this cycle stubs the wait as a lobby holding area with no timer |
 | Tenancy signs (FR-33), trash provenance (FR-32) | Cycle 3.4 |
-| v1.4 §7 balance gate (interception-pace bot proof) | Cycle 3.5 — carry-clock/earshot dials stay provisional |
+| v1.4 §7 balance gate (interception-pace bot proof) | Cycle 3.5 — carry-clock dials stay provisional |
 | Telemetry, guest-exit bots | Cycle 3.6 |
 | Guest/suitcase art | 3.A workstream / art manifest |
 
@@ -46,7 +47,9 @@ deleted with its framing surface.
 ## §7/AD deltas
 
 From prd §7 v1.4 rows (locked values, provisional pending 3.5):
-`CARRY_CLOCK_SECONDS = 60`, `DESK_EARSHOT_TILES = 3`. Restaurant dwell is 3.C.
+`CARRY_CLOCK_SECONDS = 60`. Restaurant dwell is 3.C. The v1.4
+`DESK_EARSHOT_TILES` row was removed by AD-034 (building-wide notice — no
+earshot dial exists).
 
 New §7-external constants (recorded as AD-033 at design close):
 `ROOM_DOOR_RANGE_TILES = 1` (E place/pickup range of a room door x),
@@ -65,7 +68,7 @@ desk — outside the desk zone), spacing reuses `GUEST_QUEUE_SPACING_TILES = 1`.
 | Carry-clock expiry path | Justice teardown (`player:fired`), then suitcase rests at the desk, guest re-queued to the front, assignment void + reservation released, impatience resumes | Roadmap 3.B row; reuses the fired teardown machinery | y (roadmap) |
 | Receiver already carrying | A player carrying a suitcase cannot check in another guest (one suitcase per player) | "One suitcase per player" is literal | y (roadmap) |
 | Receive while working | A player with an active work channel MAY check in; the channel completes; carrying blocks **starting** work only (FR-9a letter: "cannot start a work channel") | Narrowest reading of FR-9a; no mid-channel teardown | n (assumed) |
-| Earshot membership | Receiver + every live non-spectator player on the lobby floor within `DESK_EARSHOT_TILES` of `DESK_X_TILES` at the check-in tick; spectators excluded; never repeated | The receiver stands within the 1-tile desk zone ⊂ 3-tile earshot, so one policy covers both | n (assumed) |
+| Assignment notice reach | EVERY connected player receives `guest:assigned` at the check-in tick ('all' policy, AD-034); announced exactly once, never repeated | "O aviso é para todos players" — the saboteur learns the assignment for free; interception of the suitcase is the counterplay (user-confirmed consequence) | y (AD-034) |
 | Placement surface | `suitcase:placed {guestId, floor, roomIndex}` — sameFloor policy; **no walkie line, no building-wide event**; cross-floor staff learn a placement only via later lifecycle facts | Proposal "placement is silent" | y (proposal) |
 | Place target validation | Server validates carrier's floor + |x − roomDoorX(room)| ≤ `ROOM_DOOR_RANGE_TILES`; mismatches ignored silently | Mirrors the desk-zone server-side validation pattern | n (assumed) |
 | Pickup selection | No-arg intent; server picks the nearest resting suitcase on the player's floor within `ROOM_DOOR_RANGE_TILES`; ties → lowest guest id (deterministic) | Two resting suitcases at adjacent doors are possible; intent-arrival determinism needs a rule | n (assumed) |
@@ -90,7 +93,7 @@ desk and take their suitcase, so that routing becomes a delivery I perform —
 not a broadcast I dictate.
 
 **Why P1**: The handoff is the cycle's foundation; every other mechanic
-(carrier, earshot, clock, guest-following) hangs off it.
+(carrier, notice, clock, guest-following) hangs off it.
 
 **Acceptance Criteria** (EARS):
 
@@ -102,22 +105,20 @@ not a broadcast I dictate.
    holding area (patient — the impatience clock no longer applies). <!-- event-driven -->
 2. IF the player already carries a suitcase THEN a desk E press SHALL be
    ignored silently. <!-- unwanted-behavior -->
-3. WHEN check-in completes THEN the sim SHALL emit the assignment overhear
-   exactly once — to the receiver and every live non-spectator player on the
-   lobby floor within `DESK_EARSHOT_TILES` of the desk at that tick — never
-   repeated, never logged. <!-- event-driven -->
-4. The system SHALL NOT transmit the assignment to any player outside the
-   check-in-tick earshot set, at any later time, via any surface (message-only
-   rule: hidden by position, not by role). <!-- ubiquitous -->
+3. WHEN check-in completes THEN the sim SHALL emit the assignment notice
+   (`guest:assigned`, 'all' policy — AD-034) exactly once, at the check-in
+   tick, to every connected player — never repeated. <!-- event-driven -->
+4. The system SHALL NOT transmit the assignment at any later time via any
+   surface (announced once at check-in; message-only rule). <!-- ubiquitous -->
 5. The system SHALL NOT derive any outcome from anything but the assignment's
    server truth (there is no claim input left to lie with). <!-- ubiquitous -->
 6. Self-assignment of unchecked guests SHALL remain exactly the 3.1 behavior
    (uniform random vacant room, direct walk, no suitcase). <!-- ubiquitous -->
 
 **Independent Test**: Scripted sim scenario — guest queues, player checks in;
-assert the assignment event's recipient set is exactly the earshot set, a
-second player outside earshot never receives it, and the reservation excludes
-the assigned room from a later self-assign roll (`sim:assignment_overhear`).
+assert the assignment notice reaches every recipient page exactly once, and
+the reservation excludes the assigned room from a later self-assign roll
+(`sim:assignment_announce`).
 
 ---
 
@@ -248,8 +249,8 @@ absence of any placement/broadcast event (`sim:suitcase_carry` extensions).
 ### P2: Client suitcase slice
 
 **User Story**: As a player, I want readable suitcase affordances — markers,
-an E priority ladder, and an honest confirm before a blind placement — so
-that carrying feels physical and gambles are deliberate.
+an E priority ladder, and the building-wide assignment notice — so that
+carrying feels physical and placements are direct (AD-034).
 
 **Why P2**: The interaction matrix is the client-heavy half of the redesign;
 gray-box DOM per the phase rules.
@@ -257,24 +258,29 @@ gray-box DOM per the phase rules.
 **Acceptance Criteria**:
 
 24. The client SHALL render a suitcase marker riding the carrier, or resting
-    at the doorway — sameFloor visibility only. <!-- state-driven -->
+    at the doorway — sameFloor visibility only; a rest position is the room
+    segment center, i.e. IN FRONT OF THE DOOR (AD-034(c) pin). <!-- state-driven -->
 25. The client SHALL resolve E by the priority ladder: desk zone receive →
     elevator call (at a landing, carrying or not) → place (carrying, at a
     room door) → pickup (not carrying, near a resting suitcase) → otherwise
     elevator call / accuse hold; room doors and landings are spatially
-    disjoint so the order only breaks ties. <!-- state-driven -->
-26. WHEN the local player places at a room whose assignment they never
-    overheard THEN the client SHALL show a one-step confirm ("You haven't
-    heard this guest's room") before sending the place intent — the confirm
-    tracks the player's own received overhears, never the assignment itself. <!-- event-driven -->
-27. The client SHALL surface the assignment only to players who received the
-    overhear (e.g. the owned suitcase marker names the room); no other
-    surface SHALL name a suitcase's room before a settle or complaint. <!-- ubiquitous -->
+    disjoint so the order only breaks ties. A carrier at a door ALWAYS places
+    directly — the blind-place confirm was removed with the earshot model
+    (AD-034(b), SUI-26 dropped). <!-- state-driven -->
+26. DROPPED (AD-034): the blind-place confirm cannot trigger once
+    assignments are building-wide — every client has heard every guest's
+    room. <!-- unwanted-behavior -->
+27. The assignment surface is the building-wide announce walkie line ("a
+    guest announces: I'm in F:R") rendered by every client at the check-in
+    tick (AD-034); the owned suitcase marker naming the room is a
+    convenience surface for the carrier. No other surface SHALL name a
+    suitcase's room before a settle or complaint. <!-- ubiquitous -->
 
 **Independent Test**: Playwright scenario — real server + client; check in,
-see the owned marker name the room, place blind → confirm appears → confirm
-sends; assert the walkie lines render on all pages and no placement line ever
-appears (`client:suitcase`).
+see the announce line on EVERY page, the owned marker name the room for the
+carrier, place directly at a door (no confirm exists); assert the walkie
+lines render on all pages and no placement line ever appears
+(`client:suitcase`).
 
 ---
 
@@ -292,8 +298,12 @@ appears (`client:suitcase`).
   falls back to the self-assign rule's "no vacant room" behavior (3.1 path).
 - IF a resting suitcase's room is the guest's current wait-at door THEN the
   next rest event there triggers immediate arrival resolution.
-- IF a spectator (fired) player stands in desk earshot THEN they receive no
-  overhear (spectators excluded) but see later lifecycle facts building-wide.
+- IF a guest self-assigns while another guest's suitcase rests at the same
+  room THEN both proceed independently (reservation only blocks assignment
+  rolls, not rest positions).
+- IF a spectator (fired) player is connected at a check-in THEN they receive
+  the building-wide assignment notice like everyone else (AD-034(e) — the
+  saboteur-gets-it-free consequence, user-confirmed).
 - IF a guest self-assigns while another guest's suitcase rests at the same
   room THEN both proceed independently (reservation only blocks assignment
   rolls, not rest positions).
@@ -327,18 +337,20 @@ appears (`client:suitcase`).
 | SUI-23 | P2 walkie log | Design | Implemented (T2/T4) |
 | SUI-24 | P2 client | Design | Implemented (T5) |
 | SUI-25 | P2 client | Design | Implemented (T5) |
-| SUI-26 | P2 client | Design | Implemented (T5) |
-| SUI-27 | P2 client | Design | Implemented (T5) |
+| SUI-26 | P2 client | Design | Dropped (AD-034 — confirm removed) |
+| SUI-27 | P2 client | Design | Implemented (T5, amended AD-034) |
 
-**Coverage:** 27 total, 0 unmapped.
+**Coverage:** 27 total, 26 implemented + 1 dropped by AD-034 (SUI-26).
 
 ## Success Criteria
 
 - [ ] Gates 1–3 green: `pnpm typecheck` + `pnpm lint`; `pnpm test:sim` incl.
-      `sim:suitcase_carry` / `sim:assignment_overhear` / `sim:carry_clock` /
+      `sim:suitcase_carry` / `sim:assignment_announce` / `sim:carry_clock` /
       `sim:wrong_delivery`; `pnpm test:client` incl. `client:suitcase`.
 - [ ] Leak audit: the assignment rides the wire exactly once per guest (the
-      earshot event), and no payload ever names a resting suitcase's room to
-      players off its floor before a settle/complaint line.
+      building-wide `guest:assigned` notice, AD-034), and no payload ever
+      names a resting suitcase's room to players off its floor before a
+      settle/complaint line.
 - [ ] New constants (`ROOM_DOOR_RANGE_TILES`, `GUEST_HOLD_START_TILES`)
-      recorded as AD-033; §7 v1.4 rows consumed, none edited.
+      recorded as AD-033; §7 v1.4 rows consumed, none edited — the
+      `DESK_EARSHOT_TILES` row removed by AD-034.

@@ -1,17 +1,15 @@
 import { expect, type Page, test } from '@playwright/test'
 
-// Spec SUI-21..27 (gate scenario client:suitcase): the suitcase slice.
-// Three scenarios, ordered by ride budget — the harness shift is 30 s
-// (AD-004 seam) with the first guest at ≈15 s (AD-028 scale 0.5), so:
-//  - test 1 stays on the LOBBY (no ride): check-in handoff, building-wide
-//    lifecycle line, the assignment surfacing on the receiver only, the
-//    carried marker riding the carrier, and the last-5 walkie contract;
-//  - test 2 spends the ONE affordable ride: confident place (assignment
-//    overheard → no confirm), PLACEMENT IS SILENT, and the self-regrab;
-//  - test 3 spends two rides on the blind-place confirm: bruno checks in
-//    (ada is pre-riding, out of desk earshot on floor1), places at ada's
-//    door; ada picks up and places a guest whose assignment she never
-//    heard — the one-step confirm gates the gamble (SUI-26).
+// Spec SUI-21..27 (gate scenario client:suitcase; amended AD-034): the
+// suitcase slice. Two scenarios — the blind-place confirm is GONE (SUI-26
+// dropped: assignments are building-wide notices):
+//  - test 1 stays on the LOBBY (no ride): check-in handoff, the announce
+//    line landing on EVERY page, the receiver-only own-marker hint, the
+//    carried marker riding the carrier, and the DISCRIMINATING last-5
+//    walkie contract (six lifecycle lines driven; count === 5 and the early
+//    "takes" line evicted, newest-first kept);
+//  - test 2 spends the ONE affordable ride: direct place at a door (every
+//    carrier is "confident" now), PLACEMENT IS SILENT, and the self-regrab.
 
 const TILE = 32
 
@@ -227,7 +225,7 @@ async function pressE(page: Page): Promise<void> {
 }
 
 test.describe('client:suitcase', () => {
-  test('check-in hands off on the lobby: building-wide line, receiver-only assignment, carried marker, last-5 log (SUI-21/23/24/27)', async ({
+  test('check-in hands off on the lobby: building-wide announce + lifecycle lines, receiver-only hint, carried marker, discriminating last-5 log (SUI-21/23/24/27, AD-034)', async ({
     browser,
   }) => {
     test.setTimeout(120_000)
@@ -235,8 +233,9 @@ test.describe('client:suitcase', () => {
     const pages = await Promise.all(contexts.map((c) => c.newPage()))
     await fourPlayerRound(pages)
     const own = pages[0] as Page
+    const bruno = pages[1] as Page
 
-    // A guest queues (≈15 s scaled), the desk hint shows at the desk.
+    // A guest queues (≈6 s scaled), the desk hint shows at the desk.
     await own.waitForFunction(() => {
       const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__
       return t.events.some((e) => e.type === 'guest:arrived')
@@ -253,6 +252,14 @@ test.describe('client:suitcase', () => {
     for (const page of pages) {
       await page.waitForFunction(() =>
         (document.querySelector('#walkie-log')?.textContent ?? '').includes('«ada» takes a guest'),
+      )
+    }
+
+    // SUI-03/04 (amended AD-034): the assignment is a BUILDING-WIDE notice —
+    // the announce walkie line lands on EVERY page, not the receiver only.
+    for (const page of pages) {
+      await page.waitForFunction(() =>
+        (document.querySelector('#walkie-log')?.textContent ?? '').includes("I'm in floor"),
       )
     }
 
@@ -280,8 +287,8 @@ test.describe('client:suitcase', () => {
       { timeout: 15_000 },
     )
 
-    // SUI-27: the assignment surfaces ONLY on the receiver's own hint —
-    // the other three pages never see a room.
+    // SUI-27: the own hint surfaces on the carrier's page only (a convenience
+    // surface for the carried guest) — the other three pages never show one.
     await own.waitForSelector('#suitcase-assignment', { state: 'visible' })
     const hintText = await own.textContent('#suitcase-assignment')
     expect(hintText ?? '').toMatch(/guest's room: floor\d:\d/)
@@ -294,12 +301,52 @@ test.describe('client:suitcase', () => {
       expect(visible).toBe(false)
     }
 
-    // SUI-23: the walkie log keeps at most its last 5 lines.
+    // SUI-23 (discriminating, post-AD-034): the DOM log is capped at 5, so
+    // the trim is proven by VOLUME — count walkie-producing events on the
+    // wire, wait for five MORE after ada's "takes" line (the 5-slot log
+    // must then have evicted it, newest-first), and assert exactly that:
+    // 5 lines kept, ada's early takes gone, newer lifecycle lines present.
+    const WALKIE_KINDS = [
+      'guest:arrived',
+      'guest:settled',
+      'guest:checked_out',
+      'guest:assigned',
+      'suitcase:carried',
+      'suitcase:picked_up',
+      'guest:complained',
+    ] as string[]
+    const countWalkieEvents = (p: Page): Promise<number> =>
+      p.evaluate((kinds) => {
+        const set = new Set(kinds)
+        const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } })
+          .__TURNOVER__
+        return t.events.filter((e) => set.has(e.type)).length
+      }, WALKIE_KINDS)
+    const baseline = await countWalkieEvents(own)
+    await bruno.waitForFunction(() => {
+      const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__
+      return t.events.filter((e) => e.type === 'guest:arrived').length >= 2
+    })
+    await pressEUntil(bruno, () =>
+      (document.querySelector('#walkie-log')?.textContent ?? '').includes('«bruno» takes a guest'),
+    )
+    await own.waitForFunction(
+      ({ kinds, base }) => {
+        const set = new Set(kinds)
+        const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } })
+          .__TURNOVER__
+        return t.events.filter((e) => set.has(e.type)).length >= base + 5
+      },
+      { kinds: WALKIE_KINDS, base: baseline },
+      { timeout: 40_000 },
+    )
     const lineCount = await own.evaluate(
       () => document.querySelectorAll('#walkie-log .walkie-line').length,
     )
-    expect(lineCount).toBeGreaterThan(0)
-    expect(lineCount).toBeLessThanOrEqual(5)
+    expect(lineCount).toBe(5)
+    const logText = (await own.textContent('#walkie-log')) ?? ''
+    expect(logText).not.toContain("«ada» takes a guest's suitcase")
+    expect(logText).toMatch(/takes a guest|arrives at the front desk|announces|settles into/)
 
     for (const context of contexts) await context.close()
   })
@@ -313,7 +360,8 @@ test.describe('client:suitcase', () => {
     await fourPlayerRound(pages)
     const own = pages[0] as Page
 
-    // Guest queues, check in at the desk (the assignment is overheard).
+    // Guest queues, check in at the desk (the assignment is announced
+    // building-wide — AD-034).
     await own.waitForFunction(() => {
       const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__
       return t.events.some((e) => e.type === 'guest:arrived')
@@ -331,13 +379,9 @@ test.describe('client:suitcase', () => {
 
     // Ride to floor1 and place at the FIRST door east of the landing — the
     // room is assignment-independent (any door accepts a placement). The
-    // assignment was overheard → CONFIDENT place: no confirm dialog.
+    // confirm is gone (AD-034): a carrier at a door places directly.
     await rideTo(own, 'ada', 'Digit1', 'floor1')
     await walkUntil(own, 'ada', 'ArrowRight', (x) => x >= doorXTiles(1) - 0.4)
-    const confirmBefore = await own.evaluate(
-      () => (document.querySelector('#place-confirm') as HTMLElement | null)?.style.visibility,
-    )
-    expect(confirmBefore).not.toBe('visible')
     await pressE(own)
 
     // The marker rests at the doorway (SUI-24) and PLACEMENT IS SILENT
@@ -373,83 +417,6 @@ test.describe('client:suitcase', () => {
         '«ada» picks up a suitcase',
       ),
     )
-
-    for (const context of contexts) await context.close()
-  })
-
-  test('a player who never overheard the assignment gets the one-step blind-place confirm (SUI-26)', async ({
-    browser,
-  }) => {
-    test.setTimeout(150_000)
-    const contexts = await Promise.all([0, 1, 2, 3].map(() => browser.newContext()))
-    const pages = await Promise.all(contexts.map((c) => c.newPage()))
-    await fourPlayerRound(pages)
-    const ada = pages[0] as Page
-    const bruno = pages[1] as Page
-
-    // ada pre-rides to floor1 BEFORE the guest arrives — the elevator is
-    // phase-free (AD-011), so this spends no round budget — and waits at
-    // door 1. She is on floor1 when bruno checks in, so the desk-earshot
-    // snapshot (lobby floor only) never reaches her (SUI-04).
-    await rideTo(ada, 'ada', 'Digit1', 'floor1')
-    await walkUntil(ada, 'ada', 'ArrowRight', (x) => x >= doorXTiles(1) - 0.4)
-
-    // bruno (at the desk, spawn x = 15) checks the guest in and rides it to
-    // the SAME door — a confident place (he overheard his own guest).
-    await bruno.waitForFunction(() => {
-      const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__
-      return t.events.some((e) => e.type === 'guest:arrived')
-    })
-    await pressE(bruno)
-    await bruno.waitForFunction(() =>
-      (document.querySelector('#walkie-log')?.textContent ?? '').includes('«bruno» takes a guest'),
-    )
-    await rideTo(bruno, 'bruno', 'Digit1', 'floor1')
-    await walkUntil(bruno, 'bruno', 'ArrowRight', (x) => x >= doorXTiles(1) - 0.4)
-    await pressE(bruno)
-
-    // ada (waiting at that door, carrying nothing) picks the resting
-    // suitcase up — anyone may — then presses E again: she never overheard
-    // the assignment, so placing is a GAMBLE and the one-step confirm gates
-    // it (SUI-26).
-    await ada.waitForFunction(
-      (doorPx) => {
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              scene: (name: string) => {
-                children: { list: { type: string; x: number; visible: boolean }[] }
-              } | null
-            }
-          }
-        ).__TURNOVER__
-        const scene = t.scene('Round')
-        return (
-          scene?.children?.list.some(
-            (c) => c.type === 'Rectangle' && c.visible && Math.abs(c.x - doorPx) < 20,
-          ) === true
-        )
-      },
-      doorXTiles(1) * TILE,
-      { timeout: 30_000 },
-    )
-    // The pickup's lifecycle line confirms ada now carries it; the confirm
-    // press follows once the pickup is on the wire.
-    await pressEUntil(ada, () =>
-      (document.querySelector('#walkie-log')?.textContent ?? '').includes(
-        '«ada» picks up a suitcase',
-      ),
-    )
-    await pressE(ada)
-    await ada.waitForSelector('#place-confirm', { state: 'visible', timeout: 15_000 })
-    const confirmText = await ada.textContent('#place-confirm')
-    expect(confirmText ?? '').toContain("haven't heard")
-    await ada.click('#place-confirm-yes')
-    await ada.waitForSelector('#place-confirm', { state: 'hidden' })
-
-    // The gamble placed silently — the walkie never carries a placement.
-    const log = await ada.textContent('#walkie-log')
-    expect(log ?? '').not.toMatch(/place/i)
 
     for (const context of contexts) await context.close()
   })

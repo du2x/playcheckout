@@ -292,56 +292,32 @@ describe('router: earshot policy', () => {
   })
 })
 
-// Cycle 3.B (AD-032): the deskEarshot policy delivers the check-in assignment
-// ONLY to live lobby viewers within DESK_EARSHOT_TILES (3000 millitiles) of
-// the desk x — and deliberately excludes spectators (a fired player must not
-// learn later assignments) and riders (no floor in the car, AD-013).
-describe('router: deskEarshot policy', () => {
-  function deskEarshotContexts() {
-    const receiver = fakeClient('receiver') // at the desk: dist 0
-    const atBoundary = fakeClient('atBoundary') // exactly 3000 milli away
-    const tooFar = fakeClient('tooFar') // 3001 milli away
-    const otherFloor = fakeClient('otherFloor') // same x, guest floor
-    const rider = fakeClient('rider') // in a car: no floor, no x
-    const spectator = fakeClient('spectator') // fired, standing in earshot
-    const router = newRouter(receiver, atBoundary, tooFar, otherFloor, rider, spectator)
-    // DESK_X_TILES = 15 → desk x = 15000 milli; earshot 3000 milli.
-    const xBySession: Record<string, number | null> = {
-      receiver: 15000,
-      atBoundary: 12000,
-      tooFar: 11999,
-      otherFloor: 15000,
-      rider: null,
-      spectator: 15000,
-    }
+// Cycle 3.B (AD-032, amended AD-034): the assignment is a BUILDING-WIDE
+// notice — guest:assigned rides the 'all' policy, so every connected page
+// receives it (the saboteur included, AD-034(e)); interception of the
+// suitcase, not information, is the counterplay.
+describe('router: guest:assigned building-wide notice (AD-034)', () => {
+  it('delivers guest:assigned to every connected page (all policy)', () => {
+    const lobbyViewer = fakeClient('lobby')
+    const floorViewer = fakeClient('f1')
+    const rider = fakeClient('rider')
+    const spectator = fakeClient('spectator')
+    const router = newRouter(lobbyViewer, floorViewer, rider, spectator)
     router.setViewContext((sessionId) => {
       if (sessionId === 'rider') return { floor: null, roomKey: null, car: 1, x: null }
-      return {
-        floor: sessionId === 'otherFloor' ? 'floor2' : 'lobby',
-        roomKey: null,
-        car: null,
-        x: xBySession[sessionId] ?? null,
-        spectator: sessionId === 'spectator',
-      }
+      if (sessionId === 'spectator')
+        return { floor: 'lobby', roomKey: null, car: null, x: 15000, spectator: true }
+      if (sessionId === 'f1') return { floor: 'floor1', roomKey: null, car: null, x: 5000 }
+      return { floor: 'lobby', roomKey: null, car: null, x: 15000 }
     })
-    return { receiver, atBoundary, tooFar, otherFloor, rider, spectator, router }
-  }
 
-  it('delivers assignment:overheard to exactly the live lobby earshot set (SUI-03)', () => {
-    const { receiver, atBoundary, tooFar, otherFloor, rider, spectator, router } =
-      deskEarshotContexts()
-    router.route({ type: 'assignment:overheard', guestId: 'g1', floor: 'floor2', room: 4 })
+    router.route({ type: 'guest:assigned', guestId: 'g1', floor: 'floor2', room: 4 })
 
-    for (const heard of [receiver, atBoundary]) {
+    for (const heard of [lobbyViewer, floorViewer, rider, spectator]) {
       expect(heard.sent).toHaveLength(1)
-      expect(heard.sent[0]?.type).toBe('assignment:overheard')
+      expect(heard.sent[0]?.type).toBe('guest:assigned')
       expect(heard.sent[0]?.message.payload).toEqual({ guestId: 'g1', floor: 'floor2', room: 4 })
     }
-    // Beyond range, on a guest floor, in a car, or spectating: silence.
-    expect(tooFar.sent).toEqual([])
-    expect(otherFloor.sent).toEqual([])
-    expect(rider.sent).toEqual([])
-    expect(spectator.sent).toEqual([])
   })
 })
 

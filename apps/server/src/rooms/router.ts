@@ -171,25 +171,6 @@ export class Router {
       }
       return
     }
-    if (recipients === 'deskEarshot') {
-      // Cycle 3.B (AD-032): the check-in assignment is heard exactly as far
-      // as the desk carries it — live viewers on the lobby floor within
-      // DESK_EARSHOT_TILES of the desk x (inclusive boundary). Spectators are
-      // deliberately EXCLUDED (unlike the rustle `earshot` over-delivery): a
-      // fired player must not learn later assignments. Riders are excluded
-      // naturally — their view context carries no floor.
-      const floor = visibility?.floor
-      const x = visibility?.x
-      if (floor === undefined || x === undefined) return
-      const rangeMilli = TUNING.DESK_EARSHOT_TILES * 1000
-      for (const client of this.liveClients()) {
-        const vc = this.viewContext(client.sessionId)
-        if (vc.spectator) continue
-        if (vc.floor !== floor || vc.x === null) continue
-        if (Math.abs(vc.x - x) <= rangeMilli) this.deliver(client, key, payload, time)
-      }
-      return
-    }
     // Broadcast: each connection receives its own next seq (spec REG-07).
     for (const client of this.liveClients()) this.deliver(client, key, payload, time)
   }
