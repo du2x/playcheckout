@@ -12,7 +12,7 @@ import { expect, type Page, test } from '@playwright/test'
 // car arrives; a decoy flash (car already parked here) stays dark. This is
 // the fast Playwright entry point for elevator debugging.
 
-const TILE = 832 / 30
+const TILE = 32
 const LIGHT_OFF = 'rgb(74, 85, 104)' // #4a5568
 const LIGHT_LIT = 'rgb(232, 195, 74)' // #e8c34a
 
