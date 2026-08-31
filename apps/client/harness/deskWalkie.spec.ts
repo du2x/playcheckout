@@ -52,7 +52,9 @@ test.describe('client:desk_walkie', () => {
         return t.events.some((e) => e.type === 'guest:arrived')
       })
       await own.waitForFunction(
-        () => document.querySelector('#desk-hint')?.style.visibility === 'visible',
+        () =>
+          (document.querySelector('#desk-hint') as HTMLElement | null)?.style.visibility ===
+          'visible',
       )
 
       // Receive: E opens the two-step send menu.

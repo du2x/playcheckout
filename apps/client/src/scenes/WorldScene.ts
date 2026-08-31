@@ -130,7 +130,6 @@ export class WorldScene extends Phaser.Scene {
   private deskMenuOpen = false
   private deskMenuStep: 'destination' | 'announce' = 'destination'
   private deskDest: { floor: GuestFloorId; room: RoomIndex } | null = null
-  private deskHeldGuest: string | null = null
   private deskHint: HTMLElement | null = null
   private deskMenuEl: HTMLElement | null = null
   private deskMenuTitle: HTMLElement | null = null
@@ -469,10 +468,7 @@ export class WorldScene extends Phaser.Scene {
       // closes and the held slot clears. Other players' routings are just
       // the public departure announcement.
       case 'guest-routed':
-        if (action.playerId === this.ownId) {
-          this.deskHeldGuest = null
-          this.closeDeskMenu()
-        }
+        if (action.playerId === this.ownId) this.closeDeskMenu()
         break
       case 'walkie-broadcast':
         // The walkie line (DESK-12, prd-locked text): «Name»: guest going to
