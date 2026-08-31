@@ -253,3 +253,212 @@ describe('sim:guest_lifecycle', () => {
     expect(JSON.stringify(other)).not.toBe(JSON.stringify(run1))
   })
 })
+
+// --- Front desk (cycle 3.2, DESK-01..10): receive / hold / release / route.
+
+/** Join a holder at the desk (movement default spawn = lobby center = DESK_X). */
+function deskScenario(seed = 7) {
+  const movement = new MovementSim()
+  const guests = new GuestSim(seed, 5, new RealMovementPort(movement))
+  movement.join('p1')
+  movement.join('p2')
+  return { movement, guests }
+}
+
+describe('sim:desk_receive', () => {
+  it('receives the front queued guest: impatience freezes past the 20s mark and self-assign never fires (DESK-01/04)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1) // guest:1 queued at the desk
+    expect(guests.receiveAtDesk('p1', CADENCE_5P + 1)).toBe('accepted')
+    // Run well past the impatience deadline (spawn tick 480 + IMPATIENCE 400 = 880).
+    const held = run(movement, guests, 600, CADENCE_5P + 1).guestEvents
+    expect(of(held, 'guest:impatient')).toHaveLength(0)
+    expect(of(held, 'guest:self_assigned')).toHaveLength(0)
+    // The held guest stands at the desk (their slot) — still on the lobby lane.
+    expect(movement.positionOf('guest:1')?.floor).toBe('lobby')
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES)
+  })
+
+  it('E-again releases to the queue FRONT and impatience resumes EXACTLY where it paused (DESK-03)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    guests.receiveAtDesk('p1', CADENCE_5P + 1) // remaining = 880 - 481 = 399
+    const releaseTick = CADENCE_5P + 2 // 482
+    guests.releaseHeld('p1', releaseTick)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES) // front slot
+    // Resumed deadline = 482 + 399 = 881 — one tick later than the frozen 880.
+    let firedAt: number | null = null
+    for (let t = releaseTick; t < releaseTick + IMPATIENCE && firedAt === null; t++) {
+      movement.tick()
+      if (guests.tick(t).some((e) => e.type === 'guest:impatient')) firedAt = t
+    }
+    expect(firedAt).toBe(881)
+  })
+
+  it('walking out of the desk zone releases the held guest (DESK-03 walk-out)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    guests.receiveAtDesk('p1', CADENCE_5P + 1) // remaining = 399
+    let t = CADENCE_5P + 1
+    movement.startMove('p1', 'right')
+    let outOfZone = false
+    let firedAt: number | null = null
+    for (; t < CADENCE_5P + 2 + IMPATIENCE + 5 && firedAt === null; t++) {
+      movement.tick()
+      if (guests.tick(t).some((e) => e.type === 'guest:impatient')) firedAt = t
+      if (!outOfZone && (movement.positionOf('p1')?.x ?? 0) > TUNING.DESK_X_TILES + TUNING.DESK_RANGE_TILES) {
+        outOfZone = true
+      }
+    }
+    // The holder left the zone AND the impatience clock resumed — proof of
+    // release (a held guest never fires; spec Independent Test).
+    expect(outOfZone).toBe(true)
+    expect(firedAt).not.toBeNull()
+    // Resumed = walkOutTick + 399; the walk-out itself costs a few ticks.
+    expect(firedAt).toBeLessThan(CADENCE_5P + 10 + IMPATIENCE)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES)
+  })
+
+  it('a fired or disconnected holder releases the guest (DESK-05)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    guests.receiveAtDesk('p1', CADENCE_5P + 1)
+    guests.releaseAll('p1', CADENCE_5P + 2)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES)
+    // Impatience resumes: it fires within one frozen-remaining window.
+    let fired = false
+    for (let t = CADENCE_5P + 2; t < CADENCE_5P + 2 + IMPATIENCE; t++) {
+      movement.tick()
+      if (guests.tick(t).some((e) => e.type === 'guest:impatient')) {
+        fired = true
+        break
+      }
+    }
+    expect(fired).toBe(true)
+  })
+
+  it('ignores E silently when the queue is empty or the holder already holds one (DESK-02)', () => {
+    const { movement, guests } = deskScenario()
+    expect(guests.receiveAtDesk('p1', 0)).toBe('ignored') // empty queue
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.receiveAtDesk('p1', CADENCE_5P + 1)).toBe('accepted')
+    expect(guests.receiveAtDesk('p1', CADENCE_5P + 1)).toBe('ignored') // holds one
+  })
+
+  it('two same-tick E presses resolve first-intent-wins; the loser is an ignored release (edge)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.receiveAtDesk('p1', CADENCE_5P + 1)).toBe('accepted')
+    expect(guests.receiveAtDesk('p2', CADENCE_5P + 1)).toBe('ignored')
+  })
+
+  it('the queue does NOT shift while a guest is held (spec assumption)', () => {
+    const { movement, guests } = deskScenario()
+    // Freeze impatience (the sanctioned timing seam): the three queued guests
+    // must still be in the queue when the hold starts.
+    const frozen = new GuestSim(7, 5, new RealMovementPort(movement), {
+      impatienceTicks: 100000,
+    })
+    void guests
+    run(movement, frozen, CADENCE_5P * 3 + 1) // three guests queued eastward
+    expect(movement.positionOf('guest:2')?.x).toBe(TUNING.DESK_X_TILES + 1)
+    expect(movement.positionOf('guest:3')?.x).toBe(TUNING.DESK_X_TILES + 2)
+    frozen.receiveAtDesk('p1', CADENCE_5P * 3 + 1) // takes guest:1
+    // guest:2 and guest:3 keep their slots — no forward shift.
+    expect(movement.positionOf('guest:2')?.x).toBe(TUNING.DESK_X_TILES + 1)
+    expect(movement.positionOf('guest:3')?.x).toBe(TUNING.DESK_X_TILES + 2)
+    // Release re-places the WHOLE queue with the released guest at the front.
+    frozen.releaseHeld('p1', CADENCE_5P * 3 + 2)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES)
+    expect(movement.positionOf('guest:2')?.x).toBe(TUNING.DESK_X_TILES + 1)
+    expect(movement.positionOf('guest:3')?.x).toBe(TUNING.DESK_X_TILES + 2)
+  })
+})
+
+describe('sim:walkie_broadcast', () => {
+  it('an honest send routes the guest as a 3.1 citizen and claims the same room (DESK-06/07)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    guests.receiveAtDesk('p1', CADENCE_5P + 1)
+    expect(
+      guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 }),
+    ).toBe('routed')
+    // Announce pattern: the claim flushes on the NEXT tick.
+    const first = guests.tick(CADENCE_5P + 2)
+    expect(of(first, 'guest:routed')).toEqual([
+      { type: 'guest:routed', guestId: 'guest:1', playerId: 'p1' },
+    ])
+    expect(of(first, 'walkie:broadcast')).toEqual([
+      { type: 'walkie:broadcast', playerId: 'p1', floor: 'floor1', room: 1 },
+    ])
+  })
+})
+
+describe('sim:walkie_lie', () => {
+  it('routes to floor2:4 while claiming floor1:8 — the walk is the only truth on the wire (DESK-07/08/10)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    guests.receiveAtDesk('p1', CADENCE_5P + 1)
+    expect(
+      guests.routeHeld('p1', { floor: 'floor2', room: 4 }, { floor: 'floor1', room: 8 }),
+    ).toBe('routed')
+    let t = CADENCE_5P + 2
+    const claimEvents: SimEvent[] = guests.tick(t++)
+    // The claim names the ANNOUNCED room; the routed event names the sender
+    // and NOTHING about the destination (the lie is client-invisible).
+    expect(of(claimEvents, 'guest:routed')).toEqual([
+      { type: 'guest:routed', guestId: 'guest:1', playerId: 'p1' },
+    ])
+    expect(of(claimEvents, 'walkie:broadcast')).toEqual([
+      { type: 'walkie:broadcast', playerId: 'p1', floor: 'floor1', room: 8 },
+    ])
+    // Walk ground truth: the guest settles at floor2:4 (elevator citizen).
+    let settled: SimEvent | undefined
+    const surfaceEvents: SimEvent[] = []
+    for (; t < CADENCE_5P + 2 + 1200 && settled === undefined; t++) {
+      movement.tick()
+      for (const e of guests.tick(t)) {
+        if (e.type === 'guest:settled') settled = e
+        else if (
+          e.type === 'guest:routed' ||
+          e.type === 'walkie:broadcast' ||
+          e.type === 'guest:arrived' ||
+          e.type === 'guest:impatient'
+        ) {
+          surfaceEvents.push(e)
+        }
+      }
+    }
+    expect(settled).toEqual({
+      type: 'guest:settled',
+      guestId: 'guest:1',
+      floor: 'floor2',
+      room: 4,
+    } satisfies SimEvent)
+    // No claim-surface payload ever names the destination floor2.
+    for (const e of surfaceEvents) {
+      expect(JSON.stringify(e)).not.toContain('floor2')
+    }
+  })
+
+  it('rejects a send to a TENANTED room silently — the holder keeps the guest (DESK-09)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    guests.receiveAtDesk('p1', CADENCE_5P + 1)
+    // White-box: floor2:4 is occupied (a settled guest holds tenancy).
+    ;(guests as unknown as { tenanted: Map<string, string> }).tenanted.set('floor2:4', 'filler')
+    expect(
+      guests.routeHeld('p1', { floor: 'floor2', room: 4 }, { floor: 'floor1', room: 8 }),
+    ).toBe('ignored')
+    // The holder keeps the guest: still held, nothing queued for the flush.
+    expect(guests.tick(CADENCE_5P + 2)).toHaveLength(0)
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES)
+  })
+
+  it('a non-holder send is ignored (DESK-06 precondition)', () => {
+    const { guests } = deskScenario()
+    expect(
+      guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 }),
+    ).toBe('ignored')
+  })
+})

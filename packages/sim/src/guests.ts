@@ -34,7 +34,7 @@ export interface MovementPort {
   pressFloor(id: string, floor: FloorId): 'accepted' | 'ignored' | 'rejected'
 }
 
-export type GuestPhase = 'queued' | 'impatient' | 'toRoom' | 'settling' | 'toExit'
+export type GuestPhase = 'queued' | 'impatient' | 'held' | 'toRoom' | 'settling' | 'toExit'
 
 interface Guest {
   id: string
@@ -42,8 +42,13 @@ interface Guest {
   assigned: { floor: GuestFloorId; room: RoomIndex } | null
   /** Absolute tick impatience fires (spawn + GUEST_IMPATIENCE_SECONDS). */
   impatientAt: number
+  /** Ticks left on the frozen impatience clock while held (cycle 3.2) —
+   *  null ⇔ not held. Release restores impatientAt = tick + remaining. */
+  impatienceRemaining: number | null
   /** Absolute tick a settling guest checks out (settle + seeded dwell). */
   dwellEndsAt: number | null
+  /** Non-null ⇔ the guest is held at the desk by this player (cycle 3.2). */
+  heldBy: string | null
 }
 
 const IMPATIENCE_TICKS = TUNING.GUEST_IMPATIENCE_SECONDS * TICK_HZ
@@ -93,10 +98,17 @@ export interface GuestTiming {
  */
 export class GuestSim {
   private readonly guests = new Map<string, Guest>()
-  /** FIFO by arrival: index = queue slot (0 = at the desk, eastward growth). */
+  /** FIFO by arrival: index = queue slot (0 = at the desk, eastward growth).
+   *  NEVER contains a held guest (cycle 3.2): holding removes from the queue
+   *  without re-placing; release re-inserts at the FRONT and re-places. */
   private readonly queue: string[] = []
   /** roomKey → guestId (the single tenancy/vacancy source). */
   private readonly tenanted = new Map<string, string>()
+  /** holderId → held guestId (cycle 3.2): a holder holds at most one guest. */
+  private readonly held = new Map<string, string>()
+  /** Intent-time events (desk receive/route) flushed on the NEXT tick —
+   *  the MOVE-10 announce pattern: tick() is the only event emitter. */
+  private pending: SimEvent[] = []
   private readonly rng: Rng
   private readonly cadenceTicks: number
   private readonly impatienceTicks: number
@@ -138,10 +150,12 @@ export class GuestSim {
 
   /**
    * Advance one 0.05 s step. `tick` is the absolute round tick (from the
-   * RoundSim clock). Returns the guest lifecycle events emitted this tick.
+   * RoundSim clock). Returns the guest lifecycle events emitted this tick —
+   * including the desk intents queued since the last tick (announce pattern).
    */
   tick(tick: number): SimEvent[] {
-    const events: SimEvent[] = []
+    const events: SimEvent[] = [...this.pending]
+    this.pending = []
 
     // Arrival schedule: fixed interval, backlog when the hotel is full.
     if (tick >= this.nextScheduleTick) {
@@ -151,6 +165,21 @@ export class GuestSim {
     if (this.backlog > 0 && this.hasVacancy()) {
       this.backlog--
       this.spawn(tick, events)
+    }
+
+    // Held-guest walk-out check (DESK-03, cycle 3.2): a holder who leaves the
+    // desk zone (or whose slot is gone — fired/ghosted/disconnected) releases
+    // their guest to the queue front. The fire/ghost/leave teardown paths call
+    // releaseAll directly; this tick check covers the walking-out case.
+    for (const [holderId] of this.held) {
+      const pos = this.movement.positionOf(holderId)
+      if (
+        pos === undefined ||
+        pos.floor !== 'lobby' ||
+        Math.abs(pos.x - DESK_X) > TUNING.DESK_RANGE_TILES
+      ) {
+        this.releaseHeld(holderId, tick)
+      }
     }
 
     // Impatience (GUEST-04): the cue fires once, exactly the impatience
@@ -220,7 +249,9 @@ export class GuestSim {
       phase: 'queued',
       assigned: null,
       impatientAt: tick + this.impatienceTicks,
+      impatienceRemaining: null,
       dwellEndsAt: null,
+      heldBy: null,
     }
     this.guests.set(id, guest)
     this.queue.push(id)
@@ -233,15 +264,108 @@ export class GuestSim {
     const idx = this.queue.indexOf(id)
     if (idx === -1) return
     this.queue.splice(idx, 1)
+    this.rePlaceQueue()
+  }
+
+  /** Re-place every queued guest into their deterministic slot (NPC
+   *  positions, not walks — the same re-place removeFromQueue always did). */
+  private rePlaceQueue(): void {
     this.queue.forEach((qid, slot) => {
       const pos = this.movement.positionOf(qid)
       if (pos !== undefined && Math.abs(pos.x - slotX(slot)) > ARRIVAL_TOLERANCE_TILES) {
-        // Queue slots are NPC positions, not walks: re-place deterministically.
         this.movement.removeGuest(qid)
         this.movement.joinGuest(qid, 'lobby', slotX(slot))
         this.movement.announceGuest(qid)
       }
     })
+  }
+
+  // --- Front desk (cycle 3.2, DESK-01..10) ---------------------------------
+
+  /**
+   * E in the desk zone (DESK-01): hand the caller the FRONT queued guest —
+   * the guest leaves the queue WITHOUT re-placing the rest (the queue does
+   * not shift while a guest is held) and their impatience clock freezes.
+   * 'ignored' covers every silent case: caller already holds one, or the
+   * queue is empty (DESK-02).
+   */
+  receiveAtDesk(holderId: string, tick: number): 'accepted' | 'ignored' {
+    if (this.held.has(holderId)) return 'ignored'
+    const id = this.queue[0]
+    if (id === undefined) return 'ignored'
+    const g = this.guests.get(id)
+    if (g === undefined) return 'ignored'
+    this.queue.splice(0, 1)
+    g.phase = 'held'
+    g.heldBy = holderId
+    g.impatienceRemaining = Math.max(0, g.impatientAt - tick)
+    this.held.set(holderId, id)
+    return 'accepted'
+  }
+
+  /**
+   * Release a holder's guest (DESK-03): back to the queue FRONT, re-placing
+   * every slot, with the impatience clock resumed exactly where it paused.
+   * No-op (silent) when the holder holds nothing.
+   */
+  releaseHeld(holderId: string, tick: number): void {
+    const id = this.held.get(holderId)
+    if (id === undefined) return
+    const g = this.guests.get(id)
+    this.held.delete(holderId)
+    if (g === undefined) return
+    g.phase = 'queued'
+    g.heldBy = null
+    g.impatientAt = tick + (g.impatienceRemaining ?? 0)
+    g.impatienceRemaining = null
+    this.queue.unshift(id)
+    this.rePlaceQueue()
+  }
+
+  /** Teardown wrapper (DESK-05): fired/ghosted/disconnected holders release. */
+  releaseAll(holderId: string, tick: number): void {
+    this.releaseHeld(holderId, tick)
+  }
+
+  /**
+   * Complete the send flow (DESK-06..09): route the holder's guest to the
+   * DESTINATION (server truth — tenancy commits NOW, matching 3.1's
+   * commit-at-choice; the guest walks as a 3.1 elevator citizen) and queue
+   * the departure + walkie claim for the next-tick flush. The ANNOUNCED room
+   * is a free claim — never validated against the destination (DESK-08).
+   * A tenanted destination is rejected silently (DESK-09): the holder keeps
+   * the guest. 'ignored' also covers a non-holder.
+   */
+  routeHeld(
+    holderId: string,
+    destination: { floor: GuestFloorId; room: RoomIndex },
+    announce: { floor: GuestFloorId; room: RoomIndex },
+  ): 'routed' | 'ignored' {
+    const id = this.held.get(holderId)
+    if (id === undefined) return 'ignored'
+    const destKey = roomKey(destination.floor, destination.room)
+    if (this.tenanted.has(destKey)) return 'ignored'
+    const g = this.guests.get(id)
+    if (g === undefined) {
+      this.held.delete(holderId)
+      return 'ignored'
+    }
+    this.held.delete(holderId)
+    g.phase = 'toRoom'
+    g.assigned = destination
+    g.heldBy = null
+    g.impatienceRemaining = null
+    this.tenanted.set(destKey, id)
+    this.pending.push(
+      { type: 'guest:routed', guestId: id, playerId: holderId },
+      {
+        type: 'walkie:broadcast',
+        playerId: holderId,
+        floor: announce.floor,
+        room: announce.room,
+      },
+    )
+    return 'routed'
   }
 
   /**

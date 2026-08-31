@@ -177,15 +177,15 @@ the claimed room on all pages while the guest marker walks to the other floor
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| DESK-01 | P1 receive | Design | Pending |
-| DESK-02 | P1 receive | Design | Pending |
-| DESK-03 | P1 receive | Design | Pending |
-| DESK-04 | P1 receive | Design | Pending |
-| DESK-05 | P1 receive | Design | Pending |
+| DESK-01 | P1 receive | Design | Implemented (T3) |
+| DESK-02 | P1 receive | Design | Implemented (T3) |
+| DESK-03 | P1 receive | Design | Implemented (T3) |
+| DESK-04 | P1 receive | Design | Implemented (T3) |
+| DESK-05 | P1 receive | Design | Implemented (T3) |
 | DESK-06 | P1 send | Design | Implemented (T2) |
 | DESK-07 | P1 send | Design | Implemented |
-| DESK-08 | P1 send | Design | Pending |
-| DESK-09 | P1 send | Design | Pending |
+| DESK-08 | P1 send | Design | Implemented (T3) |
+| DESK-09 | P1 send | Design | Implemented (T3) |
 | DESK-10 | P1 send | Design | Implemented |
 | DESK-11 | P2 client | Design | Pending |
 | DESK-12 | P2 client | Design | Pending |

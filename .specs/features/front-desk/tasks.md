@@ -109,7 +109,7 @@ T5 → T6
 
 ---
 
-### T3: GuestSim hold/route
+### T3: GuestSim hold/route ✅
 
 **What**: Implement `receiveAtDesk`/`releaseHeld`/`releaseAll`/`routeHeld` with hold map, impatience freeze/resume, queue front re-place, walk-out tick check, pending-event flush; tenancy commit on route.
 **Where**: `packages/sim/src/guests.ts` (modify)
@@ -119,9 +119,9 @@ T5 → T6
 
 **Done when**:
 
-- [ ] Seeded scenarios pass: `sim:desk_receive` (AC1–4), `sim:walkie_broadcast`, `sim:walkie_lie` (AC6–8), occupied-destination silence (AC9), walk-out release, fired/ghosted release (AC5), queue-no-shift-while-held, same-tick first-intent-wins
-- [ ] Wire payloads in lie scenario never name the destination (AC10 leak assert)
-- [ ] Gate check passes: quick
+- [x] Seeded scenarios pass: sim:desk_receive (AC1–4 + walk-out, fired release, empty-queue/one-hold silence, first-intent-wins, queue-no-shift), sim:walkie_broadcast (honest), sim:walkie_lie (AC6–8), occupied-destination silence (AC9), non-holder send ignored
+- [x] Lie-scenario claim surface never names the destination (AC10 leak assert on routed/broadcast/arrived/impatient payloads)
+- [x] Gate check passes: quick (typecheck 4/4, 212 tests)
 
 **Tests**: unit
 **Gate**: quick
