@@ -128,7 +128,7 @@ T5 → T6
 
 ---
 
-### T4: RoundSim desk APIs + teardown
+### T4: RoundSim desk APIs + teardown ✅
 
 **What**: Add `deskInteract`/`deskSend` (round-active, live, range-via-`work.positionOf`, receive-or-release derivation) and `releaseAll` hooks in `leave`/`ghost`/`drainPending`; flush pending guest events at tick start.
 **Where**: `packages/sim/src/roundSim.ts` (modify)
@@ -138,9 +138,9 @@ T5 → T6
 
 **Done when**:
 
-- [ ] Out-of-zone/non-live/lobby-phase rejections covered by tests
-- [ ] All prior sim tests still pass (no regressions)
-- [ ] Gate check passes: quick
+- [x] Out-of-zone/queue-empty/round-not-started rejections covered; ghosted holder loses the guest; E-again releases and impatience resumes; full receive→send→claim→settle round integration
+- [x] All prior sim tests still pass (no regressions; 216 total in shared+sim)
+- [x] Gate check passes: quick
 
 **Tests**: unit
 **Gate**: quick

@@ -327,6 +327,12 @@ export class GuestSim {
     this.releaseHeld(holderId, tick)
   }
 
+  /** True when this player currently holds a desk guest (deskInteract's
+   *  receive-vs-release derivation reads it). */
+  holds(holderId: string): boolean {
+    return this.held.has(holderId)
+  }
+
   /**
    * Complete the send flow (DESK-06..09): route the holder's guest to the
    * DESTINATION (server truth — tenancy commits NOW, matching 3.1's

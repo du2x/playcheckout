@@ -235,6 +235,7 @@ export class RoundSim {
     // later accusations/range checks cannot reach them.
     for (const fired of this.justice.drainPending()) {
       events.push(fired)
+      this.guests?.releaseAll(fired.playerId, tickIndex)
       this.work.leave(fired.playerId)
       this.justiceSegments.delete(fired.playerId)
     }
@@ -308,8 +309,10 @@ export class RoundSim {
     return this.work.startWork(playerId, floor, room)
   }
 
-  /** Drop a departing player's channel silently (WORK-12). */
+  /** Drop a departing player's channel silently (WORK-12) and release any
+   *  guest they hold at the desk (DESK-05, cycle 3.2). */
   leave(playerId: string): void {
+    this.guests?.releaseAll(playerId, this.totalTicks - this.ticksLeft)
     this.work.leave(playerId)
   }
 
@@ -366,9 +369,53 @@ export class RoundSim {
   ghost(playerId: string): void {
     if (this.ended || this.justice.isFired(playerId)) return
     this.ghosted.add(playerId)
+    this.guests?.releaseAll(playerId, this.totalTicks - this.ticksLeft)
     this.work.leave(playerId)
     this.justiceSegments.delete(playerId)
     if (this.liveStaffCount() === 1) this.end('saboteur', 'staff-reduced')
+  }
+
+  /**
+   * E at the front desk (cycle 3.2, DESK-01..03): the server DERIVES the
+   * action — a holder releases their guest, anyone else receives the front
+   * queued one. Eligibility mirrors `accuse`: round active, sender live,
+   * standing on the lobby floor within TUNING.DESK_RANGE_TILES of
+   * TUNING.DESK_X_TILES. Every rejection maps to silence in the room (DESK-02).
+   */
+  deskInteract(playerId: string): 'accepted' | 'rejected' {
+    const guests = this.guests
+    if (!this.started || this.ended || this.ticksLeft <= 0) return 'rejected'
+    if (guests === null) return 'rejected'
+    if (this.justice.isFired(playerId) || this.ghosted.has(playerId)) return 'rejected'
+    const p = this.work.positionOf(playerId)
+    const range = TUNING.DESK_RANGE_TILES * 1000
+    if (p === undefined || p.floor !== 'lobby' || Math.abs(p.x - TUNING.DESK_X_TILES * 1000) > range) {
+      return 'rejected'
+    }
+    const tick = this.totalTicks - this.ticksLeft
+    if (guests.holds(playerId)) {
+      guests.releaseHeld(playerId, tick)
+      return 'accepted'
+    }
+    return guests.receiveAtDesk(playerId, tick) === 'accepted' ? 'accepted' : 'rejected'
+  }
+
+  /**
+   * Complete the send flow (cycle 3.2, DESK-06..09): route the sender's held
+   * guest to the DESTINATION while broadcasting the ANNOUNCED claim. A
+   * tenanted destination or a non-holder rejects silently ('rejected' — no
+   * error event; the holder keeps the guest).
+   */
+  deskSend(
+    playerId: string,
+    destination: { floor: GuestFloorId; room: RoomIndex },
+    announce: { floor: GuestFloorId; room: RoomIndex },
+  ): 'routed' | 'rejected' {
+    const guests = this.guests
+    if (!this.started || this.ended || this.ticksLeft <= 0) return 'rejected'
+    if (guests === null) return 'rejected'
+    if (this.justice.isFired(playerId) || this.ghosted.has(playerId)) return 'rejected'
+    return guests.routeHeld(playerId, destination, announce) === 'routed' ? 'routed' : 'rejected'
   }
 
   /** The deal's single saboteur — the room needs it for the abort path (FR-25). */

@@ -423,3 +423,128 @@ describe('sim:checkout_churn (round integration)', () => {
     expect(guestEventsAfterEnd).toBe(0)
   })
 })
+
+// --- Front desk (cycle 3.2, DESK-01..10): the RoundSim desk APIs.
+
+/** Positions map: everyone on the lobby floor, `at` in tiles (milli out). */
+function lobbyPositions(at: Record<string, number>): Map<string, { floor: FloorId; x: number }> {
+  const map = new Map<string, { floor: FloorId; x: number }>()
+  for (const [id, x] of Object.entries(at)) map.set(id, { floor: 'lobby', x: Math.round(x * 1000) })
+  return map
+}
+
+describe('sim:desk_receive (round integration)', () => {
+  it('receive → send routes through the round sim; the claim flushes next tick and the walk settles the destination (DESK-01/06/07)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      // Impatience frozen: nobody self-assigns during the scripted flow.
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
+    })
+    sim.tick(lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 })) // starts the round
+    let arrived = false
+    let t = 1
+    for (; t < 200 && !arrived; t++) {
+      movement.tick()
+      arrived = sim.tick(lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 })).some(
+        (e) => e.type === 'guest:arrived',
+      )
+    }
+    expect(arrived).toBe(true)
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    expect(
+      sim.deskSend('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 2 }),
+    ).toBe('routed')
+    // MOVE-10 announce pattern: the departure + claim flush on the next tick.
+    let routedSeen = false
+    let claim: { floor: FloorId; room: number } | null = null
+    let settled: { floor: FloorId; room: number } | null = null
+    for (; t < 4000 && settled === null; t++) {
+      movement.tick()
+      for (const e of sim.tick(lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 }))) {
+        if (e.type === 'guest:routed') {
+          routedSeen = true
+          expect(e.playerId).toBe('p1')
+        }
+        if (e.type === 'walkie:broadcast') claim = { floor: e.floor, room: e.room }
+        if (e.type === 'guest:settled') settled = { floor: e.floor, room: e.room }
+      }
+    }
+    expect(routedSeen).toBe(true)
+    expect(claim).toEqual({ floor: 'floor1', room: 2 }) // the ANNOUNCED claim
+    expect(settled).toEqual({ floor: 'floor1', room: 1 }) // the silent truth
+  })
+
+  it('E outside the desk zone or before the round is rejected silently (DESK-01 zone)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
+    })
+    expect(sim.deskInteract('p1')).toBe('rejected') // round not started
+    sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 }))
+    expect(sim.deskInteract('p2')).toBe('rejected') // 7 tiles from the desk
+    expect(sim.deskInteract('p1')).toBe('rejected') // queue empty — silent
+  })
+
+  it('E-again releases through the round sim and impatience resumes (DESK-03)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 50, dwellScale: 0.001 },
+    })
+    sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 }))
+    let arrived = false
+    let t = 1
+    for (; t < 200 && !arrived; t++) {
+      movement.tick()
+      arrived = sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 })).some(
+        (e) => e.type === 'guest:arrived',
+      )
+    }
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    expect(sim.deskInteract('p1')).toBe('accepted') // E-again: release
+    // The guest is queued again with the clock resumed — it self-assigns.
+    let selfAssigned = false
+    for (; t < 2000 && !selfAssigned; t++) {
+      movement.tick()
+      selfAssigned = sim
+        .tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 }))
+        .some((e) => e.type === 'guest:self_assigned')
+    }
+    expect(selfAssigned).toBe(true)
+  })
+
+  it('a ghosted holder loses the guest (DESK-05 through the room teardown path)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
+    })
+    sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 }))
+    let arrived = false
+    let t = 1
+    for (; t < 200 && !arrived; t++) {
+      movement.tick()
+      arrived = sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 })).some(
+        (e) => e.type === 'guest:arrived',
+      )
+    }
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    sim.ghost('p1')
+    expect(
+      sim.deskSend('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 2 }),
+    ).toBe('rejected')
+    // The guest is back in the queue: p2 at the desk can receive it now.
+    expect(sim.deskInteract('p2')).toBe('rejected') // out of zone
+    void t
+  })
+})
