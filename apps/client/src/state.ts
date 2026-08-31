@@ -69,6 +69,12 @@ export type ViewAction =
   // high-frequency events — continuous positions live in the world scene.
   | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: Facing }
   | { type: 'guest-moved'; guestId: string; floor: FloorId; x: number }
+  | { type: 'guest-arrived'; guestId: string }
+  | { type: 'guest-impatient'; guestId: string }
+  | { type: 'guest-self-assigned'; guestId: string; floor: FloorId; room: number }
+  | { type: 'guest-settled'; guestId: string; floor: FloorId; room: number }
+  | { type: 'guest-checked-out'; guestId: string; floor: FloorId; room: number }
+  | { type: 'guest-left'; guestId: string }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'elevator-doors'; car: CarId; floor: FloorId; open: boolean }
@@ -185,6 +191,12 @@ export const ACTION_ROUTES = {
   'round-started': 'view',
   'player-moved': 'scene',
   'guest-moved': 'scene',
+  'guest-arrived': 'scene',
+  'guest-impatient': 'scene',
+  'guest-self-assigned': 'scene',
+  'guest-settled': 'scene',
+  'guest-checked-out': 'scene',
+  'guest-left': 'scene',
   'elevator-called': 'scene',
   'elevator-moved': 'scene',
   'elevator-doors': 'scene',
@@ -317,6 +329,12 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     // Render state, not view state: identity return keeps 20 Hz out of the DOM.
     case 'player-moved':
     case 'guest-moved':
+    case 'guest-arrived':
+    case 'guest-impatient':
+    case 'guest-self-assigned':
+    case 'guest-settled':
+    case 'guest-checked-out':
+    case 'guest-left':
     case 'elevator-called':
     case 'elevator-moved':
     case 'elevator-doors':

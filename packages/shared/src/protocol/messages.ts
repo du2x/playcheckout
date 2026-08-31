@@ -144,6 +144,42 @@ export interface GuestMoved {
   readonly x: number
 }
 
+/** server → all players (cycle 3.1). A guest NPC arrived at the desk queue. */
+export interface GuestArrived {
+  readonly guestId: string
+}
+
+/** server → all players (cycle 3.1). The guest's free impatience cue fires. */
+export interface GuestImpatient {
+  readonly guestId: string
+}
+
+/** server → all players (cycle 3.1). The guest self-assigned a vacant room. */
+export interface GuestSelfAssigned {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → all players (cycle 3.1). The guest entered and settled. */
+export interface GuestSettled {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → all players (cycle 3.1). The guest checked out — room re-trashes. */
+export interface GuestCheckedOut {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/** server → all players (cycle 3.1). The guest walked out of the hotel. */
+export interface GuestLeft {
+  readonly guestId: string
+}
+
 /** server → all players. A player disconnected; remove their rectangle. */
 export interface PlayerLeft {
   readonly playerId: string

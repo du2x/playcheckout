@@ -20,6 +20,12 @@ export const MAPPERS: {
   // routes to the world scene (render state); the reducer no-ops them.
   'player:moved': (p) => [{ type: 'player-moved', ...p }],
   'guest:moved': (p) => [{ type: 'guest-moved', ...p }],
+  'guest:arrived': (p) => [{ type: 'guest-arrived', ...p }],
+  'guest:impatient': (p) => [{ type: 'guest-impatient', ...p }],
+  'guest:self_assigned': (p) => [{ type: 'guest-self-assigned', ...p }],
+  'guest:settled': (p) => [{ type: 'guest-settled', ...p }],
+  'guest:checked_out': (p) => [{ type: 'guest-checked-out', ...p }],
+  'guest:left': (p) => [{ type: 'guest-left', ...p }],
   'elevator:called': (p) => [{ type: 'elevator-called', ...p }],
   'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
   'elevator:doors': (p) => [{ type: 'elevator-doors', ...p }],

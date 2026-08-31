@@ -204,19 +204,19 @@ pin makes determinism regressions loud before those cycles.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| GUEST-01 | P1 | Design | Pending |
-| GUEST-02 | P1 | Design | Pending |
-| GUEST-03 | P1 | Design | Pending |
-| GUEST-04 | P1 | Design | Pending |
-| GUEST-05 | P1 | Design | Pending |
-| GUEST-06 | P1 | Design | Pending |
-| GUEST-07 | P1 | Design | Pending |
-| GUEST-08 | P1 | Design | Pending |
-| GUEST-09 | P1 | Design | Pending |
+| GUEST-01 | P1 | Execute | Implementing |
+| GUEST-02 | P1 | Execute | Implementing |
+| GUEST-03 | P1 | Execute | Implementing |
+| GUEST-04 | P1 | Execute | Implementing |
+| GUEST-05 | P1 | Execute | Implementing |
+| GUEST-06 | P1 | Execute | Implementing |
+| GUEST-07 | P1 | Execute | Implementing |
+| GUEST-08 | P1 | Execute | Implementing |
+| GUEST-09 | P1 | Execute | Implementing |
 | GUEST-10 | P1 / P3 | Execute | Implementing |
-| GUEST-11 | P1 | Design | Pending |
-| GUEST-12 | P2 | Design | Pending |
-| GUEST-13 | P2 | Design | Pending |
+| GUEST-11 | P1 | Execute | Implementing |
+| GUEST-12 | P2 | Execute | Implementing |
+| GUEST-13 | P2 | Execute | Implementing |
 | GUEST-14 | P3 | Execute | Implementing |
 
 **Coverage:** 14 total, 0 unmapped.

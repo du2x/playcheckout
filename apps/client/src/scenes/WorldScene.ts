@@ -109,6 +109,8 @@ export class WorldScene extends Phaser.Scene {
   private players = new Map<string, PlayerDisplay>()
   /** Guest NPC positions (cycle 3.1 plumbing) — rendered by the guest slice. */
   private guests = new Map<string, { floor: FloorId; x: number }>()
+  /** Guests whose free impatience cue is active (foot-tap + bell, GUEST-13). */
+  private impatientGuests = new Set<string>()
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
@@ -399,6 +401,25 @@ export class WorldScene extends Phaser.Scene {
         // T4 plumbing: the authoritative guest position lands here; the
         // client guest slice (T8) renders markers/queue from this map.
         this.guests.set(action.guestId, { floor: action.floor, x: action.x })
+        break
+      }
+      case 'guest-arrived': {
+        this.guests.set(action.guestId, { floor: 'lobby', x: 15 })
+        break
+      }
+      case 'guest-impatient': {
+        this.impatientGuests.add(action.guestId)
+        break
+      }
+      case 'guest-self-assigned':
+      case 'guest-settled':
+      case 'guest-checked-out': {
+        this.impatientGuests.delete(action.guestId)
+        break
+      }
+      case 'guest-left': {
+        this.guests.delete(action.guestId)
+        this.impatientGuests.delete(action.guestId)
         break
       }
       case 'player-moved': {

@@ -6,7 +6,13 @@ import type {
   ElevatorPressed,
   ElevatorRiders,
   FloorId,
+  GuestArrived,
+  GuestCheckedOut,
+  GuestImpatient,
+  GuestLeft,
   GuestMoved,
+  GuestSelfAssigned,
+  GuestSettled,
   IntentError,
   LobbySnapshot,
   MovementSnapshot,
@@ -99,6 +105,18 @@ export interface Payloads {
   'player:moved': PlayerMoved
   /** server → same-floor viewers (cycle 3.1). A guest NPC's public position. */
   'guest:moved': GuestMoved
+  /** server → all players (cycle 3.1). A guest NPC arrived at the desk queue. */
+  'guest:arrived': GuestArrived
+  /** server → all players (cycle 3.1). The guest's free impatience cue fires. */
+  'guest:impatient': GuestImpatient
+  /** server → all players (cycle 3.1). The guest self-assigned a vacant room. */
+  'guest:self_assigned': GuestSelfAssigned
+  /** server → all players (cycle 3.1). The guest entered and settled. */
+  'guest:settled': GuestSettled
+  /** server → all players (cycle 3.1). The guest checked out — room re-trashes. */
+  'guest:checked_out': GuestCheckedOut
+  /** server → all players (cycle 3.1). The guest walked out of the hotel. */
+  'guest:left': GuestLeft
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -236,6 +254,54 @@ export const PROTOCOL_REGISTRY = {
       payload: { guestId: event.guestId, floor: event.floor, x: event.x },
       visibility: { floor: event.floor },
     })) as SimProjection<'guest:moved'>,
+  },
+  /** server → all players (cycle 3.1). A guest NPC arrived at the desk queue. */
+  'guest:arrived': {
+    payload: {} as GuestArrived,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId },
+    })) as SimProjection<'guest:arrived'>,
+  },
+  /** server → all players (cycle 3.1). The guest's free impatience cue fires. */
+  'guest:impatient': {
+    payload: {} as GuestImpatient,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId },
+    })) as SimProjection<'guest:impatient'>,
+  },
+  /** server → all players (cycle 3.1). The guest self-assigned a vacant room. */
+  'guest:self_assigned': {
+    payload: {} as GuestSelfAssigned,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+    })) as SimProjection<'guest:self_assigned'>,
+  },
+  /** server → all players (cycle 3.1). The guest entered and settled. */
+  'guest:settled': {
+    payload: {} as GuestSettled,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+    })) as SimProjection<'guest:settled'>,
+  },
+  /** server → all players (cycle 3.1). The guest checked out — room re-trashes. */
+  'guest:checked_out': {
+    payload: {} as GuestCheckedOut,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+    })) as SimProjection<'guest:checked_out'>,
+  },
+  /** server → all players (cycle 3.1). The guest walked out of the hotel. */
+  'guest:left': {
+    payload: {} as GuestLeft,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId },
+    })) as SimProjection<'guest:left'>,
   },
   'elevator:called': {
     payload: {} as ElevatorCalled,

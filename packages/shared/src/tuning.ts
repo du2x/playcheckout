@@ -3,6 +3,8 @@
  * Changing a value is a recorded decision in .specs/STATE.md (AD-NNN), never an
  * incidental edit.
  */
+export type LobbySize = 4 | 5 | 6
+
 export const TUNING = {
   PLAYERS_MIN: 4,
   PLAYERS_MAX: 6,
@@ -38,7 +40,7 @@ export const TUNING = {
   /** Guest arrival cadence in seconds by lobby size (prd §7 v1.3, AD-022).
    *  Fixed interval, no jitter; first arrival one full interval after round
    *  start. The 4-player value is the designated reserve dial. */
-  GUEST_CADENCE_SECONDS: { 4: 30, 5: 24, 6: 18 } as Record<4 | 5 | 6, number>,
+  GUEST_CADENCE_SECONDS: { 4: 30, 5: 24, 6: 18 } as Record<LobbySize, number>,
   /** Settled guest dwell, uniform per guest (prd §7 v1.3, AD-022). */
   GUEST_DWELL_MIN_SECONDS: 45,
   GUEST_DWELL_MAX_SECONDS: 90,

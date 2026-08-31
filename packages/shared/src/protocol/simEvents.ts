@@ -73,6 +73,31 @@ export type SimEvent =
       readonly saboteurId: string
     }
 
+  // --- Guest lifecycle (cycle 3.1, FR-26/28): public weather. Every event is
+  // 'all'-policy — guests are public NPCs, their target room is the checkable
+  // claim the economy stands on (FR-27/FR-33 depend on it).
+  | { readonly type: 'guest:arrived'; readonly guestId: string }
+  | { readonly type: 'guest:impatient'; readonly guestId: string }
+  | {
+      readonly type: 'guest:self_assigned'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
+  | {
+      readonly type: 'guest:settled'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
+  | {
+      readonly type: 'guest:checked_out'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
+  | { readonly type: 'guest:left'; readonly guestId: string }
+
 /**
  * Why a player was fired — server-internal only, never projected to the wire.
  * `wrong-accusation` covers both wrong cases (innocent target, saboteur in

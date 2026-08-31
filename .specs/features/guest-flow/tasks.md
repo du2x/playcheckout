@@ -64,7 +64,7 @@ T3 → T4
 ### Phase 3: Guest lifecycle + wiring
 
 ```
-T4 → T5 → T6 → T7
+T4 → T5 → T7
 ```
 
 ### Phase 4: Client slice
@@ -72,6 +72,9 @@ T4 → T5 → T6 → T7
 ```
 T7 → T8
 ```
+
+(T6 is merged into T5 — the SimEvent additions and their registry rows are
+compile-coupled and land in one commit.)
 
 ---
 
@@ -174,7 +177,7 @@ T7 → T8
 
 ---
 
-### T5: GuestSim lifecycle
+### T5: GuestSim lifecycle + guest protocol rows (T6 merged — compile-coupled) ✅
 
 **What**: `GuestSim` state machine + pure guest driver: arrival schedule, held arrivals, queue slots, impatience (foot-tap/bell event, no cost), seeded self-assign, drive-to-room via intents, settle dwell, checkout churn, hotel exit; round-scoped teardown; ≥200-tick bit-for-bit replay pin.
 **Where**: `packages/sim/src/guests.ts` (new), `packages/sim/src/guests.test.ts` (new)
@@ -198,11 +201,11 @@ T7 → T8
 
 ---
 
-### T6: Protocol registry entries
+### T6: Protocol registry entries (MERGED into T5: SimEvent additions require same-commit registry rows)
 
 **What**: Registry-first declarations for all guest messages + `elevator:riders` payload amendment + sim events; exhaustive client mapper types compile.
 **Where**: `packages/shared/src/protocol/{simEvents,messages,registry}.ts` (+ `registry.test.ts`)
-**Depends on**: T5
+**Depends on**: None (merged into T5)
 **Reuses**: registry `fromSim` projection pattern, `sameFloor` policy (AD-009), `riders` policy (AD-013)
 **Requirement**: GUEST-03, GUEST-07, GUEST-12 (wire surface)
 
@@ -226,7 +229,7 @@ T7 → T8
 
 **What**: `TurnoverRoom` applies guest intents to `MovementSim` each tick (MOVE-10 flush), passes guest positions into `RoundSim.tick`, purges `guest:*` movers at round end (buzzer/abort/conviction), routing flows via registry.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts` (+ `TurnoverRoom.test.ts`)
-**Depends on**: T6
+**Depends on**: T5
 **Reuses**: intent handler patterns, `snapshotFor`, round-end teardown paths (AD-021)
 **Requirement**: GUEST-01…11 (end-to-end server behavior)
 
@@ -277,7 +280,7 @@ Phase 1 → Phase 2 → Phase 3 → Phase 4
 
 Phase 1:  T1 → T2 → T3
 Phase 2:  T3 → T4
-Phase 3:  T4 → T5 → T6 → T7
+Phase 3:  T4 → T5 → T7
 Phase 4:  T7 → T8
 ```
 
@@ -306,8 +309,8 @@ task-budgeted batch → execute inline, no sub-agent offer.
 | T3 | T2 | T2 → T3 | ✅ Match |
 | T4 | T3 | T3 → T4 | ✅ Match |
 | T5 | T4 | T4 → T5 | ✅ Match |
-| T6 | T5 | T5 → T6 | ✅ Match |
-| T7 | T6 | T6 → T7 | ✅ Match |
+| T6 | T5 | merged into T5 (compile-coupled) | ✅ N/A |
+| T7 | T5 | T5 → T7 | ✅ Match |
 | T8 | T7 | T7 → T8 | ✅ Match |
 
 ## Test Co-location Validation
