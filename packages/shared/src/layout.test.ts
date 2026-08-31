@@ -22,8 +22,8 @@ describe('layout', () => {
     expect(ROOM_COUNT).toBe(24)
   })
 
-  it('has the grand lobby plus three guest floors', () => {
-    expect(FLOOR_IDS).toEqual(['lobby', ...GUEST_FLOOR_IDS])
+  it('has the grand lobby, the mezzanine restaurant, and three guest floors (3.C)', () => {
+    expect(FLOOR_IDS).toEqual(['lobby', 'mezzanine', ...GUEST_FLOOR_IDS])
   })
 
   it('matches the roadmap step 0 travel-budget assumptions', () => {

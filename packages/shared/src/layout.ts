@@ -1,7 +1,7 @@
 export const FLOORS = 3
 export const ROOMS_PER_FLOOR = 8
 export const ROOM_COUNT = FLOORS * ROOMS_PER_FLOOR // 24 — roadmap step 0
-export const FLOOR_IDS = ['lobby', 'floor1', 'floor2', 'floor3'] as const
+export const FLOOR_IDS = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as const
 export const GUEST_FLOOR_IDS = ['floor1', 'floor2', 'floor3'] as const
 export type RoomIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 export const ROOM_INDEXES = [1, 2, 3, 4, 5, 6, 7, 8] as const

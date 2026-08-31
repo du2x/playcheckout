@@ -711,7 +711,7 @@ export class TurnoverRoom extends Room {
   private sendExitSnapshot(sessionId: string): void {
     const arrivalFloor = this.movement.viewOf(sessionId).floor
     const cards =
-      arrivalFloor !== null && arrivalFloor !== 'lobby'
+      arrivalFloor !== null && arrivalFloor !== 'lobby' && arrivalFloor !== 'mezzanine'
         ? (this.sim?.cardedOn(arrivalFloor) ?? [])
         : []
     this.router.toSelf('movement:snapshot', sessionId, {

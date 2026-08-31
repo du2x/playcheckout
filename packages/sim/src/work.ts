@@ -1,4 +1,4 @@
-import type { GuestFloorId, Role, RoomIndex, RoomState, SimEvent } from '@turnover/shared'
+import type { FloorId, GuestFloorId, Role, RoomIndex, RoomState, SimEvent } from '@turnover/shared'
 import { roomIndexAtMilli, TUNING } from '@turnover/shared'
 import { TICK_HZ } from './tick.js'
 
@@ -33,7 +33,7 @@ interface Channel {
 }
 
 export interface PositionSample {
-  readonly floor: GuestFloorId | 'lobby'
+  readonly floor: FloorId
   readonly x: number
 }
 
@@ -271,7 +271,8 @@ export class WorkChannels {
     // `room:entered` once per entrant and sends that player the room's state
     // privately; every other interior fact stays put.
     for (const [playerId, pos] of positions) {
-      if (pos.floor === 'lobby') {
+      if (pos.floor === 'lobby' || pos.floor === 'mezzanine') {
+        // The mezzanine carries no rooms (3.C): no segment to observe.
         this.lastSegment.set(playerId, null)
         continue
       }
