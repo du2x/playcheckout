@@ -325,10 +325,10 @@ appears (`client:suitcase`).
 | SUI-21 | P2 walkie log | Design | Implemented (T2/T4) |
 | SUI-22 | P2 walkie log | Design | Implemented (T2/T4) |
 | SUI-23 | P2 walkie log | Design | Implemented (T2/T4) |
-| SUI-24 | P2 client | Design | — |
-| SUI-25 | P2 client | Design | — |
-| SUI-26 | P2 client | Design | — |
-| SUI-27 | P2 client | Design | — |
+| SUI-24 | P2 client | Design | Implemented (T5) |
+| SUI-25 | P2 client | Design | Implemented (T5) |
+| SUI-26 | P2 client | Design | Implemented (T5) |
+| SUI-27 | P2 client | Design | Implemented (T5) |
 
 **Coverage:** 27 total, 0 unmapped.
 

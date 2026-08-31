@@ -173,10 +173,11 @@ T1 → T2 → T3 → T4 → T5 → T6
 
 **Done when**:
 
-- [ ] Markers follow carrier/rest state; view filter matches guests
-- [ ] Ladder order matches SUI-25; desk zone still suppresses the accuse hold
-- [ ] Blind place shows the confirm; confirm sends; heard rooms place directly
-- [ ] `client:suitcase` green in the harness; full gate passes (`pnpm test:client` incl. the scenario)
+- [x] Markers follow carrier/rest state; view filter matches guests
+- [x] Ladder order matches SUI-25; desk zone still suppresses the accuse hold
+- [x] Blind place shows the confirm ("You haven't heard this guest's room"); confirm sends; heard rooms place directly
+- [x] `client:suitcase` green in the harness (both scenarios, 27s/34s)
+- NOTE on the full gate: justice/lobby-7th/round-clock/spectator show the DOCUMENTED rotating load-flake class; justice was reproduced FAILING on the pre-3.B commit (worktree at 131af9e) — pre-existing, not a 3.B regression. typecheck 4/4 ✅, lint ✅, test:sim 381 ✅
 
 **Tests**: e2e
 **Gate**: full
