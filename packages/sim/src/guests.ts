@@ -86,6 +86,9 @@ export interface GuestTiming {
   readonly impatienceTicks?: number
   /** Scales the drawn dwell (45–90 s) — e.g. 0.02 → 0.9–1.8 s. */
   readonly dwellScale?: number
+  /** Overrides the carry clock (§7: 60 s per leg) — e.g. 30 ticks for a
+   *  round-integration test. Production never supplies it. */
+  readonly carryClockTicks?: number
 }
 
 /**
@@ -132,9 +135,13 @@ export class GuestSim {
   private readonly cadenceTicks: number
   private readonly impatienceTicks: number
   private readonly dwellScale: number
+  private readonly carryClockTicks: number
   private nextScheduleTick: number
   private backlog = 0
   private ordinal = 0
+  /** Carriers whose carry leg expired this tick — drained by the RoundSim,
+   *  which fires them through the justice pipeline (SUI-18). */
+  private expiredCarriers: string[] = []
 
   constructor(
     seed: number,
@@ -146,6 +153,7 @@ export class GuestSim {
     this.cadenceTicks = timing?.cadenceTicks ?? TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
     this.impatienceTicks = timing?.impatienceTicks ?? IMPATIENCE_TICKS
     this.dwellScale = timing?.dwellScale ?? 1
+    this.carryClockTicks = timing?.carryClockTicks ?? TUNING.CARRY_CLOCK_SECONDS * TICK_HZ
     // The first arrival lands one full cadence interval after round start.
     this.nextScheduleTick = this.cadenceTicks
   }
@@ -179,6 +187,19 @@ export class GuestSim {
   tick(tick: number): SimEvent[] {
     const events: SimEvent[] = [...this.pending]
     this.pending = []
+
+    // Carry clock (SUI-18/19, cycle 3.B): a carry leg expires after
+    // CARRY_CLOCK_SECONDS — check-in → first placement, fresh on every
+    // pickup; a resting suitcase runs no clock. Expiry raises the carrier to
+    // the RoundSim, which fires them through the justice pipeline; the
+    // dropCarry aftermath rides the fired teardown in the same flush.
+    for (const sc of this.suitcases.values()) {
+      if (sc.carrier === null || sc.legStartTick === null) continue
+      if (tick - sc.legStartTick >= this.carryClockTicks) {
+        this.expiredCarriers.push(sc.carrier)
+        sc.legStartTick = null // the leg is consumed; teardown owns the rest
+      }
+    }
 
     // Arrival schedule: fixed interval, backlog when the hotel is full.
     if (tick >= this.nextScheduleTick) {
@@ -590,7 +611,14 @@ export class GuestSim {
           g.phase = 'waiting'
           g.target = null
           this.holding.push(g.id)
-          this.rePlaceHolding()
+          // Re-place directly: the guest was just removed from the hall at
+          // the door, and rePlaceHolding only corrects existing positions.
+          this.movement.joinGuest(
+            g.id,
+            'lobby',
+            HOLD_START + (this.holding.length - 1) * QUEUE_STEP,
+          )
+          this.movement.announceGuest(g.id)
         }
         return
       }
@@ -643,6 +671,12 @@ export class GuestSim {
       return
     }
     this.movement.startMove(g.id, landingX < pos.x ? 'left' : 'right')
+  }
+
+  /** Carriers whose carry leg expired — the RoundSim drains this right after
+   *  the guest tick and fires them through the justice pipeline (SUI-18). */
+  drainExpiredCarriers(): string[] {
+    return this.expiredCarriers.splice(0)
   }
 
   /** Snapshot query for tests and the room's routing helpers. */

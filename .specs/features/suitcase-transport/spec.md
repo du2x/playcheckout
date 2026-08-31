@@ -314,13 +314,13 @@ appears (`client:suitcase`).
 | SUI-10 | P1 carry/place | Design | Implemented (T2) |
 | SUI-11 | P1 carry/place | Design | Implemented (T2) |
 | SUI-12 | P1 carry/place | Design | Implemented (T2) |
-| SUI-13 | P1 guest-follows | Design | — |
-| SUI-14 | P1 guest-follows | Design | — |
-| SUI-15 | P1 guest-follows | Design | — |
-| SUI-16 | P1 guest-follows | Design | — |
-| SUI-17 | P1 guest-follows | Design | — |
-| SUI-18 | P2 carry clock | Design | — |
-| SUI-19 | P2 carry clock | Design | — |
+| SUI-13 | P1 guest-follows | Design | Implemented (T3) |
+| SUI-14 | P1 guest-follows | Design | Implemented (T3) |
+| SUI-15 | P1 guest-follows | Design | Implemented (T3) |
+| SUI-16 | P1 guest-follows | Design | Implemented (T3) |
+| SUI-17 | P1 guest-follows | Design | Implemented (T3) |
+| SUI-18 | P2 carry clock | Design | Implemented (T3) |
+| SUI-19 | P2 carry clock | Design | Implemented (T3) |
 | SUI-20 | P2 carry clock | Design | Implemented (T2) |
 | SUI-21 | P2 walkie log | Design | — |
 | SUI-22 | P2 walkie log | Design | — |

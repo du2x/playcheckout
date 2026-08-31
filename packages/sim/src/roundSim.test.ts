@@ -527,3 +527,37 @@ describe('sim:suitcase_carry (round integration)', () => {
     expect(sim.deskInteract('p2')).toBe('accepted')
   })
 })
+
+describe('sim:carry_clock (round integration)', () => {
+  it('expiry fires the current carrier through the justice teardown; the re-queued guest is check-in-able again (SUI-18/20)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: {
+        cadenceTicks: 20,
+        impatienceTicks: 100000,
+        dwellScale: 0.001,
+        carryClockTicks: 30,
+      },
+    })
+    const positions = lobbyPositions({ p1: 15, p2: 15, p3: 22, p4: 22 })
+    runToArrival(movement, sim, positions)
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    let fired: SimEvent | undefined
+    for (let t = 0; t < 200 && fired === undefined; t++) {
+      movement.tick()
+      for (const e of sim.tick(positions)) {
+        if (e.type === 'player:fired') fired = e
+      }
+    }
+    if (fired === undefined || fired.type !== 'player:fired') throw new Error('no firing')
+    // The reason is server-internal — the wire strips it, the sim does not.
+    expect(fired.reason).toBe('carry-clock')
+    expect(fired.playerId).toBe('p1')
+    // Aftermath: the guest re-queued with the assignment void — p2 at the
+    // desk checks them in again (fresh assignment re-seeded).
+    expect(sim.deskInteract('p2')).toBe('accepted')
+  })
+})

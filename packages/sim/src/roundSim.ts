@@ -229,6 +229,12 @@ export class RoundSim {
         }
         events.push(guestEvent)
       }
+      // Carry-clock expiry (cycle 3.B, SUI-18): fire the current carrier
+      // through the justice pipeline — the `player:fired` event and the
+      // dropCarry aftermath land in this same flush via the drain below.
+      for (const carrierId of this.guests.drainExpiredCarriers()) {
+        this.justice.fire(carrierId, 'carry-clock')
+      }
     }
     // Firing teardown (JUST-04/06/11): the fired player's channels are
     // cancelled silently (WORK-12) and their position memory is dropped, so

@@ -1,4 +1,4 @@
-import type { FloorId, GuestFloorId, SimEvent } from '@turnover/shared'
+import type { FloorId, GuestFloorId, RoomIndex, SimEvent } from '@turnover/shared'
 import { GUEST_FLOOR_IDS, ROOMS_PER_FLOOR, roomDoorXMilli, TUNING } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { GuestSim, type MovementPort } from './guests.js'
@@ -412,5 +412,118 @@ describe('sim:suitcase_carry (selection)', () => {
     // carrier checks IT in next.
     expect(movement.positionOf('guest:2')?.x).toBe(TUNING.DESK_X_TILES)
     expect(guests.checkIn('p2', CADENCE_5P * 2 + 2)).toBe('accepted')
+  })
+})
+
+describe('sim:assignment_overhear', () => {
+  it('the assignment is overheard EXACTLY ONCE — never repeated, never logged, through carries and rests (SUI-03)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    const first = flush(movement, guests, CADENCE_5P + 2)
+    expect(of(first, 'assignment:overheard')).toHaveLength(1)
+    // A full carry-place-pickup-place cycle re-emits lifecycle facts but
+    // NEVER a second overhear (the snapshot happens at the check-in tick).
+    movement.join('p1', { floor: 'floor1', xMilli: roomDoorXMilli(3) })
+    expect(guests.placeSuitcase('p1', 3, CADENCE_5P + 3)).toBe('placed')
+    flush(movement, guests, CADENCE_5P + 4)
+    movement.join('p2', { floor: 'floor1', xMilli: roomDoorXMilli(3) })
+    expect(guests.pickupSuitcase('p2', CADENCE_5P + 5)).toBe('picked_up')
+    flush(movement, guests, CADENCE_5P + 6)
+    movement.join('p2', { floor: 'floor2', xMilli: roomDoorXMilli(6) })
+    expect(guests.placeSuitcase('p2', 6, CADENCE_5P + 7)).toBe('placed')
+    const rest = flush(movement, guests, CADENCE_5P + 8)
+    void rest
+    // Run a while longer — still exactly one overhear in the whole stream.
+    let count = 1
+    for (let t = CADENCE_5P + 9; t < CADENCE_5P + 210; t++) {
+      count += of(flush(movement, guests, t), 'assignment:overheard').length
+    }
+    expect(count).toBe(1)
+  })
+})
+
+describe('sim:wrong_delivery', () => {
+  it('a wrong-room arrival complains at the door, returns the guest to the holding area, and a corrected placement settles them (SUI-13/14/15/16)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    const flushed = flush(movement, guests, CADENCE_5P + 2)
+    const o = of(flushed, 'assignment:overheard')[0]
+    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    const assignment = { floor: o.floor, room: o.room }
+    // Place at a WRONG room on the assignment's floor (index shifted by one,
+    // wrapping 8 → 1 — guaranteed different from the assignment).
+    const wrongRoom = ((assignment.room % ROOMS_PER_FLOOR) + 1) as RoomIndex
+    movement.join('p1', { floor: assignment.floor, xMilli: roomDoorXMilli(wrongRoom) })
+    expect(guests.placeSuitcase('p1', wrongRoom, CADENCE_5P + 3)).toBe('placed')
+    flush(movement, guests, CADENCE_5P + 4)
+    // The guest follows the suitcase and complains at the wrong door.
+    let complained: { floor: FloorId; room: number } | null = null
+    let t = CADENCE_5P + 5
+    for (; t < CADENCE_5P + 5 + 2000 && complained === null; t++) {
+      for (const e of flush(movement, guests, t)) {
+        if (e.type === 'guest:complained') complained = { floor: e.floor, room: e.room }
+      }
+    }
+    expect(complained).toEqual({ floor: assignment.floor, room: wrongRoom })
+    // The guest returned to the holding area (patient, awaiting correction).
+    expect(movement.positionOf('guest:1')?.floor).toBe('lobby')
+    expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_HOLD_START_TILES)
+    // Correction: the suitcase is re-carried to the ASSIGNED room and placed.
+    movement.join('p2', { floor: assignment.floor, xMilli: roomDoorXMilli(wrongRoom) })
+    expect(guests.pickupSuitcase('p2', t)).toBe('picked_up')
+    flush(movement, guests, t + 1)
+    movement.join('p2', { floor: assignment.floor, xMilli: roomDoorXMilli(assignment.room) })
+    expect(guests.placeSuitcase('p2', assignment.room, t + 2)).toBe('placed')
+    flush(movement, guests, t + 3)
+    // The re-targeted guest settles into the assignment; tenancy commits.
+    let settled: { floor: FloorId; room: number } | null = null
+    for (; t < CADENCE_5P + 5 + 4000 && settled === null; t++) {
+      for (const e of flush(movement, guests, t)) {
+        if (e.type === 'guest:settled') settled = { floor: e.floor, room: e.room }
+      }
+    }
+    expect(settled).toEqual(assignment)
+    expect(guests.tenantedRooms()).toContainEqual(assignment)
+    const reserved = (guests as unknown as { reserved: Set<string> }).reserved
+    expect(reserved.size).toBe(0) // reservation converted to tenancy
+  })
+})
+
+describe('sim:carry_clock', () => {
+  it('a fresh leg starts on every pickup; a resting suitcase runs no clock (SUI-19)', () => {
+    const movement = new MovementSim()
+    // Test-only clock override (the AD-028 seam): 50-tick legs.
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      carryClockTicks: 50,
+      impatienceTicks: 100000,
+    })
+    movement.join('p1')
+    movement.join('p2')
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    flush(movement, guests, CADENCE_5P + 2)
+    // Run past the leg length: p1's carry expires.
+    let t = CADENCE_5P + 2
+    for (; t < CADENCE_5P + 62; t++) void flush(movement, guests, t)
+    expect(guests.drainExpiredCarriers()).toEqual(['p1'])
+    // Place: the leg stops — no further expiry while resting.
+    movement.join('p1', { floor: 'floor1', xMilli: roomDoorXMilli(4) })
+    expect(guests.placeSuitcase('p1', 4, t)).toBe('placed')
+    flush(movement, guests, t + 1)
+    for (t = t + 2; t < CADENCE_5P + 220; t++) void flush(movement, guests, t)
+    expect(guests.drainExpiredCarriers()).toEqual([])
+    // Pickup by p2 starts a FRESH 50-tick leg; expiry names p2, not p1.
+    movement.join('p2', { floor: 'floor1', xMilli: roomDoorXMilli(4) })
+    expect(guests.pickupSuitcase('p2', t)).toBe('picked_up')
+    flush(movement, guests, t + 1)
+    const pickupTick = t + 1
+    // legStart = t; expiry first fires at t + 50 — the window below stops
+    // one tick short of it.
+    for (t = pickupTick + 1; t < pickupTick + 48; t++) void flush(movement, guests, t)
+    expect(guests.drainExpiredCarriers()).toEqual([])
+    for (; t < pickupTick + 100; t++) void flush(movement, guests, t)
+    expect(guests.drainExpiredCarriers()).toEqual(['p2'])
   })
 })

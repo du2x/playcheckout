@@ -117,15 +117,17 @@ T1 → T2 → T3 → T4 → T5 → T6
 
 **Done when**:
 
-- [ ] Wrong delivery complains building-wide naming room + guest, never the assignment; no personal penalty anywhere
-- [ ] Correct delivery settles; tenancy commits at settle; churn unchanged
-- [ ] Clock expiry fires the current carrier via justice teardown + dropCarry aftermath
-- [ ] `sim:assignment_overhear`, `sim:carry_clock`, `sim:wrong_delivery` suites green; quick gate passes
+- [x] Wrong delivery complains building-wide naming room + guest, never the assignment; the guest returns to the holding area and a corrected placement settles them (tenancy commits at settle; reservation converts)
+- [x] Clock expiry fires the current carrier via justice teardown + dropCarry aftermath (round-integration test with a test-scaled clock — the AD-028 seam gained `carryClockTicks`)
+- [x] Fresh leg on every pickup; a resting suitcase runs no clock
+- [x] `sim:assignment_overhear`, `sim:carry_clock`, `sim:wrong_delivery` suites green; quick gate passes (typecheck ✅, lint ✅, `pnpm test:sim` 380 passed)
 
 **Tests**: unit (same files as T2)
 **Gate**: quick
 
 **Commit**: `feat(sim): make guests follow the suitcase with arrival outcomes and the carry clock`
+
+**Status**: ✅ Complete (T2 already landed the following/re-target drivers; T3 added the clock, the outcome tests, and the justice wiring)
 
 ---
 
