@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generate the Turnover corridor band (AD-020).
+"""Generate the Turnover corridor band (Deco Noir restyle, AD-028).
 
 One tile of the repeatable hallway strip: wainscot + trim + patterned carpet.
 32x146, fully opaque, tiles horizontally with period 32 (edges match by
 construction: the only asymmetric element, the panel seam, sits at x=0).
 
 Screen mapping (current 832x576 frame): band top = y350 (chair rail),
-band bottom = y495 (carpet edge); the cream wall above is a flat fill.
+band bottom = y495 (carpet edge); the slate wall above is a flat fill.
 
 Output:
   apps/client/public/art/rooms/corridor-band.png
@@ -23,13 +23,13 @@ from PIL import Image
 
 W, H = 32, 146
 
-CREAM = (232, 220, 192, 255)
-TAN = (201, 178, 138, 255)
-TAN_SHADE = (168, 148, 110, 255)
-CARPET = (140, 59, 59, 255)
-CARPET_DARK = (110, 47, 47, 255)
-BRASS = (217, 164, 65, 255)
-NIGHT = (43, 36, 64, 255)
+WALL = (51, 80, 90, 255)           # slate teal wall field
+WAINSCOT = (36, 51, 59, 255)       # dark slate wainscot
+WAINSCOT_SHADE = (26, 38, 45, 255)
+CARPET = (92, 36, 48, 255)         # deep burgundy
+CARPET_DARK = (66, 24, 34, 255)
+BRASS = (201, 161, 59, 255)
+NIGHT = (15, 27, 33, 255)          # ink teal night
 
 
 def rect(px: Image.Image, x0: int, y0: int, x1: int, y1: int, color) -> None:
@@ -39,13 +39,13 @@ def rect(px: Image.Image, x0: int, y0: int, x1: int, y1: int, color) -> None:
 
 
 def build_band() -> Image.Image:
-    px = Image.new("RGBA", (W, H), TAN)
+    px = Image.new("RGBA", (W, H), WAINSCOT)
     # chair rail
-    rect(px, 0, 0, 31, 1, TAN_SHADE)
-    rect(px, 0, 2, 31, 2, CREAM)
+    rect(px, 0, 0, 31, 1, WAINSCOT_SHADE)
+    rect(px, 0, 2, 31, 2, WALL)
     # wainscot panel: seam at x=0, quiet field
-    rect(px, 0, 3, 0, 73, TAN_SHADE)
-    rect(px, 0, 74, 31, 75, TAN_SHADE)      # base shadow
+    rect(px, 0, 3, 0, 73, WAINSCOT_SHADE)
+    rect(px, 0, 74, 31, 75, WAINSCOT_SHADE)      # base shadow
     # brass shoe trim
     rect(px, 0, 76, 31, 77, BRASS)
     # carpet field with diamond motif (period 32 by construction)
@@ -88,7 +88,7 @@ def main() -> None:
     mock = Image.new("RGBA", (W, Hs), NIGHT)
     for y in range(48, 350):
         for x in range(W):
-            mock.putpixel((x, y), CREAM)
+            mock.putpixel((x, y), WALL)
     for x0 in range(0, W, W):
         pass
     for x0 in range(0, W, band.width):
@@ -105,8 +105,8 @@ def main() -> None:
     def r(x0, y0, x1, y1, c):
         rect(interior, x0, y0, x1, y1, c)
 
-    r(0, 0, 55, 85, (240, 217, 168, 255))
-    r(0, 60, 55, 85, (110, 97, 84, 255))
+    r(0, 0, 55, 85, (244, 217, 160, 255))
+    r(0, 60, 55, 85, (90, 81, 72, 255))
     mock.alpha_composite(interior, (565, 339))
     mock.alpha_composite(door_open(), (560, 329))
     mock.alpha_composite(door_closed := doors(), (120, 329))

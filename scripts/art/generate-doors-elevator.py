@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the Turnover door + elevator prop family (AD-020).
+"""Generate the Turnover door + elevator prop family (Deco Noir restyle, AD-028).
 
-Authors 5 manifest assets with the brief's locked palette:
+Authors 5 manifest assets with the adopted Deco Noir palette (sheet contracts
+unchanged from AD-020):
   apps/client/public/art/doors/door-closed.png     (72x96, opaque slab)
   apps/client/public/art/doors/door-open.png       (72x96, opening transparent
                                                     so the room interior renders
@@ -20,15 +21,20 @@ from pathlib import Path
 
 from PIL import Image
 
-INK = (29, 26, 46, 255)
-NAVY = (47, 79, 111, 255)
-NAVY_SHADE = (34, 57, 79, 255)
-NAVY_DEEP = (26, 43, 60, 255)
-BRASS = (217, 164, 65, 255)
-BRASS_SHADE = (168, 122, 46, 255)
-GLOVE = (242, 237, 226, 255)
-CREAM = (232, 220, 192, 255)
-TAN = (201, 178, 138, 255)
+INK = (15, 27, 33, 255)
+WALNUT = (58, 38, 32, 255)
+WALNUT_SHADE = (43, 27, 23, 255)
+WALNUT_DEEP = (32, 20, 17, 255)
+JAMB = (74, 48, 38, 255)          # lighter walnut jamb block
+CHARCOAL = (35, 35, 43, 255)      # elevator slab / panel face
+CHARCOAL_SHADE = (24, 24, 30, 255)
+BRASS = (201, 161, 59, 255)
+BRASS_SHADE = (156, 120, 44, 255)
+IVORY = (246, 241, 230, 255)
+WALL = (51, 80, 90, 255)          # slate teal wall (mocks)
+WAINSCOT = (36, 51, 59, 255)
+CARPET = (92, 36, 48, 255)
+BRASS_DIM = (179, 135, 58, 255)
 
 TRANSPARENT = (0, 0, 0, 0)
 OUT = Path("apps/client/public/art")
@@ -44,28 +50,15 @@ def rect(px: Image.Image, x0: int, y0: int, x1: int, y1: int, color) -> None:
             px.putpixel((x, y), color)
 
 
-def outline(px: Image.Image, color=INK) -> None:
-    """1px dark outline around non-transparent pixels (architecture rule:
-    outlines are for characters only — but door/car slabs use darker-self
-    edges inline, so this helper is used only where the brief allows it)."""
-    src = px.copy()
-    for y in range(px.height):
-        for x in range(px.width):
-            if src.getpixel((x, y))[3] != 0:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < px.width and 0 <= ny < px.height:
-                    if src.getpixel((nx, ny))[3] != 0:
-                        px.putpixel((x, y), color)
-                        break
-
-
 def door_frame(px: Image.Image) -> None:
-    """Shared 72x96 doorframe: tan wood jamb + brass lintel."""
-    rect(px, 0, 0, 71, 95, TAN)              # jamb block
-    rect(px, 0, 0, 71, 5, BRASS)             # lintel
-    rect(px, 0, 5, 71, 5, BRASS_SHADE)
+    """Shared 72x96 doorframe: walnut jamb + stepped brass lintel."""
+    rect(px, 0, 0, 71, 95, JAMB)             # jamb block
+    # stepped pediment carved from the jamb top
+    rect(px, 8, 0, 63, 3, BRASS)             # brass cap band
+    rect(px, 4, 3, 67, 5, JAMB)
+    rect(px, 0, 0, 3, 5, WALL)               # steps recede into the wall
+    rect(px, 68, 0, 71, 5, WALL)
+    rect(px, 0, 5, 71, 6, BRASS_SHADE)       # lintel shadow line
     rect(px, 0, 0, 3, 95, BRASS_SHADE)       # jamb edge accents
     rect(px, 68, 0, 71, 95, BRASS_SHADE)
 
@@ -73,14 +66,14 @@ def door_frame(px: Image.Image) -> None:
 def door_closed() -> Image.Image:
     px = new(72, 96)
     door_frame(px)
-    rect(px, 4, 6, 67, 95, NAVY)             # slab
-    rect(px, 4, 6, 67, 7, NAVY_SHADE)
-    rect(px, 4, 6, 5, 95, NAVY_SHADE)        # hinge-side shade
+    rect(px, 4, 6, 67, 95, WALNUT)           # slab
+    rect(px, 4, 6, 67, 7, WALNUT_SHADE)
+    rect(px, 4, 6, 5, 95, WALNUT_SHADE)      # hinge-side shade
     # two recessed panels
     for py0, py1 in ((14, 46), (54, 86)):
-        rect(px, 12, py0, 59, py1, NAVY_SHADE)
-        rect(px, 14, py0 + 2, 57, py1 - 2, NAVY)
-        rect(px, 14, py1 - 2, 57, py1 - 2, NAVY_SHADE)
+        rect(px, 12, py0, 59, py1, WALNUT_SHADE)
+        rect(px, 14, py0 + 2, 57, py1 - 2, WALNUT)
+        rect(px, 14, py1 - 2, 57, py1 - 2, WALNUT_SHADE)
     # brass kick plate + knob
     rect(px, 12, 88, 59, 93, BRASS_SHADE)
     rect(px, 12, 88, 59, 89, BRASS)
@@ -95,15 +88,15 @@ def door_open() -> Image.Image:
     # opening: transparent interior (room interior renders behind, FR-10);
     # inner jamb shadows frame the hole
     rect(px, 4, 6, 67, 95, TRANSPARENT)
-    rect(px, 4, 6, 7, 95, NAVY_DEEP)         # inner shadow, hinge side
-    rect(px, 64, 6, 67, 95, NAVY_DEEP)       # inner shadow, latch side
-    rect(px, 4, 6, 67, 9, NAVY_DEEP)         # inner shadow, head
+    rect(px, 4, 6, 7, 95, WALNUT_DEEP)       # inner shadow, hinge side
+    rect(px, 64, 6, 67, 95, WALNUT_DEEP)     # inner shadow, latch side
+    rect(px, 4, 6, 67, 9, WALNUT_DEEP)       # inner shadow, head
     # slab swung inward on the hinge side (foreshortened, covers right part)
-    rect(px, 46, 6, 63, 95, NAVY)
-    rect(px, 46, 6, 48, 95, NAVY_SHADE)
+    rect(px, 46, 6, 63, 95, WALNUT)
+    rect(px, 46, 6, 48, 95, WALNUT_SHADE)
     for py0, py1 in ((14, 46), (54, 86)):    # foreshortened panel hints
-        rect(px, 52, py0, 60, py1, NAVY_SHADE)
-        rect(px, 54, py0 + 2, 58, py1 - 2, NAVY)
+        rect(px, 52, py0, 60, py1, WALNUT_SHADE)
+        rect(px, 54, py0 + 2, 58, py1 - 2, WALNUT)
     rect(px, 52, 47, 55, 51, BRASS)          # knob near the opening edge
     # threshold
     rect(px, 4, 92, 45, 95, BRASS_SHADE)
@@ -114,13 +107,13 @@ def door_open() -> Image.Image:
 def door_card() -> Image.Image:
     px = new(24, 16)
     rect(px, 11, 0, 12, 2, INK)              # hook nail
-    rect(px, 2, 2, 21, 14, GLOVE)            # ivory plaque
+    rect(px, 2, 2, 21, 14, IVORY)            # ivory plaque
     rect(px, 2, 2, 21, 2, BRASS)             # gold border
     rect(px, 2, 14, 21, 14, BRASS)
     rect(px, 2, 2, 2, 14, BRASS)
     rect(px, 21, 2, 21, 14, BRASS)
-    rect(px, 4, 4, 19, 5, NAVY_SHADE)        # text bands (non-lexical)
-    rect(px, 4, 8, 15, 9, NAVY_SHADE)
+    rect(px, 4, 4, 19, 5, WALNUT_SHADE)      # text bands (non-lexical)
+    rect(px, 4, 8, 15, 9, WALNUT_SHADE)
     rect(px, 17, 8, 19, 11, BRASS)           # seal
     return px
 
@@ -129,43 +122,43 @@ def elevator_car(open_doors: bool) -> Image.Image:
     px = new(48, 64)
     rect(px, 0, 0, 47, 5, BRASS)             # top beam
     rect(px, 0, 5, 47, 5, BRASS_SHADE)
-    rect(px, 20, 1, 27, 4, GLOVE)            # ceiling light
+    rect(px, 20, 1, 27, 4, IVORY)            # ceiling light
     rect(px, 0, 0, 3, 63, BRASS)             # side posts
     rect(px, 44, 0, 47, 63, BRASS)
     rect(px, 0, 3, 3, 63, BRASS_SHADE)
     rect(px, 44, 3, 47, 63, BRASS_SHADE)
     if open_doors:
         # doors parked at the sides, opening transparent (shaft shows through)
-        rect(px, 5, 6, 14, 57, NAVY)
-        rect(px, 5, 6, 6, 57, NAVY_SHADE)
-        rect(px, 33, 6, 42, 57, NAVY)
-        rect(px, 40, 6, 42, 57, NAVY_SHADE)
+        rect(px, 5, 6, 14, 57, CHARCOAL)
+        rect(px, 5, 6, 6, 57, CHARCOAL_SHADE)
+        rect(px, 33, 6, 42, 57, CHARCOAL)
+        rect(px, 40, 6, 42, 57, CHARCOAL_SHADE)
         rect(px, 19, 6, 20, 57, BRASS_SHADE)  # cage bars across the opening
         rect(px, 27, 6, 28, 57, BRASS_SHADE)
     else:
-        rect(px, 5, 6, 42, 57, NAVY)         # closed slab
-        rect(px, 23, 6, 24, 57, NAVY_SHADE)  # center seam
-        rect(px, 5, 6, 6, 57, NAVY_SHADE)
-        rect(px, 41, 6, 42, 57, NAVY_SHADE)
+        rect(px, 5, 6, 42, 57, CHARCOAL)      # closed slab
+        rect(px, 23, 6, 24, 57, BRASS_SHADE)  # brass center seam
+        rect(px, 5, 6, 6, 57, CHARCOAL_SHADE)
+        rect(px, 41, 6, 42, 57, CHARCOAL_SHADE)
         rect(px, 7, 29, 40, 30, BRASS_SHADE)  # safety rail across the slab
-    rect(px, 0, 58, 47, 63, BRASS_SHADE)     # floor
+    rect(px, 0, 58, 47, 63, BRASS_SHADE)      # floor
     rect(px, 0, 58, 47, 58, BRASS)
-    rect(px, 8, 60, 39, 61, BRASS)           # tread accent
+    rect(px, 8, 60, 39, 61, BRASS)            # tread accent
     return px
 
 
 def elevator_panel(flash: bool) -> Image.Image:
     px = new(16, 32)
-    rect(px, 0, 0, 15, 31, NAVY_SHADE)
-    rect(px, 0, 0, 15, 1, BRASS)             # brass border
+    rect(px, 0, 0, 15, 31, CHARCOAL)
+    rect(px, 0, 0, 15, 1, BRASS)              # brass border
     rect(px, 0, 30, 15, 31, BRASS)
     rect(px, 0, 0, 0, 31, BRASS)
     rect(px, 15, 0, 15, 31, BRASS)
-    off = (26, 43, 60, 255)
+    off = CHARCOAL_SHADE
     lamp = BRASS if flash else off
-    rect(px, 5, 6, 10, 11, off)              # car-1 lamp socket
-    rect(px, 5, 18, 10, 23, off)             # car-2 lamp socket
-    rect(px, 6, 7, 9, 10, lamp)              # lit lamp (frame 2 only)
+    rect(px, 5, 6, 10, 11, off)               # car-1 lamp socket
+    rect(px, 5, 18, 10, 23, off)              # car-2 lamp socket
+    rect(px, 6, 7, 9, 10, lamp)               # lit lamp (frame 2 only)
     rect(px, 6, 19, 9, 22, lamp)
     return px
 
@@ -225,30 +218,30 @@ def _preview(files: dict, out: Path) -> None:
 
 def _mock(out: Path) -> None:
     W, H = 832, 576
-    mock = Image.new("RGBA", (W, H), (43, 36, 64, 255))
+    mock = Image.new("RGBA", (W, H), INK)
     for y in range(60, 430):
         for x in range(W):
-            mock.putpixel((x, y), CREAM)
+            mock.putpixel((x, y), WALL)
     for y in range(330, 430):
         for x in range(W):
-            mock.putpixel((x, y), TAN)
+            mock.putpixel((x, y), WAINSCOT)
     for y in range(430, 496):
         for x in range(W):
-            mock.putpixel((x, y), (140, 59, 59, 255))
+            mock.putpixel((x, y), CARPET)
     for y in (430, 495):
         for x in range(W):
-            mock.putpixel((x, y), BRASS)
+            mock.putpixel((x, y), BRASS_DIM)
     # room interior visible through the open door (disposable placeholder)
     interior = new(56, 86)
-    rect(interior, 0, 0, 55, 85, (240, 217, 168, 255))
-    rect(interior, 0, 60, 55, 85, (110, 97, 84, 255))   # settled clutter band
+    rect(interior, 0, 0, 55, 85, (244, 217, 160, 255))
+    rect(interior, 0, 60, 55, 85, (90, 81, 72, 255))    # settled clutter band
     mock.alpha_composite(interior, (565, 339))
     mock.alpha_composite(door_open(), (560, 329))
     mock.alpha_composite(door_closed(), (120, 329))
     mock.alpha_composite(door_card(), (204, 350))
     # elevator shaft: cable, car (open), wall panel (flash)
     for y in range(60, 496):
-        mock.putpixel((790, y), (26, 43, 60, 255))
+        mock.putpixel((790, y), WALNUT_DEEP)
     mock.alpha_composite(elevator_car(True), (700, 430 - 64))
     mock.alpha_composite(elevator_panel(True), (660, 340))
     import importlib.util

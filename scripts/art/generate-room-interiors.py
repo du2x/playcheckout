@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Turnover room-interior triptych (AD-020).
+"""Generate the Turnover room-interior triptych (Deco Noir restyle, AD-028).
 
 Three 112x96 opaque interiors, anchor bottom-left at the door threshold:
   apps/client/public/art/rooms/room-prepped.png         tidy baseline
@@ -27,7 +27,7 @@ from PIL import Image
 
 W, H = 112, 96
 
-INK = (29, 26, 46, 255)
+INK = (15, 27, 33, 255)
 
 
 def C(r, g, b):
@@ -47,43 +47,43 @@ def rect(px: Image.Image, x0: int, y0: int, x1: int, y1: int, color) -> None:
 
 
 PREPPED = {
-    "wall": C(232, 220, 192),
-    "wall_shade": C(216, 200, 172),
-    "floor": C(178, 140, 88),
-    "floor_dark": C(152, 116, 70),
-    "base": C(168, 148, 110),
-    "sheet": C(242, 237, 226),
-    "sheet_shade": C(216, 208, 192),
-    "blanket": C(140, 59, 59),
-    "blanket_shade": C(110, 47, 47),
-    "wood": C(201, 178, 138),
-    "wood_shade": C(168, 148, 110),
-    "tv": C(34, 57, 79),
-    "tv_screen": C(242, 237, 226),
-    "brass": C(217, 164, 65),
-    "night": C(43, 36, 64),
-    "curtain": C(140, 59, 59),
-    "pool": C(240, 217, 168),
+    "wall": C(43, 66, 75),
+    "wall_shade": C(33, 51, 59),
+    "floor": C(110, 72, 50),
+    "floor_dark": C(88, 56, 40),
+    "base": C(26, 38, 45),
+    "sheet": C(246, 241, 230),
+    "sheet_shade": C(207, 195, 168),
+    "blanket": C(92, 36, 48),
+    "blanket_shade": C(66, 24, 34),
+    "wood": C(74, 48, 38),
+    "wood_shade": C(58, 38, 32),
+    "tv": C(35, 35, 43),
+    "tv_screen": C(246, 241, 230),
+    "brass": C(201, 161, 59),
+    "night": C(15, 27, 33),
+    "curtain": C(92, 36, 48),
+    "pool": C(244, 217, 160),
     "paper": None,
     "clump": None,
     "spill": None,
 }
 
 FRESH = {**PREPPED,
-         "wall": C(214, 198, 176), "wall_shade": C(196, 180, 156),
-         "floor": C(158, 122, 78), "floor_dark": C(134, 100, 62),
-         "sheet": C(224, 214, 198), "sheet_shade": C(198, 188, 170),
-         "blanket": C(120, 52, 52), "blanket_shade": C(94, 42, 42),
-         "paper": C(242, 237, 226), "clump": INK,
-         "spill": C(157, 184, 74)}
+         "wall": C(37, 57, 66), "wall_shade": C(28, 44, 51),
+         "floor": C(98, 62, 44), "floor_dark": C(78, 48, 34),
+         "sheet": C(226, 220, 206), "sheet_shade": C(190, 180, 160),
+         "blanket": C(80, 32, 42), "blanket_shade": C(58, 22, 30),
+         "paper": C(246, 241, 230), "clump": INK,
+         "spill": C(164, 176, 106)}
 
 SETTLED = {**PREPPED,
-           "wall": C(196, 186, 168), "wall_shade": C(178, 168, 150),
-           "floor": C(140, 116, 84), "floor_dark": C(118, 96, 68),
-           "sheet": C(206, 198, 184), "sheet_shade": C(180, 172, 158),
-           "blanket": C(104, 62, 58), "blanket_shade": C(84, 50, 46),
-           "paper": C(196, 190, 176), "clump": C(60, 54, 48),
-           "spill": C(110, 97, 84)}
+           "wall": C(30, 46, 53), "wall_shade": C(22, 34, 40),
+           "floor": C(78, 50, 36), "floor_dark": C(62, 38, 28),
+           "sheet": C(198, 190, 174), "sheet_shade": C(168, 158, 142),
+           "blanket": C(66, 30, 38), "blanket_shade": C(48, 22, 28),
+           "paper": C(156, 146, 128), "clump": C(60, 54, 48),
+           "spill": C(90, 81, 72)}
 
 
 def draw_room(state: dict, trashed: bool) -> Image.Image:
@@ -203,7 +203,7 @@ def main() -> None:
     sys.modules["gde"] = gde
     spec.loader.exec_module(gde)
 
-    mock = Image.new("RGBA", (832, 576), (43, 36, 64, 255))
+    mock = Image.new("RGBA", (832, 576), (15, 27, 33, 255))
     for y in range(48, 350):
         for x in range(832):
             mock.putpixel((x, y), PREPPED["wall"])
