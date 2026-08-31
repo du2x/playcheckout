@@ -282,8 +282,11 @@ export class WorldScene extends Phaser.Scene {
     // One elevator-car Sprite per car at its landing x (ART-15: frame 0 =
     // doors-open cage, frame 1 = closed slab; never an occupant list —
     // privacy rule). The presenter drives frame/visibility from its clock.
+    // The car rests ON the corridor floor line like doors and players
+    // (origin 0.5,1 at laneY) — the gray-box-era +30 center offset is gone.
     for (const id of [1, 2] as const) {
-      const sprite = this.add.sprite(this.carPx(id), GROUND_Y + 30, 'elevator-car')
+      const sprite = this.add.sprite(this.carPx(id), GROUND_Y, 'elevator-car')
+      sprite.setOrigin(0.5, 1)
       this.cars.set(id, { view: sprite, floor: 'lobby' })
     }
     // Landing panel sprites (ART-17): position-only panels — a call flashes
@@ -366,9 +369,10 @@ export class WorldScene extends Phaser.Scene {
     return SPECTATOR_LANE_Y[floor as FloorId] ?? GROUND_Y
   }
 
-  /** y of a car's center on its floor's lane (the presenter draws doors here). */
+  /** y of a car's feet line on its floor's lane (the presenter draws the
+   *  car body above it; the arrival slide still dips 30 px via carY). */
   private carLaneY(car: 1 | 2): number {
-    return this.laneY(this.cars.get(car)?.floor ?? 'lobby') + 30
+    return this.laneY(this.cars.get(car)?.floor ?? 'lobby')
   }
 
   /** Switch between the live single-floor view and the spectator overview. */
