@@ -2,6 +2,7 @@ import {
   type FloorId,
   type GuestFloorId,
   type MovementSnapshot,
+  ROOM_INDEXES,
   ROOMS_PER_FLOOR,
   type RoomIndex,
   type RoomState,
@@ -305,7 +306,12 @@ export class WorldScene extends Phaser.Scene {
       // E is the accusation key (FR-17): a tap calls, a hold opens the menu.
       keyboard.on('keydown-UP', () => this.callElevator())
       keyboard.on('keydown-DOWN', () => this.callElevator())
-      keyboard.on('keydown-E', () => this.beginAccuseHold())
+      keyboard.on('keydown-E', (event: KeyboardEvent) => {
+        // Key auto-repeat must not re-trigger: the desk branch would toggle
+        // receive/release every repeat (a held E would thrash the queue).
+        if (event.repeat) return
+        this.beginAccuseHold()
+      })
       keyboard.on('keyup-E', () => this.endAccuseHold())
       // In-car floor presses (ELR-06): 1/2/3 press floor1..floor3, 0 presses
       // lobby — active only while the local player rides a car.
@@ -880,7 +886,7 @@ export class WorldScene extends Phaser.Scene {
         : 'announce which room on the walkie?'
     this.deskMenuRooms.replaceChildren()
     for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
-      for (const room of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
+      for (const room of ROOM_INDEXES) {
         const button = document.createElement('button')
         button.className = 'desk-room-choice'
         button.textContent = `${floor}:${room}`

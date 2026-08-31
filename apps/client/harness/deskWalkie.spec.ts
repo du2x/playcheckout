@@ -67,6 +67,25 @@ test.describe('client:desk_walkie', () => {
           'send the guest to which room?',
       )
 
+      // DESK-11 close paths: E-again releases and closes; walking out of the
+      // zone closes too. Then re-receive to run the lie flow.
+      await own.keyboard.down('e')
+      await own.keyboard.up('e')
+      await own.waitForSelector('#desk-menu', { state: 'hidden' })
+      await own.keyboard.down('e')
+      await own.waitForSelector('#desk-menu', { state: 'visible' })
+      await own.keyboard.up('e')
+      await own.keyboard.down('ArrowRight')
+      await own.waitForTimeout(500)
+      await own.keyboard.up('ArrowRight')
+      await own.waitForSelector('#desk-menu', { state: 'hidden' })
+      await own.keyboard.down('ArrowLeft')
+      await own.waitForTimeout(500)
+      await own.keyboard.up('ArrowLeft')
+      await own.keyboard.down('e')
+      await own.waitForSelector('#desk-menu', { state: 'visible' })
+      await own.keyboard.up('e')
+
       // The lie: destination floor2:4, announced floor1:8 (DESK-13's
       // two-choice surface; nothing validates the pair).
       await own.click('#desk-menu-rooms button:has-text("floor2:4")')

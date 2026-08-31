@@ -465,3 +465,51 @@ describe('sim:walkie_lie', () => {
     )
   })
 })
+
+describe('sim:desk_receive (selection + per-holder independence)', () => {
+  it('receives the FRONT guest by id: routing names guest:1 while guest:2 stays queued (DESK-01 front)', () => {
+    // Frozen impatience: both guests must still be queued at the hold.
+    const movement = new MovementSim()
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      impatienceTicks: 100000,
+    })
+    run(movement, guests, CADENCE_5P * 2 + 1) // guest:1 front, guest:2 behind
+    expect(guests.receiveAtDesk('p1', CADENCE_5P * 2 + 1)).toBe('accepted')
+    expect(guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 })).toBe(
+      'routed',
+    )
+    // The ROUTED guest is the FRONT one — receiving queue[length-1] (the M1
+    // mutation) would route guest:2 here instead.
+    const first = guests.tick(CADENCE_5P * 2 + 2)
+    expect(of(first, 'guest:routed')).toEqual([
+      { type: 'guest:routed', guestId: 'guest:1', playerId: 'p1' },
+    ])
+    // guest:2 was never held: still queued at its slot, and a second holder
+    // receives IT next.
+    expect(movement.positionOf('guest:2')?.x).toBe(TUNING.DESK_X_TILES + 1)
+    expect(guests.receiveAtDesk('p2', CADENCE_5P * 2 + 2)).toBe('accepted')
+  })
+
+  it('per-holder state: one holder sends while another releases the same tick — both resolve (edge case 1)', () => {
+    const movement = new MovementSim()
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      impatienceTicks: 100000,
+    })
+    run(movement, guests, CADENCE_5P * 2 + 1)
+    const t = CADENCE_5P * 2 + 1
+    expect(guests.receiveAtDesk('p1', t)).toBe('accepted') // holds guest:1
+    expect(guests.receiveAtDesk('p2', t)).toBe('accepted') // holds guest:2
+    // Same tick: p1 completes a send, p2 releases — independent per-holder.
+    expect(guests.routeHeld('p1', { floor: 'floor3', room: 8 }, { floor: 'floor3', room: 8 })).toBe(
+      'routed',
+    )
+    guests.releaseHeld('p2', t)
+    const flushed = guests.tick(t + 1)
+    expect(of(flushed, 'guest:routed')).toEqual([
+      { type: 'guest:routed', guestId: 'guest:1', playerId: 'p1' },
+    ])
+    // p2's released guest is at the queue front; p1's guest walks to the room.
+    expect(movement.positionOf('guest:2')?.x).toBe(TUNING.DESK_X_TILES)
+    expect(movement.positionOf('guest:1')?.floor).toBe('lobby') // began the walk
+  })
+})
