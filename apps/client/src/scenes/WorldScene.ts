@@ -123,6 +123,7 @@ export class WorldScene extends Phaser.Scene {
   // --- Front desk (cycle 3.B): the E-zone hint; the two-step send menu is
   // gone with the walkie-broadcast model (the suitcase replaces it).
   private deskHint: HTMLElement | null = null
+  private walkieLog: HTMLElement | null = null
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
@@ -444,6 +445,8 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'guest-arrived': {
         this.guests.set(action.guestId, { floor: 'lobby', x: 15 })
+        // SUI-21: arrival is a lifecycle fact — the walkie reads it out.
+        this.appendWalkieLine('a guest arrives at the front desk')
         break
       }
       case 'guest-impatient': {
@@ -457,9 +460,15 @@ export class WorldScene extends Phaser.Scene {
         // The tap window deliberately persists past self-assignment (3.1
         // self-assign is instant — clearing here would hide the cue).
         break
-      case 'guest-settled':
+      case 'guest-settled': {
+        this.impatientGuests.delete(action.guestId)
+        // SUI-21: settle is a lifecycle fact — the room becomes public here.
+        this.appendWalkieLine(`a guest settles into ${action.floor}:${action.room}`)
+        break
+      }
       case 'guest-checked-out': {
         this.impatientGuests.delete(action.guestId)
+        this.appendWalkieLine(`a guest checks out of ${action.floor}:${action.room}`)
         break
       }
       case 'guest-left': {
@@ -625,24 +634,38 @@ export class WorldScene extends Phaser.Scene {
         // owned-marker surface and the blind-place confirm (T5 slice).
         this.heardAssignments.set(action.guestId, { floor: action.floor, room: action.room })
         break
-      case 'suitcase-carried':
+      case 'suitcase-carried': {
         // SUI-24: carried — the marker rides the carrier's position stream.
         this.suitcases.set(action.guestId, { carrierId: action.carrierId, rest: null })
+        // SUI-21: check-in handoff is a lifecycle fact (no room named).
+        const taker = this.rosterNames.get(action.carrierId) ?? action.carrierId
+        this.appendWalkieLine(`«${taker}» takes a guest's suitcase`)
         break
+      }
       case 'suitcase-placed':
         // SUI-24: resting — pinned at the doorway until a pickup.
+        // SUI-21/22: PLACEMENT IS SILENT — deliberately no walkie line; the
+        // resting room is learnable only on this floor (or later via the
+        // settle/complaint lines).
         this.suitcases.set(action.guestId, {
           carrierId: null,
           rest: { floor: action.floor, room: action.room },
         })
         break
-      case 'suitcase-picked-up':
+      case 'suitcase-picked-up': {
         // SUI-24: fresh carry leg under the new carrier.
         this.suitcases.set(action.guestId, { carrierId: action.carrierId, rest: null })
+        const picker = this.rosterNames.get(action.carrierId) ?? action.carrierId
+        this.appendWalkieLine(`«${picker}» picks up a suitcase`)
         break
+      }
       case 'guest-complained':
-        // SUI-14: wrong-delivery door complaint — audible cue; the walkie
-        // line lands with the lifecycle-log rework, the budget counter in 3.3.
+        // SUI-14: wrong-delivery door complaint — a lifecycle fact building-
+        // wide. It names the room + guest, never the assignment. The budget
+        // counter lands in cycle 3.3.
+        this.appendWalkieLine(
+          `the guest of ${action.floor}:${action.room} complained about the suitcase`,
+        )
         this.beep(140)
         break
       case 'spectator-snapshot': {
@@ -892,6 +915,33 @@ export class WorldScene extends Phaser.Scene {
     hint.style.visibility = 'hidden'
     gameEl.appendChild(hint)
     this.deskHint = hint
+
+    const log = document.createElement('div')
+    log.id = 'walkie-log'
+    log.style.position = 'absolute'
+    log.style.right = '8px'
+    log.style.top = '12px'
+    log.style.padding = '4px 8px'
+    log.style.fontSize = '13px'
+    log.style.color = '#ffe9a8'
+    log.style.background = 'rgba(20, 28, 34, 0.85)'
+    log.style.borderRadius = '4px'
+    gameEl.appendChild(log)
+    this.walkieLog = log
+  }
+
+  /** The walkie log (SUI-21/23): one line per server-generated lifecycle
+   *  fact, building-wide; last 5 kept. NO player can author a line, and
+   *  placement never produces one. */
+  private appendWalkieLine(text: string): void {
+    if (this.walkieLog === null) return
+    const line = document.createElement('div')
+    line.className = 'walkie-line'
+    line.textContent = text
+    this.walkieLog.prepend(line)
+    while (this.walkieLog.children.length > 5) {
+      this.walkieLog.lastElementChild?.remove()
+    }
   }
 
   /** Guest marker sync (called every frame): one Arc per guest on the viewed

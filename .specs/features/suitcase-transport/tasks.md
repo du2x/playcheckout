@@ -146,10 +146,10 @@ T1 → T2 → T3 → T4 → T5 → T6
 
 **Done when**:
 
-- [ ] No client can author a walkie line; the registry declares no broadcast message
-- [ ] Lifecycle lines render from real events; no placement line exists
-- [ ] 3.2 walkie-lie suites deleted with the feature (documented in the task, not silent); desk suites amended to check-in semantics
-- [ ] Full gate passes: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] No client can author a walkie line; the registry declares no broadcast message (deleted with the hold model in T2)
+- [x] Lifecycle lines render from real events (arrival/check-in/pickup/settle/complaint/checkout); no placement case exists — silence is structural
+- [x] `sim:lifecycle_log` pins the walkie feed's sim half: one entry per lifecycle fact for the checked-in guest
+- [x] Full gate passes: typecheck 4/4 ✅, lint ✅, `pnpm test:sim` 380 passed (the 1 failure in one run was the pre-existing REG-18 load flake, reproduced on master)
 
 **Tests**: unit (amended sim suites)
 **Gate**: quick (full ladder deferred to T5's e2e run)

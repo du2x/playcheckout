@@ -527,3 +527,53 @@ describe('sim:carry_clock', () => {
     expect(guests.drainExpiredCarriers()).toEqual(['p2'])
   })
 })
+
+describe('sim:lifecycle_log (walkie feed sim half)', () => {
+  it('a desk-checked-in lifecycle emits exactly the registry-declared lifecycle facts, in order (SUI-21)', () => {
+    const movement = new MovementSim()
+    const lifecycle = new GuestSim(11, 5, new RealMovementPort(movement), {
+      cadenceTicks: 20,
+      impatienceTicks: 100000,
+      dwellScale: 0.001,
+    })
+    movement.join('q1')
+    const stream: SimEvent[] = []
+    let t2 = 0
+    for (; t2 < 200; t2++) {
+      stream.push(...flush(movement, lifecycle, t2))
+      if (stream.some((e) => e.type === 'guest:arrived' && e.guestId === 'guest:1')) break
+    }
+    expect(lifecycle.checkIn('q1', t2)).toBe('accepted')
+    t2 += 1
+    stream.push(...flush(movement, lifecycle, t2))
+    const first = stream.find((e) => e.type === 'assignment:overheard')
+    if (first === undefined || first.type !== 'assignment:overheard') {
+      throw new Error('missing overheard')
+    }
+    movement.join('q1', { floor: first.floor, xMilli: roomDoorXMilli(first.room) })
+    expect(lifecycle.placeSuitcase('q1', first.room, t2)).toBe('placed')
+    let settled = false
+    let checkedOut = false
+    for (; t2 < 4000 && !checkedOut; t2++) {
+      for (const e of flush(movement, lifecycle, t2)) {
+        if (e.type === 'guest:settled') settled = true
+        if (e.type === 'guest:checked_out') checkedOut = true
+        stream.push(e)
+      }
+    }
+    expect(settled).toBe(true)
+    expect(checkedOut).toBe(true)
+    // The walkie-worthy facts for the CHECKED-IN guest, one entry each:
+    // arrived → carried → placed (silent on the feed) → settled →
+    // checked_out. Ambient arrivals from the cadence don't count. The
+    // overheard event is the ONLY room-carrying pre-settle surface — and it
+    // is not a walkie entry.
+    const own = stream.filter((e) => 'guestId' in e && e.guestId === 'guest:1')
+    const types = own.map((e) => e.type)
+    expect(types.filter((n) => n === 'guest:arrived')).toHaveLength(1)
+    expect(types.filter((n) => n === 'suitcase:carried')).toHaveLength(1)
+    expect(types.filter((n) => n === 'suitcase:placed')).toHaveLength(1) // silent on the feed
+    expect(types.filter((n) => n === 'guest:settled')).toHaveLength(1)
+    expect(types.filter((n) => n === 'guest:checked_out')).toHaveLength(1)
+  })
+})

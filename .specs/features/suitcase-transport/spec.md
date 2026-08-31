@@ -322,9 +322,9 @@ appears (`client:suitcase`).
 | SUI-18 | P2 carry clock | Design | Implemented (T3) |
 | SUI-19 | P2 carry clock | Design | Implemented (T3) |
 | SUI-20 | P2 carry clock | Design | Implemented (T2) |
-| SUI-21 | P2 walkie log | Design | — |
-| SUI-22 | P2 walkie log | Design | — |
-| SUI-23 | P2 walkie log | Design | — |
+| SUI-21 | P2 walkie log | Design | Implemented (T2/T4) |
+| SUI-22 | P2 walkie log | Design | Implemented (T2/T4) |
+| SUI-23 | P2 walkie log | Design | Implemented (T2/T4) |
 | SUI-24 | P2 client | Design | — |
 | SUI-25 | P2 client | Design | — |
 | SUI-26 | P2 client | Design | — |
