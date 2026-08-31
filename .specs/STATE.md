@@ -870,6 +870,55 @@
 - **Date**: 2026-08-31
 - **Status**: active.
 
+### AD-032
+- **Decision**: PRD v1.4 — the guest-transport (suitcase) redesign, replacing
+  3.2's walkie-broadcast routing. Check-in hands the guest's **suitcase** to
+  the receiving player (receiver = carrier, one per player; carrying blocks
+  work channels — new FR-9a — accusation stays available). The suitcase is a
+  physical object: E places it at a room door, E near a resting suitcase picks
+  it up, by anyone (saboteur included, self-regrab allowed). The guest waits
+  at the restaurant (mezzanine floor, new; holding-area stub until cycle 3.C)
+  and follows the suitcase's **last resting room**; the outcome triggers at
+  guest **arrival**: room == assignment → settle; room != assignment → door
+  complaint toward the FR-31 budget — **no personal penalty for the
+  placement**. The assignment is server-truth seeded at check-in, transmitted
+  only to the receiver + staff in desk earshot **at the check-in tick**
+  (snapshot, never repeated; hidden-by-position, message-only legal). The
+  walkie becomes a **server-generated truthful lifecycle log** (waiting,
+  check-in, pickup, settle, complaint, checkout); the `walkie:broadcast`
+  player intent is deleted and **placement emits no walkie line**. A rolling
+  **60s carry clock** (check-in → first placement, fresh 60s per pickup) is
+  the **only personal foul**: expiry fires the current carrier. Impatience
+  re-scopes to the check-in wait only. The **trash race** (overhear → beat
+  the suitcase to the assigned room → trash it) is intended core loop, not a
+  leak to patch.
+- **Reason**: AD-022's desk routing parks one staff member at the desk and
+  gives the walkie lie no verification surface (grilling session 2026-08-31).
+  The suitcase makes the receiver mobile, turns the assignment into a
+  contested overhear (verification and sabotage intel in one), and makes the
+  contested object itself the ground truth. The announce lie was removed
+  (user direction) once the suitcase made claims verifiable within seconds —
+  the walkie survives as the building's automatic, lie-free lifecycle channel
+  (framing removed with it; accepted trade). Wrong-delivery firing was
+  explicitly rejected en route (first a hurt-points gauge, then removed —
+  mis-placement stays free; the carry clock is the only personal foul).
+- **Trade-off**: Mis-placement is free and stealthy — staff interception
+  before arrival is the only defense; a §7 balance gate is attached (3.5 bot
+  sims must prove interception keeps pace before the v1.4 dials lock). Honest
+  carriers can be clock-fired in elevator congestion (60s chosen generous).
+  Innocent-placer paralysis is a recorded risk with a diegetic one-step
+  confirm mitigation (own-knowledge only, never the assignment). The walkie
+  lie and its framing surface are gone by design. Building shape breaks the
+  AD-010 pin (mezzanine floor, cycle 3.C).
+- **Scope**: `prd.md` v1.4 (§5, FR-3, FR-9a, §6.9, FR-33, §7, §9),
+  `roadmap.md` (cycles 3.B `suitcase-transport`, 3.C `restaurant-floor`;
+  3.3–3.6 amended), proposal
+  `.specs/proposals/guest-transport-economy.md`; implementation lands via
+  3.B/3.C (registry-first protocol changes: assignment earshot policy,
+  suitcase events, lifecycle walkie feed, `walkie:broadcast` removal).
+- **Date**: 2026-08-31
+- **Status**: active.
+
 ## Handoff
 
 - **Feature**: `front-desk` (cycle 3.2) — the desk is the social-information

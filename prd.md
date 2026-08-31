@@ -1,11 +1,19 @@
 # PRD — Turnover
 
-Version: 1.3 · Status: Gray-box + stack decisions locked · Owner: —
+Version: 1.4 · Status: Gray-box + stack decisions locked · Owner: —
 Name: **Turnover** (codename during docs: "Grand Hotel") · Domains reserved: turnover.game, playturnover.com
 Companion docs: `roadmap.md` (build plan)
 
 > v1.3 changelog: guest-traffic economy (AD-022) — NPC guests, walkie routing,
 > complaint budget. New §6.9; FR-14/FR-22/§5/§6.6/§7/§9 amended.
+>
+> v1.4 changelog: guest-transport economy (AD-032) — the suitcase redesign:
+> check-in hands the guest's suitcase to the receiver, the suitcase is a
+> placeable/re-grabbable object, the guest follows its final resting room,
+> wrong rooms end in door complaints (no personal penalty), the walkie becomes
+> a server-generated truthful lifecycle log, and a mezzanine restaurant floor
+> is added. §6.9/FR-3/FR-7–9/FR-33/§5/§7/§9 amended; cycles 3.B/3.C inserted
+> in `roadmap.md`. §7 v1.4 dials provisional pending the 3.5 balance gate.
 
 ---
 
@@ -61,13 +69,16 @@ Minimum-fun lobby is **6 players**; below 5 the attrition math and testimony poo
 
 ```
 Lobby gather-up → secret roles → SHIFT (5:00)
-  Guests:   arrive ~1 per cadence · queue at desk · routed by walkie broadcast ·
+  Guests:   arrive ~1 per cadence · queue at desk · checked in with a suitcase
+            carried to a room (anyone may place/re-grab it) · wait at the
+            restaurant · enter the suitcase's resting room ·
             dwell 45–90s · check out (re-trashing their room) ·
-            complain when they find trash inside a room
-  Staff:   desk duty + walkie routing · prep rooms (5s) · patrol hallways ·
-           read door cards · spot-check · testify on voice · accuse
+            complain at the door of a wrong room
+  Staff:   desk check-in + suitcase carrying · prep rooms (5s) · patrol hallways ·
+           read door cards · shadow suitcases · overhear assignments ·
+           spot-check · testify on voice · accuse
   Saboteur: un-prep (3s) · re-trash · fake prep · decoy elevator calls ·
-            walkie lies · voice lies
+            overhear assignments · mis-place suitcases · voice lies
 → Buzzer / firing / coverage / budget exhausted → Results: winner + traitor reveal
   + event recap
 → post-round argument (retention engine)
@@ -92,7 +103,8 @@ Design pillars:
        sees only their own private role card. No saboteur-count signal exists anywhere.
 
 ### 6.2 Space & Movement
-- FR-3 Building: grand lobby + 3 guest floors × 7–8 rooms (~24 rooms total).
+- FR-3 Building: grand lobby + mezzanine restaurant floor (v1.4/AD-032) + 3 guest
+         floors × 7–8 rooms (~24 rooms total).
 - FR-4 Linear left/right movement only; pass-through bodies (no collision).
 - FR-5 Two elevators at opposite ends of each floor. Capacity 2 per car.
        Deterministic cycle: call → car arrives 3s → ride 2s **per floor traveled**.
@@ -105,7 +117,10 @@ Design pillars:
 - FR-7 Staff prep: channel inside room, 5s, any non-prepped state →prepped (clean or trashed).
 - FR-8 Saboteur un-prep: channel, 3s, prepped→trashed. Re-trashing allowed.
 - FR-9 Fake prep available to saboteur: animation only, **no state change** — the room
-       stays trashed. All work animations identical across roles.
+        stays trashed. All work animations identical across roles.
+- FR-9a Carrying blocks work (v1.4/AD-032): a player holding a guest suitcase cannot
+        start a work channel (FR-7/FR-8). Accusation (FR-17) and elevator calls stay
+        available; carrying is hands-full by design — deliver before working.
 - FR-10 Room state (prepped/trashed/fresh/settled) readable **only while inside the room**.
        Doors auto-open on entry: the opening is visible **and audible from the hallway**,
        so a passerby sees who entered which room. Hallway shows nothing of interiors
@@ -162,34 +177,49 @@ Design pillars:
        continues. Saboteur disconnect ends the round as an **aborted** result, excluded
        from KPI telemetry.
 
-### 6.9 Guest Traffic (v1.3, AD-022)
+### 6.9 Guest Traffic (v1.3 AD-022; suitcase redesign v1.4, AD-032)
 
 FR numbering continues here; placement at section end keeps FR-1…FR-25 references
 stable across specs and skills.
 
 - FR-26 Guest lifecycle: NPC guests arrive at the grand lobby on the §7 cadence, queue
-        at the front desk, are routed to a room, dwell there 45–90s (random), then check
-        out — their room re-trashes, spawning **settled** trash. Guest traffic is the
-        round's renewable workload; staff throughput vs. the churn+bleed rate is the
-        core tension. All guest sampling is seeded (deterministic sim).
-- FR-27 Routing & walkie: any player standing at the desk can receive the queued guest.
-        Sending the guest requires a **walkie broadcast** — a canned room-number menu
-        ("«Marco»: guest going to 305") heard building-wide. The broadcast is the
-        broadcaster's *claim*, not server-truth: the saboteur may announce a different
-        room than the guest is sent to. The guest's actual walk — visible, elevator-using
-        (panels stay position-only, FR-6) — is the ground truth; lies are checkable but
-        only by someone with eyes on them (tenancy signs, FR-33, make the check possible
-        at a distance).
-- FR-28 Impatience: an unrouted guest waits ~20s at the desk, visibly foot-tapping with
-        a repeated desk bell (no complaint cost), then **self-assigns** a uniform random
-        vacant room. Waiting is free; the gamble is the penalty.
-- FR-29 Discovery & complaint: guests always **enter** the room they were sent to.
-        Finding trash inside: an in-world anger cue fires at the room (room-number
-        level, no detail), the guest walks to the desk and delivers a fuzzy-timestamp
-        report ("someone hit 305, maybe a minute ago"), **one complaint fires, and the
-        guest leaves the hotel** — no retry, assigned or self-assigned alike. Their
-        departure flips the tenancy sign Vacant (FR-33); the room stays trashed —
-        "vacant but trashed" is the complaint's footprint.
+        at the front desk, are checked in with a **suitcase** carried to a room (v1.4),
+        dwell there 45–90s (random), then check out — their room re-trashes, spawning
+        **settled** trash. Guest traffic is the round's renewable workload; staff
+        throughput vs. the churn+bleed rate is the core tension. All guest sampling is
+        seeded (deterministic sim).
+- FR-27 Suitcase transport & walkie (v1.4, supersedes the walkie-broadcast flow): any
+        player standing at the desk can check in the queued guest and **takes the
+        guest's suitcase** — receiver = carrier, one suitcase per player. The suitcase
+        is a physical object: E **places** it at a room door, E near a resting suitcase
+        **picks it up** — by anyone, saboteur included. The guest waits at the
+        restaurant (mezzanine; holding area pre-3.C) and walks to the suitcase's **last
+        resting room**; the outcome triggers at guest arrival. The walkie is the
+        building's **server-generated truthful log** of guest-lifecycle facts (waiting,
+        check-in, pickup, settle, complaint, checkout) — players cannot author lines;
+        **placement is silent** (the resting room is learnable only by being on that
+        floor, or later via the settle/complaint lines). The guest's **assignment** is
+        server-truth seeded at check-in, transmitted only to the receiver and staff in
+        desk earshot at the check-in tick — a snapshot, never repeated, never logged;
+        overhearing it is the only pre-placement source.
+- FR-28 Impatience (v1.4 re-scope): the ~20s clock (foot-tap + repeated desk bell, no
+        complaint cost) times only the **check-in wait** — an unchecked guest
+        self-assigns a uniform random vacant room. Once checked in, the guest is
+        patient; no clock runs on carriers except the §7 carry clock (the only
+        personal foul: it **fires the current carrier** on expiry).
+- FR-29 Arrival & complaint (v1.4): a guest enters **only the room where their suitcase
+        rests, only on arrival**. Two complaint paths:
+        *(a) wrong room* — room != assignment → the guest complains **at the door**: a
+        building-wide line ("the guest of room X complained about the suitcase"),
+        counting toward the FR-31 budget; no entry, no interior discovery, **no personal
+        penalty for the placement** — mis-placement is free and stealthy; interception
+        before arrival is the only defense. *(b) trash inside* — room == assignment but
+        trashed → the original v1.3 discovery loop: in-world anger cue at the room
+        (room-number level, no detail), the guest walks to the desk and delivers a
+        fuzzy-timestamp report ("someone hit 305, maybe a minute ago"), one complaint
+        fires, and the guest **leaves the hotel** — no retry. Their departure flips the
+        tenancy sign Vacant (FR-33); the room stays trashed — "vacant but trashed" is
+        the complaint's footprint.
 - FR-30 Guests never convict: guest encounters never trigger walk-in conviction
         (FR-15 stays staff-only). A guest entering during an active un-prep flees and
         follows the FR-29 complaint path. Guest complaints are testimony, not justice.
@@ -209,8 +239,10 @@ stable across specs and skills.
         leaves the sign Occupied while the room sits empty and trashed — the mismatch
         window is a walk-in-quality sabotage tell. Separate channel from FR-11 cards
         (card = prep history, sign = tenancy); neither carries a timestamp. Readable
-        from the hallway, and verifies walkie claims at a distance — a broadcast for
-        305 leaves 305 Vacant while the actual room flips (FR-27).
+        from the hallway, it verifies suitcase outcomes at a distance: a guest settling
+        into 305 flips 305 Occupied (v1.4 note — the walkie carries lifecycle facts
+        only, never placements, so the sign is the at-a-distance record of where a
+        guest actually ended up, FR-27).
 
 ## 7. Tuning Values (single source of truth)
 
@@ -232,11 +264,16 @@ stable across specs and skills.
 | Guest cadence | 30s (4p) / 24s (5p) / 18s (6p) | first dial for 4-player slack |
 | Guest dwell | 45–90s, random per guest | — |
 | Complaint budget | 8 (instant loss) | scale by lobby size |
-| Guest impatience | 20s → self-assign | — |
+| Guest impatience | 20s → self-assign (v1.4: times the check-in wait only) | — |
 | Peak occupancy | ~10 rooms | — |
+| Desk earshot range | ~3 tiles, snapshot at the check-in tick | v1.4; widen if overhearing feels scarce |
+| Carry clock | 60s per leg (check-in → first placement; fresh 60s per pickup), expiry fires the current carrier | v1.4; the only personal foul — soften to a bell if honest carries fire |
+| Restaurant dwell | 15–30s, seeded (wait buffer; a guest whose suitcase rests leaves immediately) | v1.4 |
 
 All v1.3 rows (AD-022) are provisional pending first playtests; changes are recorded
-decisions, never incidental edits.
+decisions, never incidental edits. **v1.4 rows (AD-032) are additionally gated: the
+carry clock, earshot range, and the free-misplacement economy lock only after the 3.5
+balance gate proves interception can keep pace with the saboteur at the 6p cadence.**
 
 ## 8. Success Metrics & Kill Criteria
 
@@ -267,7 +304,9 @@ recomputed when the guest-traffic spec is written (AD-022 trade-off).**
 | Cold-start liquidity (<6 players) | High | Browser zero-install distribution; community seeding via Discord |
 | Tone drift (cozy → procedural hunt) | Low | Deliberate marketing decision post-playtest |
 | Buzzer-ending anticlimax | Medium | Live coverage % + dramatic results screen |
-| Desk monopoly (one player pinned at reception all round) | High | v1.3: 20s impatience + bell make neglect visible; desk rotation is social; first-playtest watch-item |
+| Desk monopoly (one player pinned at reception all round) | High | v1.3: 20s impatience + bell make neglect visible; desk rotation is social; first-playtest watch-item. v1.4: the suitcase turns check-in into a moment, not a posting — but overhearing assignments makes the desk a *contested* spot instead |
+| Innocent placer paralysis (staff learn "never place") → pipeline deadlocks at the restaurant | High (new, v1.4) | One-step diegetic confirm on unheard rooms (own-knowledge, not the assignment); 60s carry clock bounds suitcase hoarding; explicit first-playtest kill check |
+| Free mis-placement outpaces interception (budget burns faster than staff correct) | High (new, v1.4) | 3.5 balance gate before §7 v1.4 dials lock; reserve lever: make a wrong placement fire its placer on a second offense |
 | Passive saboteur (churn bleeds the budget with no crime) | High | v1.3: recap provenance exposes ghost play socially; §7 dials; explicit first-playtest kill check |
 | Guest expressiveness underinvested → hotel feels dead, complaints feel like point-loss not story | Medium | v1.3: foot-tap, storm-out, anger cue are load-bearing animations, not polish (art brief scope) |
 | Voice floor raised (walkie lies, desk rotation, triage need talk) | Medium | v1.3: Discord dependency goes from load-bearing to near-required; accepted for MVP |
