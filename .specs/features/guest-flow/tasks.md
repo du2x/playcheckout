@@ -101,7 +101,7 @@ T7 → T8
 
 ---
 
-### T2: Tuning + layout guest constants
+### T2: Tuning + layout guest constants ✅
 
 **What**: Guest tuning rows (cadence per lobby size, dwell min/max, impatience) + desk/queue geometry constants; room door-x helper.
 **Where**: `packages/shared/src/tuning.ts` (+ `tuning.test.ts`), `packages/shared/src/layout.ts` (+ door-x helper)

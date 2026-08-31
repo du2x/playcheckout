@@ -41,3 +41,12 @@ export function roomIndexAtMilli(x: number): RoomIndex | 0 {
   const raw = Math.floor((x - ROOM_HALL_START_MILLI) / ROOM_WIDTH_MILLI) + 1
   return Math.min(raw, ROOMS_PER_FLOOR) as RoomIndex | 0
 }
+
+/**
+ * The doorway x of room i (cycle 3.1): the center of its AD-010 segment, in
+ * millitiles. Guests walk to this x to settle; prep cards and door cues anchor
+ * to the same point.
+ */
+export function roomDoorXMilli(room: RoomIndex): number {
+  return roomSegmentStartMilli(room) + ROOM_WIDTH_MILLI / 2
+}

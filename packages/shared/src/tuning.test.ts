@@ -40,4 +40,18 @@ describe('tuning table', () => {
   it('matches prd §7 movement speed', () => {
     expect(TUNING.PLAYER_SPEED_TILES_PER_SEC).toBe(6)
   })
+
+  it('matches prd §7 v1.3 guest cadence, dwell, and impatience (AD-022)', () => {
+    expect(TUNING.GUEST_CADENCE_SECONDS[4]).toBe(30)
+    expect(TUNING.GUEST_CADENCE_SECONDS[5]).toBe(24)
+    expect(TUNING.GUEST_CADENCE_SECONDS[6]).toBe(18)
+    expect(TUNING.GUEST_DWELL_MIN_SECONDS).toBe(45)
+    expect(TUNING.GUEST_DWELL_MAX_SECONDS).toBe(90)
+    expect(TUNING.GUEST_IMPATIENCE_SECONDS).toBe(20)
+  })
+
+  it('pins the AD-028 desk/queue geometry (not in §7 — recorded decisions)', () => {
+    expect(TUNING.DESK_X_TILES).toBe(15)
+    expect(TUNING.GUEST_QUEUE_SPACING_TILES).toBe(1)
+  })
 })

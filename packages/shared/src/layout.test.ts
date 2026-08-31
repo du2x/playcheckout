@@ -8,6 +8,7 @@ import {
   ROOM_DEPTH_TILES,
   ROOM_HALL_START_TILES,
   ROOMS_PER_FLOOR,
+  roomDoorXMilli,
   roomIndexAtMilli,
   roomSegmentEndMilli,
   roomSegmentStartMilli,
@@ -48,5 +49,30 @@ describe('layout', () => {
     expect(roomIndexAtMilli(28_999)).toBe(8)
     expect(roomIndexAtMilli(29_000)).toBe(8)
     expect(roomIndexAtMilli(29_001)).toBe(0)
+  })
+})
+
+// Cycle 3.1: guests walk to the segment-center doorway of their assigned room.
+describe('room doorway geometry (cycle 3.1)', () => {
+  it('places every door at its segment center', () => {
+    // Room 1 spans [1000, 4500) milli → center 2750.
+    expect(roomDoorXMilli(1)).toBe(2750)
+    // Room 8 spans [25500, 29000) milli → center 27250.
+    expect(roomDoorXMilli(8)).toBe(27250)
+  })
+
+  it('door x resolves back through the room-at predicate', () => {
+    for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
+      const x = roomDoorXMilli(room as 1)
+      expect(roomIndexAtMilli(x)).toBe(room)
+    }
+  })
+
+  it('keeps every door inside the walkable hall', () => {
+    for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
+      const x = roomDoorXMilli(room as 1)
+      expect(x).toBeGreaterThan(0)
+      expect(x).toBeLessThan(HALL_LENGTH_TILES * 1000)
+    }
   })
 })
