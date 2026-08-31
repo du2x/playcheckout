@@ -9,6 +9,8 @@ import type {
 } from '@turnover/shared'
 import {
   accuseIntentSchema,
+  deskInteractIntentSchema,
+  deskSendIntentSchema,
   elevatorCallIntentSchema,
   elevatorPressIntentSchema,
   type LobbySnapshot,
@@ -232,6 +234,25 @@ export class TurnoverRoom extends Room {
         }
         this.router.toSelf('error', client.sessionId, { code: result, message: messages[result] })
       }
+    })
+
+    // Front desk (cycle 3.2, FR-27): E at the desk derives receive-or-release
+    // in the sim; the send flow carries the two INDEPENDENT choices. Every
+    // rejection is SILENT (spec AC2/AC9): an ignored E press, a non-holder
+    // send, or a send into an occupied room produce nothing on the wire.
+    this.onMessage('desk:interact', deskInteractIntentSchema, (client) => {
+      if (!this.ensureLive(client.sessionId)) return
+      if (this.phase !== 'round' || this.sim === null) return
+      this.sim.deskInteract(client.sessionId)
+    })
+    this.onMessage('desk:send', deskSendIntentSchema, (client, intent) => {
+      if (!this.ensureLive(client.sessionId)) return
+      if (this.phase !== 'round' || this.sim === null) return
+      this.sim.deskSend(
+        client.sessionId,
+        { floor: intent.destinationFloor, room: intent.destinationRoom as RoomIndex },
+        { floor: intent.announceFloor, room: intent.announceRoom as RoomIndex },
+      )
     })
 
     if (TurnoverRoom.tickMs > 0) {

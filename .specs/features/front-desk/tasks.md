@@ -147,7 +147,7 @@ T5 → T6
 
 ---
 
-### T5: Room intent handlers
+### T5: Room intent handlers ✅
 
 **What**: Wire `desk:interact` + `desk:send` zod handlers; every rejection silent (no error route); fired/ghost/leave paths release holds via the sim.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts` (modify)
@@ -157,8 +157,8 @@ T5 → T6
 
 **Done when**:
 
-- [ ] @colyseus/testing shell tests: receive routes `guest:routed` 'all', send routes claim 'all' with announced room only, occupied send is silent, out-of-zone E silent
-- [ ] Gate check passes: full
+- [x] Shell tests (real server + SDK clients): lying send routes guest:routed {guestId, playerId} + walkie claim floor1:8 to ALL four clients (destination never on the claim surface); the guest settles at the silent floor2:4 destination; non-holder send and out-of-zone E are fully silent (no routed/broadcast/error)
+- [x] Gate check passes: full (typecheck 4/4, lint clean, test:sim 377/377)
 
 **Tests**: integration
 **Gate**: full

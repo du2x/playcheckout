@@ -306,7 +306,10 @@ describe('sim:desk_receive', () => {
     for (; t < CADENCE_5P + 2 + IMPATIENCE + 5 && firedAt === null; t++) {
       movement.tick()
       if (guests.tick(t).some((e) => e.type === 'guest:impatient')) firedAt = t
-      if (!outOfZone && (movement.positionOf('p1')?.x ?? 0) > TUNING.DESK_X_TILES + TUNING.DESK_RANGE_TILES) {
+      if (
+        !outOfZone &&
+        (movement.positionOf('p1')?.x ?? 0) > TUNING.DESK_X_TILES + TUNING.DESK_RANGE_TILES
+      ) {
         outOfZone = true
       }
     }
@@ -380,9 +383,9 @@ describe('sim:walkie_broadcast', () => {
     const { movement, guests } = deskScenario()
     run(movement, guests, CADENCE_5P + 1)
     guests.receiveAtDesk('p1', CADENCE_5P + 1)
-    expect(
-      guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 }),
-    ).toBe('routed')
+    expect(guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 })).toBe(
+      'routed',
+    )
     // Announce pattern: the claim flushes on the NEXT tick.
     const first = guests.tick(CADENCE_5P + 2)
     expect(of(first, 'guest:routed')).toEqual([
@@ -399,9 +402,9 @@ describe('sim:walkie_lie', () => {
     const { movement, guests } = deskScenario()
     run(movement, guests, CADENCE_5P + 1)
     guests.receiveAtDesk('p1', CADENCE_5P + 1)
-    expect(
-      guests.routeHeld('p1', { floor: 'floor2', room: 4 }, { floor: 'floor1', room: 8 }),
-    ).toBe('routed')
+    expect(guests.routeHeld('p1', { floor: 'floor2', room: 4 }, { floor: 'floor1', room: 8 })).toBe(
+      'routed',
+    )
     let t = CADENCE_5P + 2
     const claimEvents: SimEvent[] = guests.tick(t++)
     // The claim names the ANNOUNCED room; the routed event names the sender
@@ -447,9 +450,9 @@ describe('sim:walkie_lie', () => {
     guests.receiveAtDesk('p1', CADENCE_5P + 1)
     // White-box: floor2:4 is occupied (a settled guest holds tenancy).
     ;(guests as unknown as { tenanted: Map<string, string> }).tenanted.set('floor2:4', 'filler')
-    expect(
-      guests.routeHeld('p1', { floor: 'floor2', room: 4 }, { floor: 'floor1', room: 8 }),
-    ).toBe('ignored')
+    expect(guests.routeHeld('p1', { floor: 'floor2', room: 4 }, { floor: 'floor1', room: 8 })).toBe(
+      'ignored',
+    )
     // The holder keeps the guest: still held, nothing queued for the flush.
     expect(guests.tick(CADENCE_5P + 2)).toHaveLength(0)
     expect(movement.positionOf('guest:1')?.x).toBe(TUNING.DESK_X_TILES)
@@ -457,8 +460,8 @@ describe('sim:walkie_lie', () => {
 
   it('a non-holder send is ignored (DESK-06 precondition)', () => {
     const { guests } = deskScenario()
-    expect(
-      guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 }),
-    ).toBe('ignored')
+    expect(guests.routeHeld('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 1 })).toBe(
+      'ignored',
+    )
   })
 })

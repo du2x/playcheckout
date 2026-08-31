@@ -448,15 +448,15 @@ describe('sim:desk_receive (round integration)', () => {
     let t = 1
     for (; t < 200 && !arrived; t++) {
       movement.tick()
-      arrived = sim.tick(lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 })).some(
-        (e) => e.type === 'guest:arrived',
-      )
+      arrived = sim
+        .tick(lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 }))
+        .some((e) => e.type === 'guest:arrived')
     }
     expect(arrived).toBe(true)
     expect(sim.deskInteract('p1')).toBe('accepted')
-    expect(
-      sim.deskSend('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 2 }),
-    ).toBe('routed')
+    expect(sim.deskSend('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 2 })).toBe(
+      'routed',
+    )
     // MOVE-10 announce pattern: the departure + claim flush on the next tick.
     let routedSeen = false
     let claim: { floor: FloorId; room: number } | null = null
@@ -504,9 +504,9 @@ describe('sim:desk_receive (round integration)', () => {
     let t = 1
     for (; t < 200 && !arrived; t++) {
       movement.tick()
-      arrived = sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 })).some(
-        (e) => e.type === 'guest:arrived',
-      )
+      arrived = sim
+        .tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 }))
+        .some((e) => e.type === 'guest:arrived')
     }
     expect(sim.deskInteract('p1')).toBe('accepted')
     expect(sim.deskInteract('p1')).toBe('accepted') // E-again: release
@@ -534,15 +534,15 @@ describe('sim:desk_receive (round integration)', () => {
     let t = 1
     for (; t < 200 && !arrived; t++) {
       movement.tick()
-      arrived = sim.tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 })).some(
-        (e) => e.type === 'guest:arrived',
-      )
+      arrived = sim
+        .tick(lobbyPositions({ p1: 15, p2: 22, p3: 15, p4: 15 }))
+        .some((e) => e.type === 'guest:arrived')
     }
     expect(sim.deskInteract('p1')).toBe('accepted')
     sim.ghost('p1')
-    expect(
-      sim.deskSend('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 2 }),
-    ).toBe('rejected')
+    expect(sim.deskSend('p1', { floor: 'floor1', room: 1 }, { floor: 'floor1', room: 2 })).toBe(
+      'rejected',
+    )
     // The guest is back in the queue: p2 at the desk can receive it now.
     expect(sim.deskInteract('p2')).toBe('rejected') // out of zone
     void t

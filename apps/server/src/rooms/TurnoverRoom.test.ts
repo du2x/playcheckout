@@ -2691,3 +2691,129 @@ describe('server:guest_flow', () => {
     },
   )
 })
+
+// Spec DESK-01/06/07/09 (gate scenario server:front_desk): the room maps the
+// desk intents 1:1 onto the sim and maps EVERY rejection to silence — no
+// error message, no event. Guest traffic rides the AD-028 scale seam so a
+// guest is queued within a few driven ticks.
+describe('server:front_desk', () => {
+  it('routes a lying send: the claim names the announced room to every player, the destination never appears (DESK-06/07/10)', async () => {
+    process.env.TURNOVER_TEST_GUEST_SCALE = '0.05'
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collectors = [host, a, b, c].map((r) => collectAll(r))
+      const instance = TurnoverRoom.instances.at(-1)
+      if (instance === undefined) throw new Error('no room instance')
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      instance.__driveTicks(1)
+      // Deterministic staging (tickMs=0: nothing advances but driven ticks):
+      // the scaled cadence is 24 ticks, so exactly ONE guest is queued now —
+      // no ambient traffic can self-assign or settle during the flow.
+      instance.__driveTicks(24)
+      const guests = (instance.__movementDebug() as { guestIds: string[] }).guestIds
+      expect(guests).toEqual(['guest:1'])
+      // Receive (impacted impatience freezes — no rush), then send the lie.
+      host.send('desk:interact', { type: 'desk:interact' })
+      await new Promise((r) => setTimeout(r, 150))
+      host.send('desk:send', {
+        type: 'desk:send',
+        destinationFloor: 'floor2',
+        destinationRoom: 4,
+        announceFloor: 'floor1',
+        announceRoom: 8,
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      // Announce pattern: one tick flushes the departure + claim.
+      instance.__driveTicks(1)
+      const hostCollector = collectors[0]
+      if (hostCollector === undefined) throw new Error('missing host collector')
+      const routed = await hostCollector.waitFor('guest:routed')
+      expect(Object.keys(routed.payload).sort()).toEqual(['guestId', 'playerId'])
+      expect(routed.payload.playerId).toBe(host.sessionId)
+      for (const [i, collector] of collectors.entries()) {
+        if (i > 0) await collector.waitFor('guest:routed')
+        const claim = await collector.waitFor('walkie:broadcast')
+        // 'all' policy: every player sees the departure and the claim — and
+        // the claim names floor1:8, never the destination.
+        expect(claim.payload.playerId).toBe(host.sessionId)
+        expect(claim.payload.floor).toBe('floor1')
+        expect(claim.payload.room).toBe(8)
+        expect(JSON.stringify(claim.payload)).not.toContain('floor2')
+      }
+      // The walk is the ground truth: the guest settles at the DESTINATION.
+      let settled: { floor: string; room: number } | null = null
+      const off = host.onMessage('guest:settled', (envelope) => {
+        settled = (envelope as { payload: { floor: string; room: number } }).payload
+      })
+      for (let driven = 0; driven < 1500 && settled === null; driven += 2) {
+        instance.__driveTicks(2)
+        await new Promise((r) => setTimeout(r, 2))
+      }
+      off()
+      expect(settled).toMatchObject({ floor: 'floor2', room: 4 })
+      for (const collector of collectors) collector.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      delete process.env.TURNOVER_TEST_GUEST_SCALE
+    }
+  })
+
+  it('rejects silently: a send with nothing held and an out-of-zone E produce NOTHING desk-shaped on the wire (DESK-02/09 silence)', async () => {
+    process.env.TURNOVER_TEST_GUEST_SCALE = '0.05'
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collector = collectAll(host)
+      const instance = TurnoverRoom.instances.at(-1)
+      if (instance === undefined) throw new Error('no room instance')
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      instance.__driveTicks(1)
+      // Send with nothing held — silent: no routed, no broadcast, no error.
+      host.send('desk:send', {
+        type: 'desk:send',
+        destinationFloor: 'floor1',
+        destinationRoom: 1,
+        announceFloor: 'floor1',
+        announceRoom: 1,
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      instance.__driveTicks(2)
+      // Walk out of the desk zone (driving keeps us before the first scaled
+      // arrival at tick 24), then E — silent (zone guard).
+      for (let i = 0; i < 8; i++) {
+        host.send('move:start', { type: 'move:start', dir: 'right' })
+        await new Promise((r) => setTimeout(r, 60)) // intent processed first
+        instance.__driveTicks(4) // one tick = 0.3 tiles; 4 clears the 1-tile zone
+        host.send('move:stop', { type: 'move:stop' })
+        await new Promise((r) => setTimeout(r, 60))
+        const state = instance.__movementDebug() as {
+          positions: { playerId: string; x: number }[]
+        }
+        const own = state.positions.find((p) => p.playerId === host.sessionId)
+        if (own !== undefined && own.x > TUNING.DESK_X_TILES + TUNING.DESK_RANGE_TILES) break
+      }
+      const xBefore = (
+        instance.__movementDebug() as { positions: { playerId: string; x: number }[] }
+      ).positions.find((p) => p.playerId === host.sessionId)?.x
+      expect(xBefore).toBeGreaterThan(TUNING.DESK_X_TILES + TUNING.DESK_RANGE_TILES)
+      expect((instance.__movementDebug() as { guestIds: string[] }).guestIds).toEqual([]) // no guest ever arrived — no ambient noise on the wire
+      host.send('desk:interact', { type: 'desk:interact' })
+      await new Promise((r) => setTimeout(r, 150))
+      instance.__driveTicks(2)
+      expect(collector.types()).not.toContain('guest:routed')
+      expect(collector.types()).not.toContain('walkie:broadcast')
+      expect(collector.types()).not.toContain('error')
+      collector.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      delete process.env.TURNOVER_TEST_GUEST_SCALE
+    }
+  })
+})

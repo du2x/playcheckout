@@ -177,7 +177,7 @@ the claimed room on all pages while the guest marker walks to the other floor
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| DESK-01 | P1 receive | Design | Implemented (T3) |
+| DESK-01 | P1 receive | Design | Implemented (T3–T5) |
 | DESK-02 | P1 receive | Design | Implemented (T3) |
 | DESK-03 | P1 receive | Design | Implemented (T3) |
 | DESK-04 | P1 receive | Design | Implemented (T3) |

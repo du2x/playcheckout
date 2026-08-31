@@ -389,7 +389,11 @@ export class RoundSim {
     if (this.justice.isFired(playerId) || this.ghosted.has(playerId)) return 'rejected'
     const p = this.work.positionOf(playerId)
     const range = TUNING.DESK_RANGE_TILES * 1000
-    if (p === undefined || p.floor !== 'lobby' || Math.abs(p.x - TUNING.DESK_X_TILES * 1000) > range) {
+    if (
+      p === undefined ||
+      p.floor !== 'lobby' ||
+      Math.abs(p.x - TUNING.DESK_X_TILES * 1000) > range
+    ) {
       return 'rejected'
     }
     const tick = this.totalTicks - this.ticksLeft
