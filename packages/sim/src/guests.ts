@@ -28,7 +28,7 @@ export interface MovementPort {
   pressFloor(id: string, floor: FloorId): 'accepted' | 'ignored' | 'rejected'
 }
 
-export type GuestPhase = 'queued' | 'impatient' | 'waiting' | 'toRoom' | 'settling' | 'toExit'
+export type GuestPhase = 'queued' | 'impatient' | 'dining' | 'toRoom' | 'settling' | 'toExit'
 
 interface Guest {
   id: string
@@ -43,6 +43,10 @@ interface Guest {
   /** Ticks left on the frozen impatience clock while checked in (cycle 3.B) —
    *  null ⇔ not checked in. Re-queueing restores impatientAt = tick + remaining. */
   impatienceRemaining: number | null
+  /** Ticks of the drawn dining dwell for the CURRENT dining stay (cycle 3.C) —
+   *  null ⇔ not dining. No behavioral consumer (the dwell is a wait buffer,
+   *  REST-10): determinism/telemetry surface via diningDwellOf only. */
+  diningDwellTicks: number | null
   /** Absolute tick a settling guest checks out (settle + seeded dwell). */
   dwellEndsAt: number | null
 }
@@ -63,9 +67,10 @@ export interface SuitcaseState {
 const IMPATIENCE_TICKS = TUNING.GUEST_IMPATIENCE_SECONDS * TICK_HZ
 const DESK_X = TUNING.DESK_X_TILES
 const QUEUE_STEP = TUNING.GUEST_QUEUE_SPACING_TILES
-/** Holding-area stub (cycle 3.B, AD-033): checked-in guests wait east of the
- *  desk until their suitcase first rests (the 3.C restaurant replaces this). */
-const HOLD_START = TUNING.GUEST_RESTAURANT_START_TILES
+/** Dining slots (cycle 3.C, AD-035): checked-in guests wait in the mezzanine
+ *  restaurant — slot i at DINING_START + i × QUEUE_STEP — until their suitcase
+ *  first rests. Replaces the 3.B lobby holding-area stub. */
+const DINING_START = TUNING.GUEST_RESTAURANT_START_TILES
 /** Walking is 0.3 tiles/tick; arrival tolerance is one step (gray-box: the
  *  guest settles/hotel-exits at the nearest deterministic point). */
 const ARRIVAL_TOLERANCE_TILES = 0.3
@@ -118,7 +123,7 @@ export interface GuestTiming {
 export class GuestSim {
   private readonly guests = new Map<string, Guest>()
   /** FIFO by arrival: index = queue slot (0 = at the desk, eastward growth).
-   *  NEVER contains a held guest (cycle 3.2): holding removes from the queue
+   *  NEVER contains a dining guest (cycle 3.2/3.C): check-in removes from the queue
    *  without re-placing; release re-inserts at the FRONT and re-places. */
   private readonly queue: string[] = []
   /** roomKey → guestId (the single tenancy/vacancy source). */
@@ -129,9 +134,9 @@ export class GuestSim {
   private readonly reserved = new Set<string>()
   /** guestId → suitcase (cycle 3.B): one per checked-in guest. */
   private readonly suitcases = new Map<string, SuitcaseState>()
-  /** Checked-in guests waiting in the holding area, FIFO by check-in (the
-   *  holding slot index). */
-  private readonly holding: string[] = []
+  /** Checked-in guests dining in the mezzanine restaurant, FIFO by check-in
+   *  (the dining slot index). */
+  private readonly dining: string[] = []
   /** Intent-time events (desk receive/route) flushed on the NEXT tick —
    *  the MOVE-10 announce pattern: tick() is the only event emitter. */
   private pending: SimEvent[] = []
@@ -139,6 +144,7 @@ export class GuestSim {
   private readonly cadenceTicks: number
   private readonly impatienceTicks: number
   private readonly dwellScale: number
+  private readonly diningScale: number
   private readonly carryClockTicks: number
   private nextScheduleTick: number
   private backlog = 0
@@ -157,6 +163,7 @@ export class GuestSim {
     this.cadenceTicks = timing?.cadenceTicks ?? TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
     this.impatienceTicks = timing?.impatienceTicks ?? IMPATIENCE_TICKS
     this.dwellScale = timing?.dwellScale ?? 1
+    this.diningScale = timing?.diningScale ?? 1
     this.carryClockTicks = timing?.carryClockTicks ?? TUNING.CARRY_CLOCK_SECONDS * TICK_HZ
     // The first arrival lands one full cadence interval after round start.
     this.nextScheduleTick = this.cadenceTicks
@@ -288,6 +295,7 @@ export class GuestSim {
       target: null,
       impatientAt: tick + this.impatienceTicks,
       impatienceRemaining: null,
+      diningDwellTicks: null,
       dwellEndsAt: null,
     }
     this.guests.set(id, guest)
@@ -305,11 +313,16 @@ export class GuestSim {
   }
 
   /** Re-place every queued guest into their deterministic slot (NPC
-   *  positions, not walks — the same re-place removeFromQueue always did). */
+   *  positions, not walks — the same re-place removeFromQueue always did).
+   *  The floor check matters since 3.C: a dropCarry re-queue may teleport the
+   *  guest from a mezzanine dining slot whose x equals the queue slot x. */
   private rePlaceQueue(): void {
     this.queue.forEach((qid, slot) => {
       const pos = this.movement.positionOf(qid)
-      if (pos !== undefined && Math.abs(pos.x - slotX(slot)) > ARRIVAL_TOLERANCE_TILES) {
+      if (
+        pos !== undefined &&
+        (pos.floor !== 'lobby' || Math.abs(pos.x - slotX(slot)) > ARRIVAL_TOLERANCE_TILES)
+      ) {
         this.movement.removeGuest(qid)
         this.movement.joinGuest(qid, 'lobby', slotX(slot))
         this.movement.announceGuest(qid)
@@ -323,7 +336,7 @@ export class GuestSim {
    * E in the desk zone (SUI-01): check the FRONT queued guest in — seed the
    * assignment (uniform random room vacant AND unreserved, guest Rng stream),
    * reserve it, make the caller the suitcase's carrier (first carry leg), and
-   * move the guest to the holding area (patient — the impatience clock freezes
+   * move the guest to the mezzanine restaurant (patient — the impatience clock freezes
    * for the whole check-in). One suitcase per player: a caller already
    * carrying is ignored silently (SUI-02), as is an empty queue.
    */
@@ -337,14 +350,15 @@ export class GuestSim {
     const pick = vacants[this.rng.int(vacants.length - 1)]
     if (pick === undefined) return 'ignored'
     this.removeFromQueue(id)
-    g.phase = 'waiting'
+    g.phase = 'dining'
     g.assigned = pick
     g.target = null
     g.impatienceRemaining = Math.max(0, g.impatientAt - tick)
     this.reserved.add(roomKey(pick.floor, pick.room))
     this.suitcases.set(id, { carrier: playerId, rest: null, legStartTick: tick })
-    this.holding.push(id)
-    this.rePlaceHolding()
+    this.dining.push(id)
+    this.rePlaceDining()
+    g.diningDwellTicks = this.drawDiningDwellTicks()
     // SUI-03 (amended AD-034): the assignment is a BUILDING-WIDE notice —
     // emitted once, at the check-in tick, on the 'all' policy. Every player
     // learns it (saboteur included, AD-034(e)); the contested gameplay is
@@ -369,7 +383,11 @@ export class GuestSim {
     const sc = this.suitcases.get(id)
     if (sc === undefined) return 'ignored'
     const pos = this.movement.positionOf(playerId)
-    if (pos === undefined || pos.floor === 'lobby') return 'ignored'
+    if (pos === undefined || pos.floor === 'lobby' || pos.floor === 'mezzanine') {
+      // No room doors exist on the lobby or the mezzanine (3.C): a rest there
+      // would strand the guest target (REST-05).
+      return 'ignored'
+    }
     const doorX = roomDoorXMilli(room) / 1000
     if (Math.abs(pos.x - doorX) > TUNING.ROOM_DOOR_RANGE_TILES) return 'ignored'
     sc.carrier = null
@@ -438,10 +456,11 @@ export class GuestSim {
     g.phase = 'queued'
     g.impatientAt = tick + (g.impatienceRemaining ?? 0)
     g.impatienceRemaining = null
-    const hIdx = this.holding.indexOf(id)
+    const hIdx = this.dining.indexOf(id)
     if (hIdx !== -1) {
-      this.holding.splice(hIdx, 1)
-      this.rePlaceHolding()
+      this.dining.splice(hIdx, 1)
+      g.diningDwellTicks = null
+      this.rePlaceDining()
     }
     this.queue.unshift(id)
     this.rePlaceQueue()
@@ -459,32 +478,56 @@ export class GuestSim {
     return null
   }
 
-  /** Re-place waiting guests into their deterministic holding slots. */
-  private rePlaceHolding(): void {
-    this.holding.forEach((gid, slot) => {
-      const want = HOLD_START + slot * QUEUE_STEP
+  /** Re-place dining guests into their deterministic mezzanine slots. The
+   *  floor check matters: queue slots and dining slots share x values, so an
+   *  x-only compare would leave a checked-in guest stranded on the lobby. */
+  private rePlaceDining(): void {
+    this.dining.forEach((gid, slot) => {
+      const want = DINING_START + slot * QUEUE_STEP
       const pos = this.movement.positionOf(gid)
-      if (pos !== undefined && Math.abs(pos.x - want) > ARRIVAL_TOLERANCE_TILES) {
+      if (
+        pos !== undefined &&
+        (pos.floor !== 'mezzanine' || Math.abs(pos.x - want) > ARRIVAL_TOLERANCE_TILES)
+      ) {
         this.movement.removeGuest(gid)
-        this.movement.joinGuest(gid, 'lobby', want)
+        this.movement.joinGuest(gid, 'mezzanine', want)
         this.movement.announceGuest(gid)
       }
     })
   }
 
+  /** One seeded dining dwell draw in ticks (uniform within the 15–30 s dial,
+   *  scaled by the test seam). The value has no behavioral consumer — the
+   *  dwell is a wait buffer (REST-10) — but the draw keeps the guest Rng
+   *  stream deterministic per dining stay. */
+  private drawDiningDwellTicks(): number {
+    const seconds = this.rng.uniform(
+      TUNING.GUEST_DINING_MIN_SECONDS,
+      TUNING.GUEST_DINING_MAX_SECONDS,
+    )
+    return Math.max(1, Math.round(seconds * this.diningScale * TICK_HZ))
+  }
+
+  /** The drawn dining dwell of the current dining stay, or null (tests +
+   *  telemetry; no behavioral consumer, REST-10). */
+  diningDwellOf(guestId: string): number | null {
+    return this.guests.get(guestId)?.diningDwellTicks ?? null
+  }
+
   /** A rest event re-targets the suitcase's guest (SUI-13): waiting guests
-   *  leave the holding area; door-waiting guests re-target in place. */
+   *  leave the restaurant; door-waiting guests re-target in place. */
   private retargetOnRest(id: string): void {
     const g = this.guests.get(id)
     const sc = this.suitcases.get(id)
     if (g === undefined || sc === undefined) return
     const rest = sc.rest
     if (rest === null) return
-    if (g.phase === 'waiting') {
-      const hIdx = this.holding.indexOf(id)
+    if (g.phase === 'dining') {
+      const hIdx = this.dining.indexOf(id)
       if (hIdx !== -1) {
-        this.holding.splice(hIdx, 1)
-        this.rePlaceHolding()
+        this.dining.splice(hIdx, 1)
+        g.diningDwellTicks = null
+        this.rePlaceDining()
       }
       g.phase = 'toRoom'
       g.target = rest
@@ -564,9 +607,9 @@ export class GuestSim {
    * The suitcase-guest driver (SUI-13/14, cycle 3.B): walk toward the
    * suitcase's last resting room. Re-targeting happens on rest events
    * (retargetOnRest); a mid-walk pickup strands the guest exactly where they
-   * stand — holding slot or waiting at the old door — until the next rest
+   * stand — dining on the mezzanine or waiting at the old door — until the next rest
    * event. Arrival resolves the outcome (SUI-14): assignment match → settle
-   * (tenancy commits); mismatch → door complaint + return to the holding
+   *  (tenancy commits); mismatch → door complaint + return to the dining
    * area, re-targeting on the next rest (SUI-15: no personal penalty).
    */
   private driveToResting(g: Guest, tick: number, events: SimEvent[]): void {
@@ -612,17 +655,19 @@ export class GuestSim {
             floor: target.floor,
             room: target.room,
           })
-          g.phase = 'waiting'
+          g.phase = 'dining'
           g.target = null
-          this.holding.push(g.id)
+          this.dining.push(g.id)
           // Re-place directly: the guest was just removed from the hall at
-          // the door, and rePlaceHolding only corrects existing positions.
+          // the door, and rePlaceDining only corrects existing positions.
+          // A fresh dining stay draws a fresh dwell (REST-08: per stay).
           this.movement.joinGuest(
             g.id,
-            'lobby',
-            HOLD_START + (this.holding.length - 1) * QUEUE_STEP,
+            'mezzanine',
+            DINING_START + (this.dining.length - 1) * QUEUE_STEP,
           )
           this.movement.announceGuest(g.id)
+          g.diningDwellTicks = this.drawDiningDwellTicks()
         }
         return
       }

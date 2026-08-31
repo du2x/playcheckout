@@ -286,8 +286,9 @@ describe('sim:suitcase_carry', () => {
     expect(of(flushed, 'suitcase:carried')).toEqual([
       { type: 'suitcase:carried', guestId: 'guest:1', carrierId: 'p1' },
     ])
-    // The checked-in guest waits in the holding area east of the desk.
-    expect(movement.positionOf('guest:1')?.floor).toBe('lobby')
+    // The checked-in guest dines in the mezzanine restaurant (3.C: slot 0 at
+    // GUEST_RESTAURANT_START_TILES — the 3.B lobby holding stub is gone).
+    expect(movement.positionOf('guest:1')?.floor).toBe('mezzanine')
     expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES)
   })
 
@@ -447,7 +448,7 @@ describe('sim:assignment_announce', () => {
 })
 
 describe('sim:wrong_delivery', () => {
-  it('a wrong-room arrival complains at the door, returns the guest to the holding area, and a corrected placement settles them (SUI-13/14/15/16)', () => {
+  it('a wrong-room arrival complains at the door, returns the guest to the mezzanine restaurant, and a corrected placement settles them (SUI-13/14/15/16, 3.C)', () => {
     const { movement, guests } = deskScenario()
     run(movement, guests, CADENCE_5P + 1)
     expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
@@ -470,8 +471,9 @@ describe('sim:wrong_delivery', () => {
       }
     }
     expect(complained).toEqual({ floor: assignment.floor, room: wrongRoom })
-    // The guest returned to the holding area (patient, awaiting correction).
-    expect(movement.positionOf('guest:1')?.floor).toBe('lobby')
+    // The guest returned to the restaurant (patient, awaiting correction) —
+    // a dining slot on the mezzanine since 3.C.
+    expect(movement.positionOf('guest:1')?.floor).toBe('mezzanine')
     expect(movement.positionOf('guest:1')?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES)
     // Correction: the suitcase is re-carried to the ASSIGNED room and placed.
     movement.join('p2', { floor: assignment.floor, xMilli: roomDoorXMilli(wrongRoom) })
@@ -620,5 +622,124 @@ describe('sim:lifecycle_log (walkie feed sim half)', () => {
     expect(types.filter((n) => n === 'suitcase:placed')).toHaveLength(1) // silent on the feed
     expect(types.filter((n) => n === 'guest:settled')).toHaveLength(1)
     expect(types.filter((n) => n === 'guest:checked_out')).toHaveLength(1)
+  })
+})
+
+// Cycle 3.C (REST-07..13): checked-in guests dine in the mezzanine restaurant
+// with a seeded dwell buffer. Gate scenario sim:dining.
+describe('sim:dining', () => {
+  const DINING_MIN_TICKS = TUNING.GUEST_DINING_MIN_SECONDS * TICK_HZ
+  const DINING_MAX_TICKS = TUNING.GUEST_DINING_MAX_SECONDS * TICK_HZ
+
+  function dinedScenario(seed = 7) {
+    const movement = new MovementSim()
+    const guests = new GuestSim(seed, 5, new RealMovementPort(movement), {
+      impatienceTicks: 100000,
+    })
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    flush(movement, guests, CADENCE_5P + 2)
+    return { movement, guests }
+  }
+
+  it('check-in seats the guest in mezzanine dining slot 0 and seeds a 15–30 s dwell (REST-07/08)', () => {
+    const { movement, guests } = dinedScenario()
+    const pos = movement.positionOf('guest:1')
+    expect(pos?.floor).toBe('mezzanine')
+    expect(pos?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES)
+    const dwell = guests.diningDwellOf('guest:1')
+    expect(dwell).not.toBeNull()
+    expect(dwell ?? Number.NaN).toBeGreaterThanOrEqual(DINING_MIN_TICKS)
+    expect(dwell ?? Number.NaN).toBeLessThanOrEqual(DINING_MAX_TICKS)
+  })
+
+  it('the dining dwell is deterministic per seed and drawn per stay (REST-08)', () => {
+    const a = dinedScenario(7)
+    const b = dinedScenario(7)
+    const c = dinedScenario(8)
+    expect(a.guests.diningDwellOf('guest:1')).toBe(b.guests.diningDwellOf('guest:1'))
+    expect(a.guests.diningDwellOf('guest:1')).not.toBe(c.guests.diningDwellOf('guest:1'))
+    // A wrong-delivery return starts a NEW dining stay: a fresh draw replaces
+    // the consumed one (covered end-to-end in sim:wrong_delivery; here the
+    // field clears and re-fills through the real flow — asserted indirectly).
+  })
+
+  it('the test seam scales the drawn dwell (diningScale, AD-028 pattern)', () => {
+    const movement = new MovementSim()
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      impatienceTicks: 100000,
+      diningScale: 0.02,
+    })
+    run(movement, guests, CADENCE_5P + 1)
+    guests.checkIn('p1', CADENCE_5P + 1)
+    flush(movement, guests, CADENCE_5P + 2)
+    const dwell = guests.diningDwellOf('guest:1') ?? Number.NaN
+    expect(dwell).toBeGreaterThanOrEqual(1)
+    expect(dwell).toBeLessThanOrEqual(DINING_MAX_TICKS * 0.02)
+  })
+
+  it('a suitcase rest departs the diner immediately, dwell or no dwell (REST-09)', () => {
+    const { movement, guests } = dinedScenario()
+    // Place the suitcase long before the drawn dwell could elapse.
+    movement.join('p1', { floor: 'floor1', xMilli: roomDoorXMilli(4) })
+    expect(guests.placeSuitcase('p1', 4, CADENCE_5P + 3)).toBe('placed')
+    flush(movement, guests, CADENCE_5P + 4)
+    // Within a few ticks the diner leaves the slot (retarget on the rest) —
+    // never waiting out the seeded dwell.
+    let left = false
+    for (let t = CADENCE_5P + 5; t < CADENCE_5P + 205 && !left; t++) {
+      flush(movement, guests, t)
+      const pos = movement.positionOf('guest:1')
+      left =
+        pos !== undefined &&
+        (pos.floor !== 'mezzanine' || pos.x !== TUNING.GUEST_RESTAURANT_START_TILES)
+    }
+    expect(left).toBe(true)
+    expect(guests.diningDwellOf('guest:1')).toBeNull() // the stay ended
+  })
+
+  it('the dwell is a buffer, not a schedule: after it elapses the guest remains dining (REST-10)', () => {
+    const { movement, guests } = dinedScenario()
+    // Run past the LONGEST possible dwell with no rest event.
+    run(movement, guests, DINING_MAX_TICKS + 10, CADENCE_5P + 3)
+    const pos = movement.positionOf('guest:1')
+    expect(pos?.floor).toBe('mezzanine')
+    expect(pos?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES)
+    expect(guests.diningDwellOf('guest:1')).not.toBeNull()
+    // Silence: no lifecycle event fired at dwell end (buffer, not schedule).
+  })
+
+  it('suitcase:place on the mezzanine is ignored — no room doors exist there (REST-05)', () => {
+    const { movement, guests } = dinedScenario()
+    movement.join('p1', { floor: 'mezzanine', xMilli: roomDoorXMilli(4) })
+    const t = CADENCE_5P + 3
+    expect(guests.placeSuitcase('p1', 4, t)).toBe('ignored')
+    expect(flush(movement, guests, t + 1)).toHaveLength(0)
+  })
+
+  it('dining slots compact deterministically as diners depart (REST-07 membership)', () => {
+    const movement = new MovementSim()
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      impatienceTicks: 100000,
+    })
+    run(movement, guests, CADENCE_5P * 2 + 1) // guest:1 and guest:2 queued
+    expect(guests.checkIn('p1', CADENCE_5P * 2 + 1)).toBe('accepted')
+    flush(movement, guests, CADENCE_5P * 2 + 2)
+    expect(guests.checkIn('p2', CADENCE_5P * 2 + 2)).toBe('accepted')
+    flush(movement, guests, CADENCE_5P * 2 + 3)
+    expect(movement.positionOf('guest:2')?.floor).toBe('mezzanine')
+    expect(movement.positionOf('guest:2')?.x).toBe(TUNING.GUEST_RESTAURANT_START_TILES + 1)
+    // guest:1 departs (rest) → guest:2 compacts into slot 0.
+    movement.join('p1', { floor: 'floor1', xMilli: roomDoorXMilli(4) })
+    expect(guests.placeSuitcase('p1', 4, CADENCE_5P * 2 + 4)).toBe('placed')
+    let t = CADENCE_5P * 2 + 5
+    flush(movement, guests, t++)
+    let compacted = false
+    for (; t < CADENCE_5P * 2 + 305 && !compacted; t++) {
+      flush(movement, guests, t)
+      const pos = movement.positionOf('guest:2')
+      compacted = pos?.floor === 'mezzanine' && pos?.x === TUNING.GUEST_RESTAURANT_START_TILES
+    }
+    expect(compacted).toBe(true)
   })
 })

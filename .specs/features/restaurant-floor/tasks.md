@@ -105,10 +105,10 @@ T7 → T8
 
 ---
 
-### T3: Guest dining phase in the sim
+### T3: Guest dining phase in the sim — ✅ DONE
 
 **What**: Rename phase `'waiting'`→`'dining'` (internal), `holding`→dining slots on the mezzanine, seeded dwell drawn at each dining placement (`diningDwellOf` query), wrong-delivery return to dining, check-in placement on the mezzanine; update `guests.test.ts` + `movement.test.ts` pins.
-**Where**: `packages/sim/src/guests.ts`, `packages/sim/src/guests.test.ts`, `packages/sim/src/movement.test.ts`
+**Where**: `packages/sim/src/guests.ts`, `packages/sim/src/guests.test.ts` (movement.test re-pins pulled forward into T1)
 **Depends on**: T2
 **Reuses**: re-place pattern, Rng stream, `retargetOnRest`
 **Requirement**: REST-02, REST-04, REST-05, REST-07..13
