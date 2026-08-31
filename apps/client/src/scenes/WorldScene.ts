@@ -329,19 +329,19 @@ export class WorldScene extends Phaser.Scene {
   private drawHallLines(): void {
     if (this.hallLines === null) {
       this.hallLines = this.add.graphics()
-      this.hallLines.lineStyle(2, 0x556677, 1)
+      this.hallLines.lineStyle(2, 0xb3873a, 1)
     }
     this.hallLines.clear()
-    this.hallLines.lineStyle(2, 0x556677, 1)
+    this.hallLines.lineStyle(2, 0xb3873a, 1)
     if (this.wallFill === null) {
       this.wallFill = this.add.graphics()
       this.wallFill.setDepth(-3)
     }
     this.wallFill.clear()
     if (!this.spectator) {
-      // Cream wall above the corridor band (AD-020 brief: y48..350, flat
-      // quiet field so the door rhythm reads). Graphics, not a Rectangle.
-      this.wallFill.fillStyle(0xe8dcc0, 1)
+      // Slate wall above the corridor band (Deco Noir brief, AD-028: y48..350,
+      // flat quiet field so the door rhythm reads). Graphics, not a Rectangle.
+      this.wallFill.fillStyle(0x33505a, 1)
       this.wallFill.fillRect(0, 48, 832, 302)
       this.hallLines.lineBetween(0, GROUND_Y + 66, 832, GROUND_Y + 66)
       return
