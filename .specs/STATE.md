@@ -997,19 +997,19 @@
   test:sim 385/`client:suitcase` 2× green).
 
 ## Handoff
-- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — CLOSE-OUT
-  rework landed. All six tasks + the AD-034 rework implemented; Verifier
-  iteration 2's single gap (SUI-23 non-discriminating) closed with a
-  wire-event-volume-driven last-5 assertion at `TURNOVER_TEST_GUEST_SCALE=0.2`
-  (test 3 deleted with SUI-26). Next: Verifier iteration 3.
-- **Phase / Task**: Execute → Validate (Verifier iteration 3).
-- **Next step**: dispatch the fresh Verifier sub-agent (iteration 3) with the
-  `tlc-spec-driven` skill's `references/validate.md`, then
-  `python3 <skill-dir>/scripts/validate_state.py suitcase-transport` must
-  exit 0.
-- **Gates at pause**: typecheck 4/4 ✅ · lint ✅ · test:sim 385 ✅ ·
-  `client:suitcase` 2/2 green ×2 consecutive (scale 0.2) · leak audit
-  pending iteration 3 · flake class (justice/lobby/round/spectator, REG-18)
-  pre-existing (reproduced on `131af9e`).
+- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — **CLOSED
+  (PASS)**. All six tasks + the AD-034 rework implemented and committed
+  (`5ad1d1c`); Verifier iteration 3 = **PASS** (26/26 active ACs, sensor 3/3
+  mutants killed incl. the SUI-23 volume-driven re-proof, leak audit clean,
+  `validate_state.py` exit 0) — report in
+  `.specs/features/suitcase-transport/validation.md`, committed `4acf1db`.
+- **Phase / Task**: Execute → Validate ✅ done.
+- **Next step**: none for 3.B. Next work per roadmap: cycle 3.C
+  `restaurant-floor` (mezzanine restaurant replaces the holding-area stub;
+  ~30 s guest dwell).
+- **Gates at close**: typecheck 4/4 ✅ · lint ✅ · test:sim 385 ✅ ·
+  `client:suitcase` 2/2 ×2 consecutive (scale 0.2) · Verifier scratch runs
+  green · flake class (justice/lobby/round/art-doors, REG-18) pre-existing —
+  reproduced on pre-rework HEAD `d242c72` at scale 0.5 in a clean worktree.
 - **Blockers**: none.
 - **Branch**: master
