@@ -2790,3 +2790,64 @@ describe('server:suitcase_carry', () => {
     }
   })
 })
+
+// --- Cycle 3.C (REST-03/17 server half): the mezzanine is a first-class
+// elevator stop; positions and snapshots route through the sameFloor
+// machinery with no cards (the mezzanine carries no rooms).
+describe('server:restaurant_floor', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  it('serves the mezzanine as a fifth stop and routes the exiter snapshot without cards (REST-03/17)', async () => {
+    const host = await createRoom('ada')
+    const collector = collectAll(host)
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+    try {
+      // Walk to the west landing and board the parked car (AD-025 press).
+      host.send('move:start', { type: 'move:start', dir: 'left' })
+      await sleep(60)
+      instance.__driveTicks(60)
+      host.send('move:stop', { type: 'move:stop' })
+      await sleep(60)
+      host.send('elevator:call', { type: 'elevator:call' })
+      await sleep(60)
+      instance.__driveTicks(12) // doors open (AD-026) + boarding flush
+      await collector.waitFor('elevator:riders', 8000)
+      // In-car press of the NEW floor: FLOOR_ENUM accepts 'mezzanine'.
+      host.send('elevator:press', { type: 'elevator:press', floor: 'mezzanine' })
+      await sleep(60)
+      instance.__driveTicks(1)
+      const pressed = await collector.waitFor('elevator:pressed', 8000)
+      expect(pressed.payload).toMatchObject({ playerId: host.sessionId, floor: 'mezzanine' })
+      // The car serves the mezzanine stop (5-stop economy, REST-02).
+      await driveUntilMovement(instance, (s) =>
+        s.cars.some((c) => c.car === 1 && c.floor === 'mezzanine'),
+      )
+      // Exit through the open doors; the door-open exit snapshot routes with
+      // an EMPTY carded set — the mezzanine has no rooms (REST-17/REST-06).
+      for (let i = 0; i < 40; i++) {
+        host.send('move:start', { type: 'move:start', dir: 'right' })
+        await sleep(30)
+        instance.__driveTicks(2)
+        const state = instance.__movementDebug() as {
+          positions: { playerId: string; floor: string }[]
+        }
+        if (state.positions.some((p) => p.playerId === host.sessionId)) break
+        host.send('move:stop', { type: 'move:stop' })
+        await sleep(30)
+      }
+      host.send('move:stop', { type: 'move:stop' })
+      await sleep(60)
+      const exitSnap = await collector.waitFor('movement:snapshot', 8000)
+      expect(exitSnap.payload.cardedRooms).toEqual([])
+      const state = instance.__movementDebug() as {
+        positions: { playerId: string; floor: string }[]
+      }
+      const pos = state.positions.find((p) => p.playerId === host.sessionId)
+      expect(pos?.floor).toBe('mezzanine')
+    } finally {
+      collector.stop()
+      host.leave()
+    }
+  })
+})

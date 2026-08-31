@@ -126,7 +126,7 @@ T7 → T8
 
 ---
 
-### T4: Server mezzanine routing seams
+### T4: Server mezzanine routing seams — ✅ DONE
 
 **What**: Add `mezzanine` to the spectator overview floor enumeration; audit snapshot routing stays per-floor generic; server room tests cover a mezzanine snapshot/overview row.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts`, `apps/server/src/rooms/TurnoverRoom.test.ts`
