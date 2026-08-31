@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Generate the Turnover staff walk cycle (hero sprite, AD-020).
+"""Generate the Turnover staff walk cycle (hero sprite, Deco Noir restyle).
 
-Authors the 8-frame bellhop walk sheet at 28x60 px per frame, profile view,
-facing right. Palette and locks come from docs/art/art-direction-brief.md:
-identical uniform for every player (no saboteur tell), hard pixel clusters,
-1px darker-self outline on the character only, no anti-aliasing.
+Authors the 8-frame staff walk sheet at 28x60 px per frame, profile view,
+facing right. Palette and locks come from the adopted Deco Noir direction
+(docs/art/alternative/art-direction-brief.md, AD-028): ivory mess jacket,
+charcoal cap + trousers, brass band and buttons — identical uniform for every
+player (no saboteur tell), hard pixel clusters, no outlines (value separation
+only), no anti-aliasing. Sheet contract unchanged from AD-020 (28x60, 8 frames)
+pending the 960px viewport decision.
 
 Output:
   apps/client/public/art/chars/staff-walk-8f.png   (224x60 sheet)
@@ -24,17 +27,18 @@ from PIL import Image
 FRAME_W, FRAME_H, FRAMES = 28, 60, 8
 GROUND_ROW = 58  # feet bottom edge (row index, inclusive); baseline for anchor
 
-# Palette (docs/art/art-direction-brief.md)
-INK = (29, 26, 46, 255)          # shoes / darkest accents
-NAVY = (47, 79, 111, 255)        # uniform jacket (current gray-box color kept)
-NAVY_SHADE = (34, 57, 79, 255)   # darker-self: pants, far limbs, outline base
-NAVY_DEEP = (26, 43, 60, 255)    # pants shade
-BRASS = (217, 164, 65, 255)      # buttons, cap band, belt
-BRASS_SHADE = (168, 122, 46, 255)
-GLOVE = (242, 237, 226, 255)     # white gloves
-SKIN = (232, 184, 138, 255)
-SKIN_SHADE = (201, 141, 99, 255)
-EYE = (29, 26, 46, 255)
+# Palette (docs/art/alternative/art-direction-brief.md — Deco Noir)
+INK = (15, 27, 33, 255)           # shoes / darkest accents
+IVORY = (242, 234, 216, 255)      # mess jacket
+IVORY_SHADE = (207, 195, 168, 255)  # darker-self: far sleeve, back edge
+CHARCOAL = (35, 35, 43, 255)      # trousers + cap
+CHARCOAL_SHADE = (24, 24, 30, 255)  # far leg, cap shade
+BRASS = (201, 161, 59, 255)       # band, buttons, cuff
+BRASS_SHADE = (156, 120, 44, 255)
+GLOVE = (246, 241, 230, 255)
+SKIN = (217, 168, 120, 255)
+SKIN_SHADE = (179, 131, 92, 255)
+EYE = (15, 27, 33, 255)
 
 TRANSPARENT = (0, 0, 0, 0)
 
@@ -59,7 +63,7 @@ def hline(px: Image.Image, x0: int, x1: int, y: int, color) -> None:
 
 def draw_leg(px: Image.Image, hip_x: int, swing: int, lift: int, far: bool) -> None:
     """Slanted leg column from hip (y=32) to ankle (y=52) + shoe."""
-    pants = NAVY_DEEP if far else NAVY_SHADE
+    pants = CHARCOAL_SHADE if far else CHARCOAL
     top, bottom = 32, 52
     for y in range(top, bottom + 1):
         t = (y - top) / (bottom - top)
@@ -70,12 +74,12 @@ def draw_leg(px: Image.Image, hip_x: int, swing: int, lift: int, far: bool) -> N
     shoe_x = hip_x + swing
     rect(px, shoe_x, foot_y, shoe_x + 5, GROUND_ROW, INK)
     if lift == 0:
-        rect(px, shoe_x, foot_y, shoe_x + 5, foot_y, NAVY_DEEP)
+        rect(px, shoe_x, foot_y, shoe_x + 5, foot_y, CHARCOAL_SHADE)
 
 
 def draw_arm(px: Image.Image, shoulder_x: int, swing: int, far: bool) -> None:
     """Arm column from shoulder (y=18) to cuff (y=30) with white glove."""
-    sleeve = NAVY_SHADE if far else NAVY
+    sleeve = IVORY_SHADE if far else IVORY
     for y in range(18, 31):
         t = (y - 18) / 12
         x = shoulder_x + round(swing * t)
@@ -97,9 +101,10 @@ def draw_frame(frame: int) -> Image.Image:
     # far leg
     draw_leg(px, 14, -swing, back_lift, far=True)
 
-    # torso: navy jacket, hem at hip (y30)
-    rect(px, 7, 15 + bob, 20, 30 + bob, NAVY)
-    rect(px, 7, 15 + bob, 8, 30 + bob, NAVY_SHADE)      # back edge shade
+    # torso: ivory mess jacket, hem at hip (y30), coat tail behind
+    rect(px, 7, 15 + bob, 20, 30 + bob, IVORY)
+    rect(px, 7, 15 + bob, 8, 30 + bob, IVORY_SHADE)  # back edge shade
+    rect(px, 7, 30 + bob, 10, 34 + bob, IVORY)       # coat tail
     # brass buttons down the front
     for by in (18, 22, 26):
         rect(px, 18, by + bob, 18, by + bob, BRASS)
@@ -110,10 +115,10 @@ def draw_frame(frame: int) -> Image.Image:
     rect(px, 9, 6 + bob, 19, 15 + bob, SKIN)            # head
     hline(px, 9, 19, 15 + bob, SKIN_SHADE)              # jaw shade
     rect(px, 16, 10 + bob, 16, 10 + bob, EYE)           # eye
-    rect(px, 9, 1 + bob, 18, 5 + bob, NAVY)             # cap crown
+    rect(px, 9, 1 + bob, 18, 5 + bob, CHARCOAL)         # cap crown
     hline(px, 9, 18, 5 + bob, BRASS)                    # cap band
-    rect(px, 15, 5 + bob, 21, 5 + bob, NAVY_SHADE)      # brim (forward)
-    rect(px, 9, 1 + bob, 10, 5 + bob, NAVY_SHADE)       # cap back shade
+    rect(px, 15, 5 + bob, 21, 5 + bob, CHARCOAL_SHADE)  # brim (forward)
+    rect(px, 9, 1 + bob, 10, 5 + bob, CHARCOAL_SHADE)   # cap back shade
 
     # near leg (over jacket hem)
     draw_leg(px, 11, swing, lift, far=False)
@@ -121,33 +126,12 @@ def draw_frame(frame: int) -> Image.Image:
     # near arm (over torso): swings opposite the near leg
     draw_arm(px, 15 - swing // 2, -swing // 2, far=False)
     # collar
-    hline(px, 12, 17, 15 + bob, NAVY_SHADE)
+    hline(px, 12, 17, 15 + bob, IVORY_SHADE)
     return px
 
 
-def outline(px: Image.Image) -> None:
-    """1px darker-self outline around non-transparent pixels."""
-    src = px.copy()
-    w, h = px.size
-    for y in range(h):
-        for x in range(w):
-            if src.getpixel((x, y))[3] != 0:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < w and 0 <= ny < h:
-                    n = src.getpixel((nx, ny))
-                    if n[3] != 0:
-                        px.putpixel((x, y), NAVY_DEEP)
-                        break
-
-
 def build_sheet() -> Image.Image:
-    frames = []
-    for f in range(FRAMES):
-        fr = draw_frame(f)
-        outline(fr)
-        frames.append(fr)
+    frames = [draw_frame(f) for f in range(FRAMES)]
     sheet = Image.new("RGBA", (FRAME_W * FRAMES, FRAME_H), TRANSPARENT)
     for i, fr in enumerate(frames):
         sheet.paste(fr, (i * FRAME_W, 0))
@@ -157,33 +141,35 @@ def build_sheet() -> Image.Image:
 def corridor_mock(frame_img: Image.Image) -> Image.Image:
     """Disposable 832x576 corridor read: character at native scale mid-hall."""
     W, H = 832, 576
-    mock = Image.new("RGBA", (W, H), (43, 36, 64, 255))  # night shadow
-    cream = (232, 220, 192, 255)
-    tan = (201, 178, 138, 255)
-    carpet = (140, 59, 59, 255)
-    gold = (217, 164, 65, 255)
-    navy = (47, 79, 111, 255)
-    for y in range(60, 430):        # wall
+    mock = Image.new("RGBA", (W, H), (15, 27, 33, 255))  # ink teal night
+    wall = (51, 80, 90, 255)
+    wainscot = (36, 51, 59, 255)
+    carpet = (92, 36, 48, 255)
+    brass_dim = (179, 135, 58, 255)
+    for y in range(60, 430):        # wall field
         for x in range(W):
-            mock.putpixel((x, y), cream)
+            mock.putpixel((x, y), wall)
     for y in range(330, 430):       # wainscot
         for x in range(W):
-            mock.putpixel((x, y), tan)
+            mock.putpixel((x, y), wainscot)
     for y in range(430, 496):       # carpet strip
         for x in range(W):
             mock.putpixel((x, y), carpet)
     for y in (430, 495):
-        hline_mock(mock, 0, W - 1, y, gold)
-    # two doors + card
+        hline_mock(mock, 0, W - 1, y, brass_dim)
+    # two walnut doors + card
+    walnut = (58, 38, 32, 255)
+    walnut_seam = (43, 27, 23, 255)
     for dx in (120, 560):
         for y in range(240, 430):
             for x in range(dx, dx + 72):
-                mock.putpixel((x, y), navy)
+                mock.putpixel((x, y), walnut)
         for y in range(236, 240):
-            hline_mock(mock, dx, dx + 71, y, gold)
+            hline_mock(mock, dx, dx + 71, y, (201, 161, 59, 255))
         for y in range(250, 266):
             for x in range(dx + 60, dx + 72):
-                mock.putpixel((x, y), (242, 237, 226, 255))
+                mock.putpixel((x, y), (246, 241, 230, 255))
+        hline_mock(mock, dx + 6, dx + 65, 260, walnut_seam)
     mock.alpha_composite(frame_img, (400, 430 - FRAME_H))
     return mock
 
