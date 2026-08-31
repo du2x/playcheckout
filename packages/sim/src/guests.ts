@@ -54,7 +54,7 @@ interface Guest {
  */
 export interface SuitcaseState {
   carrier: string | null
-  rest: { floor: GuestFloorId; room: RoomIndex } | 'desk' | null
+  rest: { floor: GuestFloorId; room: RoomIndex } | null
   /** Absolute tick the current carry leg started (check-in or pickup) — the
    *  carry clock reads it; null while resting. */
   legStartTick: number | null
@@ -389,9 +389,8 @@ export class GuestSim {
     let best: { id: string; dist: number; ordinal: number } | null = null
     for (const [id, sc] of this.suitcases) {
       if (sc.rest === null) continue
-      const restFloor = sc.rest === 'desk' ? ('lobby' as const) : sc.rest.floor
-      if (restFloor !== pos.floor) continue
-      const restX = sc.rest === 'desk' ? DESK_X : roomDoorXMilli(sc.rest.room) / 1000
+      if (sc.rest.floor !== pos.floor) continue
+      const restX = roomDoorXMilli(sc.rest.room) / 1000
       const dist = Math.abs(pos.x - restX)
       if (dist > TUNING.ROOM_DOOR_RANGE_TILES) continue
       const ordinal = Number(id.split(':')[1] ?? 0)
@@ -475,7 +474,7 @@ export class GuestSim {
     const sc = this.suitcases.get(id)
     if (g === undefined || sc === undefined) return
     const rest = sc.rest
-    if (rest === null || rest === 'desk') return
+    if (rest === null) return
     if (g.phase === 'waiting') {
       const hIdx = this.holding.indexOf(id)
       if (hIdx !== -1) {
@@ -570,7 +569,7 @@ export class GuestSim {
     const target = g.target
     if (target === null) return
     const rest = sc?.rest
-    if (rest === undefined || rest === null || rest === 'desk') {
+    if (rest === undefined || rest === null) {
       this.movement.stopMove(g.id)
       return
     }
@@ -686,15 +685,13 @@ export class GuestSim {
 
   /**
    * Resting suitcases for the movement snapshot (cycle 3.B): sameFloor-public
-   * rows; the room filters by the viewer's floor. Desk-resting rows carry
-   * floor 'lobby', room 0 (room 0 = the desk, not a room segment).
+   * rows; the room filters by the viewer's floor.
    */
-  restingSuitcases(): { guestId: string; floor: FloorId; room: number }[] {
-    const rows: { guestId: string; floor: FloorId; room: number }[] = []
+  restingSuitcases(): { guestId: string; floor: FloorId; room: RoomIndex }[] {
+    const rows: { guestId: string; floor: FloorId; room: RoomIndex }[] = []
     for (const [id, sc] of this.suitcases) {
       if (sc.rest === null) continue
-      if (sc.rest === 'desk') rows.push({ guestId: id, floor: 'lobby', room: 0 })
-      else rows.push({ guestId: id, floor: sc.rest.floor, room: sc.rest.room })
+      rows.push({ guestId: id, floor: sc.rest.floor, room: sc.rest.room })
     }
     return rows
   }

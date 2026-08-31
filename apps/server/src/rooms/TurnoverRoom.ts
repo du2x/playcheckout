@@ -14,6 +14,7 @@ import {
   elevatorPressIntentSchema,
   type LobbySnapshot,
   lobbyStartIntentSchema,
+  type MovementSnapshot,
   moveStartIntentSchema,
   moveStopIntentSchema,
   suitcasePickupIntentSchema,
@@ -125,6 +126,33 @@ export class TurnoverRoom extends Room {
   private lastRiders = new Map<CarId, string[]>()
   /** Last known floor per car — the `from` half of a ride leg. */
   private carFloor = new Map<CarId, FloorId>()
+
+  /**
+   * Personal movement snapshot enriched with the resting suitcases of the
+   * viewer's floor (cycle 3.B, SUI-24 late joiners) — sameFloor-filtered like
+   * the guests; a spectator (fired, no position) sees every floor's resting
+   * suitcases. Carried suitcases are derived client-side from the carrier's
+   * position stream.
+   */
+  private movementSnapshotFor(
+    sessionId: string,
+    cardedRooms?: readonly RoomIndex[],
+  ): MovementSnapshot {
+    const snap: MovementSnapshot =
+      cardedRooms === undefined
+        ? this.movement.snapshotFor(sessionId)
+        : this.movement.snapshotFor(sessionId, cardedRooms)
+    const sim = this.sim
+    if (sim === null) return snap
+    const all = sim.restingSuitcases()
+    if (all.length === 0) return snap
+    const view = this.movement.viewOf(sessionId)
+    const spectator =
+      view.floor === null && view.roomKey === null && view.car === null && view.x === null
+    const visible = spectator ? all : all.filter((r) => r.floor === view.floor)
+    if (visible.length === 0) return snap
+    return { ...snap, suitcases: visible }
+  }
 
   override onCreate() {
     this.patchRate = null
@@ -368,7 +396,7 @@ export class TurnoverRoom extends Room {
     if (seat !== undefined) seat.connected = true
     if (this.phase !== 'round' || sim === null) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
-      this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
+      this.router.toSelf('movement:snapshot', sessionId, this.movementSnapshotFor(sessionId))
       return
     }
     // Re-add the rectangle everywhere: one player:moved re-announces the
@@ -390,7 +418,7 @@ export class TurnoverRoom extends Room {
     if (ownFired) {
       this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
     } else {
-      this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
+      this.router.toSelf('movement:snapshot', sessionId, this.movementSnapshotFor(sessionId))
     }
   }
 
@@ -599,7 +627,7 @@ export class TurnoverRoom extends Room {
     // position streams survive into results/lobby.
     for (const guestId of this.movement.guestIds()) this.movement.leave(guestId)
     for (const sessionId of this.players.keys()) {
-      this.router.toSelf('movement:snapshot', sessionId, this.movement.snapshotFor(sessionId))
+      this.router.toSelf('movement:snapshot', sessionId, this.movementSnapshotFor(sessionId))
     }
   }
 
@@ -687,7 +715,7 @@ export class TurnoverRoom extends Room {
         ? (this.sim?.cardedOn(arrivalFloor) ?? [])
         : []
     this.router.toSelf('movement:snapshot', sessionId, {
-      ...this.movement.snapshotFor(sessionId, cards),
+      ...this.movementSnapshotFor(sessionId, cards),
     })
   }
 

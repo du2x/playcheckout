@@ -419,27 +419,30 @@ describe('sim:assignment_overhear', () => {
   it('the assignment is overheard EXACTLY ONCE — never repeated, never logged, through carries and rests (SUI-03)', () => {
     const { movement, guests } = deskScenario()
     run(movement, guests, CADENCE_5P + 1)
+    // EVERY flush from check-in onward lands in the stream — the count below
+    // kills any mutation that re-emits the overhear on pickup or rest.
+    const stream: SimEvent[] = []
     expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
-    const first = flush(movement, guests, CADENCE_5P + 2)
-    expect(of(first, 'assignment:overheard')).toHaveLength(1)
+    let t = CADENCE_5P + 2
+    stream.push(...flush(movement, guests, t++))
     // A full carry-place-pickup-place cycle re-emits lifecycle facts but
     // NEVER a second overhear (the snapshot happens at the check-in tick).
     movement.join('p1', { floor: 'floor1', xMilli: roomDoorXMilli(3) })
-    expect(guests.placeSuitcase('p1', 3, CADENCE_5P + 3)).toBe('placed')
-    flush(movement, guests, CADENCE_5P + 4)
+    expect(guests.placeSuitcase('p1', 3, t++)).toBe('placed')
+    stream.push(...flush(movement, guests, t++))
     movement.join('p2', { floor: 'floor1', xMilli: roomDoorXMilli(3) })
-    expect(guests.pickupSuitcase('p2', CADENCE_5P + 5)).toBe('picked_up')
-    flush(movement, guests, CADENCE_5P + 6)
+    expect(guests.pickupSuitcase('p2', t++)).toBe('picked_up')
+    stream.push(...flush(movement, guests, t++))
     movement.join('p2', { floor: 'floor2', xMilli: roomDoorXMilli(6) })
-    expect(guests.placeSuitcase('p2', 6, CADENCE_5P + 7)).toBe('placed')
-    const rest = flush(movement, guests, CADENCE_5P + 8)
-    void rest
-    // Run a while longer — still exactly one overhear in the whole stream.
-    let count = 1
-    for (let t = CADENCE_5P + 9; t < CADENCE_5P + 210; t++) {
-      count += of(flush(movement, guests, t), 'assignment:overheard').length
-    }
-    expect(count).toBe(1)
+    expect(guests.placeSuitcase('p2', 6, t++)).toBe('placed')
+    stream.push(...flush(movement, guests, t++))
+    // Run a while longer — still exactly one overhear in the WHOLE stream.
+    for (; t < CADENCE_5P + 210; t++) stream.push(...flush(movement, guests, t))
+    const overheard = of(stream, 'assignment:overheard')
+    expect(overheard).toHaveLength(1)
+    const o = overheard[0]
+    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    expect(o.guestId).toBe('guest:1')
   })
 })
 
@@ -488,6 +491,48 @@ describe('sim:wrong_delivery', () => {
     expect(guests.tenantedRooms()).toContainEqual(assignment)
     const reserved = (guests as unknown as { reserved: Set<string> }).reserved
     expect(reserved.size).toBe(0) // reservation converted to tenancy
+  })
+})
+
+describe('sim:suitcase_carry (door-waiting)', () => {
+  it('a mid-walk pickup strands the guest at the old door; the next rest there resolves the outcome (SUI-13)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    let t = CADENCE_5P + 2
+    const stream = flush(movement, guests, t++)
+    const o = stream.find((e) => e.type === 'assignment:overheard')
+    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    // Place at the assignment's door, let the guest commit to the walk, then
+    // pick the suitcase back up MID-WALK.
+    movement.join('p1', { floor: o.floor, xMilli: roomDoorXMilli(o.room) })
+    expect(guests.placeSuitcase('p1', o.room, t++)).toBe('placed')
+    flush(movement, guests, t++)
+    // Wait until the guest is moving (committed to the walk), then re-grab.
+    let walking = false
+    for (; t < CADENCE_5P + 400 && !walking; t++) {
+      flush(movement, guests, t)
+      const pos = movement.positionOf('guest:1')
+      walking = pos !== undefined && movement.viewOf('guest:1').car === null
+    }
+    expect(guests.pickupSuitcase('p1', t)).toBe('picked_up')
+    flush(movement, guests, t++)
+    // The guest is stranded (no settle while the suitcase is carried).
+    let settled = false
+    for (; t < CADENCE_5P + 800 && !settled; t++) {
+      settled = flush(movement, guests, t).some((e) => e.type === 'guest:settled')
+    }
+    expect(settled).toBe(false)
+    // Re-place at the SAME room: the next rest event re-targets, the guest
+    // (already at the door) resolves the outcome immediately.
+    movement.join('p1', { floor: o.floor, xMilli: roomDoorXMilli(o.room) })
+    expect(guests.placeSuitcase('p1', o.room, t++)).toBe('placed')
+    flush(movement, guests, t++)
+    let done = false
+    for (; t < CADENCE_5P + 1600 && !done; t++) {
+      done = flush(movement, guests, t).some((e) => e.type === 'guest:settled')
+    }
+    expect(done).toBe(true)
   })
 })
 

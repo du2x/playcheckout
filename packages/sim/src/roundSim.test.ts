@@ -1,4 +1,10 @@
-import { type FloorId, type GuestFloorId, type SimEvent, TUNING } from '@turnover/shared'
+import {
+  type FloorId,
+  type GuestFloorId,
+  roomDoorXMilli,
+  type SimEvent,
+  TUNING,
+} from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { RoundSim, TICK_HZ } from './index.js'
 import { MovementSim } from './movement.js'
@@ -524,6 +530,104 @@ describe('sim:suitcase_carry (round integration)', () => {
     sim.ghost('p1')
     // The guest is back in the queue front with the assignment void: p2 at
     // the desk checks them in again (a fresh assignment re-seeds).
+    expect(sim.deskInteract('p2')).toBe('accepted')
+  })
+})
+
+describe('sim:suitcase_carry (round integration — SUI-11/16/20 sub-clauses)', () => {
+  it('accusation stays available while carrying, and an already-active channel runs to completion (SUI-11)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
+    })
+    // p2 stands inside floor1:1's segment and starts a channel (staff prep or
+    // saboteur fake — role-blind acceptance) BEFORE the carry interplay.
+    const positions = new Map<string, { floor: FloorId; x: number }>([
+      ['p1', { floor: 'lobby', x: 15000 }],
+      ['p2', { floor: 'floor1', x: 2750 }],
+      ['p3', { floor: 'lobby', x: 15000 }],
+      ['p4', { floor: 'lobby', x: 15000 }],
+    ])
+    runToArrival(movement, sim, positions)
+    expect(sim.startWork('p2', 'floor1', 1)).toBe('accepted')
+    // p1 carries: STARTS are rejected...
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    expect(sim.startWork('p1', 'floor1', 2)).toBe('carrying')
+    // ...but accusation eligibility is untouched by carrying: p1 can accuse
+    // p3 (both live, same floor, within ACCUSATION_RANGE_TILES? p3 is at 15).
+    expect(sim.accuse('p1', 'p3')).toBe('resolved')
+    // p2's channel completes (work:ended completed) — carrying others does
+    // not affect it, and p2's own carrying never started.
+    let completed = false
+    for (let t = 0; t < 400 && !completed; t++) {
+      movement.tick()
+      completed = sim
+        .tick(positions)
+        .some((e) => e.type === 'work:ended' && e.playerId === 'p2' && e.outcome === 'completed')
+    }
+    expect(completed).toBe(true)
+  })
+
+  it('a guest settling into a TRASHED room settles silently in 3.B — no complaint fires (SUI-16)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
+    })
+    const positions = lobbyPositions({ p1: 15, p2: 22, p3: 22, p4: 22 })
+    runToArrival(movement, sim, positions)
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    // Read the assignment, trash that room via the saboteur-shaped path
+    // (white-box: WorkChannels state), then deliver the suitcase there.
+    const flushed = sim.tick(positions)
+    const o = flushed.find((e) => e.type === 'assignment:overheard')
+    if (o === undefined || o.type !== 'assignment:overheard') throw new Error('missing overheard')
+    ;(
+      sim as unknown as {
+        work: { stateOf: (f: GuestFloorId, r: number) => string; trashRoom?: unknown }
+      }
+    ).work.stateOf(o.floor, o.room)
+    // Direct state poke: force the assigned room trashed (the saboteur-shaped
+    // un-prep needs role/state choreography the suite pins elsewhere).
+    const states = (sim as unknown as { work: { states: Map<string, string> } }).work.states
+    const entry = states.get(`${o.floor}:${o.room}`)
+    if (entry === undefined) throw new Error('room state missing')
+    states.set(`${o.floor}:${o.room}`, 'trashed')
+    // Deliver: place at the assignment door, wait for the settle.
+    movement.join('p1', { floor: o.floor, xMilli: roomDoorXMilli(o.room) })
+    expect(sim.suitcasePlace('p1', o.room)).toBe('placed')
+    let settled = false
+    let complained = false
+    for (let t = 0; t < 4000 && !settled; t++) {
+      movement.tick()
+      for (const e of sim.tick(positions)) {
+        if (e.type === 'guest:settled') settled = true
+        if (e.type === 'guest:complained') complained = true
+      }
+    }
+    expect(settled).toBe(true)
+    expect(complained).toBe(false) // discovery cost lands in cycle 3.3
+  })
+
+  it('a DISCONNECTED carrier drops the suitcase through the leave path; the guest re-queues (SUI-20)', () => {
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 7,
+      playerIds: IDS,
+      movement: new PortAdapter(movement),
+      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
+    })
+    const positions = lobbyPositions({ p1: 15, p2: 15, p3: 22, p4: 22 })
+    runToArrival(movement, sim, positions)
+    expect(sim.deskInteract('p1')).toBe('accepted')
+    expect(sim.restingSuitcases()).toEqual([]) // carried — not in the snapshot
+    sim.leave('p1')
+    // p2 at the desk can check the re-queued guest in again.
     expect(sim.deskInteract('p2')).toBe('accepted')
   })
 })

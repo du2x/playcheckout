@@ -2,9 +2,11 @@ import {
   type FloorId,
   type GuestFloorId,
   type MovementSnapshot,
+  ROOM_INDEXES,
   ROOMS_PER_FLOOR,
   type RoomIndex,
   type RoomState,
+  roomDoorXMilli,
   roomIndexAtMilli,
   roomSegmentEndMilli,
   roomSegmentStartMilli,
@@ -124,6 +126,14 @@ export class WorldScene extends Phaser.Scene {
   // gone with the walkie-broadcast model (the suitcase replaces it).
   private deskHint: HTMLElement | null = null
   private walkieLog: HTMLElement | null = null
+  /** Suitcase markers (cycle 3.B, SUI-24): one Rectangle per suitcase —
+   *  carried rides the carrier, rest pins the doorway (never a Sprite —
+   *  scene-children contract). */
+  private suitcaseViews = new Map<string, Phaser.GameObjects.Rectangle>()
+  /** The blind-place confirm (SUI-26) + the owned-assignment hint (SUI-27). */
+  private placeConfirm: HTMLElement | null = null
+  private placeConfirmRoom: RoomIndex | null = null
+  private assignmentHint: HTMLElement | null = null
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
@@ -622,12 +632,18 @@ export class WorldScene extends Phaser.Scene {
         this.beep(180)
         this.playRustleFx(action.floor, action.room)
         break
-      case 'player-fired':
+      case 'player-fired': {
         // JUST-04: the fired player's rectangle disappears everywhere — the
         // fired event itself is the removal signal (no player:left exists for
         // a firing; the session stays connected as a spectator, 2.9 scope).
         this.removePlayerDisplay(action.playerId)
+        // Cycle 3.B: the desk absorbed their suitcase (no dedicated event —
+        // the firing IS the signal).
+        for (const [id, sc] of this.suitcases) {
+          if (sc.carrierId === action.playerId) this.suitcases.delete(id)
+        }
         break
+      }
       case 'assignment-overheard':
         // SUI-03/04: the deskEarshot policy filtered the wire — receiving this
         // action IS the local player's own knowledge. Stored for the
@@ -740,6 +756,12 @@ export class WorldScene extends Phaser.Scene {
       const car = this.cars.get(c.car)
       if (car !== undefined) car.floor = c.floor
     }
+    // SUI-24 late joiners: resting suitcases ride the snapshot (sameFloor-
+    // filtered by the room) — carried ones are derived from the carrier's
+    // position stream. A row IS the rest truth for that guest.
+    for (const sc of snapshot.suitcases ?? []) {
+      this.suitcases.set(sc.guestId, { carrierId: null, rest: { floor: sc.floor, room: sc.room } })
+    }
     this.updatePanel()
   }
 
@@ -804,13 +826,84 @@ export class WorldScene extends Phaser.Scene {
    */
   private accuseHoldTimer: number | null = null
 
+  /** The guest whose suitcase the local player carries, or null (SUI-25). */
+  private ownCarriedGuest(): string | null {
+    for (const [id, sc] of this.suitcases) {
+      if (sc.carrierId === this.ownId) return id
+    }
+    return null
+  }
+
+  /** The room whose doorway the own player stands at on a guest floor, or
+   *  null — the place affordance (SUI-25 step 3). */
+  private ownDoorRoom(): RoomIndex | null {
+    const own = this.players.get(this.ownId)
+    if (own === undefined || own.floor === 'lobby') return null
+    for (const room of ROOM_INDEXES) {
+      if (Math.abs(own.x - roomDoorXMilli(room) / 1000) <= TUNING.ROOM_DOOR_RANGE_TILES) {
+        return room as RoomIndex
+      }
+    }
+    return null
+  }
+
+  /** A resting suitcase within ROOM_DOOR_RANGE_TILES on the own floor, or
+   *  null — the pickup affordance (SUI-25 step 4). Desk-resting counts. */
+  private ownNearRestingSuitcase(): string | null {
+    const own = this.players.get(this.ownId)
+    if (own === undefined) return null
+    for (const [id, sc] of this.suitcases) {
+      if (sc.rest === null) continue
+      // The client never sees a desk-resting suitcase: carrier loss deletes
+      // it server-side and the player:fired event prunes the local view.
+      const restX = roomDoorXMilli(sc.rest.room) / 1000
+      if (own.floor === sc.rest.floor && Math.abs(own.x - restX) <= TUNING.ROOM_DOOR_RANGE_TILES) {
+        return id
+      }
+    }
+    return null
+  }
+
+  /** SUI-26: the one-step confirm for placing at a room whose assignment the
+   *  local player never overheard — own-knowledge only, one click, not a
+   *  refusal. */
+  private openPlaceConfirm(room: RoomIndex): void {
+    this.placeConfirmRoom = room
+    if (this.placeConfirm !== null) this.placeConfirm.style.visibility = 'visible'
+  }
+
+  private closePlaceConfirm(send: boolean): void {
+    const room = this.placeConfirmRoom
+    this.placeConfirmRoom = null
+    if (this.placeConfirm !== null) this.placeConfirm.style.visibility = 'hidden'
+    if (send && room !== null) this.sendSuitcasePlace(room)
+  }
+
   private beginAccuseHold(): void {
     if (this.selfFired || this.accuseHoldTimer !== null) return
-    // Desk zone (cycle 3.B): E is the desk key — tap checks the front guest
-    // in (the caller takes the suitcase); the accuse hold is suppressed
-    // entirely inside the zone.
+    // SUI-25 ladder: desk receive → place (carrying, at a door) → pickup
+    // (not carrying, near a resting suitcase) → otherwise the hold window
+    // (keyup = elevator call, expiry = accuse). Desk/pickup/place targets
+    // are spatially disjoint from landings, so the order only breaks ties.
     if (this.ownInDeskZone()) {
       this.sendDeskInteract()
+      return
+    }
+    const carried = this.ownCarriedGuest()
+    if (carried !== null) {
+      const door = this.ownDoorRoom()
+      if (door !== null) {
+        // SUI-26: confident only for a guest whose assignment we overheard;
+        // otherwise the one-step confirm gates the gamble.
+        if (this.heardAssignments.has(carried)) {
+          this.sendSuitcasePlace(door)
+        } else {
+          this.openPlaceConfirm(door)
+        }
+        return
+      }
+    } else if (this.ownNearRestingSuitcase() !== null) {
+      this.sendSuitcasePickup()
       return
     }
     this.accuseHoldTimer = window.setTimeout(() => {
@@ -928,6 +1021,47 @@ export class WorldScene extends Phaser.Scene {
     log.style.borderRadius = '4px'
     gameEl.appendChild(log)
     this.walkieLog = log
+
+    const confirm = document.createElement('div')
+    confirm.id = 'place-confirm'
+    confirm.style.position = 'absolute'
+    confirm.style.left = '50%'
+    confirm.style.top = '40px'
+    confirm.style.transform = 'translateX(-50%)'
+    confirm.style.padding = '8px'
+    confirm.style.fontSize = '14px'
+    confirm.style.background = '#3a3a52'
+    confirm.style.color = '#ffe9a8'
+    confirm.style.borderRadius = '4px'
+    confirm.style.visibility = 'hidden'
+    confirm.textContent = "You haven't heard this guest's room"
+    const yes = document.createElement('button')
+    yes.id = 'place-confirm-yes'
+    yes.textContent = 'place anyway'
+    yes.addEventListener('click', () => this.closePlaceConfirm(true))
+    const no = document.createElement('button')
+    no.id = 'place-confirm-no'
+    no.textContent = 'cancel'
+    no.addEventListener('click', () => this.closePlaceConfirm(false))
+    confirm.appendChild(yes)
+    confirm.appendChild(no)
+    gameEl.appendChild(confirm)
+    this.placeConfirm = confirm
+
+    const assignment = document.createElement('div')
+    assignment.id = 'suitcase-assignment'
+    assignment.style.position = 'absolute'
+    assignment.style.left = '50%'
+    assignment.style.top = '64px'
+    assignment.style.transform = 'translateX(-50%)'
+    assignment.style.padding = '4px 10px'
+    assignment.style.fontSize = '13px'
+    assignment.style.background = '#2b3a4a'
+    assignment.style.color = '#d7e9ff'
+    assignment.style.borderRadius = '4px'
+    assignment.style.visibility = 'hidden'
+    gameEl.appendChild(assignment)
+    this.assignmentHint = assignment
   }
 
   /** The walkie log (SUI-21/23): one line per server-generated lifecycle
@@ -941,6 +1075,54 @@ export class WorldScene extends Phaser.Scene {
     this.walkieLog.prepend(line)
     while (this.walkieLog.children.length > 5) {
       this.walkieLog.lastElementChild?.remove()
+    }
+  }
+
+  /** Suitcase marker sync (SUI-24, called every frame): carried rides the
+   *  carrier's display position, rest pins the doorway; sameFloor view filter
+   *  like the guests. Also renders the SUI-27 assignment hint for the own
+   *  carried suitcase (own knowledge only). */
+  private syncSuitcases(): void {
+    for (const [id, sc] of this.suitcases) {
+      let view = this.suitcaseViews.get(id)
+      if (view === undefined) {
+        view = this.add.rectangle(0, GROUND_Y - 22, 14, 10, 0xffd27f)
+        this.suitcaseViews.set(id, view)
+      }
+      let x: number | null = null
+      let floor: string | null = null
+      if (sc.carrierId !== null) {
+        const carrier = this.players.get(sc.carrierId)
+        if (carrier !== undefined) {
+          x = carrier.x
+          floor = carrier.floor
+        }
+      } else if (sc.rest !== null) {
+        x = roomDoorXMilli(sc.rest.room) / 1000
+        floor = sc.rest.floor
+      }
+      if (x === null || floor === null) {
+        view.setVisible(false)
+        continue
+      }
+      view.setVisible(this.spectator || floor === this.viewFloor)
+      view.x = x * TILE_PX
+    }
+    for (const [id, view] of this.suitcaseViews) {
+      if (!this.suitcases.has(id)) {
+        view.destroy()
+        this.suitcaseViews.delete(id)
+      }
+    }
+    if (this.assignmentHint !== null) {
+      const carried = this.ownCarriedGuest()
+      const heard = carried !== null ? this.heardAssignments.get(carried) : undefined
+      if (heard !== undefined) {
+        this.assignmentHint.textContent = `guest's room: ${heard.floor}:${heard.room}`
+        this.assignmentHint.style.visibility = 'visible'
+      } else {
+        this.assignmentHint.style.visibility = 'hidden'
+      }
     }
   }
 
@@ -1376,6 +1558,7 @@ export class WorldScene extends Phaser.Scene {
     }
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
     this.syncGuests(delta)
+    this.syncSuitcases()
     this.syncDesk()
     // Card glyph position/visibility follow the floor lanes; cues expire here.
     this.syncCardMarkers()

@@ -9,6 +9,20 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts/,
   use: {
     baseURL: 'http://localhost:2567',
+    // Watchable evidence (cycle 3.B): record every test's pages so a run can
+    // be replayed without headed spectating — headed windows freeze rAF when
+    // occluded (the game loop stalls and players stand still). Videos land
+    // under apps/client/test-results/**.
+    video: 'on',
+    // Headed spectating: keep every player window's game loop running even
+    // when occluded/unfocused — no-op for the headless CI runs.
+    launchOptions: {
+      args: [
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-background-timer-throttling',
+      ],
+    },
   },
   webServer: {
     // Prod strip check (SKEL-08), then build the harness bundle (dev-only

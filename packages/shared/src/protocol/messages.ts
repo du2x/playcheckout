@@ -273,6 +273,17 @@ export interface MovementSnapshotGuest {
 }
 
 /**
+ * Movement snapshot row for one RESTING suitcase (cycle 3.B) — sameFloor-
+ * public like the placed event; carried suitcases are derived by the client
+ * from the carrier's position stream.
+ */
+export interface MovementSnapshotSuitcase {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/**
  * server → one player. Public movement state on join and at the buzzer (MOVE-18).
  * `carOccupants` is present ONLY in a rider's personal snapshot (AD-013):
  * viewers standing on a floor get the byte-identical public shape — occupancy
@@ -290,6 +301,12 @@ export interface MovementSnapshot {
    */
   readonly cardedRooms: readonly RoomIndex[]
   readonly guests?: readonly MovementSnapshotGuest[]
+  /**
+   * Resting suitcases of the snapshot's floor (cycle 3.B, SUI-24 late
+   * joiners) — sameFloor-public; present ONLY when non-empty. Spectator
+   * baselines carry every floor's rows.
+   */
+  readonly suitcases?: readonly MovementSnapshotSuitcase[]
   readonly carOccupants?: {
     readonly car: CarId
     readonly riders: readonly string[]
