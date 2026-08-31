@@ -33,11 +33,17 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       el('div', { id: 'role-label' }, ['your role']),
       roleCard,
       errorLine,
-      // Position-only elevator panels: car floors, never occupants (privacy rule).
+      // Position-only elevator panels (AD-024): per-car hall-call light (●
+      // lit from the accepted call until the car arrives) and current-floor
+      // readout — car floors, never occupants (privacy rule).
       el('div', { id: 'elevator-panel' }, [
-        'elevators  W: ',
+        'elevators  W ',
+        el('span', { id: 'panel-light-west', style: 'color:#4a5568' }, ['●']),
+        ': ',
         el('span', { id: 'panel-west' }, ['lobby']),
-        ' · E: ',
+        ' · E ',
+        el('span', { id: 'panel-light-east', style: 'color:#4a5568' }, ['●']),
+        ': ',
         el('span', { id: 'panel-east' }, ['lobby']),
       ]),
       // Rider chip (AD-013): occupants, four lit floor indicators (lit =

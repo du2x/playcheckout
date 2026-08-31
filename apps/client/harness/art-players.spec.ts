@@ -8,9 +8,10 @@ import { expect, type Page, test } from '@playwright/test'
 interface PlayerSpriteRead {
   texture: string
   playing: boolean
-  frame: string
+  frame: number
   flipX: boolean
   visible: boolean
+  timeScale: number
 }
 
 async function join(page: Page, code: string, name: string) {
@@ -53,7 +54,11 @@ function readPlayerSprites(page: Page): Promise<PlayerSpriteRead[]> {
                 flipX: boolean
                 frame: { name: string }
                 texture: { key: string }
-                anims: { isPlaying: boolean; currentAnim?: { key?: string } }
+                anims: {
+                  isPlaying: boolean
+                  timeScale: number
+                  currentAnim?: { key?: string }
+                }
               }[]
             }
           } | null
@@ -70,6 +75,7 @@ function readPlayerSprites(page: Page): Promise<PlayerSpriteRead[]> {
         frame: Number(c.frame.name),
         flipX: c.flipX,
         visible: c.visible,
+        timeScale: c.anims.timeScale,
       }))
   })
 }
@@ -146,10 +152,11 @@ test.describe('client:art_players', () => {
     await own.keyboard.up('ArrowLeft')
 
     // ART-03/FR-9: identical presentation for every player — same texture,
-    // same walk cycle availability, no per-role variation anywhere in the
-    // sprite set (the scene never learns a role it could vary on).
+    // same walk cycle availability, and identical animation timing (no
+    // per-role timeScale offset anywhere in the sprite set).
     const all = await readPlayerSprites(own)
     expect(all).toHaveLength(4)
     expect(new Set(all.map((s) => s.texture))).toEqual(new Set(['staff-walk']))
+    expect(new Set(all.map((s) => s.timeScale))).toEqual(new Set([1]))
   })
 })

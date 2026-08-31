@@ -22,14 +22,14 @@ async function readScene(page: Page): Promise<SceneRead> {
         __TURNOVER__: {
           scene: (name: string) => {
             children: {
-          list: {
-            type: string
-            text?: string
-            x: number
-            visible: boolean
-            texture?: { key?: string }
-          }[]
-        }
+              list: {
+                type: string
+                text?: string
+                x: number
+                visible: boolean
+                texture?: { key?: string }
+              }[]
+            }
           } | null
         }
       }
@@ -42,12 +42,8 @@ async function readScene(page: Page): Promise<SceneRead> {
         .filter((c) => c.type === 'Text')
         .map((c) => ({ text: String(c.text), x: c.x, visible: c.visible })),
       // ART contract (cycle 2.10): players are staff-walk Sprites.
-      rectCount: list.filter(
-        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
-      ).length,
-      carCount: list.filter(
-        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car',
-      ).length,
+      rectCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk').length,
+      carCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car').length,
     }
   })
 }
@@ -178,11 +174,12 @@ test.describe('client:movement', () => {
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
 
     // Walk to the west landing PRE-ROUND (AD-005: lobby walking + position
-    // persistence): the parked car auto-boards ada (AD-014 boarding rule) and
-    // her rider-exclusive chip appears with her own name.
+    // persistence) and board the parked car with the landing call press
+    // (AD-025); her rider-exclusive chip appears with her own name.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
@@ -267,16 +264,17 @@ test.describe('client:movement', () => {
         const t = (
           window as unknown as {
             __TURNOVER__: {
-              scene: (n: string) => { children: { list: { type: string; texture?: { key?: string } }[] } } | null
+              scene: (
+                n: string,
+              ) => { children: { list: { type: string; texture?: { key?: string } }[] } } | null
             }
           }
         ).__TURNOVER__
         const scene = t.scene('Round')
         if (scene === null) return false
         return (
-          scene.children.list.filter(
-            (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
-          ).length === 3
+          scene.children.list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk')
+            .length === 3
         )
       },
       undefined,
@@ -305,13 +303,16 @@ test.describe('client:elevator_riders', () => {
     await join(watcher, code, 'caro')
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 3)
 
-    // Both riders walk to the west landing together: the parked car auto-boards
-    // both (capacity 2, AD-014) and each chip shows BOTH names (ELR-01).
+    // Both riders walk to the west landing together and board the parked car
+    // with landing call presses (AD-025; capacity 2, AD-014) — each chip shows
+    // BOTH names (ELR-01).
     await host.keyboard.down('ArrowLeft')
     await rider2.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
     await rider2.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
+    await rider2.keyboard.press('ArrowUp')
     for (const page of [host, rider2]) {
       await page.waitForFunction(
         () => {
@@ -358,8 +359,10 @@ test.describe('client:elevator_riders', () => {
 
     // Bruno exits through the open doors, stepping only briefly: he stays
     // within the boarding radius (the episode guard must hold him out).
+    // Hold PAST the 0.5 s opening swing (AD-026): the exit is a held intent.
+    // The step stays brief — ~0.6 tiles, inside the 1-tile boarding radius.
     await rider2.keyboard.down('ArrowRight')
-    await rider2.waitForTimeout(150)
+    await rider2.waitForTimeout(700)
     await rider2.keyboard.up('ArrowRight')
 
     // Ada's chip drops bruno (ELR-01 AC2); bruno's own chip hides — his floor
@@ -420,6 +423,14 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 8000 },
+    )
     await host.keyboard.press('1')
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'floor1',
@@ -433,19 +444,29 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     expect(adaScene.labels.find((l) => l.text === 'ada')?.visible).toBe(true)
     const adaX = adaScene.labels.find((l) => l.text === 'ada')?.x ?? 0
 
-    // Bruno rides the EAST car (car 1 is away) to the same floor and steps
-    // off only briefly — he stays inside the boarding radius (AD-016 guard).
+    // Bruno rides the EAST car (car 1 is away): walk to the east landing and
+    // board with the landing call press (AD-025); he steps off only briefly
+    // after the ride.
     await follower.keyboard.down('ArrowRight')
     await follower.waitForTimeout(3000)
     await follower.keyboard.up('ArrowRight')
+    await follower.keyboard.press('ArrowUp')
+    await follower.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 5000 },
+    )
     await follower.keyboard.press('1')
     await follower.waitForFunction(
       () => document.querySelector('#panel-east')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
+    // Hold PAST the 0.5 s opening swing (AD-026): the exit is a held intent.
     await follower.keyboard.down('ArrowLeft')
-    await follower.waitForTimeout(150)
+    await follower.waitForTimeout(700)
     await follower.keyboard.up('ArrowLeft')
 
     // THE reveal: ada stands still, yet bruno sees her at her position
@@ -457,14 +478,14 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
             __TURNOVER__: {
               scene: (n: string) => {
                 children: {
-          list: {
-            type: string
-            text?: string
-            x: number
-            visible: boolean
-            texture?: { key?: string }
-          }[]
-        }
+                  list: {
+                    type: string
+                    text?: string
+                    x: number
+                    visible: boolean
+                    texture?: { key?: string }
+                  }[]
+                }
               } | null
             }
           }

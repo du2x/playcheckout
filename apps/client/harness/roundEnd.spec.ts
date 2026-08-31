@@ -48,11 +48,13 @@ test.describe('client:round_end', () => {
     await host.click('#start-button')
     for (const page of pages) await page.waitForSelector('#round-hud')
 
-    // Ride west to floor1 DURING the round: one real ride leg for the recap
-    // (rides are journaled while a round is active — cycle 2.9 scope).
+    // Ride west to floor1 DURING the round: walk to the landing and board the
+    // parked car with the call press (AD-025) — one real ride leg for the
+    // recap (rides are journaled while a round is active — cycle 2.9 scope).
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () => !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
       undefined,

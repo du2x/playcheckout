@@ -181,7 +181,7 @@ test.describe('client:spectator_view', () => {
       const floors = new Set(
         (scene?.children.list ?? [])
           .filter((c) => c.type === 'Image' && c.name.startsWith('door:') && c.visible)
-          .map((c) => (c.name.split(':')[1] as string)),
+          .map((c) => c.name.split(':')[1] as string),
       )
       return [...floors].sort()
     })

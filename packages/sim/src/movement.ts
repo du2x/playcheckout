@@ -28,6 +28,8 @@ export const ARRIVE_TICKS = TUNING.ELEVATOR_ARRIVE_SECONDS * TICK_HZ
 export const RIDE_TICKS_PER_FLOOR = TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR * TICK_HZ
 /** Open-door dwell at every stop, derived from §7-external ELEVATOR_DWELL_SECONDS. */
 export const DWELL_TICKS = TUNING.ELEVATOR_DWELL_SECONDS * TICK_HZ
+/** Door-swing stage length (opening AND closing), AD-026 — no hop while swinging. */
+export const DOOR_TICKS = TUNING.ELEVATOR_DOOR_SECONDS * TICK_HZ
 /** West (car 1) and east (car 2) landings, same x on every level (FR-5). */
 export const CAR_LANDING_MILLI: Record<1 | 2, number> = { 1: 0, 2: HALL_MAX_MILLI }
 
@@ -43,16 +45,24 @@ interface PlayerMoveState {
    *  rest-x event so clients reconcile prediction overshoot — MOVE-02/03
    *  amendment). */
   facingDirty: boolean
+  /** AD-026: a rider held a direction while the doors were swinging OPEN —
+   *  the hop-off applies the tick the doors are fully open (the client sends
+   *  the intent once per keypress, so the sim remembers it). */
+  pendingExit: MoveDir | null
 }
 
-type CarPhase = 'idle' | 'arriving' | 'dwelling' | 'riding'
+type CarPhase = 'idle' | 'arriving' | 'opening' | 'dwelling' | 'closing' | 'riding'
 
 /**
- * Per-car elevator state (AD-014 rider rework): a four-phase machine —
- * idle/arriving/dwelling/riding; idle and dwelling are the open-door phases.
+ * Per-car elevator state (AD-014 rider rework, AD-025 boarding amendment,
+ * AD-026 door stages): a six-phase machine — idle/arriving/opening/dwelling/
+ * closing/riding. Doors are fully open ONLY in `dwelling`: hop-in and hop-off
+ * are gated on it, and `idle` is a PARKED car with the doors shut (they
+ * reopen through the landing call press or an in-car current-floor press).
  * The FIFO press `queue` belongs to the CAR, not the presser: walk-offs never
- * clear it (ghost trips). `exitedThisStop` is the door-open-episode guard —
- * a player who exits cannot re-board until the car next DEPARTS.
+ * clear it (ghost trips). `pendingBoarders` holds landing-call presses made
+ * while the doors were not yet open — they board the tick the doors finish
+ * opening (capacity-checked in press order).
  */
 interface CarState {
   floor: FloorId
@@ -61,7 +71,7 @@ interface CarState {
   ticksLeft: number
   pickup: FloorId | null
   queue: FloorId[]
-  exitedThisStop: Set<string>
+  pendingBoarders: string[]
 }
 
 /**
@@ -71,6 +81,9 @@ interface CarState {
 interface QueuedCall {
   playerId: string
   pickup: FloorId
+  /** AD-023: set when the caller pressed at this car's own landing — the call
+   *  is served only by THAT car, never by the other one. */
+  car?: 1 | 2
 }
 
 /**
@@ -93,7 +106,7 @@ export class MovementSim {
       ticksLeft: 0,
       pickup: null,
       queue: [],
-      exitedThisStop: new Set(),
+      pendingBoarders: [],
     },
     2: {
       floor: 'lobby',
@@ -102,11 +115,13 @@ export class MovementSim {
       ticksLeft: 0,
       pickup: null,
       queue: [],
-      exitedThisStop: new Set(),
+      pendingBoarders: [],
     },
   }
   private callQueue: QueuedCall[] = []
   private announced: PendingAnnounce[] = []
+  /** Intent-time events (AD-025 explicit boarding) flushed at the next tick. */
+  private pendingEvents: MovementEvent[] = []
   /** Cars whose rider list changed since the last tick — one coalesced
    * `elevator:riders` per dirty car at tick start (AD-013). */
   private ridersDirty: (1 | 2)[] = []
@@ -122,6 +137,7 @@ export class MovementSim {
       moving: null,
       inCar: null,
       facingDirty: false,
+      pendingExit: null,
     })
   }
 
@@ -129,6 +145,9 @@ export class MovementSim {
     this.players.delete(playerId)
     for (const id of [1, 2] as const) {
       const car = this.cars[id]
+      if (car.pendingBoarders.includes(playerId)) {
+        car.pendingBoarders = car.pendingBoarders.filter((b) => b !== playerId)
+      }
       if (car.riders.includes(playerId)) {
         car.riders = car.riders.filter((r) => r !== playerId)
         this.markRidersDirty(id) // disconnect-dirty flush: one update next tick
@@ -178,11 +197,13 @@ export class MovementSim {
    * removed the lobby confinement). A direction change flips facing
    * immediately.
    *
-   * AD-014 door-open exit: a rider holding a direction while their car's doors
-   * are open (idle or dwelling) exits the car THIS intent — placed at the
-   * car's landing (hallway walking after exit is unrestricted). While the
-   * doors are shut (arriving/riding) the intent is still ignored (MOVE-09):
-   * positions change only via the car.
+   * AD-014 door-open exit, AMENDED by AD-026: a rider holding a direction
+   * exits their car ONLY while the doors are fully open (the `dwelling`
+   * stage) — the `opening`/`closing` swings and the parked-closed `idle` all
+   * block the hop. A rider stranded aboard a parked car reopens the doors by
+   * pressing the car's current floor (see `pressFloor`). While the doors are
+   * shut or swinging the intent is still ignored (MOVE-09): positions change
+   * only via the car.
    */
   startMove(playerId: string, dir: MoveDir): void {
     const p = this.players.get(playerId)
@@ -190,19 +211,15 @@ export class MovementSim {
     if (p.inCar !== null) {
       const carId = p.inCar
       const car = this.cars[carId]
-      if (car.phase === 'arriving' || car.phase === 'riding') return
-      p.inCar = null
-      p.floor = car.floor
-      p.x = CAR_LANDING_MILLI[carId]
-      car.riders = car.riders.filter((r) => r !== playerId)
-      this.markRidersDirty(carId) // walk-off: remaining riders get the update
-      // Door-open-episode guard: exiting is final for this stop — the board
-      // filter excludes the exiter until the car next departs (no oscillation:
-      // clearing the boarding radius takes ~4 ticks).
-      car.exitedThisStop.add(playerId)
-      p.facing = dir
-      p.facingDirty = true // the same-floor player:moved stream resumes next tick
-      p.moving = dir
+      if (car.phase !== 'dwelling') {
+        // AD-026: the doors are swinging OPEN — remember the held exit so it
+        // applies the tick the doors are fully open (the client sends the
+        // intent once per keypress). A hold during `closing` or any shut
+        // phase is lost: that hop-off never happens (MOVE-09).
+        p.pendingExit = car.phase === 'opening' ? dir : null
+        return
+      }
+      this.exitCar(carId, playerId, dir)
       return
     }
     p.facing = dir
@@ -211,15 +228,36 @@ export class MovementSim {
     p.moving = dir
   }
 
+  /** AD-026 hop-off through fully open doors: place the exiter at the car's
+   *  landing (hallway walking after exit is unrestricted) and resume their
+   *  same-floor player:moved stream. */
+  private exitCar(carId: 1 | 2, playerId: string, dir: MoveDir): void {
+    const car = this.cars[carId]
+    const p = this.players.get(playerId)
+    if (p === undefined) return
+    p.pendingExit = null
+    p.inCar = null
+    p.floor = car.floor
+    p.x = CAR_LANDING_MILLI[carId]
+    car.riders = car.riders.filter((r) => r !== playerId)
+    this.markRidersDirty(carId) // walk-off: remaining riders get the update
+    p.facing = dir
+    p.facingDirty = true // the same-floor player:moved stream resumes next tick
+    p.moving = dir
+  }
+
   /** Release-to-stop; a no-op when no move is active (spec edge). Emits one
    *  terminal `player:moved` on the next tick so clients reconcile the own
    *  rectangle to the authoritative rest x (prediction overshoot is never
-   *  corrected otherwise — stop ends the move-stream). */
+   *  corrected otherwise — stop ends the move-stream). AD-026: releasing the
+   *  direction while a door-swing exit is pending CANCELS that exit — the
+   *  hop-off is a HELD intent, and the rider kept the doors held open. */
   stopMove(playerId: string): void {
     const p = this.players.get(playerId)
     if (p === undefined) return
     if (p.moving !== null) p.facingDirty = true
     p.moving = null
+    p.pendingExit = null
   }
 
   // --- elevator calls and in-car presses ------------------------------------
@@ -229,7 +267,7 @@ export class MovementSim {
    * carries no target; the destination is chosen inside the car via
    * `elevator:press`. Returns why the call ended as it did:
    * - 'dispatched': a car was dispatched (60-tick arrival begins now) or the
-   *   call was queued sim-level FIFO (both cars busy)
+   *   call was queued sim-level FIFO (the pinned/both cars busy)
    * - 'ignored': duplicate call — duplicate predicate = pickup floor ONLY
    *   (AD-012 narrowed): a car already en route to (or queued for) the pickup,
    *   or standing there with open doors. The panel still flashes (MOVE-12).
@@ -239,6 +277,45 @@ export class MovementSim {
     const caller = this.players.get(playerId)
     if (caller === undefined || caller.inCar !== null) return 'rejected'
     const pickup = caller.floor
+    // AD-025: a caller standing at a landing whose car stands at their floor
+    // is BOARDING, not calling — the press outranks the duplicate/queue
+    // handling below. AMENDED by AD-026: boarding through the doors requires
+    // them fully open. A `dwelling` car admits the presser immediately; a
+    // car with shut or swinging doors (idle/opening/closing) queues the
+    // presser as a pending boarder and swings the doors open (0.5 s) — the
+    // board lands the tick the doors finish opening. Nothing is dispatched;
+    // the flash acknowledges and the other car stays put. A full car declines
+    // the board silently.
+    const atLanding = ([1, 2] as const).find(
+      (id) => Math.abs(caller.x - CAR_LANDING_MILLI[id]) <= TUNING.ELEVATOR_LANDING_TILES * MILLI,
+    )
+    if (atLanding !== undefined) {
+      const car = this.cars[atLanding]
+      // AD-027: the caller's car is EITHER standing here (floor match) OR
+      // arriving to this floor (the pickup they summoned it for) — either
+      // way the press is a boarding commitment through the doors.
+      const calledHere = car.floor === pickup || (car.phase === 'arriving' && car.pickup === pickup)
+      if (calledHere) {
+        if (car.phase === 'dwelling') {
+          this.boardPlayer(atLanding, playerId)
+          this.announce({ kind: 'called', floor: pickup, car: atLanding })
+          return 'ignored'
+        }
+        if (
+          car.phase === 'idle' ||
+          car.phase === 'opening' ||
+          car.phase === 'closing' ||
+          car.phase === 'arriving'
+        ) {
+          if (car.riders.length + car.pendingBoarders.length < TUNING.ELEVATOR_CAPACITY) {
+            car.pendingBoarders.push(playerId)
+            if (car.phase === 'idle') this.pendingEvents.push(this.openDoors(atLanding))
+          }
+          this.announce({ kind: 'called', floor: pickup, car: atLanding })
+          return 'ignored'
+        }
+      }
+    }
     const duplicating = ([1, 2] as const).find((id) => {
       const car = this.cars[id]
       if (car.phase === 'arriving') return car.pickup === pickup
@@ -253,14 +330,34 @@ export class MovementSim {
       this.announce({ kind: 'called', floor: pickup, car: 1 })
       return 'ignored'
     }
-    // AD-019: a car parked open-doors (idle|dwelling) at the pickup floor no
-    // longer duplicates the call — the OTHER car is summoned to this floor
-    // instead, so the parked car is excluded from dispatch candidacy. Only
-    // when BOTH cars are parked here can nothing arrive: the call stays a
-    // decoy flash (boarding/pressing a parked car is how it moves).
+    // AD-023 (hall-button dispatch): a caller standing at a landing pins the
+    // call to THAT car — the landing pressed at never summons the other car.
+    if (atLanding !== undefined) {
+      const car = this.cars[atLanding]
+      if (car.phase === 'idle') {
+        this.dispatch(atLanding, pickup)
+        this.announce({ kind: 'called', floor: pickup, car: atLanding })
+        return 'dispatched'
+      }
+      // Busy (arriving | riding | dwelling elsewhere): queue pinned to this
+      // car — it is served when THIS car frees, never by the other one.
+      this.callQueue.push({ playerId, pickup, car: atLanding })
+      return 'dispatched'
+    }
+    // Mid-hall caller (unreachable for the stock client — its landing gate
+    // only sends from a landing): AD-019 policy — a car stopped at the pickup
+    // floor with no departure pending is excluded from dispatch candidacy and
+    // the OTHER car is summoned. (AD-026: a `dwelling` car with a queued
+    // floor is NOT parked — it departs when its stop ends.) Only when BOTH
+    // cars are parked here can nothing arrive: the call stays a decoy flash
+    // (the landing call press boarding, or an in-car press, is how a parked
+    // car moves).
     const parked = (id: 1 | 2): boolean => {
       const car = this.cars[id]
-      return (car.phase === 'idle' || car.phase === 'dwelling') && car.floor === pickup
+      return (
+        (car.phase === 'idle' || (car.phase === 'dwelling' && car.queue.length === 0)) &&
+        car.floor === pickup
+      )
     }
     if (parked(1) && parked(2)) {
       this.announce({ kind: 'called', floor: pickup, car: 1 })
@@ -291,10 +388,14 @@ export class MovementSim {
   /**
    * Press a floor inside the car the sender is riding (ELR P2). The press
    * appends to the car's FIFO queue — riders-only; duplicates, the floor
-   * being served, and the stopped-at floor while doors are open are rejected
-   * SILENTLY (no event, no queue change). Returns:
-   * - 'accepted': queued (and announced rider-exclusive on the next tick)
-   * - 'ignored': silently rejected (duplicate / being served / current floor)
+   * being served, and the car's current floor while its doors are not shut
+   * are rejected SILENTLY (no event, no queue change). Returns:
+   * - 'accepted': the press had its effect — queued (and announced
+   *   rider-exclusive on the next tick), OR the parked car's doors reopened
+   *   for a current-floor press (AD-026, no queue entry, no announce — the
+   *   doors opening IS the feedback)
+   * - 'ignored': silently rejected (duplicate / being served / current floor
+   *   with doors not shut)
    * - 'rejected': the sender is not a rider of any car
    */
   pressFloor(playerId: string, floor: FloorId): 'accepted' | 'ignored' | 'rejected' {
@@ -308,13 +409,22 @@ export class MovementSim {
     if (car.phase === 'arriving' && car.pickup === floor) return 'ignored'
     if (car.phase === 'riding' && car.queue[0] === floor) return 'ignored'
     if (car.queue.includes(floor)) return 'ignored'
-    // "Current floor" = the floor the car is stopped at with doors open;
-    // while riding, the origin floor is queueable (a return trip).
-    if ((car.phase === 'idle' || car.phase === 'dwelling') && car.floor === floor) return 'ignored'
+    // "Current floor" while the car stands there: rejected while the doors
+    // are open or swinging (opening/dwelling/closing — no zero-tick rides);
+    // AD-026: while PARKED with the doors shut (`idle`) the current-floor
+    // press REOPENS the doors — the stranded rider's escape hatch (walk off
+    // during the 1 s dwell that follows; no queue entry, no lit button).
+    if (car.phase === 'opening' || car.phase === 'dwelling' || car.phase === 'closing') {
+      if (car.floor === floor) return 'ignored'
+    }
+    if (car.phase === 'idle' && car.floor === floor) {
+      this.pendingEvents.push(this.openDoors(carId))
+      return 'accepted'
+    }
     car.queue.push(floor)
     this.announce({ kind: 'pressed', playerId, floor, car: carId })
-    // A press into an idling car departs it immediately (ELR P2 AC5: the
-    // open-doors idle lasts "until a new press or dispatch occurs").
+    // A press into an idling car departs it immediately (ELR P2 AC5): the
+    // parked doors are shut (AD-026), so the car leaves without opening.
     if (car.phase === 'idle') this.departRiding(carId)
     return 'accepted'
   }
@@ -326,10 +436,49 @@ export class MovementSim {
 
   private dispatch(carId: 1 | 2, pickup: FloorId): void {
     const car = this.cars[carId]
+    car.pendingBoarders = [] // a car summoned elsewhere abandons its waiting boarders
     car.phase = 'arriving'
     car.ticksLeft = ARRIVE_TICKS
     car.pickup = pickup
-    car.exitedThisStop.clear() // departure opens a new door-open episode
+  }
+
+  /**
+   * AD-026/027: swing the doors open at the car's current floor (0.5 s).
+   * Public door state rides the `elevator:doors` event (registry, 'all') —
+   * the car's floor is unchanged, so no `elevator:moved` is emitted.
+   * Returns the event; intent-time callers flush it via `pendingEvents`,
+   * tick-time callers push it straight into the tick's event list.
+   */
+  private openDoors(carId: 1 | 2): MovementEvent {
+    const car = this.cars[carId]
+    car.phase = 'opening'
+    car.ticksLeft = DOOR_TICKS
+    return { type: 'elevator:doors', car: carId, floor: car.floor, open: true }
+  }
+
+  /**
+   * AD-027: begin the closing swing (0.5 s) — the car has a call to attend
+   * (a queued ride or a waiting hall call it can serve from another floor).
+   * The departure/dispatch itself lands at the swing's end.
+   */
+  private closeDoors(carId: 1 | 2): MovementEvent {
+    const car = this.cars[carId]
+    car.phase = 'closing'
+    car.ticksLeft = DOOR_TICKS
+    return { type: 'elevator:doors', car: carId, floor: car.floor, open: false }
+  }
+
+  /**
+   * AD-027: a waiting hall call THIS car can serve from a DIFFERENT floor
+   * (landing-pinned to it or unpinned). Calls for the car's own floor are
+   * NOT attendable from here — the caller boards through the open doors.
+   */
+  private attendableCall(carId: 1 | 2): QueuedCall | undefined {
+    const car = this.cars[carId]
+    const idx = this.callQueue.findIndex(
+      (q) => (q.car === undefined || q.car === carId) && q.pickup !== car.floor,
+    )
+    return idx === -1 ? undefined : this.callQueue[idx]
   }
 
   /** Depart toward the oldest queued floor (queue non-empty at every call site). */
@@ -339,13 +488,13 @@ export class MovementSim {
     if (target === undefined) throw new Error(`depart with empty queue: car ${carId}`)
     const ticks = this.rideTicks(car.floor, target)
     // Belt-and-braces zero-ride guard (AD-014): unreachable — the
-    // pickup-while-arriving and open-door current-floor press rejections keep
-    // every queued floor distinct from the car's stopped-at floor. Pinned by
+    // pickup-while-arriving and current-floor press rejections keep every
+    // queued floor distinct from the car's stopped-at floor. Pinned by
     // those rejection tests.
     if (ticks <= 0) throw new Error(`zero-tick ride: ${car.floor} -> ${String(target)}`)
+    car.pendingBoarders = [] // a departing car abandons its waiting boarders
     car.phase = 'riding'
     car.ticksLeft = ticks
-    car.exitedThisStop.clear() // departure opens a new door-open episode
   }
 
   // --- queries --------------------------------------------------------------
@@ -449,7 +598,7 @@ export class MovementSim {
 
   /** Advance one 0.05 s step; returns the events emitted this tick (may be []). */
   tick(): readonly MovementEvent[] {
-    const events: MovementEvent[] = []
+    const events: MovementEvent[] = [...this.pendingEvents.splice(0)]
     // AD-013: every rider-list change (board, walk-off, disconnect) reaches the
     // car's riders next tick as ONE elevator:riders carrying the car's current
     // occupants AND press queue — the "lit buttons visible from inside" model.
@@ -500,45 +649,86 @@ export class MovementSim {
     for (const id of [1, 2] as const) {
       const car = this.cars[id]
       if (car.phase === 'idle') {
-        // Doors open: auto-board every tick (AD-014 — one boarding rule
-        // everywhere; parked cars pick up candidates standing in range).
-        this.board(id, car, events)
+        // Parked with the doors SHUT (AD-026): nobody boards or hops off a
+        // parked car — the landing call press (or an in-car current-floor
+        // press) reopens the doors.
         continue
       }
       if (car.phase === 'arriving') {
         car.ticksLeft--
         if (car.ticksLeft > 0) continue
-        // Arrived at the pickup floor: doors open, the dwell begins; board on
-        // entry (the generalized arrival-tick rule). Riders stay aboard —
-        // arrival no longer auto-exits anyone (AD-014).
+        // Arrived at the pickup floor: the doors begin their 0.5 s opening
+        // swing (AD-026) — the public `elevator:moved` announces the stop.
+        // Riders stay aboard — arrival never auto-exits anyone (AD-014), and
+        // the caller boards through the doors once they finish opening
+        // (AD-025/AD-026).
         car.floor = car.pickup as FloorId
         car.pickup = null
+        events.push({ type: 'elevator:moved', car: id, floor: car.floor })
+        events.push(this.openDoors(id))
+        this.syncRiderFloors(id)
+        continue
+      }
+      if (car.phase === 'opening') {
+        // Opening swing countdown; the doors finish and the 1 s dwell begins
+        // with any pending boarders stepping in (AD-026, capacity-checked in
+        // press order — a full car declines silently).
+        car.ticksLeft--
+        if (car.ticksLeft > 0) continue
         car.phase = 'dwelling'
         car.ticksLeft = DWELL_TICKS
-        events.push({ type: 'elevator:moved', car: id, floor: car.floor })
-        this.syncRiderFloors(id)
-        this.board(id, car, events)
+        for (const boarder of car.pendingBoarders.splice(0)) this.boardPlayer(id, boarder)
+        // Doors fully open: riders who held a direction through the opening
+        // swing hop off now (AD-026 pending exits, join order is stable).
+        for (const [rid, p] of this.players) {
+          if (p.inCar === id && p.pendingExit !== null) {
+            this.exitCar(id, rid, p.pendingExit)
+          }
+        }
         continue
       }
       if (car.phase === 'dwelling') {
-        // Dwell countdown, then board, then departure (pinned tick order).
+        // Doors fully open — the only hop window. AD-027: the dwell is the
+        // MINIMUM open time (3 s); afterwards the doors STAY OPEN until the
+        // car has a call to attend — a queued ride, or a waiting hall call
+        // it can serve from another floor. Nothing to attend: keep dwelling.
+        if (car.ticksLeft > 0) {
+          car.ticksLeft--
+          if (car.ticksLeft > 0) continue
+        }
+        if (car.queue.length > 0) {
+          // A queued ride: close, then depart at the swing's end. The queue
+          // belongs to the car: an empty car still departs and serves (ghost
+          // trips, ELR P3 AC3).
+          events.push(this.closeDoors(id))
+          continue
+        }
+        if (this.attendableCall(id) !== undefined) {
+          // A waiting hall call from another floor: close, then dispatch to
+          // it at the swing's end.
+          events.push(this.closeDoors(id))
+          continue
+        }
+        continue
+      }
+      if (car.phase === 'closing') {
         car.ticksLeft--
-        this.board(id, car, events)
         if (car.ticksLeft > 0) continue
         if (car.queue.length > 0) {
-          // The queue belongs to the car: an empty car still departs and
-          // serves (ghost trips, ELR P3 AC3).
           this.departRiding(id)
         } else {
-          car.phase = 'idle'
-          car.ticksLeft = 0
-          // A waiting call is served the moment a car frees (MOVE-15 queue).
-          // AD-011: elevators run in both phases, so a call queued at the
-          // buzzer is NOT dropped — the next car to go idle serves it.
-          const next = this.callQueue.shift()
+          // The close was for a waiting hall call (or a press landed during
+          // the swing and changed the picture): serve it, or reopen when the
+          // call went away.
+          const idx = this.callQueue.findIndex(
+            (q) => (q.car === undefined || q.car === id) && q.pickup !== car.floor,
+          )
+          const next = idx === -1 ? undefined : this.callQueue.splice(idx, 1)[0]
           if (next !== undefined) {
             this.dispatch(id, next.pickup)
             this.announce({ kind: 'called', floor: next.pickup, car: id })
+          } else {
+            events.push(this.openDoors(id))
           }
         }
         continue
@@ -548,11 +738,9 @@ export class MovementSim {
       if (car.ticksLeft > 0) continue
       const served = car.queue.shift() as FloorId
       car.floor = served
-      car.phase = 'dwelling'
-      car.ticksLeft = DWELL_TICKS
       events.push({ type: 'elevator:moved', car: id, floor: served })
+      events.push(this.openDoors(id))
       this.syncRiderFloors(id)
-      this.board(id, car, events)
     }
   }
 
@@ -573,58 +761,39 @@ export class MovementSim {
   }
 
   /**
-   * MOVE-13: board the closest candidates, capacity 2, deterministic order —
-   * distance to the landing, then playerId. Runs on EVERY open-door tick
-   * (arrival, dwelling, idle — AD-014). The door-open-episode guard excludes
-   * players who exited this car since its last departure. Boarding removes
-   * the player from the floor stream (player:left-floor names the floor
-   * BOARDed — never any destination, WORK-19/MOVE-16) and drops their own
-   * queued call (AD-012 #3: no car to an abandoned floor).
+   * Explicit boarding (AD-025): the caller pressed the call button while
+   * standing at the parked car's landing — they step in. AMENDED by AD-026:
+   * the board fires only through fully open doors — immediately when the
+   * car is `dwelling`, otherwise at the NEXT dwelling start via the car's
+   * `pendingBoarders` (the 0.5 s opening swing comes first). Capacity 2
+   * still applies; a full car declines silently (the caller can walk off).
+   * Boarding removes the player from the floor stream (player:left-floor
+   * names the floor BOARDed — never any destination, WORK-19/MOVE-16) and
+   * drops their own queued call (AD-012 #3: no car to an abandoned floor).
+   * Emits on the NEXT tick (intent calls run between ticks — MOVE-10).
    */
-  private board(carId: 1 | 2, car: CarState, events: MovementEvent[]): void {
+  private boardPlayer(carId: 1 | 2, playerId: string): boolean {
+    const p = this.players.get(playerId)
+    if (p === undefined) return false
+    const car = this.cars[carId]
+    if (car.riders.length >= TUNING.ELEVATOR_CAPACITY) return false
     const landing = CAR_LANDING_MILLI[carId]
-    // AD-016 hysteresis: the episode guard only needs to cover the walk-off.
-    // An exiter observed OUTSIDE the boarding zone (on the car's floor) may
-    // re-board by walking back in; the exit itself places the player at the
-    // landing, so the ~4-tick walk-off stays guard-protected.
-    for (const pid of car.exitedThisStop) {
-      const p = this.players.get(pid)
-      if (
-        p !== undefined &&
-        p.inCar === null &&
-        p.floor === car.floor &&
-        Math.abs(p.x - landing) > TUNING.ELEVATOR_LANDING_TILES * MILLI
-      ) {
-        car.exitedThisStop.delete(pid)
-      }
+    p.inCar = carId
+    // Boarding ends the walk: clear the held move so a later move:stop while
+    // aboard cannot emit a terminal player:moved for a rider (riders are on
+    // NO floor, AD-009 — the exit intent resumes the stream via facingDirty).
+    p.moving = null
+    p.pendingExit = null
+    p.facingDirty = false
+    if (p.x !== landing) {
+      p.x = landing
+      this.pendingEvents.push(moved(playerId, p))
     }
-    const candidates = [...this.players.entries()]
-      .filter(
-        ([pid, p]) => p.inCar === null && p.floor === car.floor && !car.exitedThisStop.has(pid),
-      )
-      .filter(([, p]) => Math.abs(p.x - landing) <= TUNING.ELEVATOR_LANDING_TILES * MILLI)
-      .sort(([a, pa], [b, pb]) => {
-        const da = Math.abs(pa.x - landing)
-        const db = Math.abs(pb.x - landing)
-        return da !== db ? da - db : a < b ? -1 : a > b ? 1 : 0
-      })
-    for (const [pid, p] of candidates) {
-      if (car.riders.length >= TUNING.ELEVATOR_CAPACITY) break
-      p.inCar = carId
-      // Boarding ends the walk: clear the held move so a later move:stop while
-      // aboard cannot emit a terminal player:moved for a rider (riders are on
-      // NO floor, AD-009 — the exit intent resumes the stream via facingDirty).
-      p.moving = null
-      p.facingDirty = false
-      if (p.x !== landing) {
-        p.x = landing
-        events.push(moved(pid, p))
-      }
-      car.riders.push(pid)
-      this.callQueue = this.callQueue.filter((q) => q.playerId !== pid)
-      events.push({ type: 'player:left-floor', playerId: pid, floor: car.floor })
-      this.markRidersDirty(carId) // AD-013: riders learn the new occupant list
-    }
+    car.riders.push(playerId)
+    this.callQueue = this.callQueue.filter((q) => q.playerId !== playerId)
+    this.pendingEvents.push({ type: 'player:left-floor', playerId, floor: car.floor })
+    this.markRidersDirty(carId) // AD-013: riders learn the new occupant list
+    return true
   }
 }
 

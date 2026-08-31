@@ -87,18 +87,83 @@ test.describe('client:accuse_ui', () => {
     if (accuserName === undefined) throw new Error('no accuser name')
 
     // --- Tap E (< 400 ms): the elevator call fires exactly as before, and no
-    // menu opens (JUST-17). ---
-    await accuser.keyboard.press('e')
+    // menu opens (JUST-17). The landing gate (AD-022) means the call must be
+    // tapped AT a landing, and the landing call press BOARDS the parked car
+    // (AD-025): the accuser walks west, taps ArrowUp to board, rides to
+    // floor1 and walks off there. ---
+    await accuser.keyboard.down('ArrowLeft')
+    await accuser.waitForTimeout(3000) // walk to the west landing
+    await accuser.keyboard.up('ArrowLeft')
+    await accuser.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
     await accuser.waitForFunction(
       () =>
-        (window as unknown as { __TURNOVER__: TurnoverHandle }).__TURNOVER__.events.some(
-          (e) => e.type === 'elevator:called',
-        ),
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
       undefined,
+      { timeout: 8000 },
+    )
+    await accuser.keyboard.press('1') // ride to floor1
+    await accuser.waitForFunction(
+      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      undefined,
+      { timeout: 10_000 },
+    )
+    await accuser.keyboard.down('ArrowLeft') // walk off at the floor1 landing
+    // The pending exit (AD-026) applies when the doors finish opening — the
+    // rider chip hiding is the truth that she is back on the floor stream.
+    await accuser.waitForFunction(
+      () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
+      undefined,
+      { timeout: 8000 },
+    )
+    await accuser.keyboard.up('ArrowLeft')
+    const calledBefore = await accuser.evaluate(
+      () =>
+        (
+          window as unknown as { __TURNOVER__: { events: { type: string }[] } }
+        ).__TURNOVER__.events.filter((e) => e.type === 'elevator:called').length,
+    )
+    await accuser.keyboard.press('e')
+    // The tap fires a NEW call — at the floor1 landing with car 1 parked
+    // open-doors there, the press boards her (AD-025) and still announces.
+    await accuser.waitForFunction(
+      (before) =>
+        (
+          window as unknown as { __TURNOVER__: { events: { type: string }[] } }
+        ).__TURNOVER__.events.filter((e) => e.type === 'elevator:called').length > before,
+      calledBefore,
       { timeout: 5000 },
     )
     const menuHidden = await accuser.$eval('#accuse-menu', (m) => m.hasAttribute('hidden'))
     expect(menuHidden).toBe(true)
+
+    // --- Return to the lobby center near the other players: walk out of the
+    // boarding zone, back to the landing, board with the call press (AD-025),
+    // ride down, then walk to the spawn cluster (within ACCUSATION_RANGE_TILES
+    // of a candidate). ---
+    await accuser.keyboard.down('ArrowRight')
+    await accuser.waitForTimeout(1500) // ~9 tiles out
+    await accuser.keyboard.up('ArrowRight')
+    await accuser.keyboard.down('ArrowLeft')
+    await accuser.waitForTimeout(3000) // walk back to the west landing
+    await accuser.keyboard.up('ArrowLeft')
+    await accuser.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
+    await accuser.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 8000 },
+    )
+    await accuser.keyboard.press('0') // ride back to the lobby
+    await accuser.waitForFunction(
+      () => document.querySelector('#panel-west')?.textContent === 'lobby',
+      undefined,
+      { timeout: 10_000 },
+    )
+    await accuser.keyboard.down('ArrowRight') // exit + walk to the center cluster
+    await accuser.waitForTimeout(2700) // ~16 tiles: within 2 of the spawn x=15
+    await accuser.keyboard.up('ArrowRight')
 
     // --- Hold E (≥ 400 ms): the confirm menu opens naming a nearby player —
     // never the accuser themselves (JUST-16). ---

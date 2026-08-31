@@ -34,7 +34,8 @@ there (see [AGENTS.md](../AGENTS.md)).
 | --- | --- | --- |
 | `ELEVATOR_ARRIVE_SECONDS` | 3 | prd §7 (MOVE-11) |
 | `ELEVATOR_RIDE_SECONDS_PER_FLOOR` | 2 | prd §7 |
-| `ELEVATOR_DWELL_SECONDS` | 1 | **not in §7** — added by AD-014 |
+| `ELEVATOR_DWELL_SECONDS` | 3 | **not in §7** — added by AD-014, raised to 3 s minimum by AD-027 |
+| `ELEVATOR_DOOR_SECONDS` | 0.5 | **not in §7** — added by AD-026 (door swings, both directions) |
 | `ELEVATOR_CAPACITY` | 2 | prd §7 / FR-5 |
 | `ELEVATOR_LANDING_TILES` | 1 | **not in §7** — added by AD-007 |
 
@@ -62,6 +63,24 @@ there (see [AGENTS.md](../AGENTS.md)).
   before. FR-6 panels and `elevator:called`/`elevator:moved` payloads stay
   `{floor, car}`/`{car, floor}` — never occupancy, never queue, never press
   targets.
+- **AD-027** (STATE.md): **stay-open dwell** — the 3 s dwell is a MINIMUM;
+  afterwards the doors stay open until the car has a call to attend (a
+  queued ride or a waiting hall call it can serve from another floor).
+  Public door state is a first-class event, `elevator:doors {car, floor,
+  open}` (all recipients) — the client presenter's door phases are driven by
+  it and `elevator:moved` is position-only again. Amends AD-026's 1 s dwell
+  and the presenter's dwell-timer auto-close.
+- **AD-026** (STATE.md): **door stages** — every stop plays a 0.5 s opening
+  swing and a 0.5 s closing swing (new `ELEVATOR_DOOR_SECONDS`); hop-in and
+  hop-off are gated on the doors being FULLY open (the 1 s dwell only), and
+  a parked (`idle`) car's doors are SHUT: boarding a parked car queues the
+  presser as a pending boarder who steps in when the doors finish opening,
+  and a rider escapes a parked car by pressing the car's current floor
+  (reopens the doors). Public door state rides `elevator:moved` — no
+  protocol change. Amends AD-014's "doors open in idle + dwelling" and the
+  AD-019/AD-023 "parked open-doors" wording (parked now means doors shut;
+  a `dwelling` car with a queued floor counts as departed for the
+  parked-exclusion predicate).
 - **AD-014** (STATE.md:292): **call-model rework** — `elevator:call` is
   destination-free; destination chosen inside the car via `elevator:press
   {floor}` (rider-only, no cancel) appended to a per-car FIFO press queue. The
@@ -86,37 +105,62 @@ there (see [AGENTS.md](../AGENTS.md)).
 
 From `.specs/features/movement/{spec,design}.md` (cycle 2.4, as amended):
 
-- Car machine: `idle(floor)` → `arriving` (fixed **60 ticks** = 3 s from call,
-  regardless of distance) → board (instant, same tick) → `dwelling` (open-door
-  stop, 20 ticks) → `riding` (**40 ticks per floor** traveled) → `idle(target)`.
-- **Dispatch**: idle car whose landing is closest to the caller's x; tie →
-  car 1; among idle cars **empty ones are drafted first**; occupied-idle only
-  when no empty idle car exists; overflow calls queue sim-level FIFO and are
-  served by the first car to free (MOVE-15).
+- Car machine (AD-026, dwell re-defined by AD-027): `idle(floor, doors shut)`
+  → `arriving` (fixed **60 ticks** = 3 s from call, regardless of distance) →
+  `opening` (**10 ticks**, no hop) → `dwelling` (open-door stop, **60 ticks**
+  = 3 s MINIMUM — the ONLY hop window; pending boarders step in as it starts,
+  and the doors stay open past the dwell until a call needs the car) →
+  `closing` (**10 ticks**, no hop) → `riding` (**40 ticks per floor**
+  traveled) → `idle(target)`. Boarding
+  through fully open doors is instant; a boarding press against shut/swinging
+  doors pends until the doors finish opening.
+- **Dispatch** (AD-023 hall-button rule): a caller standing within
+  `ELEVATOR_LANDING_TILES` (1 tile) of a landing pins the call to THAT car —
+  the landing pressed at never summons the other car. The pinned car
+  dispatches if idle; if busy (arriving/riding/dwelling elsewhere) the call
+  queues pinned and is served when THAT car frees; if it is parked open-doors
+  at the caller's floor the call is a decoy flash (the car is already here).
+  Mid-hall callers (unreachable for the stock client, whose landing gate only
+  sends from a landing): idle car whose landing is closest to the caller's x;
+  tie → car 1; among idle cars **empty ones are drafted first**;
+  occupied-idle only when no empty idle car exists; overflow calls queue
+  sim-level FIFO and are served by the first car to free (MOVE-15).
 - **Duplicate call** (decoy flash): a call for a pickup floor the car is
   already en route to (or queued for) emits `elevator:called` but **no new
   dispatch** (AD-014 narrows the predicate to pickup floor only; AD-019
-  narrows it further — a car parked open-doors at the pickup is not a
-  duplicate, the other car is summoned; the flash remains when **both** cars
-  are parked at the pickup).
-- **Boarding** (MOVE-13 + AD-014): on arrival/dwell, candidates are connected
-  players on the car's floor within `ELEVATOR_LANDING_TILES` (1 tile) of the
-  car's landing x, sorted by (distance, then playerId); first 2 board, rest
-  wait for the next arrival. Boarded players: floor tracks the car, x pinned
-  to the landing, move intents ignored.
+  narrows it further — a mid-hall caller with a car parked open-doors at the
+  pickup summons the other car; AD-023 pins landing calls). **AD-025**: a call
+  pressed at a landing whose car is parked open-doors at the caller's floor
+  outranks the duplicate predicate — it **boards** the caller.
+- **Boarding is the explicit call press** (MOVE-13 + AD-014, boarding
+  rework in AD-025): proximity auto-boarding is DISABLED — standing in the
+  landing zone never boards anyone. Boarding happens when a non-rider presses
+  the call (E tap / ArrowUp / ArrowDown, landing-gated in the stock client) while a car
+  stands `idle` or `dwelling` at the caller's floor within
+  `ELEVATOR_LANDING_TILES` (1 tile) of its landing: the presser steps in
+  (capacity 2 still applies — a full car declines the board silently, flash
+  only). Boarded players: floor tracks the car, x pinned to the landing, move
+  intents ignored. No door-open-episode guard is needed without a proximity
+  rule (AD-016 superseded) — an exiter re-boards by pressing again.
 - **Riding**: riders keep riding while the queue is non-empty even if the
   caller walked away; boarding drops the boarding player's own queued calls
   (AD-012); walk intents from riders are rejected while the car moves.
-- **Stops**: doors open at every stop (1 s dwell, `ELEVATOR_DWELL_SECONDS`);
-  riders may stay in (and press another floor) or walk off; on queue-empty the
-  car **idles with doors open** at that floor — a car never moves
-  spontaneously.
+- **Stops**: doors swing open (0.5 s) and shut (0.5 s) at every stop; the
+  3 s dwell (`ELEVATOR_DWELL_SECONDS`) between them is the MINIMUM open time
+  and the only hop window — riders may stay in (and press another floor) or
+  walk off while the doors are fully open. A direction held through the
+  opening swing applies the hop-off the moment the doors are fully open
+  (releasing cancels it, AD-026). On queue-empty the car **KEEPS its doors
+  OPEN** at that floor until a call needs it (AD-027) — a car never moves
+  spontaneously; it closes only to attend a queued ride or a waiting hall
+  call it can serve from another floor.
 - **Ghost trips**: presses belong to the car, not the presser — walk-offs
   never clear the queue; an empty car still departs and serves pressed floors.
 - **Caller-never-boards**: a pickup with nobody in boarding range completes
-  without riders; the car idles open-doors at that floor; a re-call there
-  summons the other car (AD-019) — with both cars parked, the re-call is the
-  decoy flash and boarding/pressing is the only way to move a car.
+  without riders; the car idles open-doors at that floor; a mid-hall re-call
+  there summons the other car (AD-019); a re-call at the parked car's own
+  landing **boards the caller** (AD-025) — with both cars parked, the landing
+  call press or an in-car press is the only way to move a car.
 - **Determinism**: for a fixed call sequence and tick schedule, car positions
   and events are identical across runs (bit-for-bit replay over ≥100-tick
   scripted sequences, `sim:elevator`).
@@ -172,8 +216,10 @@ From `.specs/features/elevator-riders/spec.md`:
 From `.specs/features/elevator-animation/spec.md` (client-only; no protocol/
 sim changes):
 
-- Doors visibly open on `idle`/`dwelling` cars on the local player's floor and
-  close before any position change, timed off `TUNING.ELEVATOR_DWELL_SECONDS`.
+- Door swings (0.5 s each, `TUNING.ELEVATOR_DOOR_SECONDS`) are driven by the
+  public `elevator:doors` events; an open car holds its doors open
+  indefinitely until a real close event (AD-027), and closes before any
+  position change.
 - Cars tween between floors instead of snapping, timed off
   `ELEVATOR_ARRIVE_SECONDS`/`ELEVATOR_RIDE_SECONDS_PER_FLOOR`; between known
   stops the car renders as departed/in-transit — bystanders can never know
@@ -193,16 +239,19 @@ sim changes):
 
 ## 9. Edge cases (`.specs/features/elevator-riders/spec.md:141-150`)
 
-- Exiting a car is final for that stop (door-open-episode guard): an exiter
-  cannot re-board until the car next departs; exit is available in any phase.
+- Exiting a car is available in any phase. **AD-025 supersedes the
+  door-open-episode guard (AD-016)**: without proximity auto-boarding there is
+  no board/exit oscillation to guard against — an exiter standing anywhere
+  (the landing zone included) re-boards only by pressing the call again.
 - A rider pressed during dwell before departure queues normally — pressing is
   never rejected for a rider by car state.
 - Both cars busy → call queues FIFO, served by the first car to free.
 - A queued call is dropped when its caller boards another car (AD-012 #3).
 - Buzzer with calls queued → in-flight trips complete, queued call dispatched
   by the next car to go idle (no drop).
-- Simultaneous board/walk-off in the same tick is resolved deterministically
-  (order fixed in design, pinned by test).
+- Boarding happens at intent time (AD-025), not on a tick — there is no
+  board/walk-off same-tick race to resolve; boarding events flush on the next
+  tick (MOVE-10 pattern).
 
 ## 10. Explicit non-behaviors / out of scope
 

@@ -102,6 +102,16 @@ export type MovementEvent =
     }
   | { readonly type: 'elevator:called'; readonly floor: FloorId; readonly car: CarId }
   | { readonly type: 'elevator:moved'; readonly car: CarId; readonly floor: FloorId }
+  // AD-026/027: public door state — emitted when a car's doors begin their
+  // opening swing (open: true) and when they begin closing to attend a call
+  // (open: false). Door state is hallway-visible info (turnover-protocol
+  // rule 2); it carries car/floor only, never occupants.
+  | {
+      readonly type: 'elevator:doors'
+      readonly car: CarId
+      readonly floor: FloorId
+      readonly open: boolean
+    }
   // AD-009 coherence: when a rider departs a floor, that floor's viewers learn
   // ONLY that she left — never the destination (cross-floor sightings stay
   // impossible for live players).

@@ -18,14 +18,14 @@ async function readScene(page: Page): Promise<SceneRead> {
         __TURNOVER__: {
           scene: (name: string) => {
             children: {
-          list: {
-            type: string
-            text?: string
-            x: number
-            visible: boolean
-            texture?: { key?: string }
-          }[]
-        }
+              list: {
+                type: string
+                text?: string
+                x: number
+                visible: boolean
+                texture?: { key?: string }
+              }[]
+            }
           } | null
         }
       }
@@ -38,12 +38,8 @@ async function readScene(page: Page): Promise<SceneRead> {
         .filter((c) => c.type === 'Text')
         .map((c) => ({ text: String(c.text), x: c.x, visible: c.visible })),
       // ART contract (cycle 2.10): players are staff-walk Sprites.
-      rectCount: list.filter(
-        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
-      ).length,
-      carCount: list.filter(
-        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car',
-      ).length,
+      rectCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk').length,
+      carCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car').length,
     }
   })
 }
@@ -101,12 +97,19 @@ test.describe('client:work_channels', () => {
     }
     await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 4)
 
-    // Pre-round: walk to the west landing — the parked car auto-boards ada
-    // (AD-014 boarding rule); the round begins with her aboard.
+    // Pre-round: walk to the west landing and board the parked car with the
+    // landing call press (AD-025); the round begins with her aboard.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
-    await host.waitForTimeout(300)
+    await host.keyboard.press('ArrowUp')
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 8000 },
+    )
 
     // (WORK-03's lobby-phase rejection is server-asserted: the client
     // short-circuits work intents on floors without rooms.)
@@ -124,16 +127,17 @@ test.describe('client:work_channels', () => {
 
     // Exit through the open doors: holding right walks her off the car and
     // then along floor1.
-    await host.keyboard.down('ArrowRight')
+    await host.keyboard.down('ArrowRight') // held 1.5 s: 0.5 s swing + 1 s walk (AD-026)
     // WORK-17 in vivo: while ada walks on floor1, the lobby tab's event stream
     // receives NO new positions for her (sameFloor routing, AD-009).
     const beforeMoves = await adaMoveCount(pages[1] as Page, adaId)
-    await host.waitForTimeout(1000)
+    await host.waitForTimeout(1500)
     const afterMoves = await adaMoveCount(pages[1] as Page, adaId)
     expect(afterMoves).toBe(beforeMoves)
 
-    // 1 s of walking lands ~6 tiles out — inside room 2's segment [4.5, 8);
-    // the client derives the room from the same shared geometry as the server.
+    // 1 s of walking (the pending exit ate the first 0.5 s of the hold,
+    // AD-026) lands ~6 tiles out — inside room 2's segment [4.5, 8); the
+    // client derives the room from the same shared geometry as the server.
     await host.keyboard.up('ArrowRight')
     await host.waitForTimeout(300)
 

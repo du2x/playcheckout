@@ -1,7 +1,7 @@
 {
   "name": "turnover",
   "private": true,
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=22",
     "pnpm": ">=10"
@@ -11,6 +11,7 @@
     "lint": "biome check .",
     "test:sim": "vitest run",
     "test:client": "playwright test --config apps/client/harness/playwright.config.ts",
+    "boot": "node scripts/dev-boot.mjs",
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build"
   },

@@ -102,6 +102,7 @@ describe('protocol registry', () => {
     'player:moved': 'sameFloor',
     'elevator:called': 'all',
     'elevator:moved': 'all',
+    'elevator:doors': 'all',
     'elevator:pressed': 'riders',
     'elevator:riders': 'riders',
     'player:left': 'all',

@@ -38,32 +38,26 @@ function eventsOf(
   )
 }
 
-/** Walk to the west landing, auto-board the parked car, press floor1, ride. */
-async function rideWestToFloor1(page: Page) {
-  await page.keyboard.down('ArrowLeft')
-  await page.waitForTimeout(3000)
-  await page.keyboard.up('ArrowLeft')
-  await page.waitForTimeout(200)
-  await page.keyboard.press('1')
-  await page.waitForFunction(
-    () => document.querySelector('#panel-west')?.textContent === 'floor1',
+/** The rider chip confirms the server processed the boarding press — the
+ * in-car floor press is only sendable once the client's rider session is set. */
+function waitForRiderChip(page: Page) {
+  return page.waitForFunction(
+    () =>
+      document.querySelector('#elevator-riders') !== null &&
+      !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
     undefined,
-    { timeout: 10_000 },
+    { timeout: 8000 },
   )
 }
 
-/** Walk to the east landing, auto-board the parked car, press floor1, ride. */
-async function rideEastToFloor1(page: Page) {
-  await page.keyboard.down('ArrowRight')
+/** Walk to the west landing and board the parked car with the call press
+ * (AD-025) — the rider chip confirms the board. No ride press. */
+async function boardWestCar(page: Page) {
+  await page.keyboard.down('ArrowLeft')
   await page.waitForTimeout(3000)
-  await page.keyboard.up('ArrowRight')
-  await page.waitForTimeout(200)
-  await page.keyboard.press('1')
-  await page.waitForFunction(
-    () => document.querySelector('#panel-east')?.textContent === 'floor1',
-    undefined,
-    { timeout: 10_000 },
-  )
+  await page.keyboard.up('ArrowLeft')
+  await page.keyboard.press('ArrowUp')
+  await waitForRiderChip(page)
 }
 
 test.describe('client:evidence_cues', () => {
@@ -93,15 +87,29 @@ test.describe('client:evidence_cues', () => {
     const staff = pages[staffIndex] as Page
     expect(sabIndex).toBeGreaterThanOrEqual(0)
 
-    // Staff rides west and parks inside room 2 ([4.5, 8) — 1 s of walking).
-    await rideWestToFloor1(staff)
+    // BOTH riders share the west car (capacity 2) — AD-027's minimum dwell
+    // makes a second full ride unaffordable inside the 600-tick test shift,
+    // and parking the saboteur next to the staff keeps the rustle in earshot.
+    // Board both, then one press rides them together.
+    await boardWestCar(staff)
+    await boardWestCar(saboteur)
+    await staff.keyboard.press('1')
+    for (const page of [staff, saboteur]) {
+      await page.waitForFunction(
+        () => document.querySelector('#panel-west')?.textContent === 'floor1',
+        undefined,
+        { timeout: 15_000 },
+      )
+    }
+    // Each hold starts at the arrival moved = the opening swing (AD-026):
+    // the pending exit eats the first 0.5 s, so the staff's 1.5 s hold walks
+    // 1 s — parking inside room 2 ([4.5, 8)). The saboteur exits later (the
+    // doors are already open — the exit applies on the keydown), so a 1.2 s
+    // hold lands them ~1 tile apart.
     await staff.keyboard.down('ArrowRight')
-    await staff.waitForTimeout(1000)
+    await staff.waitForTimeout(1500)
     await staff.keyboard.up('ArrowRight')
     await staff.waitForTimeout(300)
-
-    // Saboteur rides east and stands at the floor1 landing.
-    await rideEastToFloor1(saboteur)
 
     // Arm the staff page's cue watcher BEFORE the saboteur walks (the DOM cue
     // lives only CUE_TTL_MS).
@@ -110,11 +118,11 @@ test.describe('client:evidence_cues', () => {
       .then(() => true)
       .catch(() => false)
 
-    // Saboteur walks left from the east landing into room 2 (crossing rooms
-    // 8..3 — every entry is a door-open cue; the watcher catches them).
-    await saboteur.keyboard.down('ArrowLeft')
-    await saboteur.waitForTimeout(4000)
-    await saboteur.keyboard.up('ArrowLeft')
+    // Saboteur walks right from the landing into room 2 beside the staff —
+    // the entry fires the door-open cue the watcher catches.
+    await saboteur.keyboard.down('ArrowRight')
+    await saboteur.waitForTimeout(1200)
+    await saboteur.keyboard.up('ArrowRight')
     await saboteur.waitForTimeout(300)
     expect(await enteredCue).toBe(true)
 
@@ -193,14 +201,43 @@ test.describe('client:evidence_cues', () => {
       .then(() => true)
       .catch(() => false)
     await saboteur.keyboard.press('Space')
-    await staff.waitForFunction(
-      () =>
-        (
-          window as unknown as { __TURNOVER__: { events: { type: string }[] } }
-        ).__TURNOVER__.events.some((e) => e.type === 'room:rustle'),
-      undefined,
-      { timeout: 15_000 },
-    )
+    await staff
+      .waitForFunction(
+        () =>
+          (
+            window as unknown as { __TURNOVER__: { events: { type: string }[] } }
+          ).__TURNOVER__.events.some((e) => e.type === 'room:rustle'),
+        undefined,
+        { timeout: 15_000 },
+      )
+      .catch(async () => {
+        const dump = await Promise.all(
+          [staff, saboteur].map((p) =>
+            p.evaluate(() => {
+              const t = (
+                window as unknown as {
+                  __TURNOVER__: {
+                    events: { type: string; payload: Record<string, unknown> }[]
+                    local: { playerId: string }
+                  }
+                }
+              ).__TURNOVER__
+              const own = t.events.filter(
+                (e) => e.type === 'player:moved' && e.payload.playerId === t.local.playerId,
+              )
+              return {
+                id: t.local.playerId,
+                lastX: (own.at(-1)?.payload as { x?: number }).x ?? null,
+                lastFloor: (own.at(-1)?.payload as { floor?: string }).floor ?? null,
+                workEvents: t.events
+                  .filter((e) => e.type.startsWith('work:'))
+                  .map((e) => `${e.type}:${JSON.stringify(e.payload)}`),
+              }
+            }),
+          ),
+        )
+        throw new Error(`RUSTLE-DEBUG: ${JSON.stringify(dump)}`)
+      })
     expect(await rustleCue).toBe(true)
     const trash = await staff.evaluate(() => {
       const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__

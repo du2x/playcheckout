@@ -1,0 +1,27 @@
+{
+  "project": "Turnover — ALTERNATIVE art direction (Deco Noir)",
+  "status": "proposal-seed, NOT referenced by the client build",
+  "brief": "docs/art/alternative/art-direction-brief.md",
+  "assets": [
+    {
+      "path": "docs/art/alternative/seeds/staff-idle-34x64.png",
+      "role": "hero target: staff idle frame, strict profile, feet at row 63",
+      "size": "34x64",
+      "alpha": true,
+      "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
+      "license": "original work, repo-owned",
+      "qa": "asset_report ok: 9 colors, alpha 0-255, no problems",
+      "approval": "pending — judge at native scale over the seed corridor"
+    },
+    {
+      "path": "docs/art/alternative/seeds/styleboard-corridor-832x576.png",
+      "role": "native-scale gameplay mock: door triptych (closed+card / open prepped / open trashed-fresh), sconce glows, staff hero",
+      "size": "832x576",
+      "alpha": false,
+      "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
+      "license": "original work, repo-owned",
+      "qa": "visual pass: ellipse-stepped glows, silhouette-first trash, ivory figure separates from wall and carpet",
+      "approval": "pending — art workstream + design owner"
+    }
+  ]
+}

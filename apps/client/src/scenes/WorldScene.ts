@@ -137,6 +137,11 @@ export class WorldScene extends Phaser.Scene {
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
+  /** Per-car hall-call lights (AD-024): lit from the car's accepted call
+   *  until it arrives. Derived purely from public events — a decoy call
+   *  naming a car already parked at that floor never lights (nothing to
+   *  wait for). */
+  private calledLights: Record<1 | 2, boolean> = { 1: false, 2: false }
   /** The App-owned accusation session (accuseSession.ts): the self-fired flag
    * gates every live-play intent — a fired player watches quietly (JUST-04). */
   private selfFired = false
@@ -185,6 +190,7 @@ export class WorldScene extends Phaser.Scene {
     this.cueNodes.clear()
     this.doorImages.clear()
     this.riderSession = data.riderSession
+    this.calledLights = { 1: false, 2: false }
     this.buildEvidenceLayer()
     this.buildDoorImages()
 
@@ -235,7 +241,11 @@ export class WorldScene extends Phaser.Scene {
     // them (decoys included); occupants are never rendered (privacy rule).
     if (this.textures.exists('elevator-panel')) {
       for (const side of ['west', 'east'] as const) {
-        const image = this.add.sprite(side === 'west' ? 16 : 832 - 16, GROUND_Y - 80, 'elevator-panel')
+        const image = this.add.sprite(
+          side === 'west' ? 16 : 832 - 16,
+          GROUND_Y - 80,
+          'elevator-panel',
+        )
         image.setFrame(0)
         image.setName(`panel:${side}`)
         image.setVisible(!this.spectator)
@@ -243,11 +253,7 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
-    this.elevatorPresenter = new ElevatorPresenter(
-      this.cars,
-      (car) => this.carPx(car),
-      (car) => this.carLaneY(car),
-    )
+    this.elevatorPresenter = new ElevatorPresenter(this.cars, (car) => this.carLaneY(car))
 
     const keyboard = this.input.keyboard
     if (keyboard !== null) {
@@ -415,14 +421,26 @@ export class WorldScene extends Phaser.Scene {
       case 'elevator-moved': {
         const car = this.cars.get(action.car)
         if (car !== undefined) car.floor = action.floor
+        this.calledLights[action.car] = false // arrival: the hall call is served
         this.elevatorPresenter?.onMoved(action.car, action.floor)
         this.updatePanel()
         break
       }
+      case 'elevator-doors': {
+        // Public door state (AD-026/027): the presenter drives the open/close
+        // swing from it; the panel's floor readout follows the event too.
+        const car = this.cars.get(action.car)
+        if (car !== undefined) car.floor = action.floor
+        this.elevatorPresenter?.onDoors(action.car, action.floor, action.open)
+        this.updatePanel()
+        break
+      }
       case 'elevator-called': {
+        // Hall-call light (AD-024): lit only when the named car is NOT
         // already standing at the called floor (the AD-019/023 decoy summons
         // nothing) — it turns off on that car's next arrival.
         const car = this.cars.get(action.car)
+        if (car !== undefined && car.floor !== action.floor) this.calledLights[action.car] = true
         this.elevatorPresenter?.onCalled(action.car, action.floor)
         this.updatePanel()
         // ART-17: the flash moves to the landing panel sprites — every call
@@ -638,9 +656,20 @@ export class WorldScene extends Phaser.Scene {
     this.sendMoveStop()
   }
 
-  /** Destination-free elevator call (AD-014): the pickup floor is implicit. */
+  /**
+   * Destination-free elevator call (AD-014): the pickup floor is implicit.
+   * Hall-button gate (AD-022): the call only fires from within
+   * ELEVATOR_LANDING_TILES of a car landing (x≈0 west, x≈30 east) — the
+   * server still dispatches, so which car answers stays sim policy. Riders
+   * never send (the server rejects rider calls anyway).
+   */
   private callElevator(): void {
     if (this.selfFired) return
+    if (this.riderSession !== null) return
+    const own = this.players.get(this.ownId)
+    if (own === undefined) return
+    const range = TUNING.ELEVATOR_LANDING_TILES
+    if (own.x > range && own.x < 30 - range) return
     this.sendElevatorCall()
   }
 
@@ -772,9 +801,7 @@ export class WorldScene extends Phaser.Scene {
         ? this.interior.room
         : null
     const cuedRooms = new Set(
-      this.evidence.cues
-        .filter((c) => c.kind === 'entered')
-        .map((c) => `${c.floor}:${c.room}`),
+      this.evidence.cues.filter((c) => c.kind === 'entered').map((c) => `${c.floor}:${c.room}`),
     )
     for (const [key, image] of this.doorImages) {
       const [floor, roomText] = String(key).split(':')
@@ -811,9 +838,7 @@ export class WorldScene extends Phaser.Scene {
    */
   private syncOwnInterior(ownRoom: number | null): void {
     const show =
-      ownRoom !== null &&
-      this.interior !== null &&
-      this.viewFloor === this.interior.floor
+      ownRoom !== null && this.interior !== null && this.viewFloor === this.interior.floor
     if (!show || this.interior === null || ownRoom === null) {
       this.interiorImage?.setVisible(false)
       return
@@ -948,8 +973,13 @@ export class WorldScene extends Phaser.Scene {
     const e = panel.querySelector('#panel-east')
     if (w !== null) w.textContent = west
     if (e !== null) e.textContent = east
+    // Hall-call lights (AD-024): amber while the car owes the floor a stop.
+    const lightW = panel.querySelector('#panel-light-west')
+    const lightE = panel.querySelector('#panel-light-east')
     if (lightW instanceof HTMLElement)
+      lightW.style.color = this.calledLights[1] ? '#e8c34a' : '#4a5568'
     if (lightE instanceof HTMLElement)
+      lightE.style.color = this.calledLights[2] ? '#e8c34a' : '#4a5568'
   }
 
   /** Per-frame panel sprite sync: idle frame, flash frame inside the window. */
@@ -978,14 +1008,22 @@ export class WorldScene extends Phaser.Scene {
     if (clock.phase !== 'transit') {
       this.carScreenLeg = null
       setCarScreenFloor(clock.floor)
-      setCarScreenState(clock.phase === 'open' ? 'doors open' : 'doors closing')
+      setCarScreenState(
+        clock.phase === 'opening'
+          ? 'doors opening'
+          : clock.phase === 'open'
+            ? 'doors open'
+            : clock.phase === 'closing'
+              ? 'doors closing'
+              : 'doors closed',
+      )
       return
     }
     // Transit: riders know the current leg's destination from the own car's
-    // press queue (rider-exclusive, already on their screen); bystander ground
-    // truth (`pendingFloor`) names it once the arrival event lands. No known
-    // destination = a car that merely closed after its dwell — not a ride.
-    const dest = clock.pendingFloor ?? session.queue[0] ?? null
+    // press queue (rider-exclusive, already on their screen); bystander
+    // ground truth is the arrival event, which lands as the door-open event
+    // at the destination floor.
+    const dest = session.queue[0] ?? null
     if (dest === null) {
       this.carScreenLeg = null
       setCarScreenFloor(clock.floor)

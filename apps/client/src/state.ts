@@ -70,6 +70,7 @@ export type ViewAction =
   | { type: 'player-moved'; playerId: string; floor: FloorId; x: number; facing: Facing }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
+  | { type: 'elevator-doors'; car: CarId; floor: FloorId; open: boolean }
   // Rider-exclusive render state (AD-013): reducer no-ops like the
   // other scene-kind events — the chip lives in the DOM layer (T10).
   | { type: 'elevator-pressed'; playerId: string; floor: FloorId }
@@ -184,6 +185,7 @@ export const ACTION_ROUTES = {
   'player-moved': 'scene',
   'elevator-called': 'scene',
   'elevator-moved': 'scene',
+  'elevator-doors': 'scene',
   'elevator-pressed': 'consumed',
   'elevator-riders': 'consumed',
   'player-left': 'scene',
@@ -314,6 +316,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'player-moved':
     case 'elevator-called':
     case 'elevator-moved':
+    case 'elevator-doors':
     case 'elevator-pressed':
     case 'elevator-riders':
     case 'player-left':

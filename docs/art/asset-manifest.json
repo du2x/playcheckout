@@ -15,13 +15,7 @@
         "frames": 8,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "silhouette",
-        "proportions",
-        "facing",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "silhouette", "proportions", "facing", "light-direction"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-staff-walk.py (deterministic Pillow authoring, no generation model)",
@@ -50,12 +44,7 @@
         "frames": 6,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "proportions",
-        "facing",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "proportions", "facing", "light-direction"],
       "source": {
         "kind": "authored",
         "url_or_tool": "",
@@ -84,12 +73,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "silhouette",
-        "proportions",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "silhouette", "proportions", "light-direction"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
@@ -118,11 +102,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "proportions",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "proportions", "light-direction"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
@@ -151,10 +131,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "silhouette"
-      ],
+      "visual_locks": ["palette", "silhouette"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
@@ -183,11 +160,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "light-direction",
-        "detail-density"
-      ],
+      "visual_locks": ["palette", "light-direction", "detail-density"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-room-interiors.py (deterministic Pillow authoring, no generation model)",
@@ -216,11 +189,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "light-direction",
-        "silhouette-of-clutter"
-      ],
+      "visual_locks": ["palette", "light-direction", "silhouette-of-clutter"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-room-interiors.py (deterministic Pillow authoring, no generation model)",
@@ -249,11 +218,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "light-direction",
-        "silhouette-of-clutter"
-      ],
+      "visual_locks": ["palette", "light-direction", "silhouette-of-clutter"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-room-interiors.py (deterministic Pillow authoring, no generation model)",
@@ -282,10 +247,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "light-direction"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-corridor-band.py (deterministic Pillow authoring, no generation model)",
@@ -314,11 +276,7 @@
         "frames": 2,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "proportions",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "proportions", "light-direction"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
@@ -347,9 +305,7 @@
         "frames": 2,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette"
-      ],
+      "visual_locks": ["palette"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
@@ -378,9 +334,7 @@
         "frames": 4,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette"
-      ],
+      "visual_locks": ["palette"],
       "source": {
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-fx-rustle.py (deterministic Pillow authoring, no generation model)",

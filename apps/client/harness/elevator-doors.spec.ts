@@ -32,9 +32,7 @@ async function readCars(page: Page): Promise<CarRead> {
     const list = scene.children.list
     return {
       // ART contract (cycle 2.10): the player is a staff-walk Sprite.
-      rectCount: list.filter(
-        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk',
-      ).length,
+      rectCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk').length,
       // ART contract (cycle 2.10): cars are elevator-car Sprites.
       visibleCarCount: list.filter(
         (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
@@ -63,14 +61,15 @@ test.describe('client:elevator_doors', () => {
     expect(baseline.rectCount).toBe(1)
     expect(baseline.visibleCarCount).toBe(2)
 
-    // Walk to the west landing (auto-boards, AD-014) and press floor1
-    // in-car. A rider-triggered departure never announces `elevator:called`
-    // on the wire (AD-013) — this also exercises the presenter's documented
-    // SPEC_DEVIATION path (ground truth `elevator:moved` alone drives the
-    // arrival animation).
+    // Walk to the west landing and board with the call press (AD-025), then
+    // press floor1 in-car. A rider-triggered departure never announces
+    // `elevator:called` on the wire (AD-013) — this also exercises the
+    // presenter's documented SPEC_DEVIATION path (ground truth
+    // `elevator:moved` alone drives the arrival animation).
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
@@ -85,10 +84,11 @@ test.describe('client:elevator_doors', () => {
       { timeout: 10_000 },
     )
 
-    // Exit immediately: the own player-moved event flips viewFloor to floor1
-    // (ELAN-04 — WorldScene forwards only plain fields) right as car1's
-    // open-door window begins, well inside its ~1 s dwell
-    // (TUNING.ELEVATOR_DWELL_SECONDS) before the presenter auto-closes it.
+    // Exit right after the arrival: the ride plus the stop's dwell tail and
+    // closing swing (AD-026) run before the moved lands, then the doors
+    // reopen — the own player-moved event flips viewFloor to floor1
+    // (ELAN-04) while the doors are open, inside the 1 s dwell
+    // (TUNING.ELEVATOR_DWELL_SECONDS) before the presenter closes them.
     await host.keyboard.down('ArrowRight')
     await host.waitForFunction(
       () => document.querySelector('#panel-west')?.textContent === 'floor1',
@@ -98,9 +98,7 @@ test.describe('client:elevator_doors', () => {
         const t = (
           window as unknown as {
             __TURNOVER__: {
-              scene: (
-                n: string,
-              ) => {
+              scene: (n: string) => {
                 children: {
                   list: { type: string; visible: boolean; texture?: { key?: string } }[]
                 }
@@ -129,37 +127,13 @@ test.describe('client:elevator_doors', () => {
     expect((await readCars(host)).rectCount).toBe(1)
 
     // No further stop is ever reported at floor1 (the panel never changes
-    // again below), yet the presenter still closes and hides car1 once its
-    // dwell timer elapses — ELAN-01 AC2 / P2 AC1 ("render that car's doors
-    // as closed before any position change is shown"). This is a stable
-    // terminal state (car1 never departs again in this scenario), so a
-    // generous bound is not flaky.
-    await host.waitForFunction(
-      () => {
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              scene: (
-                n: string,
-              ) => {
-                children: {
-                  list: { type: string; visible: boolean; texture?: { key?: string } }[]
-                }
-              } | null
-            }
-          }
-        ).__TURNOVER__
-        const scene = t.scene('Round')
-        if (scene === null) return false
-        return (
-          scene.children.list.filter(
-            (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
-          ).length === 0
-        )
-      },
-      undefined,
-      { timeout: 5000 },
-    )
+    // again below) and no call waits anywhere — AD-027: car1 KEEPS its doors
+    // open at this stop instead of closing away. A stable terminal state
+    // (car1 never departs again in this scenario), so a generous bound is
+    // not flaky.
+    await host.waitForTimeout(2500)
+    const terminal = await readCars(host)
+    expect(terminal.visibleCarCount).toBe(1)
     expect(await host.textContent('#panel-west')).toBe('floor1')
 
     await host.context().close()

@@ -32,6 +32,11 @@ describe('tuning table', () => {
     expect(TUNING.ELEVATOR_CAPACITY).toBe(2)
   })
 
+  it('pins the AD-026/027 door stages (not in §7 — recorded decisions)', () => {
+    expect(TUNING.ELEVATOR_DWELL_SECONDS).toBe(3)
+    expect(TUNING.ELEVATOR_DOOR_SECONDS).toBe(0.5)
+  })
+
   it('matches prd §7 movement speed', () => {
     expect(TUNING.PLAYER_SPEED_TILES_PER_SEC).toBe(6)
   })

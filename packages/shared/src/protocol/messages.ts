@@ -98,6 +98,18 @@ export interface ElevatorMoved {
 }
 
 /**
+ * server → all players (AD-026/027). The named car's doors began their
+ * opening swing (open: true) or began closing to attend a call (open: false)
+ * at the named floor. Public door state — panels and the presenter derive
+ * the door visuals from it; it never names occupants.
+ */
+export interface ElevatorDoors {
+  readonly car: CarId
+  readonly floor: FloorId
+  readonly open: boolean
+}
+
+/**
  * server → the riders of the named car ONLY (AD-013 riders policy). A rider
  * pressed a floor inside the car; attribution testimony for co-riders.
  * Panels never carry this — the public target would make tailing trivial.

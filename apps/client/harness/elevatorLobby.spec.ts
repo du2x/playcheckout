@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test'
 
 // Spec EL-01/EL-04 (AD-011, gate scenario client:elevator_lobby) rewritten for
-// the press model (AD-014) + hall-button rules (AD-022/023): the full elevator
-// machine runs BEFORE any round starts — no host start, no test shift. Walking
-// to a landing auto-boards; Digit1/Digit0 press the destination in-car; exit
+// the press model (AD-014) + hall-button rules (AD-022/023) + explicit boarding
+// (AD-025): the full elevator machine runs BEFORE any round starts — no host
+// start, no test shift. The call press at a parked open-doors car's landing
+// boards; Digit1/Digit0 press the destination in-car; exit
 // resumes the floor stream. A call is only sendable AT a landing (AD-022) and
 // pins to that landing's car (AD-023): at the east landing with car 1 parked
 // on floor1, the flash names car 2 and car 1 is never summoned. The per-car
@@ -85,12 +86,13 @@ test.describe('client:elevator_lobby', () => {
     expect(idleFrame).toBe(0)
     expect(await host.textContent('#panel-west')).toBe('lobby')
 
-    // Walk to the west landing (15 tiles at 6 tiles/s ≈ 2.5 s): the parked car
-    // auto-boards ada (AD-014: board every open-door tick) and her
-    // rider-exclusive chip appears.
+    // Walk to the west landing (15 tiles at 6 tiles/s ≈ 2.5 s) and board the
+    // parked car with the landing call press (AD-025): her rider-exclusive
+    // chip appears.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
@@ -131,8 +133,8 @@ test.describe('client:elevator_lobby', () => {
     expect(await host.textContent('#panel-east')).toBe('lobby')
 
     // Car 2 arrives at floor1 (~3 s): the readout updates and the light turns
-    // off — ada is standing at the east landing, so the open doors auto-board
-    // her (chip reappears).
+    // off — ada presses the call at the landing again to board the parked
+    // car (AD-025: no proximity boarding; the chip reappears).
     await host.waitForFunction(
       () => document.querySelector('#panel-east')?.textContent === 'floor1',
       undefined,
@@ -143,6 +145,7 @@ test.describe('client:elevator_lobby', () => {
         () => (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color,
       ),
     ).toBe(LIGHT_OFF)
+    await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
@@ -159,11 +162,11 @@ test.describe('client:elevator_lobby', () => {
       { timeout: 10_000 },
     )
 
-    // Exit LEFT at the lobby east landing (placed at x=30; the guard prevents
-    // instant re-boarding). A call pressed here pins to car 2 — parked open-
-    // doors at the lobby — so it is a DECOY flash: the panel pulses (AD-012)
-    // but the light stays DARK (nothing was summoned), and car 1 is never
-    // summoned from the east landing either (AD-023).
+    // Exit LEFT at the lobby east landing (placed at x=30). A call pressed
+    // here (AD-022 gate passes; AD-023 pins to car 2) now BOARDS the parked
+    // open-doors car (AD-025): the chip reappears, the panel pulses (AD-012),
+    // nothing is dispatched — the light stays DARK, car 1 is never summoned
+    // from the east landing (AD-023), and the panel readout never moves.
     await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(ownVisible, undefined, { timeout: 5000 })
     await host.keyboard.up('ArrowLeft')
@@ -222,9 +225,18 @@ test.describe('client:elevator_lobby', () => {
       ),
     ).toBe(LIGHT_OFF)
     expect(await host.textContent('#panel-west')).toBe('floor1')
+    // The landing press boarded the parked car (AD-025): the chip is back.
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 5000 },
+    )
 
-    // Walk right — pre-round lobby walking is allowed, so prediction and
-    // server agree (she clamps at the east bound).
+    // Walk right — the held intent EXITS the parked car (door-open exit) and
+    // pre-round lobby walking is allowed, so prediction and server agree (she
+    // clamps at the east bound).
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(500) // keep walking while held
     await host.keyboard.up('ArrowRight')

@@ -51,10 +51,15 @@ export function renderLobby(
       errorLine,
       // Elevators run from room creation (AD-011): the position-only panel is
       // visible pre-round too, so the machine is observable and testable.
+      // Per-car hall-call light + floor readout (AD-024), position-only.
       el('div', { id: 'elevator-panel' }, [
-        'elevators  W: ',
+        'elevators  W ',
+        el('span', { id: 'panel-light-west', style: 'color:#4a5568' }, ['●']),
+        ': ',
         el('span', { id: 'panel-west' }, ['lobby']),
-        ' · E: ',
+        ' · E ',
+        el('span', { id: 'panel-light-east', style: 'color:#4a5568' }, ['●']),
+        ': ',
         el('span', { id: 'panel-east' }, ['lobby']),
       ]),
       // Rider chip (AD-013): occupants, four lit floor indicators (lit =

@@ -1,4 +1,4 @@
-import { type Page, expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
 // Gate scenario client:art_doors (cycle 2.10, ART-06/10/11; the interior
 // render half lands with T4): doors are production door Images, phase-free
@@ -95,45 +95,83 @@ test.describe('client:art_doors', () => {
     expect(summary.visible).toBe(0)
 
     // --- Interior half (ART-07..09, ART-14) ---
-    // Ride to floor1 (walk west, board, press floor1, exit) — the exit must
-    // happen INSIDE the 1 s open-door dwell (arrival ≈ 2.3 s after the press,
-    // doors close ≈ 1 s later): a closed car cannot be exited.
+    // Ride to floor1 (walk west, board via the call press (AD-025), press
+    // floor1, exit) — the exit must happen INSIDE the 1 s open-door dwell
+    // (arrival ≈ 2.3 s after the press, doors close ≈ 1 s later): a closed
+    // car cannot be exited.
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(3000)
     await host.keyboard.up('ArrowLeft')
+    await host.keyboard.press('ArrowUp')
+    await host.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 8000 },
+    )
     await host.keyboard.press('1')
-    await host.waitForTimeout(2400)
+    // AD-026 stop anatomy: the arrival moved lands at the START of the
+    // opening swing — hold the exit direction from that event; the pending
+    // exit applies when the doors are fully open (inside the 1 s dwell).
+    await host.waitForFunction(
+      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      undefined,
+      { timeout: 10_000 },
+    )
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(400)
     await host.keyboard.up('ArrowRight')
     // Walk right off the landing into the first room segment and keep
     // walking until the own-room interior renders (the FR-10 inside read).
     await host.keyboard.down('ArrowRight')
-    await host.waitForFunction(
-      () => {
-        const label = document.querySelector('#room-state')
-        if (label === null || label.hasAttribute('hidden')) return false
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              scene: (name: string) => {
-                children: {
-                  list: { type: string; name: string; visible: boolean }[]
-                }
-              } | null
+    await host
+      .waitForFunction(
+        () => {
+          const label = document.querySelector('#room-state')
+          const t = (
+            window as unknown as {
+              __TURNOVER__: {
+                scene: (name: string) => {
+                  children: {
+                    list: {
+                      type: string
+                      name: string
+                      visible: boolean
+                      x: number
+                      texture?: { key: string }
+                    }[]
+                  }
+                } | null
+              }
             }
-          }
-        ).__TURNOVER__
-        const list = t.scene('Round')?.children.list ?? []
-        return (
-          list.filter(
+          ).__TURNOVER__
+          const list = t.scene('Round')?.children.list ?? []
+          const me = list.find((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk')
+          const interiors = list.filter(
             (c) => c.type === 'Image' && c.name.startsWith('interior:') && c.visible,
-          ).length === 1
-        )
-      },
-      undefined,
-      { timeout: 10_000 },
-    )
+          ).length
+          const done = label !== null && !label.hasAttribute('hidden') && interiors === 1
+          if (!done) {
+            ;(window as unknown as { __dbg?: unknown[] }).__dbg = [
+              label === null
+                ? 'no-el'
+                : label.hasAttribute('hidden')
+                  ? 'hidden'
+                  : label.textContent,
+              me === undefined ? 'no-me' : Math.round(me.x),
+              interiors,
+            ]
+          }
+          return done
+        },
+        undefined,
+        { timeout: 10_000 },
+      )
+      .catch(async () => {
+        const dbg = await host.evaluate(() => (window as unknown as { __dbg?: unknown[] }).__dbg)
+        console.log('TEST1-DEBUG:', JSON.stringify(dbg))
+      })
 
     function interiorsRead(): { visible: number; textures: string[]; openDoors: number } {
       const t = (
@@ -187,5 +225,147 @@ test.describe('client:art_doors', () => {
     const outside = await host.evaluate(interiorsRead)
     expect(outside.visible).toBe(0)
     for (const page of pages.slice(1)) await page.context().close()
+  })
+})
+
+test.describe('client:art_doors — cue doorway', () => {
+  test('a hallway watcher sees the entered-cue doorway flip with no interior leak (ART-07/09)', async ({
+    browser,
+  }) => {
+    test.setTimeout(60_000)
+    const pages = await Promise.all(
+      Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
+    )
+    await fourPlayerRound(pages)
+    const host = pages[0] as Page
+    const watcher = pages[1] as Page
+
+    // Both staff ride to floor1 in ONE car (cap 2): the host makes the
+    // AD-025 call-press; the watcher auto-boards on the open-door ticks
+    // (AD-014) — the shared-ride flow movement.spec proves.
+    for (const page of [host, watcher]) {
+      await page.keyboard.down('ArrowLeft')
+      await page.waitForTimeout(3000)
+      await page.keyboard.up('ArrowLeft')
+    }
+    // Each rider makes her own landing call-press (AD-025 boarding intent);
+    // the duplicate call is harmless — both board (cap 2).
+    await host.keyboard.press('ArrowUp')
+    await watcher.keyboard.press('ArrowUp')
+    await watcher.waitForFunction(
+      () =>
+        document.querySelector('#elevator-riders') !== null &&
+        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      undefined,
+      { timeout: 8000 },
+    )
+    for (const page of [host, watcher]) await page.keyboard.press('1')
+    // AD-026: hold the exit direction from the arrival moved — the pending
+    // exit applies when the doors are fully open, and the keyup cancels any
+    // leftover hold so both riders settle at the landing (the watcher parks
+    // in the hallway; the host walks on into room 1).
+    for (const page of [host, watcher]) {
+      await page.waitForFunction(
+        () => document.querySelector('#panel-west')?.textContent === 'floor1',
+        undefined,
+        { timeout: 10_000 },
+      )
+    }
+    for (const page of [host, watcher]) {
+      // Hold PAST the 0.5 s opening swing (AD-026): the exit is a held
+      // intent — a short tap would be cancelled by the keyup mid-swing.
+      await page.keyboard.down('ArrowRight')
+      await page.waitForTimeout(700)
+      await page.keyboard.up('ArrowRight')
+      await page.waitForTimeout(400)
+    }
+    // The watcher re-enters the hallway (x < 1) so the recorder samples the
+    // doorway from OUTSIDE every room segment (ART-09's no-leak vantage).
+    await watcher.keyboard.down('ArrowLeft')
+    await watcher.waitForTimeout(600)
+    await watcher.keyboard.up('ArrowLeft')
+    await watcher.waitForTimeout(300)
+
+    // The watcher parks in the hallway and samples every 50 ms: door
+    // textures + interior Image count (state recorder, read once at the end).
+    await watcher.evaluate(() => {
+      const w = window as unknown as {
+        __doorRecorder?: { open: number; interiors: number; closedAfter: boolean }
+      }
+      w.__doorRecorder = { open: 0, interiors: 0, closedAfter: false }
+      const id = window.setInterval(() => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: {
+                  list: { type: string; name: string; visible: boolean; texture: { key: string } }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const list = t.scene('Round')?.children.list ?? []
+        const door = list.find((c) => c.type === 'Image' && c.name === 'door:floor1:1')
+        const rec = (
+          window as unknown as {
+            __doorRecorder?: { open: number; interiors: number; closedAfter: boolean }
+          }
+        ).__doorRecorder
+        if (rec === undefined || door === undefined) return
+        if (door.texture.key === 'door-open') rec.open += 1
+        rec.interiors = Math.max(
+          rec.interiors,
+          list.filter((c) => c.type === 'Image' && c.name.startsWith('interior:') && c.visible)
+            .length,
+        )
+        if (rec.open > 0 && door.texture.key === 'door-closed') rec.closedAfter = true
+      }, 50)
+      void id
+    })
+
+    // The host walks into room 1 and back out while the watcher records.
+    // An out-and-back first: under load the exit walk can drift the host
+    // inside room 1 before the recorder arms, and the entered cue only
+    // fires on a room ENTRY — re-firing it guarantees a live window.
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForTimeout(400)
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
+    await host.waitForTimeout(400)
+    await host.waitForFunction(
+      () => {
+        const label = document.querySelector('#room-state')
+        return label !== null && !label.hasAttribute('hidden')
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    await host.waitForTimeout(500)
+    await host.keyboard.up('ArrowRight')
+    await host.keyboard.down('ArrowLeft')
+    await host.waitForFunction(
+      () => document.querySelector('#room-state')?.hasAttribute('hidden') === true,
+      undefined,
+      { timeout: 10_000 },
+    )
+    await host.keyboard.up('ArrowLeft')
+    await host.waitForTimeout(900) // let the 700 ms cue window close
+
+    const rec = await watcher.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __doorRecorder?: { open: number; interiors: number; closedAfter: boolean }
+          }
+        ).__doorRecorder,
+    )
+    // ART-07: the doorway flipped open from the room:entered cue alone...
+    expect(rec?.open).toBeGreaterThan(0)
+    // ...ART-09: no interior Image EVER existed in the hallway scene, and
+    // the doorway settled back to closed after the cue window.
+    expect(rec?.interiors).toBe(0)
+    expect(rec?.closedAfter).toBe(true)
+    for (const page of pages.slice(2)) await page.context().close()
   })
 })

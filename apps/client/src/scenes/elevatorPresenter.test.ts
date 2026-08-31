@@ -2,115 +2,57 @@ import { describe, expect, it } from 'vitest'
 import {
   advanceCarClock,
   applyCalled,
+  applyDoors,
   applyMoved,
+  type CarViewLike,
   carAlpha,
   carVisible,
   carY,
   DEFAULT_ANIMATION_CONFIG,
   doorsOpenAmount,
   ElevatorPresenter,
-  type CarViewLike,
   initialCarClock,
 } from './elevatorPresenter'
 
 const cfg = DEFAULT_ANIMATION_CONFIG
 
-// Elevator animation (cycle `elevator-animation`): pure clock reducer tests.
-// Every case maps to a spec.md acceptance criterion (ELAN-01..11) or a
-// listed edge case — see .specs/features/elevator-animation/spec.md.
+// Elevator animation (cycle `elevator-animation`, AD-026/027): pure clock
+// reducer tests. The presenter's door phases are driven by the public
+// `elevator:doors` events — the sim's door state is the single truth; the
+// presenter never guesses a close from a dwell timer.
 
-describe('elevator clock — doors open at every stop (ELAN-01)', () => {
-  it('renders doors fully open once the arrival swing finishes', () => {
-    const clock = applyMoved(initialCarClock('lobby'), 'floor1')
-    expect(clock.phase).toBe('open')
-    const swungOpen = advanceCarClock(clock, cfg.doorAnimMs, cfg)
+function arrive(from: 'lobby' | 'floor1' | 'floor2', to: 'lobby' | 'floor1' | 'floor2') {
+  return applyDoors(applyMoved(initialCarClock(from), to), to, true)
+}
+
+describe('elevator clock — boot: parked with the doors shut', () => {
+  it('starts closed and visible with the slab frame', () => {
+    const clock = initialCarClock('lobby')
+    expect(clock.phase).toBe('closed')
+    expect(carVisible(clock)).toBe(true)
+    expect(doorsOpenAmount(clock, cfg)).toBe(0)
+  })
+})
+
+describe('elevator clock — door events drive everything (AD-026/027)', () => {
+  it('plays the opening swing when the doors-open event lands', () => {
+    const clock = applyDoors(initialCarClock('lobby'), 'lobby', true)
+    expect(clock.phase).toBe('opening')
+    const midSwing = advanceCarClock(clock, cfg.doorAnimMs / 2, cfg)
+    expect(doorsOpenAmount(midSwing, cfg)).toBeGreaterThan(0)
+    expect(doorsOpenAmount(midSwing, cfg)).toBeLessThan(1)
+    const swungOpen = advanceCarClock(midSwing, cfg.doorAnimMs / 2, cfg)
+    expect(swungOpen.phase).toBe('open')
     expect(doorsOpenAmount(swungOpen, cfg)).toBe(1)
     expect(carVisible(swungOpen)).toBe(true)
   })
 
-  it('keeps doors fully open through the rest of the dwell window', () => {
-    const open = advanceCarClock(initialCarClock('floor1'), cfg.doorAnimMs, cfg)
-    expect(doorsOpenAmount(open, cfg)).toBe(1)
-    const stillOpen = advanceCarClock(open, cfg.dwellMs - cfg.doorAnimMs - 1, cfg)
-    expect(doorsOpenAmount(stillOpen, cfg)).toBe(1)
-  })
-})
-
-describe('elevator clock — doors close before departure (ELAN-02)', () => {
-  it('closes automatically once the dwell window elapses with no redirect', () => {
-    const open = advanceCarClock(initialCarClock('floor1'), cfg.doorAnimMs, cfg)
-    const closingStart = advanceCarClock(open, cfg.dwellMs - cfg.doorAnimMs, cfg)
-    expect(closingStart.phase).toBe('closing')
-
-    const closingMidway = advanceCarClock(closingStart, cfg.doorAnimMs / 2, cfg)
-    expect(doorsOpenAmount(closingMidway, cfg)).toBeLessThan(1)
-    expect(doorsOpenAmount(closingMidway, cfg)).toBeGreaterThan(0)
-    expect(carVisible(closingMidway)).toBe(true)
-
-    const transit = advanceCarClock(closingMidway, cfg.doorAnimMs, cfg)
-    expect(doorsOpenAmount(transit, cfg)).toBe(0)
-    expect(carVisible(transit)).toBe(false)
-  })
-
-  it('measures the dwell window from elevator:moved, not from the end of the arrival swing', () => {
-    // A fresh arrival starts elapsedMs at 0. The dwell deadline is therefore
-    // exactly cfg.dwellMs after the event, regardless of how long the door
-    // swing or fade takes.
-    const arrived = applyMoved(initialCarClock('lobby'), 'floor1')
-    const justBeforeDwell = advanceCarClock(arrived, cfg.dwellMs - 1, cfg)
-    expect(justBeforeDwell.phase).toBe('open')
-    const atDwell = advanceCarClock(justBeforeDwell, 1, cfg)
-    expect(atDwell.phase).toBe('closing')
-  })
-
-  it('closes immediately on a public call to a different floor, not waiting for dwell', () => {
-    const open = initialCarClock('floor1')
-    const called = applyCalled(open, 'floor2')
-    expect(called.phase).toBe('closing')
-    const transit = advanceCarClock(called, cfg.doorAnimMs, cfg)
-    expect(carVisible(transit)).toBe(false)
-  })
-})
-
-describe('elevator clock — fixed minimum transit duration, distance-independent (ELAN-05, ELAN-08)', () => {
-  it('holds the transit visual for at least minTransitMs even if the real arrival is faster', () => {
-    const open = initialCarClock('floor1')
-    const closing = applyCalled(open, 'floor2')
-    const transit = advanceCarClock(closing, cfg.doorAnimMs, cfg)
-    expect(transit.phase).toBe('transit')
-
-    const withPending = applyMoved(transit, 'floor2')
-    const tooEarly = advanceCarClock(withPending, cfg.minTransitMs - 1, cfg)
-    expect(tooEarly.phase).toBe('transit')
-    expect(carVisible(tooEarly)).toBe(false)
-
-    const resolved = advanceCarClock(tooEarly, 1, cfg)
-    expect(resolved.phase).toBe('open')
-    expect(resolved.floor).toBe('floor2')
-  })
-
-  it('derives minTransitMs from TUNING.ELEVATOR_RIDE_SECONDS_PER_FLOOR', () => {
-    expect(cfg.minTransitMs).toBe(2000)
-  })
-
-  it('never derives transit duration from real ride distance (no distance parameter exists)', () => {
-    const openA = initialCarClock('lobby')
-    const transitA = advanceCarClock(applyCalled(openA, 'floor3'), cfg.doorAnimMs, cfg)
-    const openB = initialCarClock('lobby')
-    const transitB = advanceCarClock(applyCalled(openB, 'floor1'), cfg.doorAnimMs, cfg)
-    expect(transitA.phase).toBe('transit')
-    expect(transitB.phase).toBe('transit')
-    expect(advanceCarClock(transitA, cfg.minTransitMs - 1, cfg).phase).toBe('transit')
-    expect(advanceCarClock(transitB, cfg.minTransitMs - 1, cfg).phase).toBe('transit')
-  })
-})
-
-describe('elevator clock — arrival renders motion, not an instant snap (ELAN-06, ELAN-07)', () => {
-  it('fades in over arrivalAnimMs rather than snapping to full opacity', () => {
-    const arriving = applyMoved(initialCarClock('lobby'), 'floor1')
-    expect(arriving.phase).toBe('open')
-    expect(arriving.fromFloor).toBe('lobby')
-    const halfway = advanceCarClock(arriving, cfg.arrivalAnimMs / 2, cfg)
+  it('an arrival moves the clock into the opening swing with the arrival slide', () => {
+    // The sim emits moved (position) then doors(open) at every arrival.
+    const opened = arrive('lobby', 'floor1')
+    expect(opened.phase).toBe('opening')
+    expect(opened.fromFloor).toBe('lobby')
+    const halfway = advanceCarClock(opened, cfg.arrivalAnimMs / 2, cfg)
     expect(carAlpha(halfway, cfg)).toBeGreaterThan(0)
     expect(carAlpha(halfway, cfg)).toBeLessThan(1)
     const done = advanceCarClock(halfway, cfg.arrivalAnimMs / 2, cfg)
@@ -118,11 +60,11 @@ describe('elevator clock — arrival renders motion, not an instant snap (ELAN-0
   })
 
   it('slides vertically over arrivalAnimMs rather than snapping to baseY', () => {
-    const arriving = applyMoved(initialCarClock('lobby'), 'floor1')
+    const opened = arrive('lobby', 'floor1')
     const baseY = 460
-    const start = carY(arriving, cfg, baseY)
+    const start = carY(opened, cfg, baseY)
     expect(start).toBeLessThan(baseY)
-    const halfway = advanceCarClock(arriving, cfg.arrivalAnimMs / 2, cfg)
+    const halfway = advanceCarClock(opened, cfg.arrivalAnimMs / 2, cfg)
     const mid = carY(halfway, cfg, baseY)
     expect(mid).toBeGreaterThan(start)
     expect(mid).toBeLessThan(baseY)
@@ -130,26 +72,97 @@ describe('elevator clock — arrival renders motion, not an instant snap (ELAN-0
     expect(carY(done, cfg, baseY)).toBe(baseY)
   })
 
-  it('derives arrival timings from TUNING.ELEVATOR_ARRIVE_SECONDS', () => {
-    expect(cfg.doorAnimMs).toBe(300)
-    expect(cfg.arrivalAnimMs).toBe(300)
+  it('keeps doors fully open indefinitely while no call arrives (AD-027)', () => {
+    const open = advanceCarClock(
+      applyDoors(initialCarClock('floor1'), 'floor1', true),
+      cfg.doorAnimMs,
+      cfg,
+    )
+    expect(open.phase).toBe('open')
+    // Far beyond any dwell window: no close event = no close. The doors
+    // stay open while the car has no call to attend.
+    const muchLater = advanceCarClock(open, 60_000, cfg)
+    expect(muchLater.phase).toBe('open')
+    expect(doorsOpenAmount(muchLater, cfg)).toBe(1)
+  })
+
+  it('closes only on a real doors-close event, into a departure (hidden)', () => {
+    const open = advanceCarClock(
+      applyDoors(initialCarClock('floor1'), 'floor1', true),
+      cfg.doorAnimMs,
+      cfg,
+    )
+    const closing = applyDoors(open, 'floor1', false)
+    expect(closing.phase).toBe('closing')
+    const closingMidway = advanceCarClock(closing, cfg.doorAnimMs / 2, cfg)
+    expect(doorsOpenAmount(closingMidway, cfg)).toBeLessThan(1)
+    expect(doorsOpenAmount(closingMidway, cfg)).toBeGreaterThan(0)
+    expect(carVisible(closingMidway)).toBe(true)
+    const transit = advanceCarClock(closingMidway, cfg.doorAnimMs, cfg)
+    expect(doorsOpenAmount(transit, cfg)).toBe(0)
+    expect(carVisible(transit)).toBe(false)
+  })
+
+  it('a doors-open event resolves a mid-ride transit immediately (ground truth)', () => {
+    const open = advanceCarClock(
+      applyDoors(initialCarClock('lobby'), 'lobby', true),
+      cfg.doorAnimMs,
+      cfg,
+    )
+    const transit = advanceCarClock(applyDoors(open, 'lobby', false), cfg.doorAnimMs, cfg)
+    expect(transit.phase).toBe('transit')
+    // The ride: position updates arrive first (the sweep readout), then the
+    // doors-open event at the destination — no fixed minimum transit wait.
+    const swept = applyMoved(transit, 'floor1')
+    expect(swept.floor).toBe('floor1')
+    expect(swept.phase).toBe('transit')
+    const resolved = applyDoors(swept, 'floor1', true)
+    expect(resolved.phase).toBe('opening')
+    expect(resolved.fromFloor).toBe('lobby')
+    expect(doorsOpenAmount(advanceCarClock(resolved, cfg.doorAnimMs, cfg), cfg)).toBe(1)
+  })
+
+  it('a stale close for a car already hidden is a no-op', () => {
+    const open = advanceCarClock(
+      applyDoors(initialCarClock('lobby'), 'lobby', true),
+      cfg.doorAnimMs,
+      cfg,
+    )
+    const transit = advanceCarClock(applyDoors(open, 'lobby', false), cfg.doorAnimMs, cfg)
+    const stale = applyDoors(transit, 'lobby', false)
+    expect(stale).toBe(transit)
+  })
+
+  it('applies position updates from elevator:moved without touching the door phase', () => {
+    const open = advanceCarClock(
+      applyDoors(initialCarClock('floor1'), 'floor1', true),
+      cfg.doorAnimMs,
+      cfg,
+    )
+    const same = applyMoved(open, 'floor1')
+    expect(same).toBe(open)
+    const movedFloor = applyMoved(open, 'floor2')
+    expect(movedFloor.phase).toBe('open')
+    expect(movedFloor.floor).toBe('floor2')
+  })
+
+  it('a public call never touches the door phases (the door events drive the rest)', () => {
+    const open = advanceCarClock(
+      applyDoors(initialCarClock('floor1'), 'floor1', true),
+      cfg.doorAnimMs,
+      cfg,
+    )
+    expect(applyCalled(open, 'floor1')).toBe(open)
+    expect(applyCalled(open, 'floor2')).toBe(open)
+    const closed = initialCarClock('floor1')
+    expect(applyCalled(closed, 'floor2')).toBe(closed)
   })
 })
 
-describe('elevator clock — decoy re-call does not restart the door animation (edge case)', () => {
-  it('is a no-op when called for the floor it is already parked open at', () => {
-    const open = initialCarClock('floor1')
-    const advancedOpen = advanceCarClock(open, 200, cfg)
-    const recalled = applyCalled(advancedOpen, 'floor1')
-    expect(recalled).toEqual(advancedOpen)
-  })
-
-  it('is a no-op when already mid-transit (call for yet another floor)', () => {
-    const open = initialCarClock('floor1')
-    const closing = applyCalled(open, 'floor2')
-    const transit = advanceCarClock(closing, cfg.doorAnimMs, cfg)
-    const recalled = applyCalled(transit, 'floor3')
-    expect(recalled).toBe(transit)
+describe('elevator clock — timing provenance', () => {
+  it('derives the door swing from TUNING.ELEVATOR_DOOR_SECONDS (AD-026) and the fade from ARRIVE_SECONDS', () => {
+    expect(cfg.doorAnimMs).toBe(500)
+    expect(cfg.arrivalAnimMs).toBe(300)
   })
 })
 
@@ -201,11 +214,7 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
       [1 as const, { view: car1 }],
       [2 as const, { view: car2 }],
     ])
-    const presenter = new ElevatorPresenter(
-      cars,
-      () => 0,
-      () => 460,
-    )
+    const presenter = new ElevatorPresenter(cars, () => 460)
 
     presenter.tick(0, 'lobby')
     expect(car1.visible).toBe(true)
@@ -214,37 +223,31 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
     expect(car1.visible).toBe(false)
   })
 
-  it('renders the doors-open cage frame while open and the closed slab frame once closed (ELAN-01/02, ART-15)', () => {
+  it('renders the doors-open cage frame while open and the closed slab once closed (ELAN-01/02, ART-15)', () => {
     const car1 = fakeCarView()
     const cars = new Map([[1 as const, { view: car1 }]])
-    const presenter = new ElevatorPresenter(
-      cars,
-      () => 100,
-      () => 460,
-    )
+    const presenter = new ElevatorPresenter(cars, () => 460)
 
     // Fully open (arrival swing done): the doors-open cage frame (ART-15).
     presenter.onMoved(1, 'floor1')
+    presenter.onDoors(1, 'floor1', true)
     presenter.tick(cfg.doorAnimMs, 'floor1')
     expect(car1.frames.at(-1)).toBe(0)
 
-    // Closed (public call dispatched the car elsewhere): the closed slab.
-    presenter.onCalled(1, 'floor2')
+    // Closed (the car departed): the closed slab — then hidden in transit.
+    presenter.onDoors(1, 'floor1', false)
     presenter.tick(cfg.doorAnimMs, 'floor1')
     expect(car1.frames.at(-1)).toBe(1)
   })
 
-  it('does not render arrival/transit for elevator:moved on a different floor (ELAN-07)', () => {
+  it('does not render a car parked on a floor the viewer is not on (ELAN-04)', () => {
     const car1 = fakeCarView()
     const cars = new Map([[1 as const, { view: car1 }]])
-    const presenter = new ElevatorPresenter(
-      cars,
-      () => 100,
-      () => 460,
-    )
+    const presenter = new ElevatorPresenter(cars, () => 460)
 
     // Viewer is on floor1; car arrives on floor2.
     presenter.onMoved(1, 'floor2')
+    presenter.onDoors(1, 'floor2', true)
     presenter.tick(cfg.doorAnimMs, 'floor1')
     expect(car1.visible).toBe(false)
   })
@@ -254,16 +257,14 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
       [1 as const, { view: fakeCarView() }],
       [2 as const, { view: fakeCarView() }],
     ])
-    const presenter = new ElevatorPresenter(
-      cars,
-      () => 0,
-      () => 460,
-    )
+    const presenter = new ElevatorPresenter(cars, () => 460)
     expect(() => {
       presenter.onCalled(1, 'floor1')
       presenter.tick(16, 'lobby')
       presenter.onMoved(1, 'floor1')
+      presenter.onDoors(1, 'floor1', true)
       presenter.tick(16, 'floor1')
+      presenter.onDoors(1, 'floor1', false)
       presenter.reset()
     }).not.toThrow()
   })

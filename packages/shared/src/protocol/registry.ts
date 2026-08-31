@@ -1,6 +1,7 @@
 import type {
   CarId,
   ElevatorCalled,
+  ElevatorDoors,
   ElevatorMoved,
   ElevatorPressed,
   ElevatorRiders,
@@ -99,6 +100,9 @@ export interface Payloads {
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
   'elevator:moved': ElevatorMoved
+  /** server → all players. Public door state: the doors began opening (open) or
+   *  began closing to attend a call (AD-026/027). */
+  'elevator:doors': ElevatorDoors
   /** server → the car's riders ONLY. A rider pressed a floor in-car (AD-013). */
   'elevator:pressed': ElevatorPressed
   /** server → the car's riders ONLY. The car's occupants + press queue (AD-013). */
@@ -234,6 +238,13 @@ export const PROTOCOL_REGISTRY = {
     fromSim: ((event) => ({
       payload: { car: event.car, floor: event.floor },
     })) as SimProjection<'elevator:moved'>,
+  },
+  'elevator:doors': {
+    payload: {} as ElevatorDoors,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { car: event.car, floor: event.floor, open: event.open },
+    })) as SimProjection<'elevator:doors'>,
   },
   'elevator:pressed': {
     payload: {} as ElevatorPressed,

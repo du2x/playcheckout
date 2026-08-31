@@ -14,13 +14,7 @@
         "frames": 1,
         "filtering": "nearest"
       },
-      "visual_locks": [
-        "palette",
-        "silhouette",
-        "proportions",
-        "facing",
-        "light-direction"
-      ],
+      "visual_locks": ["palette", "silhouette", "proportions", "facing", "light-direction"],
       "source": {
         "kind": "generated-or-authored",
         "url_or_tool": "",

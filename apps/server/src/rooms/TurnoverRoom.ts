@@ -138,22 +138,7 @@ export class TurnoverRoom extends Room {
       const carBefore = this.movement.viewOf(client.sessionId).car
       this.movement.startMove(client.sessionId, intent.dir)
       if (carBefore !== null && this.movement.viewOf(client.sessionId).car === null) {
-        // Door-open exit = floor change (protocol rule: personal snapshots on
-        // visibility change). The exiter's picture of the arrival floor is
-        // stale — standing occupants emit no stream, so without this refresh
-        // they stay invisible until they move. Same-floor occupants learn the
-        // arrival from the exiter's own resumed player:moved stream.
-        // EVID-04: the arrival floor's carded rooms ride along — cards are
-        // floor-public (FR-11) and the round sim owns them (empty pre-round;
-        // cards die with the sim at the buzzer, evidence is round-scoped).
-        const arrivalFloor = this.movement.viewOf(client.sessionId).floor
-        const cards =
-          arrivalFloor !== null && arrivalFloor !== 'lobby'
-            ? (this.sim?.cardedOn(arrivalFloor) ?? [])
-            : []
-        this.router.toSelf('movement:snapshot', client.sessionId, {
-          ...this.movement.snapshotFor(client.sessionId, cards),
-        })
+        this.sendExitSnapshot(client.sessionId)
       }
     })
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {
@@ -473,9 +458,20 @@ export class TurnoverRoom extends Room {
   /** One fixed 0.05 s step; the production interval and the test hook share this path. */
   private advance() {
     // Movement runs in BOTH phases (AD-005); the round sim only in round.
+    // AD-026: riders before the tick — a PENDING exit (a direction held
+    // through the opening swing) applies inside the sim, so the rider→floor
+    // transition is detected here and the exit snapshot still goes out.
+    const ridersBefore: string[] = []
+    for (const sessionId of this.players.keys()) {
+      if (this.movement.viewOf(sessionId).car !== null) ridersBefore.push(sessionId)
+    }
     for (const event of this.movement.tick()) {
       this.router.route(event)
       this.journalMovement(event)
+    }
+    for (const sessionId of ridersBefore) {
+      if (!this.players.has(sessionId)) continue
+      if (this.movement.viewOf(sessionId).car === null) this.sendExitSnapshot(sessionId)
     }
     const sim = this.sim
     if (sim === null || this.phase !== 'round') return
@@ -583,11 +579,42 @@ export class TurnoverRoom extends Room {
     return this.phase
   }
 
+  /** Test hook: public movement state (positions + car floors) for tests. */
+  __movementDebug(): unknown {
+    return {
+      positions: this.movement.allPositions(),
+      cars: this.movement.carFloors(),
+    }
+  }
+
   /**
    * Justice live-ness guard (cycle 2.8): a fired session cannot act — every
    * intent handler rejects with a coarse justice error. One message, no
    * validity or role information (FR-18).
    */
+  /**
+   * Door-open exit = floor change (protocol rule: personal snapshots on
+   * visibility change). The exiter's picture of the arrival floor is stale —
+   * standing occupants emit no stream, so without this refresh they stay
+   * invisible until they move. Same-floor occupants learn the arrival from
+   * the exiter's own resumed player:moved stream. EVID-04: the arrival
+   * floor's carded rooms ride along — cards are floor-public (FR-11) and the
+   * round sim owns them (empty pre-round; cards die with the sim at the
+   * buzzer, evidence is round-scoped). AD-026: also fired by the tick for a
+   * PENDING exit (a direction held through the opening swing) — the sim
+   * applies that hop-off itself, one intent-less tick later.
+   */
+  private sendExitSnapshot(sessionId: string): void {
+    const arrivalFloor = this.movement.viewOf(sessionId).floor
+    const cards =
+      arrivalFloor !== null && arrivalFloor !== 'lobby'
+        ? (this.sim?.cardedOn(arrivalFloor) ?? [])
+        : []
+    this.router.toSelf('movement:snapshot', sessionId, {
+      ...this.movement.snapshotFor(sessionId, cards),
+    })
+  }
+
   private ensureLive(sessionId: string): boolean {
     if (!this.fired.has(sessionId)) return true
     this.router.toSelf('error', sessionId, {

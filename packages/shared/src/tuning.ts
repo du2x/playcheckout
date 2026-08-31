@@ -20,8 +20,15 @@ export const TUNING = {
   RUSTLE_RANGE_TILES: 3,
   ELEVATOR_ARRIVE_SECONDS: 3,
   ELEVATOR_RIDE_SECONDS_PER_FLOOR: 2,
-  /** Open-door dwell at every stop (cycle 2.6, AD-014 — new constant, not in prd §7). */
-  ELEVATOR_DWELL_SECONDS: 1,
+  /** Open-door dwell at every stop (cycle 2.6, AD-014 — new constant, not in prd §7).
+   *  AD-027: raised to 3 s — the MINIMUM time the doors stay open; they stay
+   *  open beyond it until the car has a call to attend. */
+  ELEVATOR_DWELL_SECONDS: 3,
+  /** Door swing duration, BOTH directions — the opening and closing stages at
+   *  every stop (AD-026 — new constant, not in prd §7). Hop-in/hop-off is
+   *  impossible while the doors swing; riders may hop only through fully
+   *  open doors (the 1 s dwell). */
+  ELEVATOR_DOOR_SECONDS: 0.5,
   ELEVATOR_CAPACITY: 2,
   PLAYER_SPEED_TILES_PER_SEC: 6,
   /** Boarding range around a car's landing x (cycle 2.4, AD-007 — new constant, not in prd §7). */
