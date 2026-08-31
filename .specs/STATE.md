@@ -851,6 +851,25 @@
 - **Date**: 2026-08-31
 - **Status**: active.
 
+### AD-031
+- **Decision**: New §7-external constant `TUNING.DESK_RANGE_TILES = 1` — the
+  E receive/release zone at the front desk: a player on the lobby floor within
+  1 tile of `DESK_X_TILES` may receive the front queued guest (cycle 3.2) and
+  releases the held guest by pressing E again or leaving the zone. Inside the
+  zone the contextual E suppresses the accuse hold entirely.
+- **Reason**: prd §6.9/FR-27 lock the desk interaction but no receive range;
+  the spec's assumptions table leaves the zone to the design (AD-029-slot
+  placeholder in the spec text — the number was taken by the Deco Noir merge,
+  renumbered here per that precedent). 1 tile matches the landing-zone scale
+  (`ELEVATOR_LANDING_TILES`) and keeps the zone a deliberate standing spot.
+- **Trade-off**: One more §7-external tuning constant (recorded per the tuning
+  rule); playtests may widen it via a new AD, never an incidental edit.
+- **Scope**: `packages/shared/src/tuning.ts`, `packages/sim/src/guests.ts`,
+  `packages/sim/src/roundSim.ts`, `apps/client/src/scenes/WorldScene.ts`,
+  cycle 3.2.
+- **Date**: 2026-08-31
+- **Status**: active.
+
 ## Handoff
 
 - **Feature**: `guest-flow` (cycle 3.1) — guest lifecycle as weather:

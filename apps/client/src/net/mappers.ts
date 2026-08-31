@@ -26,6 +26,8 @@ export const MAPPERS: {
   'guest:settled': (p) => [{ type: 'guest-settled', ...p }],
   'guest:checked_out': (p) => [{ type: 'guest-checked-out', ...p }],
   'guest:left': (p) => [{ type: 'guest-left', ...p }],
+  'guest:routed': (p) => [{ type: 'guest-routed', ...p }],
+  'walkie:broadcast': (p) => [{ type: 'walkie-broadcast', ...p }],
   'elevator:called': (p) => [{ type: 'elevator-called', ...p }],
   'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
   'elevator:doors': (p) => [{ type: 'elevator-doors', ...p }],

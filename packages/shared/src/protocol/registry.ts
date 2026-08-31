@@ -11,6 +11,7 @@ import type {
   GuestImpatient,
   GuestLeft,
   GuestMoved,
+  GuestRouted,
   GuestSelfAssigned,
   GuestSettled,
   IntentError,
@@ -35,6 +36,7 @@ import type {
   RoundResumed,
   RoundStarted,
   SpectatorSnapshot,
+  WalkieBroadcast,
   WorkEnded,
   WorkStarted,
 } from './messages.js'
@@ -117,6 +119,12 @@ export interface Payloads {
   'guest:checked_out': GuestCheckedOut
   /** server → all players (cycle 3.1). The guest walked out of the hotel. */
   'guest:left': GuestLeft
+  /** server → all players (cycle 3.2). A held guest was routed — sender named,
+   *  destination NEVER on the wire (FR-27: the walk is the ground truth). */
+  'guest:routed': GuestRouted
+  /** server → all players (cycle 3.2). The walkie claim: the ANNOUNCED room,
+   *  building-wide — the broadcaster's statement, not server truth (FR-27). */
+  'walkie:broadcast': WalkieBroadcast
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -302,6 +310,24 @@ export const PROTOCOL_REGISTRY = {
     fromSim: ((event) => ({
       payload: { guestId: event.guestId },
     })) as SimProjection<'guest:left'>,
+  },
+  // --- Front desk (cycle 3.2, FR-27): departure + claim are 'all'-policy.
+  // guest:routed deliberately names the sender and nothing about where the
+  // guest goes; walkie:broadcast is the announced claim. The pair makes the
+  // lie structurally possible and structurally invisible on the wire.
+  'guest:routed': {
+    payload: {} as GuestRouted,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, playerId: event.playerId },
+    })) as SimProjection<'guest:routed'>,
+  },
+  'walkie:broadcast': {
+    payload: {} as WalkieBroadcast,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { playerId: event.playerId, floor: event.floor, room: event.room },
+    })) as SimProjection<'walkie:broadcast'>,
   },
   'elevator:called': {
     payload: {} as ElevatorCalled,

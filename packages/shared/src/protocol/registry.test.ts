@@ -107,6 +107,8 @@ describe('protocol registry', () => {
     'guest:settled': 'all',
     'guest:checked_out': 'all',
     'guest:left': 'all',
+    'guest:routed': 'all',
+    'walkie:broadcast': 'all',
     'elevator:called': 'all',
     'elevator:moved': 'all',
     'elevator:doors': 'all',

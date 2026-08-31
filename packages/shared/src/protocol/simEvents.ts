@@ -1,6 +1,6 @@
 import type { Role } from '../roles.js'
 import type { RoomState } from '../roomState.js'
-import type { CarId, Facing, FloorId, RoomIndex } from './messages.js'
+import type { CarId, Facing, FloorId, GuestFloorId, RoomIndex } from './messages.js'
 
 /**
  * Sim events are past-tense domain facts. The room routes each event per the
@@ -97,6 +97,19 @@ export type SimEvent =
       readonly room: RoomIndex
     }
   | { readonly type: 'guest:left'; readonly guestId: string }
+
+  // --- Front desk (cycle 3.2, FR-27): the departure announcement and the
+  // walkie claim. guest:routed names the sender only — the DESTINATION never
+  // rides the wire (leak rule: the lie must be client-invisible); the walk
+  // (guest:moved/guest:settled, already public) is the ground truth.
+  // walkie:broadcast carries the ANNOUNCED room — the broadcaster's claim.
+  | { readonly type: 'guest:routed'; readonly guestId: string; readonly playerId: string }
+  | {
+      readonly type: 'walkie:broadcast'
+      readonly playerId: string
+      readonly floor: GuestFloorId
+      readonly room: RoomIndex
+    }
 
 /**
  * Why a player was fired — server-internal only, never projected to the wire.

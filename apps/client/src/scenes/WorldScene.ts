@@ -436,6 +436,12 @@ export class WorldScene extends Phaser.Scene {
         this.impatientGuests.delete(action.guestId)
         break
       }
+      // Front desk (cycle 3.2): the desk slice consumes guest-routed (own
+      // receive → send menu, T6) and walkie-broadcast (log line, T7); the
+      // cases land with those slices — compile needs them exhaustive now.
+      case 'guest-routed':
+      case 'walkie-broadcast':
+        break
       case 'player-moved': {
         let display = this.players.get(action.playerId)
         if (display === undefined) {

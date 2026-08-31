@@ -53,5 +53,7 @@ describe('tuning table', () => {
   it('pins the AD-028 desk/queue geometry (not in §7 — recorded decisions)', () => {
     expect(TUNING.DESK_X_TILES).toBe(15)
     expect(TUNING.GUEST_QUEUE_SPACING_TILES).toBe(1)
+    // AD-031: the desk E receive/release zone (cycle 3.2).
+    expect(TUNING.DESK_RANGE_TILES).toBe(1)
   })
 })

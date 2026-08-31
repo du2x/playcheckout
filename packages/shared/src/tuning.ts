@@ -52,4 +52,8 @@ export const TUNING = {
   DESK_X_TILES: 15,
   /** Gap between consecutive queue slots (AD-028 — new constant, not in prd §7). */
   GUEST_QUEUE_SPACING_TILES: 1,
+  /** E receive/release zone at the front desk (cycle 3.2, AD-031 — new
+   *  constant, not in prd §7): lobby-floor tiles from DESK_X_TILES within
+   *  which E receives/releases a guest; the accuse hold is suppressed here. */
+  DESK_RANGE_TILES: 1,
 } as const

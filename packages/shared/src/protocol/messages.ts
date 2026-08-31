@@ -180,6 +180,29 @@ export interface GuestLeft {
   readonly guestId: string
 }
 
+/**
+ * server → all players (cycle 3.2, FR-27). A held guest was routed by the
+ * named sender — the departure announcement. It NEVER names the destination:
+ * the walk is the only server truth, and the walkie claim is the sender's
+ * statement (the lie must be client-invisible until eyes-on).
+ */
+export interface GuestRouted {
+  readonly guestId: string
+  readonly playerId: string
+}
+
+/**
+ * server → all players (cycle 3.2, FR-27). The mandatory walkie broadcast,
+ * building-wide: the ANNOUNCED room — the broadcaster's claim, not server
+ * truth. Deliberately independent of the guest's actual walk; the client
+ * renders the prd-locked text «Name»: guest going to F:R from the roster.
+ */
+export interface WalkieBroadcast {
+  readonly playerId: string
+  readonly floor: GuestFloorId
+  readonly room: RoomIndex
+}
+
 /** server → all players. A player disconnected; remove their rectangle. */
 export interface PlayerLeft {
   readonly playerId: string
