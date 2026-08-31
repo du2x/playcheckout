@@ -14,6 +14,7 @@ export {
   RIDE_TICKS_PER_FLOOR,
   SPEED_MILLI_PER_TICK,
 } from './movement.js'
+export { Rng } from './rng.js'
 export { RoundSim, type RoundSimConfig } from './roundSim.js'
 export { TICK_HZ } from './tick.js'
 export {
