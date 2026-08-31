@@ -207,7 +207,7 @@ export interface CarViewLike {
 /**
  * Owns car/motion visuals for the building's two elevator cars. Consumes
  * only plain facts (car id, floor, elapsed time via `tick`) — never a
- * `MovementAction`, never a protocol/registry type (spec ELAN-09/10).
+ * `ViewAction`, never a protocol/registry type (spec ELAN-09/10).
  * ART-15 (cycle 2.10): the sprite's own artwork carries the doors — the
  * presenter drives the open/closed FRAME from the same clock that drove the
  * gray-box door rectangles; no separate door objects exist.

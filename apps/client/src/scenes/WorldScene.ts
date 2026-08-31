@@ -22,6 +22,7 @@ import {
   reduceEvidence,
 } from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
+import type { SceneAction } from '../state'
 import {
   floorLabel,
   setCarScreenFloor,
@@ -85,40 +86,6 @@ export interface WorldStartData {
   riderSession: RiderUpdate
 }
 
-type MovementAction =
-  | { type: 'player-moved'; playerId: string; floor: string; x: number; facing: string }
-  | { type: 'elevator-called'; floor: string; car: 1 | 2 }
-  | { type: 'elevator-moved'; car: 1 | 2; floor: string }
-  | { type: 'player-left'; playerId: string }
-  | { type: 'player-left-floor'; playerId: string; floor: string }
-  | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
-  // Work channels (cycle 2.5): the actor's own channel view + the interior of
-  // the room they stand in. No payload names a role or a channel kind (FR-9).
-  | { type: 'work-started'; playerId: string; floor: string; room: number; seconds: number }
-  | {
-      type: 'work-ended'
-      playerId: string
-      floor: string
-      room: number
-      outcome: 'completed' | 'cancelled'
-    }
-  | { type: 'room-observed'; playerId: string; floor: string; room: number; state: RoomState }
-  | { type: 'room-prepped'; floor: string; room: number }
-  | { type: 'room-trashed'; floor: string; room: number }
-  // Evidence (cycle 2.7): hallway-visible cues; rendering lands with the
-  // evidence slice — the scene stores them no-op for now.
-  | { type: 'room-carded'; floor: string; room: number }
-  | { type: 'room-settled'; floor: string; room: number }
-  | { type: 'room-rustle'; floor: string; room: number }
-  | { type: 'room-entered'; playerId: string; floor: string; room: number }
-  // Justice (cycle 2.8): name-only firing — the fired player's rectangle is
-  // removed; the toast/banner live in the App's accuse HUD.
-  | { type: 'player-fired'; playerId: string }
-  // Round end (cycle 2.9): the fired player's full-world baseline (FR-20) —
-  // all-floor positions, car floors, room states, all carded rooms. Consumed
-  // by the spectator overview; live players never receive it.
-  | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
-
 interface PlayerDisplay {
   sprite: Phaser.GameObjects.Sprite
   label: Phaser.GameObjects.Text
@@ -170,9 +137,6 @@ export class WorldScene extends Phaser.Scene {
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
-   *  until it arrives. Derived purely from public events — a decoy call
-   *  naming a car already parked at that floor never lights (nothing to
-   *  wait for). */
   /** The App-owned accusation session (accuseSession.ts): the self-fired flag
    * gates every live-play intent — a fired player watches quietly (JUST-04). */
   private selfFired = false
@@ -415,8 +379,13 @@ export class WorldScene extends Phaser.Scene {
     this.updatePanel()
   }
 
-  /** Movement-kind ViewActions are routed here by the App (render state). */
-  applyAction(action: MovementAction): void {
+  /**
+   * Scene-kind ViewActions routed here by the App (render state). The
+   * parameter is `SceneAction` — derived from ACTION_ROUTES, so a new
+   * registry message routed 'scene' must be handled here or compilation
+   * fails (the drift guard the hand-mirrored union used to evade).
+   */
+  applyAction(action: SceneAction): void {
     switch (action.type) {
       case 'player-moved': {
         let display = this.players.get(action.playerId)
@@ -434,7 +403,7 @@ export class WorldScene extends Phaser.Scene {
         display.floor = action.floor
         display.x = action.x
         display.left = false
-        display.facing = action.facing === 'left' ? 'left' : 'right'
+        display.facing = action.facing
         if (action.playerId === this.ownId) {
           display.targetX = null
           this.viewFloor = action.floor
@@ -446,7 +415,7 @@ export class WorldScene extends Phaser.Scene {
       case 'elevator-moved': {
         const car = this.cars.get(action.car)
         if (car !== undefined) car.floor = action.floor
-        this.elevatorPresenter?.onMoved(action.car, action.floor as FloorId)
+        this.elevatorPresenter?.onMoved(action.car, action.floor)
         this.updatePanel()
         break
       }
@@ -454,7 +423,7 @@ export class WorldScene extends Phaser.Scene {
         // already standing at the called floor (the AD-019/023 decoy summons
         // nothing) — it turns off on that car's next arrival.
         const car = this.cars.get(action.car)
-        this.elevatorPresenter?.onCalled(action.car, action.floor as FloorId)
+        this.elevatorPresenter?.onCalled(action.car, action.floor)
         this.updatePanel()
         // ART-17: the flash moves to the landing panel sprites — every call
         // looks registered (AD-012), the data-only semantics are unchanged.
@@ -525,7 +494,7 @@ export class WorldScene extends Phaser.Scene {
       case 'room-carded':
         this.evidence = reduceEvidence(
           this.evidence,
-          { type: 'carded', floor: action.floor, room: action.room as RoomIndex },
+          { type: 'carded', floor: action.floor, room: action.room },
           Date.now(),
         )
         this.syncCardMarkers()
@@ -537,7 +506,7 @@ export class WorldScene extends Phaser.Scene {
             type: 'entered',
             playerId: action.playerId,
             floor: action.floor,
-            room: action.room as RoomIndex,
+            room: action.room,
           },
           Date.now(),
         )
@@ -546,11 +515,11 @@ export class WorldScene extends Phaser.Scene {
       case 'room-rustle':
         this.evidence = reduceEvidence(
           this.evidence,
-          { type: 'rustle', floor: action.floor, room: action.room as RoomIndex },
+          { type: 'rustle', floor: action.floor, room: action.room },
           Date.now(),
         )
         this.beep(180)
-        this.playRustleFx(action.floor, action.room as RoomIndex)
+        this.playRustleFx(action.floor, action.room)
         break
       case 'player-fired':
         // JUST-04: the fired player's rectangle disappears everywhere — the
@@ -563,6 +532,12 @@ export class WorldScene extends Phaser.Scene {
         // the server routes it 'self' to the fired session).
         this.spectatorSnapshot = action.snapshot
         if (this.spectator) this.seedFromSpectatorSnapshot()
+        break
+      }
+      default: {
+        // Exhaustiveness: SceneAction covers every 'scene'-routed member of
+        // ACTION_ROUTES; an unhandled one must fail the build, not slip.
+        const _exhaustive: never = action
         break
       }
     }
