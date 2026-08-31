@@ -94,23 +94,6 @@ export const deskInteractIntentSchema = z
 export type DeskInteractIntent = z.infer<typeof deskInteractIntentSchema>
 
 /**
- * Complete the send flow (cycle 3.2, FR-27): TWO independent choices in one
- * intent — the destination room (server truth, never broadcast) and the
- * announced room (the walkie claim, building-wide). Nothing validates that
- * they match: the lie is a legal input.
- */
-export const deskSendIntentSchema = z
-  .object({
-    type: z.literal('desk:send'),
-    destinationFloor: GUEST_FLOOR_ENUM,
-    destinationRoom: z.number().int().min(1).max(8),
-    announceFloor: GUEST_FLOOR_ENUM,
-    announceRoom: z.number().int().min(1).max(8),
-  })
-  .strict()
-export type DeskSendIntent = z.infer<typeof deskSendIntentSchema>
-
-/**
  * Place the sender's carried suitcase at a room door (cycle 3.B, AD-032).
  * The floor is derived server-side from the carrier's position; the server
  * validates the carrier is within ROOM_DOOR_RANGE_TILES of the named room's

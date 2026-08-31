@@ -75,11 +75,6 @@ export type ViewAction =
   | { type: 'guest-settled'; guestId: string; floor: FloorId; room: number }
   | { type: 'guest-checked-out'; guestId: string; floor: FloorId; room: number }
   | { type: 'guest-left'; guestId: string }
-  // Front desk (cycle 3.2): the routed departure (own playerId opens the send
-  // menu) and the walkie claim line — scene/DOM state; no destination exists
-  // on either payload (FR-27).
-  | { type: 'guest-routed'; guestId: string; playerId: string }
-  | { type: 'walkie-broadcast'; playerId: string; floor: FloorId; room: RoomIndex }
   // Suitcase transport (cycle 3.B): scene-kind actions. The assignment rides
   // the deskEarshot policy — receiving it IS the local player's own knowledge;
   // no payload here is ever redistributed to another surface pre-settle.
@@ -210,8 +205,6 @@ export const ACTION_ROUTES = {
   'guest-settled': 'scene',
   'guest-checked-out': 'scene',
   'guest-left': 'scene',
-  'guest-routed': 'scene',
-  'walkie-broadcast': 'scene',
   'assignment-overheard': 'scene',
   'suitcase-carried': 'scene',
   'suitcase-placed': 'scene',
@@ -355,8 +348,6 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'guest-settled':
     case 'guest-checked-out':
     case 'guest-left':
-    case 'guest-routed':
-    case 'walkie-broadcast':
     case 'assignment-overheard':
     case 'suitcase-carried':
     case 'suitcase-placed':

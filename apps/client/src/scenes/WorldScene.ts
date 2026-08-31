@@ -2,7 +2,6 @@ import {
   type FloorId,
   type GuestFloorId,
   type MovementSnapshot,
-  ROOM_INDEXES,
   ROOMS_PER_FLOOR,
   type RoomIndex,
   type RoomState,
@@ -81,13 +80,12 @@ export interface WorldStartData {
   sendElevatorCall: () => void
   sendElevatorPress: (floor: FloorId) => void
   sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
-  /** Desk E (cycle 3.2): receive-or-release, derived server-side. */
+  /** Desk E (cycle 3.B): check the front queued guest in — the caller takes
+   *  the suitcase. Derived server-side; rejections are silent. */
   sendDeskInteract: () => void
-  /** Desk send (FR-27): destination and announced claim, two independent choices. */
-  sendDeskSend: (
-    destination: { floor: GuestFloorId; room: RoomIndex },
-    announce: { floor: GuestFloorId; room: RoomIndex },
-  ) => void
+  /** Suitcase intents (cycle 3.B, AD-032): place at a room door / pick up. */
+  sendSuitcasePlace: (room: RoomIndex) => void
+  sendSuitcasePickup: () => void
   /** Hold-E expiry (JUST-16): opens the confirm menu for the nearest candidate. */
   openAccuseMenu: (targetId: string) => void
   /** The App-reduced rider session at mount time (usually null on fresh join). */
@@ -114,28 +112,17 @@ export class WorldScene extends Phaser.Scene {
   private sendElevatorPress: (floor: FloorId) => void = () => {}
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private sendDeskInteract: () => void = () => {}
-  private sendDeskSend: (
-    destination: { floor: GuestFloorId; room: RoomIndex },
-    announce: { floor: GuestFloorId; room: RoomIndex },
-  ) => void = () => {}
+  private sendSuitcasePlace: (room: RoomIndex) => void = () => {}
+  private sendSuitcasePickup: () => void = () => {}
   private openAccuseMenu: (targetId: string) => void = () => {}
   private players = new Map<string, PlayerDisplay>()
   /** Guest NPC positions (cycle 3.1 plumbing) — rendered by the guest slice. */
   private guests = new Map<string, { floor: FloorId; x: number }>()
   /** Guests whose free impatience cue is active (foot-tap + bell, GUEST-13). */
   private impatientGuests = new Set<string>()
-  // --- Front desk (cycle 3.2, DESK-11/13): optimistic gray-box desk state.
-  // The menu has NO authority: reception has no wire event, so the E press
-  // opens it optimistically and the server truth shows up as the guest's
-  // walk/queue; guest:routed (own) closes it on a successful send.
-  private deskMenuOpen = false
-  private deskMenuStep: 'destination' | 'announce' = 'destination'
-  private deskDest: { floor: GuestFloorId; room: RoomIndex } | null = null
+  // --- Front desk (cycle 3.B): the E-zone hint; the two-step send menu is
+  // gone with the walkie-broadcast model (the suitcase replaces it).
   private deskHint: HTMLElement | null = null
-  private deskMenuEl: HTMLElement | null = null
-  private deskMenuTitle: HTMLElement | null = null
-  private deskMenuRooms: HTMLElement | null = null
-  private walkieLog: HTMLElement | null = null
   private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
   /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
@@ -225,7 +212,8 @@ export class WorldScene extends Phaser.Scene {
     this.sendElevatorPress = data.sendElevatorPress
     this.sendWorkStart = data.sendWorkStart
     this.sendDeskInteract = data.sendDeskInteract
-    this.sendDeskSend = data.sendDeskSend
+    this.sendSuitcasePlace = data.sendSuitcasePlace
+    this.sendSuitcasePickup = data.sendSuitcasePickup
     this.openAccuseMenu = data.openAccuseMenu
     this.players.clear()
     this.cars.clear()
@@ -479,20 +467,6 @@ export class WorldScene extends Phaser.Scene {
         this.impatientGuests.delete(action.guestId)
         break
       }
-      // Front desk (cycle 3.2): own guest-routed = the send completed —
-      // the destination stays unknown to this payload (FR-27); the menu
-      // closes and the held slot clears. Other players' routings are just
-      // the public departure announcement.
-      case 'guest-routed':
-        if (action.playerId === this.ownId) this.closeDeskMenu()
-        break
-      case 'walkie-broadcast':
-        // The walkie line (DESK-12, prd-locked text): «Name»: guest going to
-        // F:R — the CLAIM, building-wide; the name resolves from the roster
-        // (ids on the wire, names client-side). The destination does not
-        // exist in this payload.
-        this.appendWalkieLine(action.playerId, action.floor, action.room)
-        break
       case 'player-moved': {
         let display = this.players.get(action.playerId)
         if (display === undefined) {
@@ -809,15 +783,10 @@ export class WorldScene extends Phaser.Scene {
 
   private beginAccuseHold(): void {
     if (this.selfFired || this.accuseHoldTimer !== null) return
-    // Desk zone (cycle 3.2): E is the desk key — tap receives (or releases),
-    // and the accuse hold is suppressed entirely inside the zone.
+    // Desk zone (cycle 3.B): E is the desk key — tap checks the front guest
+    // in (the caller takes the suitcase); the accuse hold is suppressed
+    // entirely inside the zone.
     if (this.ownInDeskZone()) {
-      if (this.deskMenuOpen) {
-        // E-again: release — the guest returns to the queue front.
-        this.closeDeskMenu()
-      } else {
-        this.openDeskMenu()
-      }
       this.sendDeskInteract()
       return
     }
@@ -897,78 +866,11 @@ export class WorldScene extends Phaser.Scene {
     return Math.abs(own.x - TUNING.DESK_X_TILES) <= TUNING.DESK_RANGE_TILES
   }
 
-  private openDeskMenu(): void {
-    this.deskMenuOpen = true
-    this.deskMenuStep = 'destination'
-    this.deskDest = null
-    this.renderDeskMenu()
-  }
-
-  private closeDeskMenu(): void {
-    this.deskMenuOpen = false
-    this.deskDest = null
-    if (this.deskMenuEl !== null) this.deskMenuEl.style.visibility = 'hidden'
-  }
-
-  /** Two-step send menu: destination list → announce list → desk:send. */
-  private renderDeskMenu(): void {
-    if (this.deskMenuEl === null || this.deskMenuTitle === null || this.deskMenuRooms === null) {
-      return
-    }
-    this.deskMenuEl.style.visibility = 'visible'
-    this.deskMenuTitle.textContent =
-      this.deskMenuStep === 'destination'
-        ? 'send the guest to which room?'
-        : 'announce which room on the walkie?'
-    this.deskMenuRooms.replaceChildren()
-    for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
-      for (const room of ROOM_INDEXES) {
-        const button = document.createElement('button')
-        button.className = 'desk-room-choice'
-        button.textContent = `${floor}:${room}`
-        button.addEventListener('click', () => this.pickDeskRoom(floor, room))
-        this.deskMenuRooms.appendChild(button)
-      }
-    }
-  }
-
-  private pickDeskRoom(floor: GuestFloorId, room: RoomIndex): void {
-    if (!this.deskMenuOpen) return
-    if (this.deskMenuStep === 'destination') {
-      this.deskDest = { floor, room }
-      this.deskMenuStep = 'announce'
-      this.renderDeskMenu()
-      return
-    }
-    const dest = this.deskDest
-    if (dest === null) return
-    // One intent, two independent choices (FR-27). The menu closes when the
-    // own guest:routed confirms the send — a silently rejected send (tenanted
-    // destination) keeps it open.
-    this.sendDeskSend(dest, { floor, room })
-  }
-
-  /** Per-frame desk DOM sync: the receive hint and the walk-out menu close. */
+  /** Per-frame desk DOM sync: the check-in hint. */
   private syncDesk(): void {
     if (this.deskHint !== null) {
       const guestQueued = [...this.guests.values()].some((g) => g.floor === 'lobby')
-      this.deskHint.style.visibility =
-        this.ownInDeskZone() && guestQueued && !this.deskMenuOpen ? 'visible' : 'hidden'
-    }
-    // Walking out of the zone releases server-side; the menu follows.
-    if (this.deskMenuOpen && !this.ownInDeskZone()) this.closeDeskMenu()
-  }
-
-  /** The walkie log (DESK-12): one named claim line, building-wide, last 5. */
-  private appendWalkieLine(playerId: string, floor: FloorId, room: RoomIndex): void {
-    if (this.walkieLog === null) return
-    const line = document.createElement('div')
-    line.className = 'walkie-line'
-    const name = this.rosterNames.get(playerId) ?? playerId
-    line.textContent = `«${name}»: guest going to ${floor}:${room}`
-    this.walkieLog.prepend(line)
-    while (this.walkieLog.children.length > 5) {
-      this.walkieLog.lastElementChild?.remove()
+      this.deskHint.style.visibility = this.ownInDeskZone() && guestQueued ? 'visible' : 'hidden'
     }
   }
 
@@ -977,7 +879,7 @@ export class WorldScene extends Phaser.Scene {
     if (gameEl === null) return
     const hint = document.createElement('div')
     hint.id = 'desk-hint'
-    hint.textContent = 'E - receive the guest'
+    hint.textContent = 'E - check the guest in (take the suitcase)'
     hint.style.position = 'absolute'
     hint.style.left = '50%'
     hint.style.transform = 'translateX(-50%)'
@@ -990,46 +892,6 @@ export class WorldScene extends Phaser.Scene {
     hint.style.visibility = 'hidden'
     gameEl.appendChild(hint)
     this.deskHint = hint
-
-    const menu = document.createElement('div')
-    menu.id = 'desk-menu'
-    menu.style.position = 'absolute'
-    menu.style.left = '50%'
-    menu.style.top = '64px'
-    menu.style.transform = 'translateX(-50%)'
-    menu.style.padding = '8px'
-    menu.style.background = '#3a3a52'
-    menu.style.color = '#ffe9a8'
-    menu.style.borderRadius = '4px'
-    menu.style.visibility = 'hidden'
-    const title = document.createElement('div')
-    title.id = 'desk-menu-title'
-    title.style.fontSize = '13px'
-    title.style.marginBottom = '6px'
-    const rooms = document.createElement('div')
-    rooms.id = 'desk-menu-rooms'
-    rooms.style.display = 'grid'
-    rooms.style.gridTemplateColumns = 'repeat(8, auto)'
-    rooms.style.gap = '4px'
-    menu.appendChild(title)
-    menu.appendChild(rooms)
-    gameEl.appendChild(menu)
-    this.deskMenuEl = menu
-    this.deskMenuTitle = title
-    this.deskMenuRooms = rooms
-
-    const log = document.createElement('div')
-    log.id = 'walkie-log'
-    log.style.position = 'absolute'
-    log.style.right = '8px'
-    log.style.top = '12px'
-    log.style.padding = '4px 8px'
-    log.style.fontSize = '13px'
-    log.style.color = '#ffe9a8'
-    log.style.background = 'rgba(20, 28, 34, 0.85)'
-    log.style.borderRadius = '4px'
-    gameEl.appendChild(log)
-    this.walkieLog = log
   }
 
   /** Guest marker sync (called every frame): one Arc per guest on the viewed

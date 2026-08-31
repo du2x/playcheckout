@@ -215,10 +215,8 @@ export class App {
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
         this.connection?.sendWorkStart(floor, room),
       sendDeskInteract: () => this.connection?.sendDeskInteract(),
-      sendDeskSend: (
-        destination: { floor: GuestFloorId; room: RoomIndex },
-        announce: { floor: GuestFloorId; room: RoomIndex },
-      ) => this.connection?.sendDeskSend(destination, announce),
+      sendSuitcasePlace: (room: RoomIndex) => this.connection?.sendSuitcasePlace(room),
+      sendSuitcasePickup: () => this.connection?.sendSuitcasePickup(),
       openAccuseMenu: (targetId: string) => this.openAccuseMenu(targetId),
       riderSession: this.rider,
     })

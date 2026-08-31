@@ -1,11 +1,5 @@
 import type { FloorId, GuestFloorId, LobbySize, RoomIndex, SimEvent } from '@turnover/shared'
-import {
-  GUEST_FLOOR_IDS,
-  ROOM_INDEXES,
-  ROOMS_PER_FLOOR,
-  roomDoorXMilli,
-  TUNING,
-} from '@turnover/shared'
+import { GUEST_FLOOR_IDS, ROOM_INDEXES, roomDoorXMilli, TUNING } from '@turnover/shared'
 import { Rng } from './rng.js'
 import { TICK_HZ } from './tick.js'
 
@@ -34,26 +28,44 @@ export interface MovementPort {
   pressFloor(id: string, floor: FloorId): 'accepted' | 'ignored' | 'rejected'
 }
 
-export type GuestPhase = 'queued' | 'impatient' | 'held' | 'toRoom' | 'settling' | 'toExit'
+export type GuestPhase = 'queued' | 'impatient' | 'waiting' | 'toRoom' | 'settling' | 'toExit'
 
 interface Guest {
   id: string
   phase: GuestPhase
   assigned: { floor: GuestFloorId; room: RoomIndex } | null
+  /** The suitcase's last resting room this guest walks toward (cycle 3.B) —
+   *  null for self-assigned guests (they walk straight to `assigned`) and
+   *  while no suitcase rest exists. */
+  target: { floor: GuestFloorId; room: RoomIndex } | null
   /** Absolute tick impatience fires (spawn + GUEST_IMPATIENCE_SECONDS). */
   impatientAt: number
-  /** Ticks left on the frozen impatience clock while held (cycle 3.2) —
-   *  null ⇔ not held. Release restores impatientAt = tick + remaining. */
+  /** Ticks left on the frozen impatience clock while checked in (cycle 3.B) —
+   *  null ⇔ not checked in. Re-queueing restores impatientAt = tick + remaining. */
   impatienceRemaining: number | null
   /** Absolute tick a settling guest checks out (settle + seeded dwell). */
   dwellEndsAt: number | null
-  /** Non-null ⇔ the guest is held at the desk by this player (cycle 3.2). */
-  heldBy: string | null
+}
+
+/**
+ * One suitcase per checked-in guest (cycle 3.B, AD-032): either carried
+ * (`carrier` set, carry leg running) or resting (`rest` set — a room doorway
+ * or the desk). Exactly one of carrier/rest is set.
+ */
+export interface SuitcaseState {
+  carrier: string | null
+  rest: { floor: GuestFloorId; room: RoomIndex } | 'desk' | null
+  /** Absolute tick the current carry leg started (check-in or pickup) — the
+   *  carry clock reads it; null while resting. */
+  legStartTick: number | null
 }
 
 const IMPATIENCE_TICKS = TUNING.GUEST_IMPATIENCE_SECONDS * TICK_HZ
 const DESK_X = TUNING.DESK_X_TILES
 const QUEUE_STEP = TUNING.GUEST_QUEUE_SPACING_TILES
+/** Holding-area stub (cycle 3.B, AD-033): checked-in guests wait east of the
+ *  desk until their suitcase first rests (the 3.C restaurant replaces this). */
+const HOLD_START = TUNING.GUEST_HOLD_START_TILES
 /** Walking is 0.3 tiles/tick; arrival tolerance is one step (gray-box: the
  *  guest settles/hotel-exits at the nearest deterministic point). */
 const ARRIVAL_TOLERANCE_TILES = 0.3
@@ -104,8 +116,15 @@ export class GuestSim {
   private readonly queue: string[] = []
   /** roomKey → guestId (the single tenancy/vacancy source). */
   private readonly tenanted = new Map<string, string>()
-  /** holderId → held guestId (cycle 3.2): a holder holds at most one guest. */
-  private readonly held = new Map<string, string>()
+  /** Room keys reserved by check-in assignments (cycle 3.B): vacancy excludes
+   *  them until settle converts the reservation into tenancy or teardown voids
+   *  the assignment. */
+  private readonly reserved = new Set<string>()
+  /** guestId → suitcase (cycle 3.B): one per checked-in guest. */
+  private readonly suitcases = new Map<string, SuitcaseState>()
+  /** Checked-in guests waiting in the holding area, FIFO by check-in (the
+   *  holding slot index). */
+  private readonly holding: string[] = []
   /** Intent-time events (desk receive/route) flushed on the NEXT tick —
    *  the MOVE-10 announce pattern: tick() is the only event emitter. */
   private pending: SimEvent[] = []
@@ -141,11 +160,15 @@ export class GuestSim {
   }
 
   private vacantRooms(): { floor: GuestFloorId; room: RoomIndex }[] {
-    return this.allRoomKeys().filter((r) => !this.tenanted.has(roomKey(r.floor, r.room)))
+    return this.allRoomKeys().filter(
+      (r) =>
+        !this.tenanted.has(roomKey(r.floor, r.room)) &&
+        !this.reserved.has(roomKey(r.floor, r.room)),
+    )
   }
 
   private hasVacancy(): boolean {
-    return this.tenanted.size < GUEST_FLOOR_IDS.length * ROOMS_PER_FLOOR
+    return this.vacantRooms().length > 0
   }
 
   /**
@@ -167,23 +190,10 @@ export class GuestSim {
       this.spawn(tick, events)
     }
 
-    // Held-guest walk-out check (DESK-03, cycle 3.2): a holder who leaves the
-    // desk zone (or whose slot is gone — fired/ghosted/disconnected) releases
-    // their guest to the queue front. The fire/ghost/leave teardown paths call
-    // releaseAll directly; this tick check covers the walking-out case.
-    for (const [holderId] of this.held) {
-      const pos = this.movement.positionOf(holderId)
-      if (
-        pos === undefined ||
-        pos.floor !== 'lobby' ||
-        Math.abs(pos.x - DESK_X) > TUNING.DESK_RANGE_TILES
-      ) {
-        this.releaseHeld(holderId, tick)
-      }
-    }
-
     // Impatience (GUEST-04): the cue fires once, exactly the impatience
     // interval after spawn. Free — no complaint, no budget effect in 3.1.
+    // v1.4 re-scope: the clock times only the CHECK-IN wait — checked-in
+    // guests are patient (FR-28 v1.4), so the scan covers the queue only.
     for (const id of this.queue) {
       const g = this.guests.get(id)
       if (g === undefined) continue
@@ -202,6 +212,7 @@ export class GuestSim {
       const pick = vacants[this.rng.int(vacants.length - 1)]
       if (pick === undefined) continue
       g.assigned = pick
+      g.target = pick
       g.phase = 'toRoom'
       this.removeFromQueue(id)
       events.push({
@@ -231,8 +242,9 @@ export class GuestSim {
 
     // Movement drivers — one intent per guest per tick.
     for (const g of this.guests.values()) {
-      if (g.phase === 'toRoom' && g.assigned !== null) {
-        this.driveToRoom(g, tick, events)
+      if (g.phase === 'toRoom') {
+        if (this.suitcases.has(g.id)) this.driveToResting(g, tick, events)
+        else this.driveToRoom(g, tick, events)
       } else if (g.phase === 'toExit') {
         this.driveToExit(g, tick, events)
       }
@@ -248,10 +260,10 @@ export class GuestSim {
       id,
       phase: 'queued',
       assigned: null,
+      target: null,
       impatientAt: tick + this.impatienceTicks,
       impatienceRemaining: null,
       dwellEndsAt: null,
-      heldBy: null,
     }
     this.guests.set(id, guest)
     this.queue.push(id)
@@ -280,98 +292,180 @@ export class GuestSim {
     })
   }
 
-  // --- Front desk (cycle 3.2, DESK-01..10) ---------------------------------
+  // --- Suitcase check-in + carry (cycle 3.B, AD-032) ------------------------
 
   /**
-   * E in the desk zone (DESK-01): hand the caller the FRONT queued guest —
-   * the guest leaves the queue WITHOUT re-placing the rest (the queue does
-   * not shift while a guest is held) and their impatience clock freezes.
-   * 'ignored' covers every silent case: caller already holds one, or the
-   * queue is empty (DESK-02).
+   * E in the desk zone (SUI-01): check the FRONT queued guest in — seed the
+   * assignment (uniform random room vacant AND unreserved, guest Rng stream),
+   * reserve it, make the caller the suitcase's carrier (first carry leg), and
+   * move the guest to the holding area (patient — the impatience clock freezes
+   * for the whole check-in). One suitcase per player: a caller already
+   * carrying is ignored silently (SUI-02), as is an empty queue.
    */
-  receiveAtDesk(holderId: string, tick: number): 'accepted' | 'ignored' {
-    if (this.held.has(holderId)) return 'ignored'
+  checkIn(playerId: string, tick: number): 'accepted' | 'ignored' {
+    if (this.isCarrying(playerId)) return 'ignored'
     const id = this.queue[0]
     if (id === undefined) return 'ignored'
     const g = this.guests.get(id)
     if (g === undefined) return 'ignored'
-    this.queue.splice(0, 1)
-    g.phase = 'held'
-    g.heldBy = holderId
+    const vacants = this.vacantRooms()
+    const pick = vacants[this.rng.int(vacants.length - 1)]
+    if (pick === undefined) return 'ignored'
+    this.removeFromQueue(id)
+    g.phase = 'waiting'
+    g.assigned = pick
+    g.target = null
     g.impatienceRemaining = Math.max(0, g.impatientAt - tick)
-    this.held.set(holderId, id)
+    this.reserved.add(roomKey(pick.floor, pick.room))
+    this.suitcases.set(id, { carrier: playerId, rest: null, legStartTick: tick })
+    this.holding.push(id)
+    this.rePlaceHolding()
+    // SUI-03: the assignment overhear — emitted once, at the check-in tick;
+    // the deskEarshot policy (registry) scopes delivery to the receiver +
+    // desk-earshot staff. Never repeated, never logged.
+    this.pending.push(
+      { type: 'assignment:overheard', guestId: id, floor: pick.floor, room: pick.room },
+      { type: 'suitcase:carried', guestId: id, carrierId: playerId },
+    )
     return 'accepted'
   }
 
   /**
-   * Release a holder's guest (DESK-03): back to the queue FRONT, re-placing
-   * every slot, with the impatience clock resumed exactly where it paused.
-   * No-op (silent) when the holder holds nothing.
+   * Place the sender's carried suitcase at a room door (SUI-07): server-side
+   * range validation against the named room's door x on the carrier's floor.
+   * Resting stops the carry leg and emits `suitcase:placed` (sameFloor,
+   * SILENT — no walkie line, SUI-21/22). The guest re-targets the resting
+   * room (SUI-13).
    */
-  releaseHeld(holderId: string, tick: number): void {
-    const id = this.held.get(holderId)
-    if (id === undefined) return
+  placeSuitcase(playerId: string, room: RoomIndex, _tick: number): 'placed' | 'ignored' {
+    const id = this.carriedGuestOf(playerId)
+    if (id === null) return 'ignored'
+    const sc = this.suitcases.get(id)
+    if (sc === undefined) return 'ignored'
+    const pos = this.movement.positionOf(playerId)
+    if (pos === undefined || pos.floor === 'lobby') return 'ignored'
+    const doorX = roomDoorXMilli(room) / 1000
+    if (Math.abs(pos.x - doorX) > TUNING.ROOM_DOOR_RANGE_TILES) return 'ignored'
+    sc.carrier = null
+    sc.rest = { floor: pos.floor as GuestFloorId, room }
+    sc.legStartTick = null
+    this.pending.push({ type: 'suitcase:placed', guestId: id, floor: sc.rest.floor, room })
+    this.retargetOnRest(id)
+    return 'placed'
+  }
+
+  /**
+   * Pick up the nearest resting suitcase on the sender's floor within
+   * ROOM_DOOR_RANGE_TILES (SUI-08) — by anyone, saboteur included; self-regrab
+   * allowed. Ties resolve to the lowest guest ordinal (deterministic). A fresh
+   * carry leg starts (the carry clock restarts, SUI-19). Emits
+   * `suitcase:picked_up` (lifecycle fact — the walkie log renders it).
+   */
+  pickupSuitcase(playerId: string, tick: number): 'picked_up' | 'ignored' {
+    if (this.isCarrying(playerId)) return 'ignored'
+    const pos = this.movement.positionOf(playerId)
+    if (pos === undefined) return 'ignored'
+    let best: { id: string; dist: number; ordinal: number } | null = null
+    for (const [id, sc] of this.suitcases) {
+      if (sc.rest === null) continue
+      const restFloor = sc.rest === 'desk' ? ('lobby' as const) : sc.rest.floor
+      if (restFloor !== pos.floor) continue
+      const restX = sc.rest === 'desk' ? DESK_X : roomDoorXMilli(sc.rest.room) / 1000
+      const dist = Math.abs(pos.x - restX)
+      if (dist > TUNING.ROOM_DOOR_RANGE_TILES) continue
+      const ordinal = Number(id.split(':')[1] ?? 0)
+      if (best === null || dist < best.dist || (dist === best.dist && ordinal < best.ordinal)) {
+        best = { id, dist, ordinal }
+      }
+    }
+    if (best === null) return 'ignored'
+    const sc = this.suitcases.get(best.id)
+    if (sc === undefined) return 'ignored'
+    sc.carrier = playerId
+    sc.rest = null
+    sc.legStartTick = tick
+    this.pending.push({ type: 'suitcase:picked_up', guestId: best.id, carrierId: playerId })
+    return 'picked_up'
+  }
+
+  /**
+   * Carrier-loss teardown (SUI-20, fired/ghosted/disconnect): the guest
+   * re-queues at the FRONT with the impatience clock resumed exactly where it
+   * froze, and the assignment is void — reservation released, re-assigned at
+   * re-check-in.
+   *
+   * SPEC_DEVIATION: the roadmap/proposal shorthand "the suitcase rests at the
+   * desk" is implemented as the desk ABSORBING the suitcase (removed from
+   * play). A rest-at-desk object with a voided assignment has no game
+   * consequence — nothing follows it, and a movable one could dead-end the
+   * desk for its guest — so the re-check-in issues the guest's luggage afresh.
+   * Recorded in the cycle's STATE.md decisions.
+   */
+  dropCarry(playerId: string, tick: number): void {
+    const id = this.carriedGuestOf(playerId)
+    if (id === null) return
+    this.suitcases.delete(id)
     const g = this.guests.get(id)
-    this.held.delete(holderId)
     if (g === undefined) return
+    if (g.assigned !== null) this.reserved.delete(roomKey(g.assigned.floor, g.assigned.room))
+    g.assigned = null
+    g.target = null
     g.phase = 'queued'
-    g.heldBy = null
     g.impatientAt = tick + (g.impatienceRemaining ?? 0)
     g.impatienceRemaining = null
+    const hIdx = this.holding.indexOf(id)
+    if (hIdx !== -1) {
+      this.holding.splice(hIdx, 1)
+      this.rePlaceHolding()
+    }
     this.queue.unshift(id)
     this.rePlaceQueue()
   }
 
-  /** Teardown wrapper (DESK-05): fired/ghosted/disconnected holders release. */
-  releaseAll(holderId: string, tick: number): void {
-    this.releaseHeld(holderId, tick)
+  /** True when this player carries a suitcase (SUI-11 work block + SUI-02). */
+  isCarrying(playerId: string): boolean {
+    return this.carriedGuestOf(playerId) !== null
   }
 
-  /** True when this player currently holds a desk guest (deskInteract's
-   *  receive-vs-release derivation reads it). */
-  holds(holderId: string): boolean {
-    return this.held.has(holderId)
-  }
-
-  /**
-   * Complete the send flow (DESK-06..09): route the holder's guest to the
-   * DESTINATION (server truth — tenancy commits NOW, matching 3.1's
-   * commit-at-choice; the guest walks as a 3.1 elevator citizen) and queue
-   * the departure + walkie claim for the next-tick flush. The ANNOUNCED room
-   * is a free claim — never validated against the destination (DESK-08).
-   * A tenanted destination is rejected silently (DESK-09): the holder keeps
-   * the guest. 'ignored' also covers a non-holder.
-   */
-  routeHeld(
-    holderId: string,
-    destination: { floor: GuestFloorId; room: RoomIndex },
-    announce: { floor: GuestFloorId; room: RoomIndex },
-  ): 'routed' | 'ignored' {
-    const id = this.held.get(holderId)
-    if (id === undefined) return 'ignored'
-    const destKey = roomKey(destination.floor, destination.room)
-    if (this.tenanted.has(destKey)) return 'ignored'
-    const g = this.guests.get(id)
-    if (g === undefined) {
-      this.held.delete(holderId)
-      return 'ignored'
+  private carriedGuestOf(playerId: string): string | null {
+    for (const [id, sc] of this.suitcases) {
+      if (sc.carrier === playerId) return id
     }
-    this.held.delete(holderId)
-    g.phase = 'toRoom'
-    g.assigned = destination
-    g.heldBy = null
-    g.impatienceRemaining = null
-    this.tenanted.set(destKey, id)
-    this.pending.push(
-      { type: 'guest:routed', guestId: id, playerId: holderId },
-      {
-        type: 'walkie:broadcast',
-        playerId: holderId,
-        floor: announce.floor,
-        room: announce.room,
-      },
-    )
-    return 'routed'
+    return null
+  }
+
+  /** Re-place waiting guests into their deterministic holding slots. */
+  private rePlaceHolding(): void {
+    this.holding.forEach((gid, slot) => {
+      const want = HOLD_START + slot * QUEUE_STEP
+      const pos = this.movement.positionOf(gid)
+      if (pos !== undefined && Math.abs(pos.x - want) > ARRIVAL_TOLERANCE_TILES) {
+        this.movement.removeGuest(gid)
+        this.movement.joinGuest(gid, 'lobby', want)
+        this.movement.announceGuest(gid)
+      }
+    })
+  }
+
+  /** A rest event re-targets the suitcase's guest (SUI-13): waiting guests
+   *  leave the holding area; door-waiting guests re-target in place. */
+  private retargetOnRest(id: string): void {
+    const g = this.guests.get(id)
+    const sc = this.suitcases.get(id)
+    if (g === undefined || sc === undefined) return
+    const rest = sc.rest
+    if (rest === null || rest === 'desk') return
+    if (g.phase === 'waiting') {
+      const hIdx = this.holding.indexOf(id)
+      if (hIdx !== -1) {
+        this.holding.splice(hIdx, 1)
+        this.rePlaceHolding()
+      }
+      g.phase = 'toRoom'
+      g.target = rest
+    } else if (g.phase === 'toRoom') {
+      g.target = rest
+    }
   }
 
   /**
@@ -408,20 +502,7 @@ export class GuestSim {
       if (Math.abs(pos.x - doorX) <= ARRIVAL_TOLERANCE_TILES) {
         this.movement.stopMove(g.id)
         this.movement.removeGuest(g.id) // enters the room — leaves hall view
-        g.phase = 'settling'
-        this.tenanted.set(roomKey(target.floor, target.room), g.id)
-        const dwellSeconds = this.rng.uniform(
-          TUNING.GUEST_DWELL_MIN_SECONDS,
-          TUNING.GUEST_DWELL_MAX_SECONDS,
-        )
-        const dwellTicks = Math.max(1, Math.round(dwellSeconds * this.dwellScale * TICK_HZ))
-        g.dwellEndsAt = tick + dwellTicks
-        events.push({
-          type: 'guest:settled',
-          guestId: g.id,
-          floor: target.floor,
-          room: target.room,
-        })
+        this.settleAt(g, target.floor, target.room, tick, events)
         return
       }
       this.movement.startMove(g.id, doorX < pos.x ? 'left' : 'right')
@@ -430,6 +511,93 @@ export class GuestSim {
 
     // On the lobby floor: reach the nearest landing and press (which boards,
     // summons, pins, or flashes — all idempotent).
+    this.driveToLandingAndCall(g, pos)
+  }
+
+  /** Shared settle (tenancy commits at arrival; seeded dwell). Reservation
+   *  cleanup is a no-op for self-assigned guests (never reserved). */
+  private settleAt(
+    g: Guest,
+    floor: GuestFloorId,
+    room: RoomIndex,
+    tick: number,
+    events: SimEvent[],
+  ): void {
+    g.phase = 'settling'
+    this.tenanted.set(roomKey(floor, room), g.id)
+    this.reserved.delete(roomKey(floor, room))
+    const dwellSeconds = this.rng.uniform(
+      TUNING.GUEST_DWELL_MIN_SECONDS,
+      TUNING.GUEST_DWELL_MAX_SECONDS,
+    )
+    const dwellTicks = Math.max(1, Math.round(dwellSeconds * this.dwellScale * TICK_HZ))
+    g.dwellEndsAt = tick + dwellTicks
+    events.push({ type: 'guest:settled', guestId: g.id, floor, room })
+  }
+
+  /**
+   * The suitcase-guest driver (SUI-13/14, cycle 3.B): walk toward the
+   * suitcase's last resting room. Re-targeting happens on rest events
+   * (retargetOnRest); a mid-walk pickup strands the guest exactly where they
+   * stand — holding slot or waiting at the old door — until the next rest
+   * event. Arrival resolves the outcome (SUI-14): assignment match → settle
+   * (tenancy commits); mismatch → door complaint + return to the holding
+   * area, re-targeting on the next rest (SUI-15: no personal penalty).
+   */
+  private driveToResting(g: Guest, tick: number, events: SimEvent[]): void {
+    const sc = this.suitcases.get(g.id)
+    const target = g.target
+    if (target === null) return
+    const rest = sc?.rest
+    if (rest === undefined || rest === null || rest === 'desk') {
+      this.movement.stopMove(g.id)
+      return
+    }
+    if (target.floor !== rest.floor || target.room !== rest.room) {
+      g.target = rest
+      return
+    }
+    const doorX = roomDoorXMilli(target.room) / 1000
+    const view = this.movement.viewOf(g.id)
+    const pos = this.movement.positionOf(g.id)
+    if (pos === undefined) return
+
+    if (view.car !== null) {
+      // Riding: press the target floor until queued; hold the exit direction
+      // once the car is at (or past) the target floor.
+      if (pos.floor !== target.floor) {
+        this.movement.pressFloor(g.id, target.floor)
+        return
+      }
+      this.movement.startMove(g.id, doorX < pos.x ? 'left' : 'right')
+      return
+    }
+
+    if (pos.floor === target.floor) {
+      if (Math.abs(pos.x - doorX) <= ARRIVAL_TOLERANCE_TILES) {
+        this.movement.stopMove(g.id)
+        this.movement.removeGuest(g.id) // at the door — leaves hall view
+        const assigned = g.assigned
+        if (assigned !== null && assigned.floor === target.floor && assigned.room === target.room) {
+          this.settleAt(g, target.floor, target.room, tick, events)
+        } else {
+          events.push({
+            type: 'guest:complained',
+            guestId: g.id,
+            floor: target.floor,
+            room: target.room,
+          })
+          g.phase = 'waiting'
+          g.target = null
+          this.holding.push(g.id)
+          this.rePlaceHolding()
+        }
+        return
+      }
+      this.movement.startMove(g.id, doorX < pos.x ? 'left' : 'right')
+      return
+    }
+
     this.driveToLandingAndCall(g, pos)
   }
 
@@ -480,6 +648,21 @@ export class GuestSim {
   /** Snapshot query for tests and the room's routing helpers. */
   tenantedRooms(): { floor: GuestFloorId; room: RoomIndex }[] {
     return this.allRoomKeys().filter((r) => this.tenanted.has(roomKey(r.floor, r.room)))
+  }
+
+  /**
+   * Resting suitcases for the movement snapshot (cycle 3.B): sameFloor-public
+   * rows; the room filters by the viewer's floor. Desk-resting rows carry
+   * floor 'lobby', room 0 (room 0 = the desk, not a room segment).
+   */
+  restingSuitcases(): { guestId: string; floor: FloorId; room: number }[] {
+    const rows: { guestId: string; floor: FloorId; room: number }[] = []
+    for (const [id, sc] of this.suitcases) {
+      if (sc.rest === null) continue
+      if (sc.rest === 'desk') rows.push({ guestId: id, floor: 'lobby', room: 0 })
+      else rows.push({ guestId: id, floor: sc.rest.floor, room: sc.rest.room })
+    }
+    return rows
   }
 
   guestIds(): string[] {

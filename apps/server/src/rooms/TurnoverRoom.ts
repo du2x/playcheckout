@@ -10,13 +10,14 @@ import type {
 import {
   accuseIntentSchema,
   deskInteractIntentSchema,
-  deskSendIntentSchema,
   elevatorCallIntentSchema,
   elevatorPressIntentSchema,
   type LobbySnapshot,
   lobbyStartIntentSchema,
   moveStartIntentSchema,
   moveStopIntentSchema,
+  suitcasePickupIntentSchema,
+  suitcasePlaceIntentSchema,
   TUNING,
   workStartIntentSchema,
 } from '@turnover/shared'
@@ -231,28 +232,30 @@ export class TurnoverRoom extends Room {
           'not-in-room': 'you are not inside that room',
           'room-not-workable': 'that room offers you no work',
           'channel-active': 'you are already working',
+          // FR-9a (cycle 3.B): carrying is hands-full — deliver before working.
+          carrying: 'you are carrying a suitcase',
         }
         this.router.toSelf('error', client.sessionId, { code: result, message: messages[result] })
       }
     })
 
-    // Front desk (cycle 3.2, FR-27): E at the desk derives receive-or-release
-    // in the sim; the send flow carries the two INDEPENDENT choices. Every
-    // rejection is SILENT (spec AC2/AC9): an ignored E press, a non-holder
-    // send, or a send into an occupied room produce nothing on the wire.
+    // Front desk + suitcase intents (cycle 3.B, AD-032): E at the desk checks
+    // the front guest in (the caller takes the suitcase); place/pickup are
+    // the carry intents. Every rejection is SILENT (SUI-02/09/10).
     this.onMessage('desk:interact', deskInteractIntentSchema, (client) => {
       if (!this.ensureLive(client.sessionId)) return
       if (this.phase !== 'round' || this.sim === null) return
       this.sim.deskInteract(client.sessionId)
     })
-    this.onMessage('desk:send', deskSendIntentSchema, (client, intent) => {
+    this.onMessage('suitcase:place', suitcasePlaceIntentSchema, (client, intent) => {
       if (!this.ensureLive(client.sessionId)) return
       if (this.phase !== 'round' || this.sim === null) return
-      this.sim.deskSend(
-        client.sessionId,
-        { floor: intent.destinationFloor, room: intent.destinationRoom as RoomIndex },
-        { floor: intent.announceFloor, room: intent.announceRoom as RoomIndex },
-      )
+      this.sim.suitcasePlace(client.sessionId, intent.room as RoomIndex)
+    })
+    this.onMessage('suitcase:pickup', suitcasePickupIntentSchema, (client) => {
+      if (!this.ensureLive(client.sessionId)) return
+      if (this.phase !== 'round' || this.sim === null) return
+      this.sim.suitcasePickup(client.sessionId)
     })
 
     if (TurnoverRoom.tickMs > 0) {

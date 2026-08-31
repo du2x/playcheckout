@@ -235,7 +235,7 @@ export class RoundSim {
     // later accusations/range checks cannot reach them.
     for (const fired of this.justice.drainPending()) {
       events.push(fired)
-      this.guests?.releaseAll(fired.playerId, tickIndex)
+      this.guests?.dropCarry(fired.playerId, tickIndex)
       this.work.leave(fired.playerId)
       this.justiceSegments.delete(fired.playerId)
     }
@@ -300,19 +300,23 @@ export class RoundSim {
   /**
    * Validate a `work:start` intent (FR-7/8/9). Rejections map 1:1 to intent
    * errors in the room; the channel itself announces on the next tick.
+   * v1.4 (FR-9a, SUI-11): a player carrying a suitcase cannot START a work
+   * channel — accusation and elevator calls stay available, and an
+   * already-active channel runs to completion.
    */
   startWork(
     playerId: string,
     floor: Parameters<WorkChannels['startWork']>[1],
     room: Parameters<WorkChannels['startWork']>[2],
-  ): ReturnType<WorkChannels['startWork']> {
+  ): ReturnType<WorkChannels['startWork']> | 'carrying' {
+    if (this.guests?.isCarrying(playerId)) return 'carrying'
     return this.work.startWork(playerId, floor, room)
   }
 
-  /** Drop a departing player's channel silently (WORK-12) and release any
-   *  guest they hold at the desk (DESK-05, cycle 3.2). */
+  /** Drop a departing player's channel silently (WORK-12) and drop any
+   *  suitcase they carry (SUI-20, cycle 3.B). */
   leave(playerId: string): void {
-    this.guests?.releaseAll(playerId, this.totalTicks - this.ticksLeft)
+    this.guests?.dropCarry(playerId, this.totalTicks - this.ticksLeft)
     this.work.leave(playerId)
   }
 
@@ -369,18 +373,19 @@ export class RoundSim {
   ghost(playerId: string): void {
     if (this.ended || this.justice.isFired(playerId)) return
     this.ghosted.add(playerId)
-    this.guests?.releaseAll(playerId, this.totalTicks - this.ticksLeft)
+    this.guests?.dropCarry(playerId, this.totalTicks - this.ticksLeft)
     this.work.leave(playerId)
     this.justiceSegments.delete(playerId)
     if (this.liveStaffCount() === 1) this.end('saboteur', 'staff-reduced')
   }
 
   /**
-   * E at the front desk (cycle 3.2, DESK-01..03): the server DERIVES the
-   * action — a holder releases their guest, anyone else receives the front
-   * queued one. Eligibility mirrors `accuse`: round active, sender live,
-   * standing on the lobby floor within TUNING.DESK_RANGE_TILES of
-   * TUNING.DESK_X_TILES. Every rejection maps to silence in the room (DESK-02).
+   * E at the front desk (cycle 3.B, SUI-01/02): check the front queued guest
+   * in — the caller takes the guest's suitcase (receiver = carrier). One
+   * suitcase per player: a caller already carrying is rejected. Eligibility
+   * mirrors `accuse`: round active, sender live, standing on the lobby floor
+   * within TUNING.DESK_RANGE_TILES of TUNING.DESK_X_TILES. Every rejection
+   * maps to silence in the room.
    */
   deskInteract(playerId: string): 'accepted' | 'rejected' {
     const guests = this.guests
@@ -397,29 +402,40 @@ export class RoundSim {
       return 'rejected'
     }
     const tick = this.totalTicks - this.ticksLeft
-    if (guests.holds(playerId)) {
-      guests.releaseHeld(playerId, tick)
-      return 'accepted'
-    }
-    return guests.receiveAtDesk(playerId, tick) === 'accepted' ? 'accepted' : 'rejected'
+    return guests.checkIn(playerId, tick) === 'accepted' ? 'accepted' : 'rejected'
   }
 
   /**
-   * Complete the send flow (cycle 3.2, DESK-06..09): route the sender's held
-   * guest to the DESTINATION while broadcasting the ANNOUNCED claim. A
-   * tenanted destination or a non-holder rejects silently ('rejected' — no
-   * error event; the holder keeps the guest).
+   * Place the sender's carried suitcase at a room door (cycle 3.B, SUI-07).
+   * Floor/range validation is the sim's (carrier position vs the door x);
+   * every rejection is silent (SUI-10).
    */
-  deskSend(
-    playerId: string,
-    destination: { floor: GuestFloorId; room: RoomIndex },
-    announce: { floor: GuestFloorId; room: RoomIndex },
-  ): 'routed' | 'rejected' {
+  suitcasePlace(playerId: string, room: RoomIndex): 'placed' | 'rejected' {
     const guests = this.guests
     if (!this.started || this.ended || this.ticksLeft <= 0) return 'rejected'
     if (guests === null) return 'rejected'
     if (this.justice.isFired(playerId) || this.ghosted.has(playerId)) return 'rejected'
-    return guests.routeHeld(playerId, destination, announce) === 'routed' ? 'routed' : 'rejected'
+    const tick = this.totalTicks - this.ticksLeft
+    return guests.placeSuitcase(playerId, room, tick) === 'placed' ? 'placed' : 'rejected'
+  }
+
+  /**
+   * Pick up the nearest resting suitcase on the sender's floor (cycle 3.B,
+   * SUI-08) — by anyone, saboteur included; a player already carrying is
+   * rejected silently (SUI-09).
+   */
+  suitcasePickup(playerId: string): 'picked_up' | 'rejected' {
+    const guests = this.guests
+    if (!this.started || this.ended || this.ticksLeft <= 0) return 'rejected'
+    if (guests === null) return 'rejected'
+    if (this.justice.isFired(playerId) || this.ghosted.has(playerId)) return 'rejected'
+    const tick = this.totalTicks - this.ticksLeft
+    return guests.pickupSuitcase(playerId, tick) === 'picked_up' ? 'picked_up' : 'rejected'
+  }
+
+  /** Resting suitcases for the movement snapshot (cycle 3.B, sameFloor rows). */
+  restingSuitcases(): ReturnType<GuestSim['restingSuitcases']> {
+    return this.guests?.restingSuitcases() ?? []
   }
 
   /** The deal's single saboteur — the room needs it for the abort path (FR-25). */

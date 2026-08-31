@@ -302,18 +302,18 @@ appears (`client:suitcase`).
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| SUI-01 | P1 check-in | Design | — |
-| SUI-02 | P1 check-in | Design | — |
+| SUI-01 | P1 check-in | Design | Implemented (T2) |
+| SUI-02 | P1 check-in | Design | Implemented (T2) |
 | SUI-03 | P1 check-in | Design | Implemented (T1) |
 | SUI-04 | P1 check-in | Design | Implemented (T1) |
 | SUI-05 | P1 check-in | Design | — |
-| SUI-06 | P1 check-in | Design | — |
-| SUI-07 | P1 carry/place | Design | — |
-| SUI-08 | P1 carry/place | Design | — |
-| SUI-09 | P1 carry/place | Design | — |
-| SUI-10 | P1 carry/place | Design | — |
-| SUI-11 | P1 carry/place | Design | — |
-| SUI-12 | P1 carry/place | Design | — |
+| SUI-06 | P1 check-in | Design | Implemented (T2) |
+| SUI-07 | P1 carry/place | Design | Implemented (T2) |
+| SUI-08 | P1 carry/place | Design | Implemented (T2) |
+| SUI-09 | P1 carry/place | Design | Implemented (T2) |
+| SUI-10 | P1 carry/place | Design | Implemented (T2) |
+| SUI-11 | P1 carry/place | Design | Implemented (T2) |
+| SUI-12 | P1 carry/place | Design | Implemented (T2) |
 | SUI-13 | P1 guest-follows | Design | — |
 | SUI-14 | P1 guest-follows | Design | — |
 | SUI-15 | P1 guest-follows | Design | — |
@@ -321,7 +321,7 @@ appears (`client:suitcase`).
 | SUI-17 | P1 guest-follows | Design | — |
 | SUI-18 | P2 carry clock | Design | — |
 | SUI-19 | P2 carry clock | Design | — |
-| SUI-20 | P2 carry clock | Design | — |
+| SUI-20 | P2 carry clock | Design | Implemented (T2) |
 | SUI-21 | P2 walkie log | Design | — |
 | SUI-22 | P2 walkie log | Design | — |
 | SUI-23 | P2 walkie log | Design | — |

@@ -98,19 +98,6 @@ export type SimEvent =
     }
   | { readonly type: 'guest:left'; readonly guestId: string }
 
-  // --- Front desk (cycle 3.2, FR-27): the departure announcement and the
-  // walkie claim. guest:routed names the sender only — the DESTINATION never
-  // rides the wire (leak rule: the lie must be client-invisible); the walk
-  // (guest:moved/guest:settled, already public) is the ground truth.
-  // walkie:broadcast carries the ANNOUNCED room — the broadcaster's claim.
-  | { readonly type: 'guest:routed'; readonly guestId: string; readonly playerId: string }
-  | {
-      readonly type: 'walkie:broadcast'
-      readonly playerId: string
-      readonly floor: GuestFloorId
-      readonly room: RoomIndex
-    }
-
   // --- Suitcase transport (cycle 3.B, AD-032): check-in hands the guest's
   // suitcase to the receiver. The assignment rides the deskEarshot policy
   // exactly ONCE (receiver + desk-earshot staff at the check-in tick) and
@@ -119,6 +106,10 @@ export type SimEvent =
   // building-wide); placement is sameFloor and SILENT — no walkie line ever
   // fires for it (FR-27 v1.4). guest:complained is the wrong-delivery door
   // complaint (FR-29(a) trigger; the budget lands in cycle 3.3).
+  // DELETED with the v1.4 redesign: `guest:routed` (the departure
+  // announcement) and `walkie:broadcast` (the authorable claim) — no client
+  // can author a walkie line, and the walk is no longer commanded at the
+  // desk: the suitcase's resting room is the only ground truth.
   | {
       readonly type: 'assignment:overheard'
       readonly guestId: string

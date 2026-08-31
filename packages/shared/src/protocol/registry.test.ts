@@ -4,9 +4,10 @@ import { ROLES } from '../roles.js'
 import {
   accuseIntentSchema,
   deskInteractIntentSchema,
-  deskSendIntentSchema,
   elevatorCallIntentSchema,
   elevatorPressIntentSchema,
+  suitcasePickupIntentSchema,
+  suitcasePlaceIntentSchema,
 } from './intents.js'
 import {
   type LobbySnapshot,
@@ -89,9 +90,9 @@ describe('protocol payloads', () => {
     ).toThrow()
   })
 
-  // Cycle 3.2 (FR-27): the desk intents. desk:interact is empty (the server
-  // derives receive vs release); desk:send carries the TWO independent
-  // choices — destination (server truth) and announce (the claim).
+  // Cycle 3.B (AD-032): the desk intent checks the front guest in; the
+  // suitcase intents replace the deleted desk:send (two-choice flow removed
+  // with the walkie-broadcast model).
   it('desk:interact intent schema accepts only the empty intent', () => {
     expect(deskInteractIntentSchema.parse({ type: 'desk:interact' })).toEqual({
       type: 'desk:interact',
@@ -100,47 +101,24 @@ describe('protocol payloads', () => {
     expect(() => deskInteractIntentSchema.parse({ type: 'desk:interact', room: 3 })).toThrow()
   })
 
-  it('desk:send intent schema accepts two independent guest-floor room choices', () => {
-    const parsed = deskSendIntentSchema.parse({
-      type: 'desk:send',
-      destinationFloor: 'floor2',
-      destinationRoom: 4,
-      announceFloor: 'floor1',
-      announceRoom: 8,
+  it('suitcase:place intent accepts exactly a room index 1-8', () => {
+    expect(suitcasePlaceIntentSchema.parse({ type: 'suitcase:place', room: 8 })).toEqual({
+      type: 'suitcase:place',
+      room: 8,
     })
-    expect(parsed.destinationRoom).toBe(4)
-    expect(parsed.announceRoom).toBe(8)
+    expect(() => suitcasePlaceIntentSchema.parse({ type: 'suitcase:place', room: 9 })).toThrow()
+    expect(() => suitcasePlaceIntentSchema.parse({ type: 'suitcase:place' })).toThrow()
+    expect(() =>
+      suitcasePlaceIntentSchema.parse({ type: 'suitcase:place', room: 4, extra: 1 }),
+    ).toThrow()
   })
 
-  it('desk:send intent schema rejects player floors, bad rooms, and extra fields', () => {
-    expect(() =>
-      deskSendIntentSchema.parse({
-        type: 'desk:send',
-        destinationFloor: 'lobby',
-        destinationRoom: 4,
-        announceFloor: 'floor1',
-        announceRoom: 8,
-      }),
-    ).toThrow()
-    expect(() =>
-      deskSendIntentSchema.parse({
-        type: 'desk:send',
-        destinationFloor: 'floor2',
-        destinationRoom: 9,
-        announceFloor: 'floor1',
-        announceRoom: 8,
-      }),
-    ).toThrow()
-    expect(() =>
-      deskSendIntentSchema.parse({
-        type: 'desk:send',
-        destinationFloor: 'floor2',
-        destinationRoom: 4,
-        announceFloor: 'floor1',
-        announceRoom: 8,
-        extra: 1,
-      }),
-    ).toThrow()
+  it('suitcase:pickup intent accepts only the empty intent', () => {
+    expect(suitcasePickupIntentSchema.parse({ type: 'suitcase:pickup' })).toEqual({
+      type: 'suitcase:pickup',
+    })
+    expect(() => suitcasePickupIntentSchema.parse({ type: 'suitcase:pickup', room: 3 })).toThrow()
+    expect(() => suitcasePickupIntentSchema.parse({})).toThrow()
   })
 })
 
@@ -163,8 +141,6 @@ describe('protocol registry', () => {
     'guest:settled': 'all',
     'guest:checked_out': 'all',
     'guest:left': 'all',
-    'guest:routed': 'all',
-    'walkie:broadcast': 'all',
     'assignment:overheard': 'deskEarshot',
     'suitcase:carried': 'all',
     'suitcase:placed': 'sameFloor',

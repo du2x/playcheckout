@@ -129,12 +129,12 @@ T1 → T2 → T3 → T4 → T5 → T6
 
 ---
 
-### T4: The walkie becomes the lifecycle log (deletions)
+### T4: The walkie becomes the lifecycle log (client feed + suites)
 
-**What**: Delete `walkie:broadcast` (registry + sim event), the `desk:send` intent, `routeHeld` + the announce model in the sim, the room handler, and every client send-menu/mapper/connection surface; rework the client walkie log into the server-generated lifecycle feed (check-in/pickup/settle/complaint/checkout/arrival lines composed from payloads + roster names; placement silent; last-5 contract kept); amend the 3.2 desk/walkie suites.
-**Where**: `packages/shared/src/protocol/registry.ts` (secondary: `simEvents.ts`, `intents.ts`, `guests.ts`, `TurnoverRoom.ts`, `apps/client/src/net/mappers.ts`, `connection.ts`, `WorldScene.ts`, sim test files)
+**What**: (Deletions moved into T2 — the hold/send model is structurally coupled to check-in.) Rework the client walkie log into the server-generated lifecycle feed — check-in/pickup/settle/complaint/checkout/arrival lines composed client-side from event payloads + roster names; placement silent; last-5 contract kept — and add the sim suites asserting the lifecycle fact set (no placement line exists).
+**Where**: `apps/client/src/scenes/WorldScene.ts` (secondary: `state.ts` action plumbing, sim lifecycle suites)
 **Depends on**: T3
-**Reuses**: `appendWalkieLine` (`WorldScene.ts:926-937`)
+**Reuses**: the walkie-log DOM contract (rebuilt in WorldScene)
 **Requirement**: SUI-21, SUI-22, SUI-23
 
 **Tools**:

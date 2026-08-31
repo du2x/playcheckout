@@ -133,24 +133,20 @@ export class Connection {
     this.room.send('accuse', { type: 'accuse', targetId })
   }
 
-  /** E at the front desk (cycle 3.2): the server derives receive-or-release. */
+  /** E at the front desk (cycle 3.B): check the front guest in — the caller
+   *  takes the suitcase. Rejections are silent. */
   sendDeskInteract(): void {
     this.room.send('desk:interact', { type: 'desk:interact' })
   }
 
-  /** Complete the send flow (FR-27): destination (server truth) + announced
-   *  claim are INDEPENDENT choices — nothing validates that they match. */
-  sendDeskSend(
-    destination: { floor: GuestFloorId; room: RoomIndex },
-    announce: { floor: GuestFloorId; room: RoomIndex },
-  ): void {
-    this.room.send('desk:send', {
-      type: 'desk:send',
-      destinationFloor: destination.floor,
-      destinationRoom: destination.room,
-      announceFloor: announce.floor,
-      announceRoom: announce.room,
-    })
+  /** Place the carried suitcase at a room door (cycle 3.B, AD-032). */
+  sendSuitcasePlace(room: RoomIndex): void {
+    this.room.send('suitcase:place', { type: 'suitcase:place', room })
+  }
+
+  /** Pick up the nearest resting suitcase on the floor (cycle 3.B, AD-032). */
+  sendSuitcasePickup(): void {
+    this.room.send('suitcase:pickup', { type: 'suitcase:pickup' })
   }
 
   leave(): void {
