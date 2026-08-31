@@ -170,6 +170,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: literals.test.ts denylist vs WorldScene.ts room list (apps/client)
 - last seen: 2026-08-31T12:49:54Z
 
+### L-027 - A DOM-cap contract (keep last N lines) needs volume-driven evidence: drive >N lifecycle events through the real wire (guest-timing scale seam) and assert count === N plus an early line's eviction, otherwise the trim removal survives the sensor.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `apps/client/harness` · harmful: 0
+- features: suitcase-transport
+- evidence: client:suitcase SUI-23 / mutant E (apps/client/harness)
+- last seen: 2026-08-31T20:43:17Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

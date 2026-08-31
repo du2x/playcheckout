@@ -334,7 +334,7 @@ lines render on all pages and no placement line ever appears
 | SUI-20 | P2 carry clock | Design | Implemented (T2) |
 | SUI-21 | P2 walkie log | Design | Implemented (T2/T4) |
 | SUI-22 | P2 walkie log | Design | Implemented (T2/T4) |
-| SUI-23 | P2 walkie log | Design | Implemented (T2/T4) |
+| SUI-23 | P2 walkie log | Design | Verified (T2/T4) |
 | SUI-24 | P2 client | Design | Implemented (T5) |
 | SUI-25 | P2 client | Design | Implemented (T5) |
 | SUI-26 | P2 client | Design | Dropped (AD-034 — confirm removed) |
