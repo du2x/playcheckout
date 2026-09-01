@@ -68,3 +68,14 @@ occupants, press queue, last press — reduced purely from the ViewAction
 stream. The rider chip renders from it and the world scene consumes it (press
 keymap gate, rider visibility). Derived once, never per-consumer.
 _Avoid_: riding state, rider chip state
+
+**Affordance (E)**:
+The pure spatial module (`packages/shared/src/affordances.ts`, AD-037) behind
+every E-key and range-gated interaction: the desk zone, room-door range,
+pickup-nearest (ties to lowest guest ordinal), accusation range, and landing
+zone predicates, plus the E-keydown ladder and keyup swallow-rule decision
+tables. Consumed by BOTH the sim's authority guards and the client's
+prediction mirror — range expressions have exactly one home, and a mirrored
+expression in a caller is a defect. Nothing that emits, mutates, or knows
+about transport crosses this module's interface.
+_Avoid_: range mirror, client-side predicate, proximity check

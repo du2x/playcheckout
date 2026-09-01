@@ -269,3 +269,83 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
     }).not.toThrow()
   })
 })
+
+describe('ElevatorPresenter — presentation state (AD-038: one clock authority)', () => {
+  function makePresenter() {
+    const car1 = fakeCarView()
+    const car2 = fakeCarView()
+    const cars = new Map([
+      [1 as const, { view: car1 }],
+      [2 as const, { view: car2 }],
+    ])
+    return { car1, car2, presenter: new ElevatorPresenter(cars, () => 460) }
+  }
+
+  it('lights a hall call only when the car is NOT already at the called floor (AD-024 decoy)', () => {
+    const { presenter } = makePresenter()
+    expect(presenter.panelState().lightWest).toBe(false)
+    presenter.onCalled(1, 'floor1') // car stands at the lobby: the call registers
+    expect(presenter.panelState().lightWest).toBe(true)
+    const decoy = makePresenter()
+    decoy.presenter.onMoved(1, 'floor1')
+    decoy.presenter.onCalled(1, 'floor1') // already standing there: nothing to wait for
+    expect(decoy.presenter.panelState().lightWest).toBe(false)
+  })
+
+  it('clears the hall light on the next arrival, and only that car', () => {
+    const { presenter } = makePresenter()
+    presenter.onCalled(1, 'floor1')
+    presenter.onCalled(2, 'floor1')
+    presenter.onMoved(1, 'floor1')
+    expect(presenter.panelState().lightWest).toBe(false)
+    expect(presenter.panelState().lightEast).toBe(true)
+  })
+
+  it('flashes the called-floor panels for the window, then idle (ART-17)', () => {
+    const { presenter } = makePresenter()
+    const t0 = Date.now() // `until` anchors to wall-clock inside onCalled
+    presenter.onCalled(1, 'floor1')
+    expect(presenter.isFlashing('floor1', t0 + 100)).toBe(true)
+    expect(presenter.isFlashing('floor2', t0 + 100)).toBe(false)
+    expect(presenter.isFlashing('floor1', t0 + 700)).toBe(false)
+  })
+
+  it('reports car floors from the clocks; snapshots unify through onMoved', () => {
+    const { presenter } = makePresenter()
+    expect(presenter.floorOf(1)).toBe('lobby')
+    presenter.onMoved(1, 'floor2') // snapshot seeding uses the same path
+    expect(presenter.floorOf(1)).toBe('floor2')
+    expect(presenter.panelState().west).toBe('floor2')
+  })
+
+  it('clears the car-screen readout when not riding', () => {
+    const { presenter } = makePresenter()
+    presenter.tick(16, 'lobby', null)
+    expect(presenter.carScreen()).toEqual({ floor: null, state: null })
+  })
+
+  it('derives the parked readout from the own car clock', () => {
+    const { presenter } = makePresenter()
+    presenter.onDoors(1, 'lobby', true)
+    presenter.tick(cfg.doorAnimMs / 2, 'lobby', { car: 1, queue: ['floor1'] })
+    expect(presenter.carScreen()).toEqual({ floor: 'lobby', state: 'doors opening' })
+    presenter.tick(cfg.doorAnimMs, 'lobby', { car: 1, queue: ['floor1'] })
+    expect(presenter.carScreen()).toEqual({ floor: 'lobby', state: 'doors open' })
+  })
+
+  it('sweeps the transit readout from the press queue, re-anchoring per leg', () => {
+    const { presenter } = makePresenter()
+    // The car is mid-transit (the doors closed into a departure).
+    presenter.onMoved(1, 'lobby')
+    presenter.onDoors(1, 'lobby', false)
+    presenter.tick(cfg.doorAnimMs, 'lobby', { car: 1, queue: ['floor1'] })
+    const early = presenter.carScreen()
+    expect(early.state).toBe('moving to 1')
+    presenter.tick(1000, 'lobby', { car: 1, queue: ['floor1'] })
+    presenter.tick(1000, 'lobby', { car: 1, queue: ['floor1'] })
+    expect(presenter.carScreen().floor).not.toBe(early.floor) // the sweep advanced
+    // A retarget re-anchors the sweep from the known departure.
+    presenter.tick(0, 'lobby', { car: 1, queue: ['floor2'] })
+    expect(presenter.carScreen().state).toBe('moving to 2')
+  })
+})

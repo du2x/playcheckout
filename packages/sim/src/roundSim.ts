@@ -1,5 +1,7 @@
 import {
   type GuestFloorId,
+  inAccuseRange,
+  inDeskZone,
   type LobbySize,
   type RecapEntry,
   ROOM_COUNT,
@@ -348,12 +350,14 @@ export class RoundSim {
     }
     const accuser = this.work.positionOf(accuserId)
     const target = this.work.positionOf(targetId)
-    const range = TUNING.ACCUSATION_RANGE_TILES * 1000
     if (
       accuser === undefined ||
       target === undefined ||
-      accuser.floor !== target.floor ||
-      Math.abs(accuser.x - target.x) > range
+      // work positions are MILLITILES; the affordances interface is tiles.
+      !inAccuseRange(
+        { floor: accuser.floor, x: accuser.x / 1000 },
+        { floor: target.floor, x: target.x / 1000 },
+      )
     ) {
       return 'out-of-range'
     }
@@ -399,12 +403,7 @@ export class RoundSim {
     if (guests === null) return 'rejected'
     if (this.justice.isFired(playerId) || this.ghosted.has(playerId)) return 'rejected'
     const p = this.work.positionOf(playerId)
-    const range = TUNING.DESK_RANGE_TILES * 1000
-    if (
-      p === undefined ||
-      p.floor !== 'lobby' ||
-      Math.abs(p.x - TUNING.DESK_X_TILES * 1000) > range
-    ) {
+    if (p === undefined || !inDeskZone({ floor: p.floor, x: p.x / 1000 })) {
       return 'rejected'
     }
     const tick = this.totalTicks - this.ticksLeft

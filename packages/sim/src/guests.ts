@@ -1,5 +1,12 @@
 import type { FloorId, GuestFloorId, LobbySize, RoomIndex, SimEvent } from '@turnover/shared'
-import { GUEST_FLOOR_IDS, ROOM_INDEXES, roomDoorXMilli, TUNING } from '@turnover/shared'
+import {
+  doorInRange,
+  GUEST_FLOOR_IDS,
+  nearestRestingSuitcase,
+  ROOM_INDEXES,
+  roomDoorXMilli,
+  TUNING,
+} from '@turnover/shared'
 import { Rng } from './rng.js'
 import { TICK_HZ } from './tick.js'
 
@@ -388,8 +395,7 @@ export class GuestSim {
       // would strand the guest target (REST-05).
       return 'ignored'
     }
-    const doorX = roomDoorXMilli(room) / 1000
-    if (Math.abs(pos.x - doorX) > TUNING.ROOM_DOOR_RANGE_TILES) return 'ignored'
+    if (!doorInRange(pos.x, room)) return 'ignored'
     sc.carrier = null
     sc.rest = { floor: pos.floor as GuestFloorId, room }
     sc.legStartTick = null
@@ -409,25 +415,20 @@ export class GuestSim {
     if (this.isCarrying(playerId)) return 'ignored'
     const pos = this.movement.positionOf(playerId)
     if (pos === undefined) return 'ignored'
-    let best: { id: string; dist: number; ordinal: number } | null = null
-    for (const [id, sc] of this.suitcases) {
-      if (sc.rest === null) continue
-      if (sc.rest.floor !== pos.floor) continue
-      const restX = roomDoorXMilli(sc.rest.room) / 1000
-      const dist = Math.abs(pos.x - restX)
-      if (dist > TUNING.ROOM_DOOR_RANGE_TILES) continue
-      const ordinal = Number(id.split(':')[1] ?? 0)
-      if (best === null || dist < best.dist || (dist === best.dist && ordinal < best.ordinal)) {
-        best = { id, dist, ordinal }
-      }
-    }
-    if (best === null) return 'ignored'
-    const sc = this.suitcases.get(best.id)
+    // Nearest on the same floor within ROOM_DOOR_RANGE_TILES; ties resolve to
+    // the lowest guest ordinal — the rule lives once in the affordances
+    // module (AD-036) and the client's pickup affordance reuses it.
+    const bestId = nearestRestingSuitcase(
+      { floor: pos.floor, x: pos.x },
+      [...this.suitcases].map(([id, s]) => ({ id, carrierId: s.carrier, rest: s.rest })),
+    )
+    if (bestId === null) return 'ignored'
+    const sc = this.suitcases.get(bestId)
     if (sc === undefined) return 'ignored'
     sc.carrier = playerId
     sc.rest = null
     sc.legStartTick = tick
-    this.pending.push({ type: 'suitcase:picked_up', guestId: best.id, carrierId: playerId })
+    this.pending.push({ type: 'suitcase:picked_up', guestId: bestId, carrierId: playerId })
     return 'picked_up'
   }
 

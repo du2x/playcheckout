@@ -1,16 +1,22 @@
 import {
+  accuseTargetAtHoldExpiry,
+  carriedGuestIdOf,
   type FloorId,
   type GuestFloorId,
+  inDeskZone,
   type MovementSnapshot,
-  ROOM_INDEXES,
+  onLanding,
   ROOMS_PER_FLOOR,
   type RoomIndex,
   type RoomState,
+  resolveEKeydown,
+  resolveEKeyup,
   roomDoorXMilli,
   roomIndexAtMilli,
   roomSegmentEndMilli,
   roomSegmentStartMilli,
   type SpectatorSnapshot,
+  type SuitcaseRef,
   TUNING,
 } from '@turnover/shared'
 import Phaser from 'phaser'
@@ -25,12 +31,7 @@ import {
 } from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
-import {
-  floorLabel,
-  setCarScreenFloor,
-  setCarScreenState,
-  transitFloorReadout,
-} from '../ui/carScreen'
+import { setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
 import { ElevatorPresenter } from './elevatorPresenter'
 
 /**
@@ -140,17 +141,15 @@ export class WorldScene extends Phaser.Scene {
   /** The blind-place confirm is REMOVED (AD-034) — kept only the
    *  owned-assignment hint (SUI-27, convenience surface). */
   private assignmentHint: HTMLElement | null = null
-  private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite; floor: string }>()
-  /** Owns door/motion visuals (ELAN); built in `create()` once cars exist. */
+  private cars = new Map<1 | 2, { view: Phaser.GameObjects.Sprite }>()
+  /** Owns door/motion visuals, hall-call lights, the landing-panel flash, and
+   *  the in-car screen readout (ELAN + AD-038): the single clock authority for
+   *  elevator presentation — built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
   private work: { startedAt: number; seconds: number } | null = null
-  /** The in-car screen's current ride leg: sweep anchored when the leg's
-   *  destination became known (the presenter's own transit clock may predate
-   *  the real departure by up to a dwell window). */
-  private carScreenLeg: { from: FloorId; to: FloorId; startedAt: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
   /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
@@ -188,11 +187,6 @@ export class WorldScene extends Phaser.Scene {
   /** The App-owned rider session (riderSession.ts): keymap gate + rider
    * visibility. The scene derives nothing — it only consumes. */
   private riderSession: RiderUpdate = null
-  /** Per-car hall-call lights (AD-024): lit from the car's accepted call
-   *  until it arrives. Derived purely from public events — a decoy call
-   *  naming a car already parked at that floor never lights (nothing to
-   *  wait for). */
-  private calledLights: Record<1 | 2, boolean> = { 1: false, 2: false }
   /** The App-owned accusation session (accuseSession.ts): the self-fired flag
    * gates every live-play intent — a fired player watches quietly (JUST-04). */
   private selfFired = false
@@ -208,7 +202,6 @@ export class WorldScene extends Phaser.Scene {
   /** Landing panel sprites (ART-17): west/east landings of the viewed floor;
    * frame 0 idle, frame 1 during a call's flash window (decoys included). */
   private panelImages = new Map<'west' | 'east', Phaser.GameObjects.Image>()
-  private panelFlash: { floor: string; until: number } | null = null
   private hallLines: Phaser.GameObjects.Graphics | null = null
   /** Corridor band backdrop (AD-020 art slice): live lane only, never a
    *  Rectangle — the harness counts Rectangle/Ellipse per player/car. */
@@ -244,7 +237,6 @@ export class WorldScene extends Phaser.Scene {
     this.cueNodes.clear()
     this.doorImages.clear()
     this.riderSession = data.riderSession
-    this.calledLights = { 1: false, 2: false }
     this.buildEvidenceLayer()
     this.buildGuestLayer()
     this.buildDeskLayer()
@@ -294,7 +286,7 @@ export class WorldScene extends Phaser.Scene {
     for (const id of [1, 2] as const) {
       const sprite = this.add.sprite(this.carPx(id), GROUND_Y, 'elevator-car')
       sprite.setOrigin(0.5, 1)
-      this.cars.set(id, { view: sprite, floor: 'lobby' })
+      this.cars.set(id, { view: sprite })
     }
     // Landing panel sprites (ART-17): position-only panels — a call flashes
     // them (decoys included); occupants are never rendered (privacy rule).
@@ -378,9 +370,10 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** y of a car's feet line on its floor's lane (the presenter draws the
-   *  car body above it; the arrival slide still dips 30 px via carY). */
+   *  car body above it; the arrival slide still dips 30 px via carY). The
+   *  car floor lives in the presenter's clocks (AD-038) — one home. */
   private carLaneY(car: 1 | 2): number {
-    return this.laneY(this.cars.get(car)?.floor ?? 'lobby')
+    return this.laneY(this.elevatorPresenter?.floorOf(car) ?? 'lobby')
   }
 
   /** Switch between the live single-floor view and the spectator overview. */
@@ -431,8 +424,7 @@ export class WorldScene extends Phaser.Scene {
       display.left = false
     }
     for (const c of snapshot.cars) {
-      const car = this.cars.get(c.car)
-      if (car !== undefined) car.floor = c.floor
+      this.elevatorPresenter?.onMoved(c.car, c.floor)
     }
     this.roomStates.clear()
     for (const room of snapshot.rooms) {
@@ -524,9 +516,6 @@ export class WorldScene extends Phaser.Scene {
         break
       }
       case 'elevator-moved': {
-        const car = this.cars.get(action.car)
-        if (car !== undefined) car.floor = action.floor
-        this.calledLights[action.car] = false // arrival: the hall call is served
         this.elevatorPresenter?.onMoved(action.car, action.floor)
         this.updatePanel()
         break
@@ -534,23 +523,16 @@ export class WorldScene extends Phaser.Scene {
       case 'elevator-doors': {
         // Public door state (AD-026/027): the presenter drives the open/close
         // swing from it; the panel's floor readout follows the event too.
-        const car = this.cars.get(action.car)
-        if (car !== undefined) car.floor = action.floor
         this.elevatorPresenter?.onDoors(action.car, action.floor, action.open)
         this.updatePanel()
         break
       }
       case 'elevator-called': {
-        // Hall-call light (AD-024): lit only when the named car is NOT
-        // already standing at the called floor (the AD-019/023 decoy summons
-        // nothing) — it turns off on that car's next arrival.
-        const car = this.cars.get(action.car)
-        if (car !== undefined && car.floor !== action.floor) this.calledLights[action.car] = true
+        // Hall-call light (AD-024) and the ART-17 landing-panel flash both
+        // live in the presenter (AD-038) — a decoy call naming a car parked
+        // at the called floor lights nothing, the flash registers every call.
         this.elevatorPresenter?.onCalled(action.car, action.floor)
         this.updatePanel()
-        // ART-17: the flash moves to the landing panel sprites — every call
-        // looks registered (AD-012), the data-only semantics are unchanged.
-        this.panelFlash = { floor: action.floor, until: Date.now() + 700 }
         break
       }
       case 'player-left': {
@@ -767,8 +749,7 @@ export class WorldScene extends Phaser.Scene {
       if (p.playerId === this.ownId) this.viewFloor = p.floor
     }
     for (const c of snapshot.cars) {
-      const car = this.cars.get(c.car)
-      if (car !== undefined) car.floor = c.floor
+      this.elevatorPresenter?.onMoved(c.car, c.floor)
     }
     // SUI-24 late joiners: resting suitcases ride the snapshot (sameFloor-
     // filtered by the room) — carried ones are derived from the carrier's
@@ -835,8 +816,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.riderSession !== null) return
     const own = this.players.get(this.ownId)
     if (own === undefined) return
-    const range = TUNING.ELEVATOR_LANDING_TILES
-    if (own.x > range && own.x < 30 - range) return
+    if (!onLanding(own.x)) return
     this.sendElevatorCall()
   }
 
@@ -850,71 +830,51 @@ export class WorldScene extends Phaser.Scene {
 
   /** The guest whose suitcase the local player carries, or null (SUI-25). */
   private ownCarriedGuest(): string | null {
-    for (const [id, sc] of this.suitcases) {
-      if (sc.carrierId === this.ownId) return id
-    }
-    return null
+    return carriedGuestIdOf(this.suitcaseRefs(), this.ownId)
   }
 
-  /** The room whose doorway the own player stands at on a guest floor, or
-   *  null — the place affordance (SUI-25 step 3). */
-  private ownDoorRoom(): RoomIndex | null {
-    const own = this.players.get(this.ownId)
-    if (own === undefined || own.floor === 'lobby') return null
-    for (const room of ROOM_INDEXES) {
-      if (Math.abs(own.x - roomDoorXMilli(room) / 1000) <= TUNING.ROOM_DOOR_RANGE_TILES) {
-        return room as RoomIndex
-      }
-    }
-    return null
+  private suitcaseRefs(): SuitcaseRef[] {
+    return [...this.suitcases].map(([id, s]) => ({ id, carrierId: s.carrierId, rest: s.rest }))
   }
 
-  /** A resting suitcase within ROOM_DOOR_RANGE_TILES on the own floor, or
-   *  null — the pickup affordance (SUI-25 step 4). Desk-resting counts. */
-  private ownNearRestingSuitcase(): string | null {
+  /** The own player's predicted position in affordances units (tiles), or
+   * null — riders have no floor (AD-009). */
+  private ownPos(): { floor: FloorId; x: number } | null {
     const own = this.players.get(this.ownId)
-    if (own === undefined) return null
-    for (const [id, sc] of this.suitcases) {
-      if (sc.rest === null) continue
-      // The client never sees a desk-resting suitcase: carrier loss deletes
-      // it server-side and the player:fired event prunes the local view.
-      const restX = roomDoorXMilli(sc.rest.room) / 1000
-      if (own.floor === sc.rest.floor && Math.abs(own.x - restX) <= TUNING.ROOM_DOOR_RANGE_TILES) {
-        return id
-      }
-    }
-    return null
+    return own === undefined ? null : { floor: own.floor as FloorId, x: own.x }
   }
 
   private beginAccuseHold(): void {
     if (this.selfFired || this.accuseHoldTimer !== null) return
-    // SUI-25 ladder: desk receive → place (carrying, at a door) → pickup
-    // (not carrying, near a resting suitcase) → otherwise the hold window
-    // (keyup = elevator call, expiry = accuse). Desk/pickup/place targets
-    // are spatially disjoint from landings, so the order only breaks ties.
-    if (this.ownInDeskZone()) {
+    // SUI-25 ladder (AD-037): the decision table lives in the shared
+    // affordances module — the same expressions the sim's guards run; the
+    // scene only maps the intent to sends and owns the hold timer.
+    const intent = resolveEKeydown({
+      selfFired: this.selfFired,
+      own: this.ownPos(),
+      suitcases: this.suitcaseRefs(),
+      playerId: this.ownId,
+    })
+    if (intent.kind === 'desk') {
       this.sendDeskInteract()
       return
     }
-    const carried = this.ownCarriedGuest()
-    if (carried !== null) {
-      const door = this.ownDoorRoom()
-      if (door !== null) {
-        // AD-034: assignments are building-wide — a carrier at a door always
-        // places directly (the blind-place confirm was removed with it).
-        this.sendSuitcasePlace(door)
-        return
-      }
-    } else if (this.ownNearRestingSuitcase() !== null) {
+    if (intent.kind === 'place') {
+      this.sendSuitcasePlace(intent.room)
+      return
+    }
+    if (intent.kind === 'pickup') {
       this.sendSuitcasePickup()
       return
     }
+    if (intent.kind !== 'hold') return
     this.accuseHoldTimer = window.setTimeout(() => {
       this.accuseHoldTimer = null
-      // Riding players cannot accuse: the server sees no floor for them.
-      if (this.riderSession !== null) return
-      const target = this.nearestAccuseCandidate()
-      if (target !== undefined) this.openAccuseMenu(target)
+      const candidates = [...this.players]
+        .filter(([id, display]) => id !== this.ownId && !display.left)
+        .map(([id, display]) => ({ id, floor: display.floor as FloorId, x: display.x }))
+      const target = accuseTargetAtHoldExpiry(this.riderSession !== null, this.ownPos(), candidates)
+      if (target !== undefined) this.openAccuseMenu(target.id)
     }, ACCUSE_HOLD_MS)
   }
 
@@ -922,22 +882,17 @@ export class WorldScene extends Phaser.Scene {
     if (this.accuseHoldTimer === null) return
     window.clearTimeout(this.accuseHoldTimer)
     this.accuseHoldTimer = null
-    this.callElevator()
-  }
-
-  /** Nearest live player on the own floor within ACCUSATION_RANGE_TILES — a
-   * mirror of the server's range rule, never an authority (design pin). */
-  private nearestAccuseCandidate(): string | undefined {
-    const own = this.players.get(this.ownId)
-    if (own === undefined) return undefined
-    let best: { id: string; dist: number } | undefined
-    for (const [id, display] of this.players) {
-      if (id === this.ownId || display.left || display.floor !== own.floor) continue
-      const dist = Math.abs(display.x - own.x)
-      if (dist > TUNING.ACCUSATION_RANGE_TILES) continue
-      if (best === undefined || dist < best.dist) best = { id, dist }
+    // JUST-17: a keyup that ends the hold window sends the elevator call —
+    // the swallow rule is the shared table's, not the scene's.
+    if (
+      resolveEKeyup({
+        selfFired: this.selfFired,
+        riding: this.riderSession !== null,
+        own: this.ownPos(),
+      }).kind === 'elevatorCall'
+    ) {
+      this.sendElevatorCall()
     }
-    return best?.id
   }
 
   /** In-car floor press — sent only while the local player rides a car. */
@@ -980,9 +935,8 @@ export class WorldScene extends Phaser.Scene {
 
   /** True when the own predicted position stands in the E desk zone (AD-031). */
   private ownInDeskZone(): boolean {
-    const own = this.players.get(this.ownId)
-    if (own === undefined || own.floor !== 'lobby') return false
-    return Math.abs(own.x - TUNING.DESK_X_TILES) <= TUNING.DESK_RANGE_TILES
+    const own = this.ownPos()
+    return own !== null && inDeskZone(own)
   }
 
   /** Per-frame desk DOM sync: the check-in hint. */
@@ -1377,27 +1331,26 @@ export class WorldScene extends Phaser.Scene {
   private updatePanel(): void {
     const panel = document.querySelector('#elevator-panel')
     if (panel === null) return
-    const west = this.cars.get(1)?.floor ?? '?'
-    const east = this.cars.get(2)?.floor ?? '?'
+    // Car floors + hall-call lights read from the presenter (AD-038).
+    const p = this.elevatorPresenter?.panelState()
+    const west = p?.west ?? null
+    const east = p?.east ?? null
     const w = panel.querySelector('#panel-west')
     const e = panel.querySelector('#panel-east')
-    if (w !== null) w.textContent = west
-    if (e !== null) e.textContent = east
+    if (w !== null) w.textContent = west ?? '?'
+    if (e !== null) e.textContent = east ?? '?'
     // Hall-call lights (AD-024): amber while the car owes the floor a stop.
     const lightW = panel.querySelector('#panel-light-west')
     const lightE = panel.querySelector('#panel-light-east')
     if (lightW instanceof HTMLElement)
-      lightW.style.color = this.calledLights[1] ? '#e8c34a' : '#4a5568'
+      lightW.style.color = (p?.lightWest ?? false) ? '#e8c34a' : '#4a5568'
     if (lightE instanceof HTMLElement)
-      lightE.style.color = this.calledLights[2] ? '#e8c34a' : '#4a5568'
+      lightE.style.color = (p?.lightEast ?? false) ? '#e8c34a' : '#4a5568'
   }
 
   /** Per-frame panel sprite sync: idle frame, flash frame inside the window. */
   private syncPanelFlash(): void {
-    const flashing =
-      this.panelFlash !== null &&
-      Date.now() < this.panelFlash.until &&
-      this.panelFlash.floor === this.viewFloor
+    const flashing = this.elevatorPresenter?.isFlashing(this.viewFloor as FloorId) ?? false
     for (const [side, image] of this.panelImages) {
       void side
       image.setVisible(!this.spectator)
@@ -1405,54 +1358,13 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** Current-floor sweep + state line for the in-car screen (every frame). */
+  /** Current-floor sweep + state line for the in-car screen (every frame).
+   *  The readout is derived in the presenter's tick (AD-038); the scene only
+   *  applies it to the DOM. */
   private syncCarScreenReadouts(): void {
-    const session = this.riderSession
-    const clock = session === null ? undefined : this.elevatorPresenter?.clockOf(session.car)
-    if (session === null || clock === undefined) {
-      this.carScreenLeg = null
-      setCarScreenFloor(null)
-      setCarScreenState(null)
-      return
-    }
-    if (clock.phase !== 'transit') {
-      this.carScreenLeg = null
-      setCarScreenFloor(clock.floor)
-      setCarScreenState(
-        clock.phase === 'opening'
-          ? 'doors opening'
-          : clock.phase === 'open'
-            ? 'doors open'
-            : clock.phase === 'closing'
-              ? 'doors closing'
-              : 'doors closed',
-      )
-      return
-    }
-    // Transit: riders know the current leg's destination from the own car's
-    // press queue (rider-exclusive, already on their screen); bystander
-    // ground truth is the arrival event, which lands as the door-open event
-    // at the destination floor.
-    const dest = session.queue[0] ?? null
-    if (dest === null) {
-      this.carScreenLeg = null
-      setCarScreenFloor(clock.floor)
-      setCarScreenState('doors closed')
-      return
-    }
-    // Anchor (or re-anchor) the sweep when the leg starts or retargets, so
-    // transition floors step per ride stride from the known departure.
-    let startedAt = this.carScreenLeg?.startedAt ?? 0
-    if (
-      this.carScreenLeg === null ||
-      this.carScreenLeg.from !== clock.floor ||
-      this.carScreenLeg.to !== dest
-    ) {
-      startedAt = Date.now()
-      this.carScreenLeg = { from: clock.floor, to: dest, startedAt }
-    }
-    setCarScreenFloor(transitFloorReadout(clock.floor, dest, Date.now() - startedAt))
-    setCarScreenState(`moving to ${floorLabel(dest)}`)
+    const readout = this.elevatorPresenter?.carScreen() ?? { floor: null, state: null }
+    setCarScreenFloor(readout.floor)
+    setCarScreenState(readout.state)
   }
 
   /** Progress bar is DOM: fill width from the own channel's elapsed time. */
@@ -1533,10 +1445,8 @@ export class WorldScene extends Phaser.Scene {
         display.sprite.setFrame(0)
       }
     }
-    for (const car of this.cars.values()) {
-      car.view.y = this.laneY(car.floor) + 30
-    }
-    this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId)
+    // The presenter drives every car's y (base lane + arrival slide) in tick.
+    this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId, this.riderSession)
     this.syncGuests(delta)
     this.syncSuitcases()
     this.syncDesk()

@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
+import { type RoomIndex, roomDoorXMilli } from '@turnover/shared'
 
 // Spec SUI-21..27 (gate scenario client:suitcase; amended AD-034): the
 // suitcase slice. Two scenarios — the blind-place confirm is GONE (SUI-26
@@ -213,9 +214,12 @@ async function pressEUntil(page: Page, predicate: () => boolean): Promise<void> 
   throw new Error('pressEUntil did not converge')
 }
 
-/** Room segment center in tiles (AD-010 geometry). */
+/** Room segment center in tiles — derived from the shared layout (the same
+ * geometry the sim's door ranges use), never hand-mirrored: the AD-036
+ * re-derivation moved the doors and a hand-pinned constant silently broke
+ * this scenario. */
 function doorXTiles(room: number): number {
-  return (room - 1) * 3.5 + 2.75
+  return roomDoorXMilli(room as RoomIndex) / 1000
 }
 
 /** E press: keydown runs the contextual ladder, keyup ends the hold window. */
@@ -382,6 +386,17 @@ test.describe('client:suitcase', () => {
     // confirm is gone (AD-034): a carrier at a door places directly.
     await rideTo(own, 'ada', 'Digit1', 'floor1')
     await walkUntil(own, 'ada', 'ArrowRight', (x) => x >= doorXTiles(1) - 0.4)
+    // The 900ms exit hop overshoots the door zone (6 tiles/s + intent-flush
+    // latency); tap back left until the label sits inside ROOM_DOOR_RANGE so
+    // the ladder resolves place rather than the between-doors hold.
+    for (let i = 0; i < 6; i++) {
+      const p = await readLabel(own, 'ada')
+      if (Math.abs(p.x / TILE - doorXTiles(1)) <= 0.8) break
+      await own.keyboard.down('ArrowLeft')
+      await own.waitForTimeout(200)
+      await own.keyboard.up('ArrowLeft')
+      await own.waitForTimeout(150)
+    }
     await pressE(own)
 
     // The marker rests at the doorway (SUI-24) and PLACEMENT IS SILENT

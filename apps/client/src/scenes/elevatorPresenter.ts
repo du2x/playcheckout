@@ -1,4 +1,5 @@
 import { type FloorId, TUNING } from '@turnover/shared'
+import { floorLabel, transitFloorReadout } from '../ui/carScreen'
 
 /**
  * Elevator door/ride animation (client-only, `elevator-animation` cycle):
@@ -183,6 +184,21 @@ export interface CarViewLike {
   setFrame(frame: number): void
 }
 
+/** ART-17: how long a landing panel flash reads as "call registered". */
+const PANEL_FLASH_MS = 700
+
+/** The read-only rider facts the car screen needs (RiderUpdate's shape). */
+export interface RiderFacts {
+  readonly car: CarId
+  readonly queue: readonly FloorId[]
+}
+
+/** The in-car screen readout the scene applies to the DOM each frame. */
+export interface CarScreenReadout {
+  readonly floor: FloorId | null
+  readonly state: string | null
+}
+
 /**
  * Owns car/motion visuals for the building's two elevator cars. Consumes
  * only plain facts (car id, floor, elapsed time via `tick`) — never a
@@ -193,6 +209,17 @@ export interface CarViewLike {
  */
 export class ElevatorPresenter {
   private readonly clocks = new Map<CarId, CarClock>()
+  /** Hall-call lights (AD-024): amber while the car owes the called floor a
+   *  stop — lit on a call the car is NOT already standing at, cleared on that
+   *  car's next arrival (`elevator:moved`). */
+  private readonly calledLights: Record<CarId, boolean> = { 1: false, 2: false }
+  /** ART-17: the landing panels of the called floor flash for a fixed window. */
+  private panelFlash: { floor: FloorId; until: number } | null = null
+  /** The rider's current transit leg, re-anchored from the own car's press
+   *  queue; `elapsedMs` advances with tick so the floor sweep steps per ride
+   *  stride from the known departure. */
+  private carScreenLeg: { from: FloorId; to: FloorId; elapsedMs: number } | null = null
+  private carScreenReadout: CarScreenReadout = { floor: null, state: null }
 
   constructor(
     private readonly cars: ReadonlyMap<CarId, { readonly view: CarViewLike }>,
@@ -205,6 +232,11 @@ export class ElevatorPresenter {
   /** Resets both cars to a fresh idle-open-at-lobby clock (scene restart). */
   reset(): void {
     this.clocks.clear()
+    this.calledLights[1] = false
+    this.calledLights[2] = false
+    this.panelFlash = null
+    this.carScreenLeg = null
+    this.carScreenReadout = { floor: null, state: null }
     for (const car of [1, 2] as const) {
       this.clocks.set(car, initialCarClock('lobby'))
     }
@@ -214,12 +246,17 @@ export class ElevatorPresenter {
     const clock = this.clocks.get(car)
     if (clock === undefined) return
     this.clocks.set(car, applyCalled(clock, floor))
+    // Hall-call light (AD-024): the AD-019/023 decoy summons nothing — a call
+    // for the floor the car stands at lights nothing.
+    if (clock.floor !== floor) this.calledLights[car] = true
+    this.panelFlash = { floor, until: Date.now() + PANEL_FLASH_MS }
   }
 
   onMoved(car: CarId, floor: FloorId): void {
     const clock = this.clocks.get(car)
     if (clock === undefined) return
     this.clocks.set(car, applyMoved(clock, floor))
+    this.calledLights[car] = false // arrival: the hall call is served
   }
 
   /** Public door state (AD-026/027): the only driver of the door phases. */
@@ -229,13 +266,49 @@ export class ElevatorPresenter {
     this.clocks.set(car, applyDoors(clock, floor, open))
   }
 
-  /** Read-only view of one car's animation clock (in-car screen readouts). */
+  /** Public per-car floor — the building panel and lane math read this. */
+  floorOf(car: CarId): FloorId | null {
+    return this.clocks.get(car)?.floor ?? null
+  }
+
+  /** The building panel's state: both cars' floors and the hall-call lights. */
+  panelState(): {
+    west: FloorId | null
+    east: FloorId | null
+    lightWest: boolean
+    lightEast: boolean
+  } {
+    return {
+      west: this.floorOf(1),
+      east: this.floorOf(2),
+      lightWest: this.calledLights[1],
+      lightEast: this.calledLights[2],
+    }
+  }
+
+  /** True inside the ART-17 flash window for the viewed floor's panels. */
+  isFlashing(viewFloor: FloorId, now: number = Date.now()): boolean {
+    return (
+      this.panelFlash !== null && now < this.panelFlash.until && this.panelFlash.floor === viewFloor
+    )
+  }
+
+  /** Read-only view of one car's animation clock. */
   clockOf(car: CarId): CarClock | undefined {
     return this.clocks.get(car)
   }
 
-  /** Advances every car's clock and drives car sprite visuals for `viewFloor`. */
-  tick(dtMs: number, viewFloor: FloorId): void {
+  /** The in-car screen readout, computed during tick. Cleared when not
+   *  riding (`rider === null`) — the scene applies it to the DOM verbatim. */
+  carScreen(): CarScreenReadout {
+    return this.carScreenReadout
+  }
+
+  /** Advances every car's clock, drives car sprite visuals for `viewFloor`,
+   *  and derives the rider's in-car screen readout (AD-038: one clock
+   *  authority — the hall-call lights, the panel flash, and the transit
+   *  sweep live here, not in the scene). */
+  tick(dtMs: number, viewFloor: FloorId, rider: RiderFacts | null = null): void {
     for (const carId of [1, 2] as const) {
       const clock = this.clocks.get(carId)
       const entry = this.cars.get(carId)
@@ -251,6 +324,56 @@ export class ElevatorPresenter {
       // Frame follows the same open amount the gray-box doors used: any
       // openness renders the doors-open cage, full closure the closed slab.
       entry.view.setFrame(doorsOpenAmount(advanced, this.cfg) > 0 ? 0 : 1)
+    }
+    this.deriveCarScreen(dtMs, rider)
+  }
+
+  /** Riders know the current leg's destination from the own car's press
+   *  queue (rider-exclusive, already on their screen); bystander ground
+   *  truth is the arrival event, which lands as the door-open event at the
+   *  destination floor. The sweep re-anchors when the leg starts or
+   *  retargets, so transition floors step per ride stride from the known
+   *  departure. */
+  private deriveCarScreen(dtMs: number, rider: RiderFacts | null): void {
+    const clock = rider === null ? undefined : this.clocks.get(rider.car)
+    if (rider === null || clock === undefined) {
+      this.carScreenLeg = null
+      this.carScreenReadout = { floor: null, state: null }
+      return
+    }
+    if (clock.phase !== 'transit') {
+      this.carScreenLeg = null
+      this.carScreenReadout = {
+        floor: clock.floor,
+        state:
+          clock.phase === 'opening'
+            ? 'doors opening'
+            : clock.phase === 'open'
+              ? 'doors open'
+              : clock.phase === 'closing'
+                ? 'doors closing'
+                : 'doors closed',
+      }
+      return
+    }
+    const dest = rider.queue[0] ?? null
+    if (dest === null) {
+      this.carScreenLeg = null
+      this.carScreenReadout = { floor: clock.floor, state: 'doors closed' }
+      return
+    }
+    if (
+      this.carScreenLeg === null ||
+      this.carScreenLeg.from !== clock.floor ||
+      this.carScreenLeg.to !== dest
+    ) {
+      this.carScreenLeg = { from: clock.floor, to: dest, elapsedMs: 0 }
+    } else {
+      this.carScreenLeg = { ...this.carScreenLeg, elapsedMs: this.carScreenLeg.elapsedMs + dtMs }
+    }
+    this.carScreenReadout = {
+      floor: transitFloorReadout(this.carScreenLeg.from, dest, this.carScreenLeg.elapsedMs),
+      state: `moving to ${floorLabel(dest)}`,
     }
   }
 }
