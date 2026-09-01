@@ -1135,36 +1135,63 @@
 - **Date**: 2026-09-01
 - **Status**: active
 
+### AD-039
+- **Decision**: PRD v1.5 — delivery scoring (cycle 3.D, proposal:
+  `.specs/proposals/delivery-scoring.md`). The FR-29(a) wrong-delivery door
+  complaint is **decoupled from the FR-31 complaint budget**: the
+  building-wide line still fires at guest arrival (evidence beat, honest-
+  mistake feedback, recap provenance unchanged) but counts toward nothing —
+  the budget means "caught sabotaging" (trash-discovery complaints only,
+  wired by 3.3). The §6.6 buzzer leg swaps coverage% for the **settle
+  score**: staff win at the buzzer when the round's settled-guest count ≥
+  `SETTLE_TARGET` (§7 v1.5: 4p 5 / 5p 7 / 6p 9, provisional pending the 3.5
+  exit-bot gate); win reasons rename `coverage-met`/`coverage-failed` →
+  `settle-target-met`/`settle-target-failed`; coverage survives as FR-23
+  telemetry/KPI only. Transport: **no new protocol message** — the client
+  HUD counts the already-public `guest:settled` stream (pure `ScoreHud`
+  presenter in the scene); `round:recap` carries `settleScore`+`settleTarget`
+  and `round:resumed` carries `settleScore` (reconnect re-seed) as payload
+  extensions on existing rows.
+- **Reason**: User direction ("simpler: right room = points, wrong room =
+  nothing"), refined in discussion: a fully silent mis-placement would
+  remove the suitcase system's evidence beat and honest-mistake feedback, so
+  the line stays while its punitive coupling dies. Budget = getting caught
+  sabotaging; score = doing the job; wrong delivery costs time only.
+- **Trade-off**: The 8-complaint leg becomes harder to reach (trash
+  discovery only) — its dial is re-examined at the 3.5 gate, not retuned
+  now. Per-player points were rejected (staff-vs-staff incentives); the
+  score is one public team number.
+- **Scope**: `packages/shared` (`tuning.settleTargetFor`, `RoundEndReason`
+  rename, `RoundRecap`/`RoundResumed` fields), `packages/sim`
+  (`GuestSim.settledCount`, `RoundSim` buzzer verdict), `apps/server`
+  (recap/resume builders), `apps/client` (`ui/scoreHud` + WorldScene mount,
+  results view, state/mappers), harness `client:score_hud`, prd/roadmap.
+  Sequencing: cycle 3.D precedes 3.3 (the letter precedent — 3.3's loss
+  loop consumes these triggers); 3.5 calibrates `SETTLE_TARGET`.
+- **Date**: 2026-09-01
+- **Status**: active
+
 ## Handoff
-- **Feature**: `restaurant-floor` (cycle 3.C, prd v1.4, AD-035) — **CLOSED
-  (PASS)**. All 8 tasks committed (T1 `c9ec84d` layout, T2 `e9b6cd1` dials,
-  T3 `45fadb5` dining sim, T4 `db68015` server seams, T5 `b90351e` client
-  view, T6 `464554e` dining cue + gate, T7 `b90242d` manifest, T8 `abc8ce6`
-  docs); Verifier = **PASS** (18/18 ACs, sensor 3/3 mutants killed, leak
-  audit clean, `validate_state.py` exit 0) — report in
-  `.specs/features/restaurant-floor/validation.md`.
-- **Phase / Task**: Execute → Validate ✅ done.
-- **Next step**: none for 3.C. Next work per roadmap: cycle 3.3
-  `complaint-budget` (the evidence + loss loop consumes 3.B's complaint
-  triggers — already unblocked).
-- **Gates at close**: typecheck 4/4 ✓ · lint ✓ · test:sim 394 ✓ ·
-  test:client 37/37 ✓ (workers=2, shift seam 60 s) · `client:restaurant`
-  2× consecutive ✓ · `sim:dining` 7 scenarios ✓.
-- **Follow-ups (non-blocking, Verifier-ranked)**: (1) ~~REG-18 seq flake~~ —
-  **RESOLVED 2026-09-01 (AD-037 session)**: the exact `buzzer.seq + 4` pin
-  relaxed to ordered floor assertions (buzzer < ended < recap < started, gap
-  `≥ recap + 2`, re-deal adjacency kept exact) — guest lifecycle events may
-  share the buzzer flush window with seed-dependent volume, so the property
-  under test is per-connection seq continuity, not flush size; 10/10 isolated
-  + 2× full-suite green (previously ~3/5 flaky). (2) REST-14 mezzanine
-  hall-call lights and (3) REST-17 spectator mezzanine lane are structurally
-  implemented without dedicated assertions.
-- **Notes**: the pre-3.C flake class (justice/lobby/round) was root-caused
-  into two fixable seams — shift length (buzzer fired mid-choreography after
-  the lobby ride legs doubled) and stale per-test timeout/selector budgets —
-  plus two genuine test bugs (missing keyup after cancel; fixed-sleep walk
-  drifting into the desk E-suppression zone). Full suite now green at
-  workers=2; residual cross-test bleed under 4-worker parallelism remains
-  the documented flake class, unchanged by 3.C.
+- **Feature**: `delivery-scoring` (cycle 3.D, prd v1.5, AD-039) — all 8 tasks
+  committed (T1 `settleTargetFor`, T2 `GuestSim.settledCount`, T3 buzzer
+  verdict swap + reason rename, T4 recap/resume payloads, T5 score HUD,
+  T6 results + resume wiring, T7 `client:score_hud` ×2, T8 docs). Verifier
+  report: `.specs/features/delivery-scoring/validation.md`.
+- **Phase / Task**: Execute → Validate.
+- **Next step**: cycle 3.3 `complaint-budget` (scope amended by 3.D:
+  trash-discovery complaints only) or the 3.5 gate for `SETTLE_TARGET`
+  calibration.
+- **Gates**: typecheck ✓ · lint ✓ · test:sim 436 ✓ · test:client 38/38
+  (one in-suite re-flake of `client:lobby_join` room-full — green isolated
+  and 2× full green at HEAD; documented bleed class, predates 3.D).
+- **Follow-ups (non-blocking)**: (1) **Elevator boarding jam at high guest
+  density** (found while building `client:score_hud`, pre-existing): a FULL
+  car parked at a landing with a lit same-floor hall call keeps its doors
+  open indefinitely — boarders queue behind capacity and the car never
+  departs ("dwell extends while a call remains to attend", AD-027 wording).
+  Needs ~7+ simultaneous self-assigned boarders (harness timing only at
+  §7 dials); movement quirk, not 3.D scope — investigate before the 3.5
+  bot sims which may hit it at scale. (2) `SETTLE_TARGET` values are
+  provisional by design — 3.5 calibrates.
 - **Blockers**: none.
 - **Branch**: master

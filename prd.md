@@ -1,6 +1,6 @@
 # PRD — Turnover
 
-Version: 1.4 · Status: Gray-box + stack decisions locked · Owner: —
+Version: 1.5 · Status: Gray-box + stack decisions locked · Owner: —
 Name: **Turnover** (codename during docs: "Grand Hotel") · Domains reserved: turnover.game, playturnover.com
 Companion docs: `roadmap.md` (build plan)
 
@@ -14,6 +14,14 @@ Companion docs: `roadmap.md` (build plan)
 > a server-generated truthful lifecycle log, and a mezzanine restaurant floor
 > is added. §6.9/FR-3/FR-7–9/FR-33/§5/§7/§9 amended; cycles 3.B/3.C inserted
 > in `roadmap.md`. §7 v1.4 dials provisional pending the 3.5 balance gate.
+>
+> v1.5 changelog: delivery scoring (AD-039) — the settle score: correct
+> deliveries settle guests and build a public team score that decides the
+> buzzer verdict (§6.6), the wrong-delivery complaint line stops counting
+> toward the complaint budget (it informs, it no longer damages — only
+> trash-discovery complaints feed the loss leg), and coverage% drops out of
+> the win check into telemetry. §6.6/FR-29/FR-31/§5/§7/§8 amended; cycle 3.D
+> inserted in `roadmap.md`; SETTLE_TARGET provisional pending 3.5.
 
 ---
 
@@ -79,7 +87,7 @@ Lobby gather-up → secret roles → SHIFT (5:00)
            spot-check · testify on voice · accuse
   Saboteur: un-prep (3s) · re-trash · fake prep · decoy elevator calls ·
             overhear assignments · mis-place suitcases · voice lies
-→ Buzzer / firing / coverage / budget exhausted → Results: winner + traitor reveal
+→ Buzzer / firing / settle target / budget exhausted → Results: winner + traitor reveal
   + event recap
 → post-round argument (retention engine)
 ```
@@ -154,11 +162,11 @@ Design pillars:
         quiet" is a social honor convention (Among Us ghost rule), stated in-client but
         unenforced.
 
-### 6.6 Win Conditions
+### 6.6 Win Conditions (v1.5, AD-039)
 | Side | Wins when |
 |---|---|
-| Staff | Saboteur fired (walk-in or correct accusation) **or** ≥80% rooms prepped at 5:00 buzzer |
-| Saboteur | Complaint budget exhausted — 8th guest complaint (instant loss) **or** <80% coverage at buzzer **or** staff reduced to 1 player |
+| Staff | Saboteur fired (walk-in or correct accusation) **or** the settle score ≥ `SETTLE_TARGET` at the 5:00 buzzer |
+| Saboteur | Complaint budget exhausted — 8th guest complaint, trash-discovery complaints only (v1.5; instant loss) **or** settle score < `SETTLE_TARGET` at buzzer **or** staff reduced to 1 player |
 
 ### 6.7 Results & Recap
 - FR-21 Winner banner + traitor identity reveal.
@@ -207,26 +215,31 @@ stable across specs and skills.
         self-assigns a uniform random vacant room. Once checked in, the guest is
         patient; no clock runs on carriers except the §7 carry clock (the only
         personal foul: it **fires the current carrier** on expiry).
-- FR-29 Arrival & complaint (v1.4): a guest enters **only the room where their suitcase
+- FR-29 Arrival & complaint (v1.4; budget decoupled v1.5): a guest enters **only the room where their suitcase
         rests, only on arrival**. Two complaint paths:
         *(a) wrong room* — room != assignment → the guest complains **at the door**: a
         building-wide line ("the guest of room X complained about the suitcase"),
-        counting toward the FR-31 budget; no entry, no interior discovery, **no personal
-        penalty for the placement** — mis-placement is free and stealthy; interception
-        before arrival is the only defense. *(b) trash inside* — room == assignment but
-        trashed → the original v1.3 discovery loop: in-world anger cue at the room
-        (room-number level, no detail), the guest walks to the desk and delivers a
-        fuzzy-timestamp report ("someone hit 305, maybe a minute ago"), one complaint
-        fires, and the guest **leaves the hotel** — no retry. Their departure flips the
-        tenancy sign Vacant (FR-33); the room stays trashed — "vacant but trashed" is
-        the complaint's footprint.
+        **counting toward nothing since v1.5 — the line informs, it no longer damages**
+        (the settlement score is untouched, the budget is untouched); no entry, no
+        interior discovery, **no personal penalty for the placement** — mis-placement
+        costs only time; interception before arrival is the only defense. *(b) trash
+        inside* — room == assignment but trashed → the original v1.3 discovery loop:
+        in-world anger cue at the room (room-number level, no detail), the guest walks
+        to the desk and delivers a fuzzy-timestamp report ("someone hit 305, maybe a
+        minute ago"), one complaint fires, and the guest **leaves the hotel** — no
+        retry. Their departure flips the tenancy sign Vacant (FR-33); the room stays
+        trashed — "vacant but trashed" is the complaint's footprint. A guest settling
+        into their assigned room — however it got there — adds **+1 settle score**
+        (v1.5), the §6.6 buzzer verdict's input.
 - FR-30 Guests never convict: guest encounters never trigger walk-in conviction
         (FR-15 stays staff-only). A guest entering during an active un-prep flees and
         follows the FR-29 complaint path. Guest complaints are testimony, not justice.
-- FR-31 Complaint budget: the Nth complaint (N=8, §7) is **instant staff loss**
+- FR-31 Complaint budget (v1.5 scope): only **trash-discovery complaints** (FR-29b)
+        count; the Nth complaint (N=8, §7) is **instant staff loss**
         (§6.6). The HUD counter (FR-14) pulses red at ≥6. Every complaint delivers
         information (the FR-29 desk report) — losing ground and gaining leads share
-        a beat.
+        a beat. Wrong-delivery door complaints (FR-29a) never counted here since
+        v1.5 — the budget means "caught sabotaging", not "logistics happened".
 - FR-32 Trash provenance: trash has an author dimension on top of FR-12 freshness —
         checkout churn spawns *settled*; sabotage spawns *fresh*; re-trashing resets to
         fresh. Churn can be laundered into "suspicious" by re-trashing; a sabotage hit
@@ -253,7 +266,8 @@ stable across specs and skills.
 | Rooms | ~24 (3 floors × 7–8) | — |
 | Prep / un-prep | 5s / 3s | un-prep → 2s if saboteur weak |
 | Re-trash | Unlimited | — |
-| Coverage target | 80% | — |
+| Coverage target | 80% | — (telemetry/KPI only since v1.5 — no longer a win check) |
+| Settle target (v1.5, AD-039) | 5 (4p) / 7 (5p) / 9 (6p) settled guests at buzzer | provisional — locks only after the 3.5 exit-bot gate proves settle throughput under interception-shaped sabotage |
 | Attrition loss | Staff down to 1 | scale by lobby size later |
 | Freshness window | 75s | — |
 | Rustle range | ~3 tiles | — |
@@ -263,7 +277,7 @@ stable across specs and skills.
 | Initial trashed rooms | 7 of 24 at t=0 | — |
 | Guest cadence | 30s (4p) / 24s (5p) / 18s (6p) | first dial for 4-player slack |
 | Guest dwell | 45–90s, random per guest | — |
-| Complaint budget | 8 (instant loss) | scale by lobby size |
+| Complaint budget | 8 (instant loss; trash-discovery complaints only since v1.5) | scale by lobby size; harder to reach now — re-examine at the 3.5 gate |
 | Guest impatience | 20s → self-assign (v1.4: times the check-in wait only) | — |
 | Peak occupancy | ~10 rooms | — |
 | Desk earshot range | ~3 tiles, snapshot at the check-in tick | v1.4; widen if overhearing feels scarce |
@@ -292,7 +306,9 @@ outruns saboteur re-trash (~7/min). The saboteur's win lever at 5–6 players is
 trash blitz** + attrition at low counts, not sustained denial. Expect coverage wins at high
 counts, catch/accusation wins at low counts. No dial changes pre-build. **v1.3 note: guest
 churn adds a third mess source the §8 math never priced; throughput vs. bleed must be
-recomputed when the guest-traffic spec is written (AD-022 trade-off).**
+recomputed when the guest-traffic spec is written (AD-022 trade-off).** **v1.5 note: the
+buzzer win leg is the settle score, not coverage — the 3.5 exit-bot gate calibrates
+SETTLE_TARGET (and re-checks the shrunken complaint budget's reachability) instead.**
 
 ## 9. Risks & Mitigations
 
