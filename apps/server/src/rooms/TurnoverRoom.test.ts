@@ -516,10 +516,18 @@ describe('server:protocol_registry', () => {
     host.send('lobby:start', { type: 'lobby:start' })
     await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
     instance?.__driveTicks(1)
-    const reStarted = await collector.waitFor('round:started')
     // Buzzer + its same-flush round:ended verdict + round:recap + the
-    // movement snapshot precede the re-deal's start (cycle 2.9).
-    expect(reStarted.seq).toBe(buzzer.seq + 4)
+    // movement snapshot precede the re-deal's start (cycle 2.9). Guest
+    // lifecycle events may share the buzzer flush window — their volume at
+    // the buzzer is seed-dependent — so the gap is a FLOOR, not an exact pin;
+    // the property under test is per-connection seq continuity across sim
+    // disposal, not the flush size.
+    const ended = await collector.waitFor('round:ended')
+    expect(ended.seq).toBeGreaterThan(buzzer.seq)
+    const recap = await collector.waitFor('round:recap')
+    expect(recap.seq).toBeGreaterThan(ended.seq)
+    const reStarted = await collector.waitFor('round:started')
+    expect(reStarted.seq).toBeGreaterThanOrEqual(recap.seq + 2) // + movement snapshot
     const reDealt = await collector.waitFor('role:dealt')
     expect(reDealt.seq).toBe(reStarted.seq + 1)
     collector.stop()
@@ -1419,7 +1427,7 @@ describe('server:work_channels', () => {
       // Fake prep on a fresh room: identical confirmation, no transition ever.
       saboteur.send('move:start', { type: 'move:start', dir: 'right' })
       await sleep(50)
-      instance.__driveTicks(9) // x ≈ 5700 → room 2 (fresh)
+      instance.__driveTicks(16) // x ≈ 7200–7800 → mid room 2 (fresh, AD-036)
       saboteur.send('move:stop', { type: 'move:stop' })
       await sleep(50)
       instance.__driveTicks(1)
@@ -1601,7 +1609,7 @@ describe('server:evidence', () => {
         }
       }
 
-      // Walk right until parked INSIDE room 1's segment ([1000, 4500) milli).
+      // Walk right until parked INSIDE room 1's segment ([2000, 5250) milli).
       staffPage.send('move:start', { type: 'move:start', dir: 'right' })
       await sleep(60)
       let ownX = 0

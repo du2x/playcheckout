@@ -1039,6 +1039,30 @@
 - **Date**: 2026-08-31
 - **Status**: active
 
+### AD-036
+- **Decision**: Room geometry re-derived (amends AD-010's constants, not its
+  shape): `ROOM_DEPTH_TILES` 3.5 → 3.25 and `ROOM_HALL_START_TILES` 1 → 2, so
+  the 8 rooms tile `[2, 28]` of the 30-tile hall and each end frees a 2-tile
+  (64 px) landing clearance. Purpose: the elevator gets FRONT-FACING landing
+  doors in the same perspective as room doors (replacing the transverse
+  `elevator-car` slab), and a 64 px door needs 64 px of clear wall — the old
+  1-tile (32 px) landings could not fit one. Segment width 104 px still
+  comfortably holds the 72 px `door-closed` art; door gaps go 40 → 32 px.
+- **Reason**: The transverse car reads as a foreign object against the
+  billboarded hall; a front-facing door also makes arrivals publicly readable
+  (doors open across the hall = someone landed) without leaking occupants
+  (ART-15 privacy rule keeps the occupant list server-side).
+- **Trade-off**: All milli-derived positions shift (room doors move up to
+  0.875 tiles inward); landing boarding zones (1 tile around x=0/30) no longer
+  overlap any room segment — an improvement for the "at landing vs in room"
+  ambiguity. No travel-budget change (hall length and room count unchanged).
+- **Scope**: `packages/shared/src/layout.ts` (+tests), re-pinned hard-coded
+  milli literals in `packages/sim/src/{justice,roundSim,work}.test.ts`,
+  `apps/server/src/rooms/{router,TurnoverRoom}.test.ts`. Client coordinates
+  all derive from milli — no client edits.
+- **Date**: 2026-09-01
+- **Status**: active
+
 ## Handoff
 - **Feature**: `restaurant-floor` (cycle 3.C, prd v1.4, AD-035) — **CLOSED
   (PASS)**. All 8 tasks committed (T1 `c9ec84d` layout, T2 `e9b6cd1` dials,

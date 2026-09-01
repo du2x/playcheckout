@@ -5,9 +5,10 @@ import { RoundSim } from './roundSim.js'
 import { PREP_TICKS, UNPREP_TICKS } from './work.js' // Spec JUST-01..05 (gate scenario sim:walkin_conviction, FR-15/FR-16): scripted
 
 // positions over the pure round sim. Positions are integer millitiles; AD-010
-// room 1 on any guest floor spans [1000, 4500), room 2 [4500, 8000).
+// (re-derived AD-036) room 1 on any guest floor spans [2000, 5250), room 2
+// [5250, 8500).
 
-const CENTER = 2750 // inside room 1
+const CENTER = 3625 // room 1's doorway (segment center)
 const WEST_HALL = 500 // open hall west of every segment
 const F1 = 'floor1' as GuestFloorId
 const IDS = ['p1', 'p2', 'p3', 'p4']
@@ -265,17 +266,17 @@ describe('sim:accuse', () => {
     const b = staff[1]
     if (a === undefined || b === undefined) throw new Error('ids')
     // No sabotage has completed: grace is irrelevant for an innocent target.
-    sim.tick(positions(at(a, pos(F1, 1100)), at(b, pos(F1, 1400))))
+    sim.tick(positions(at(a, pos(F1, 2100)), at(b, pos(F1, 2400))))
     // a is mid-prep when they accuse: firing them cancels the channel
     // silently (JUST-11 — no work:ended, no trace).
     expect(sim.startWork(a, F1, 1)).toBe('accepted')
-    sim.tick(positions(at(a, pos(F1, 1100)), at(b, pos(F1, 1400))))
+    sim.tick(positions(at(a, pos(F1, 2100)), at(b, pos(F1, 2400))))
     expect(sim.accuse(a, b)).toBe('resolved')
-    const fired = firedOf(sim.tick(positions(at(a, pos(F1, 1100)), at(b, pos(F1, 1400)))))
+    const fired = firedOf(sim.tick(positions(at(a, pos(F1, 2100)), at(b, pos(F1, 2400)))))
     expect(fired).toEqual([{ type: 'player:fired', playerId: a, reason: 'wrong-accusation' }])
     expect(
       sim
-        .tick(positions(at(a, pos(F1, 1100)), at(b, pos(F1, 1400))))
+        .tick(positions(at(a, pos(F1, 2100)), at(b, pos(F1, 2400))))
         .filter((e) => e.type === 'work:ended' && e.playerId === a),
     ).toEqual([])
     void saboteur

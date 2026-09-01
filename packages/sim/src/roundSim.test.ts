@@ -152,9 +152,9 @@ describe('sim:work buzzer', () => {
 // Gate scenario `sim:win_checks` (cycle 2.9, REND-01..05): the three §6.6
 // paths — saboteur fired, staff reduced, buzzer coverage — plus the journal.
 // Positions are integer millitiles; room r on a guest floor spans
-// [1000 + 3500(r-1), +3500) (AD-010).
+// [2000 + 3250(r-1), +3250) (AD-010, re-derived AD-036).
 // ---------------------------------------------------------------------------
-const roomX = (room: number): number => 1000 + 3500 * (room - 1) + 100
+const roomX = (room: number): number => 2000 + 3250 * (room - 1) + 100
 
 describe('sim:win_checks', () => {
   /** A dealt round + a per-tick position feeder. */

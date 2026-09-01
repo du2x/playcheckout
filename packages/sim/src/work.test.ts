@@ -6,7 +6,8 @@ import { FRESHNESS_TICKS, PREP_TICKS, UNPREP_TICKS, WorkChannels } from './work.
 
 // Spec WORK-01..15 (gate scenarios sim:prep / sim:unprep / sim:fake_prep):
 // scripted positions + start intents over the pure work system. Positions are
-// integer millitiles; AD-010 room 1 on any guest floor spans [1000, 4500).
+// integer millitiles; AD-010 (re-derived AD-036) room 1 on any guest floor
+// spans [2000, 5250).
 
 const CENTER = 2750 // inside room 1
 const OUTSIDE = 29_500 // east open hall, outside every segment
@@ -643,8 +644,8 @@ describe('sim:door_open_cue', () => {
   it('fires on a pass-through crossing from one room into the next (EVID-16)', () => {
     const sim = simWith([['ada', 'staff']])
     sim.tick(positions(['ada', pos('floor1', CENTER)]))
-    // Room 2 starts at x = 4500 (AD-010); walking straight there is an entry.
-    const cross = sim.tick(positions(['ada', pos('floor1', 5000)]))
+    // Room 2 starts at x = 5250 (AD-010, AD-036); walking straight there is an entry.
+    const cross = sim.tick(positions(['ada', pos('floor1', 5750)]))
     expect(workOf(cross, 'room:entered')).toEqual([
       { type: 'room:entered', playerId: 'ada', floor: 'floor1', room: 2 },
     ])

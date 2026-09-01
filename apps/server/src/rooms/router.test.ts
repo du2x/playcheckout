@@ -240,13 +240,13 @@ describe('router: earshot policy', () => {
     const otherFloor = fakeClient('otherFloor') // same x, wrong floor
     const rider = fakeClient('rider') // in a car: no floor, no x
     const router = newRouter(inRoom, twoTiles, atBoundary, tooFar, otherFloor, rider)
-    // Room 2 on any guest floor spans [4500, 8000) millitiles (AD-010).
+    // Room 2 on any guest floor spans [5250, 8500) millitiles (AD-010, AD-036).
     const xBySession: Record<string, number | null> = {
-      inRoom: 5000,
-      twoTiles: 2500,
-      atBoundary: 1500,
-      tooFar: 1499,
-      otherFloor: 5000,
+      inRoom: 5750,
+      twoTiles: 3250,
+      atBoundary: 2250,
+      tooFar: 2249,
+      otherFloor: 5750,
       rider: null,
     }
     router.setViewContext((sessionId) => {
@@ -277,13 +277,13 @@ describe('router: earshot policy', () => {
     expect(rider.sent).toEqual([])
   })
 
-  it('hears a rustle from inside ANY room segment and the west landing is 4.5 tiles from room 1', () => {
+  it('hears a rustle from inside ANY room segment and the west landing is 2 tiles from room 1', () => {
     const { inRoom, router } = earshotContexts()
-    // Sabotage in room 1 ([1000, 4500)): the segment-inside viewer hears it.
+    // Sabotage in room 1 ([2000, 5250)): the segment-inside viewer hears it.
     router.route({ type: 'room:rustle', floor: 'floor1', room: 1 })
-    expect(inRoom.sent).toHaveLength(1) // x 5000 is 500 milli from room 1's edge
+    expect(inRoom.sent).toHaveLength(1) // x 5750 is 500 milli from room 1's east edge
 
-    // Landing x=0 is 1000 milli from room 1's near edge — inside earshot.
+    // Landing x=0 is 2000 milli from room 1's near edge — inside earshot.
     const atLanding = fakeClient('landing')
     const router2 = newRouter(atLanding)
     router2.setViewContext(() => ({ floor: 'floor1', roomKey: null, car: null, x: 0 }))

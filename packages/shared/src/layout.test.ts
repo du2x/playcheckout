@@ -28,37 +28,42 @@ describe('layout', () => {
 
   it('matches the roadmap step 0 travel-budget assumptions', () => {
     expect(HALL_LENGTH_TILES).toBe(30)
-    expect(ROOM_DEPTH_TILES).toBe(3.5)
+    expect(ROOM_DEPTH_TILES).toBe(3.25)
   })
 
-  it('tiles the hall exactly: 8 segments of 3.5 fill [1, 29] (AD-010)', () => {
-    expect(ROOM_HALL_START_TILES + ROOMS_PER_FLOOR * ROOM_DEPTH_TILES).toBe(HALL_LENGTH_TILES - 1)
-    expect(roomSegmentStartMilli(1)).toBe(1000)
-    expect(roomSegmentEndMilli(8)).toBe(29000)
+  it('tiles the hall exactly: 8 segments of 3.25 fill [2, 28] (AD-010, re-derived AD-036)', () => {
+    expect(ROOM_HALL_START_TILES + ROOMS_PER_FLOOR * ROOM_DEPTH_TILES).toBe(HALL_LENGTH_TILES - 2)
+    expect(roomSegmentStartMilli(1)).toBe(2000)
+    expect(roomSegmentEndMilli(8)).toBe(28000)
     for (let i = 2; i <= ROOMS_PER_FLOOR; i++) {
       expect(roomSegmentStartMilli(i as 2)).toBe(roomSegmentEndMilli((i - 1) as 1))
     }
   })
 
+  it('leaves a 2-tile landing clearance at each end (AD-036: front-facing elevator door)', () => {
+    expect(ROOM_HALL_START_TILES).toBeGreaterThanOrEqual(2)
+    expect(roomSegmentEndMilli(8)).toBeLessThanOrEqual((HALL_LENGTH_TILES - 2) * 1000)
+  })
+
   it('resolves segment membership half-open, last room inclusive (AD-010)', () => {
-    expect(roomIndexAtMilli(999)).toBe(0)
-    expect(roomIndexAtMilli(1000)).toBe(1)
-    expect(roomIndexAtMilli(4499)).toBe(1)
-    expect(roomIndexAtMilli(4500)).toBe(2)
+    expect(roomIndexAtMilli(1999)).toBe(0)
+    expect(roomIndexAtMilli(2000)).toBe(1)
+    expect(roomIndexAtMilli(5249)).toBe(1)
+    expect(roomIndexAtMilli(5250)).toBe(2)
     expect(roomIndexAtMilli(15_000)).toBe(5)
-    expect(roomIndexAtMilli(28_999)).toBe(8)
-    expect(roomIndexAtMilli(29_000)).toBe(8)
-    expect(roomIndexAtMilli(29_001)).toBe(0)
+    expect(roomIndexAtMilli(27_999)).toBe(8)
+    expect(roomIndexAtMilli(28_000)).toBe(8)
+    expect(roomIndexAtMilli(28_001)).toBe(0)
   })
 })
 
 // Cycle 3.1: guests walk to the segment-center doorway of their assigned room.
 describe('room doorway geometry (cycle 3.1)', () => {
   it('places every door at its segment center', () => {
-    // Room 1 spans [1000, 4500) milli → center 2750.
-    expect(roomDoorXMilli(1)).toBe(2750)
-    // Room 8 spans [25500, 29000) milli → center 27250.
-    expect(roomDoorXMilli(8)).toBe(27250)
+    // Room 1 spans [2000, 5250) milli → center 3625.
+    expect(roomDoorXMilli(1)).toBe(3625)
+    // Room 8 spans [24750, 28000) milli → center 26375.
+    expect(roomDoorXMilli(8)).toBe(26375)
   })
 
   it('door x resolves back through the room-at predicate', () => {
