@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUNING, settleTargetFor } from './tuning'
+import { settleTargetFor, TUNING } from './tuning'
 
 // Expected values copied verbatim from prd §7 (single source of truth, locked).
 describe('tuning table', () => {

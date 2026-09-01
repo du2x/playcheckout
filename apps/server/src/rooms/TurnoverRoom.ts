@@ -17,9 +17,9 @@ import {
   type MovementSnapshot,
   moveStartIntentSchema,
   moveStopIntentSchema,
+  settleTargetFor,
   suitcasePickupIntentSchema,
   suitcasePlaceIntentSchema,
-  settleTargetFor,
   TUNING,
   workStartIntentSchema,
 } from '@turnover/shared'
