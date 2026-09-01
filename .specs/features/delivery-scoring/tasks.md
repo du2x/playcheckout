@@ -270,10 +270,10 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Every named prd section amended; changelog notes v1.5
-- [ ] Roadmap carries 3.D between 3.C and 3.3 with amended 3.3 scope
-- [ ] AD-039 recorded with proposal link; Handoff updated
-- [ ] Build gate green
+- [x] Every named prd section amended; changelog notes v1.5
+- [x] Roadmap carries 3.D between 3.C and 3.3 with amended 3.3 scope
+- [x] AD-039 recorded with proposal link; Handoff updated
+- [x] Build gate green
 
 **Tests**: none
 **Gate**: build

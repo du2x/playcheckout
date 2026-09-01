@@ -110,21 +110,21 @@ recorded with the proposal link.
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| DLVR-01 | P1: Settle score | Design | Pending |
-| DLVR-02 | P1: Settle score | Design | Pending |
-| DLVR-03 | P1: Settle score | Design | Pending |
-| DLVR-04 | P1: Settle score | Design | Pending |
-| DLVR-05 | P1: Win verdict | Design | Pending |
-| DLVR-06 | P1: Win verdict | Design | Pending |
-| DLVR-07 | P1: Win verdict | Design | Pending |
-| DLVR-08 | P1: Win verdict | Design | Pending |
-| DLVR-09 | P2: Score HUD | - | Pending |
-| DLVR-10 | P2: Score HUD | - | Pending |
-| DLVR-11 | P2: Recap | - | Pending |
-| DLVR-12 | P2: Recap | - | Pending |
-| DLVR-13 | P3: Docs | - | Pending |
+| DLVR-01 | P1: Settle score | Design | Verified |
+| DLVR-02 | P1: Settle score | Design | Verified |
+| DLVR-03 | P1: Settle score | Design | Verified |
+| DLVR-04 | P1: Settle score | Design | Verified |
+| DLVR-05 | P1: Win verdict | Design | Verified |
+| DLVR-06 | P1: Win verdict | Design | Verified |
+| DLVR-07 | P1: Win verdict | Design | Verified |
+| DLVR-08 | P1: Win verdict | Design | Verified |
+| DLVR-09 | P2: Score HUD | - | Verified |
+| DLVR-10 | P2: Score HUD | - | Verified |
+| DLVR-11 | P2: Recap | - | Verified |
+| DLVR-12 | P2: Recap | - | Verified |
+| DLVR-13 | P3: Docs | - | Verified |
 
-**Coverage:** 13 total, 0 mapped to tasks yet (mapping lands in the Tasks phase).
+**Coverage:** 13 total, 13 mapped to tasks, 0 unmapped.
 
 ## Success Criteria
 
