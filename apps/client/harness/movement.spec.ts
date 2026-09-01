@@ -187,7 +187,7 @@ test.describe('client:movement', () => {
   test('round: press-model ride, rider invisibility, position-only panels (MOVE-10..17, ELR-05/14)', async ({
     browser,
   }) => {
-    test.setTimeout(90_000) // the test shift (30 s, AD-004) plus choreography
+    test.setTimeout(130_000) // the test shift (60 s, AD-004 seam at 3.C) plus choreography
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -263,7 +263,7 @@ test.describe('client:movement', () => {
 
     // Buzzer (30 s test shift, AD-004 seam): the results view covers the
     // world (cycle 2.9) — ada keeps floor1 beneath it.
-    for (const page of pages) await page.waitForSelector('#results-view', { timeout: 45_000 })
+    for (const page of pages) await page.waitForSelector('#results-view', { timeout: 90_000 })
 
     // Post-buzzer movement is no longer confined to the lobby (AD-015): ada
     // remains on floor1 and can keep walking there.
@@ -312,7 +312,7 @@ test.describe('client:elevator_riders', () => {
   test('shared ride: rider-exclusive chip, lit indicator, press redirect, no re-board', async ({
     browser,
   }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(130_000)
     const host = await browser.newContext().then((c) => c.newPage())
     const code = await createRoom(host, 'ada')
     const rider2 = await browser.newContext().then((c) => c.newPage())

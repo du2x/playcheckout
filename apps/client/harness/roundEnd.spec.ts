@@ -59,7 +59,7 @@ test.describe('client:round_end', () => {
   test('buzzer with zero preps: saboteur banner, traitor reveal, recap, next start', async ({
     browser,
   }) => {
-    test.setTimeout(120_000) // the 30 s test shift (AD-004) plus choreography
+    test.setTimeout(170_000) // the 60 s test shift (AD-004 seam at 3.C) plus choreography
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -93,7 +93,7 @@ test.describe('client:round_end', () => {
 
     // Zero preps → at the buzzer the coverage check fails: saboteur win.
     for (const page of pages) {
-      await page.waitForSelector('#results-view', { timeout: 45_000 })
+      await page.waitForSelector('#results-view', { timeout: 90_000 })
       await expect(page.locator('#results-banner')).toHaveText('SABOTEUR WINS')
     }
     // The traitor reveal names a roster player on every page (FR-21).

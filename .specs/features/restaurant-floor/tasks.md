@@ -168,18 +168,18 @@ T7 → T8
 
 ---
 
-### T6: Dining cue + client:restaurant harness scenario
+### T6: Dining cue + client:restaurant harness scenario — ✅ DONE
 
 **What**: Gray-box dining chip on mezzanine guest markers; new `apps/client/harness/restaurant.spec.ts` with `client:restaurant` (ride to mezzanine, view asserts, checked-in guest dining chip).
-**Where**: `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/restaurant.spec.ts`
+**Where**: `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/restaurant.spec.ts` (+ 3.C gate re-pins: shift seam 60 s, per-test timeouts, buzzer-spanning waits, snapshot guest ingestion in applySnapshot, clock-read tolerance in round.spec)
 **Depends on**: T5
 **Reuses**: harness press-retry + guest-scale patterns
 **Requirement**: REST-16
 
 **Done when**:
 
-- [ ] `client:restaurant` passes twice consecutively
-- [ ] Full gate passes
+- [x] `client:restaurant` passes twice consecutively (2× ✓)
+- [x] Full gate passes: typecheck 0 · lint ✓ · test:sim 394 ✓ · test:client 37/37 (workers=2)
 
 **Tests**: e2e
 **Gate**: full

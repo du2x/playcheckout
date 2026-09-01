@@ -64,7 +64,7 @@ test.describe('client:accuse_ui', () => {
   test('tap E calls, hold E accuses, the accuser is fired name-only, the round continues', async ({
     browser,
   }) => {
-    test.setTimeout(90_000)
+    test.setTimeout(120_000)
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -216,8 +216,8 @@ test.describe('client:accuse_ui', () => {
         // Backwards scan: the newest own moved event is within the last few
         // ticks; a forward filter would lag behind the walk and overshoot.
         for (let i = t.events.length - 1; i >= 0; i--) {
-          const e = t.events[i]!
-          if (e.type !== 'player:moved') continue
+          const e = t.events[i]
+          if (e === undefined || e.type !== 'player:moved') continue
           if (e.payload?.playerId !== own) continue
           return typeof e.payload.x === 'number' && (e.payload.x ?? 0) >= 13.2
         }

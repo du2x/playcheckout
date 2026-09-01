@@ -48,6 +48,10 @@ import { ElevatorPresenter } from './elevatorPresenter'
 const TILE_PX = 32 // hall width in px per tile (960 / 30, integer grid — AD-030)
 const GROUND_Y = 430
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
+/** Guest marker fills (3.C dining cue): ice-blue in the lobby/queue, amber
+ *  while dining on the mezzanine. */
+const GUEST_FILL = 0xbfe3ff
+const DINING_FILL = 0xffd27a
 
 /**
  * Spectator lanes (cycle 2.9, FR-20): the full-building overview stacks all
@@ -772,6 +776,14 @@ export class WorldScene extends Phaser.Scene {
     for (const sc of snapshot.suitcases ?? []) {
       this.suitcases.set(sc.guestId, { carrierId: null, rest: { floor: sc.floor, room: sc.room } })
     }
+    // 3.C (AD-017 class): guests appear in slots by NPC teleport, so an
+    // arriving player's snapshot is the ONLY delivery for a teleport that
+    // happened while they rode a car (riders get no floor stream). Snapshot
+    // guests are own-floor rows — merge them in; departures still arrive as
+    // guest:left events.
+    for (const g of snapshot.guests ?? []) {
+      this.guests.set(g.guestId, { floor: g.floor, x: g.x })
+    }
     this.updatePanel()
   }
 
@@ -1092,13 +1104,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** Guest marker sync (called every frame): one Arc per guest on the viewed
-   *  floor, bouncing while its free impatience cue is active (GUEST-12/13). */
+   *  floor, bouncing while its free impatience cue is active (GUEST-12/13).
+   *  Dining guests (3.C: on the mezzanine) render amber — the dining cue. */
   private syncGuests(delta: number): void {
     this.tapPhase += delta / 1000
     for (const [id, g] of this.guests) {
       let view = this.guestViews.get(id)
+      const laneY = this.laneY(g.floor)
       if (view === undefined) {
-        view = this.add.circle(g.x * TILE_PX, GROUND_Y - 10, 9, 0xbfe3ff)
+        view = this.add.circle(g.x * TILE_PX, laneY - 10, 9, 0xbfe3ff)
         this.guestViews.set(id, view)
       }
       const visible = this.spectator || g.floor === this.viewFloor
@@ -1107,7 +1121,8 @@ export class WorldScene extends Phaser.Scene {
       const tap = this.impatientGuests.has(id)
         ? Math.abs(Math.sin(this.tapPhase * Math.PI * 2)) * 8
         : 0
-      view.y = GROUND_Y - 10 - tap
+      view.y = laneY - 10 - tap
+      view.setFillStyle(g.floor === 'mezzanine' ? DINING_FILL : GUEST_FILL)
     }
     for (const [id, view] of this.guestViews) {
       if (!this.guests.has(id)) {
