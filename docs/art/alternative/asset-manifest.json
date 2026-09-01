@@ -1,57 +1,57 @@
 {
- "project": "Turnover — ALTERNATIVE art direction (Deco Noir)",
- "status": "ADOPTED as production direction (AD-029, 2026-08-30); seeds retained as approval evidence — production sheets live in apps/client/public/art",
- "brief": "docs/art/alternative/art-direction-brief.md",
- "assets": [
-  {
-   "path": "docs/art/alternative/seeds/staff-idle-34x64.png",
-   "role": "hero target: staff idle frame, strict profile, feet at row 63",
-   "size": "34x64",
-   "alpha": true,
-   "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
-   "license": "original work, repo-owned",
-   "qa": "asset_report ok: 9 colors, alpha 0-255, no problems",
-   "approval": "pending — judge at native scale over the seed corridor"
-  },
-  {
-   "path": "docs/art/alternative/seeds/styleboard-corridor-832x576.png",
-   "role": "native-scale gameplay mock: door triptych (closed+card / open prepped / open trashed-fresh), sconce glows, staff hero",
-   "size": "832x576",
-   "alpha": false,
-   "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
-   "license": "original work, repo-owned",
-   "qa": "visual pass: ellipse-stepped glows, silhouette-first trash, ivory figure separates from wall and carpet",
-   "approval": "pending — art workstream + design owner"
-  },
-  {
-   "path": "apps/client/public/art/floors/mezzanine-band.png",
-   "role": "cycle 3.C: mezzanine floor band — restaurant corridor strip, same 32 px/tile integer grid as the lobby band (AD-030), no door segments (the mezzanine has no rooms)",
-   "size": "960x146",
-   "alpha": false,
-   "source": "pending authoring (scripts/art/generate-corridor-band.py extension) — manifest entry lands BEFORE authoring per the Phase 3 rule",
-   "license": "original work, repo-owned",
-   "qa": "pending",
-   "approval": "pending — art workstream"
-  },
-  {
-   "path": "apps/client/public/art/furniture/restaurant.png",
-   "role": "cycle 3.C: restaurant furniture — dining slot markers (table + stool silhouettes) anchored to the dining slots east of x=18 tiles on the mezzanine lane; geometric Deco ornament, no outlines (value-separation gate)",
-   "size": "64x48 per slot",
-   "alpha": true,
-   "source": "pending authoring — manifest entry lands BEFORE authoring per the Phase 3 rule",
-   "license": "original work, repo-owned",
-   "qa": "pending",
-   "approval": "pending — art workstream"
-  },
-  {
-   "path": "apps/client/public/art/items/suitcase.png",
-   "role": "cycle 3.C manifest entry for the 3.B suitcase (carried/resting marker): hard pixel clusters, brass trim accent, readable at gray-box marker scale; no role tell (FR-9)",
-   "size": "24x16",
-   "alpha": true,
-   "source": "pending authoring — manifest entry lands BEFORE authoring per the Phase 3 rule",
-   "license": "original work, repo-owned",
-   "qa": "pending",
-   "approval": "pending — art workstream"
-  }
- ]
+  "project": "Turnover — ALTERNATIVE art direction (Deco Noir)",
+  "status": "ADOPTED as production direction (AD-029, 2026-08-30); seeds retained as approval evidence — production sheets live in apps/client/public/art",
+  "brief": "docs/art/alternative/art-direction-brief.md",
+  "assets": [
+    {
+      "path": "docs/art/alternative/seeds/staff-idle-34x64.png",
+      "role": "hero target: staff idle frame, strict profile, feet at row 63",
+      "size": "34x64",
+      "alpha": true,
+      "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
+      "license": "original work, repo-owned",
+      "qa": "asset_report ok: 9 colors, alpha 0-255, no problems",
+      "approval": "pending — judge at native scale over the seed corridor"
+    },
+    {
+      "path": "docs/art/alternative/seeds/styleboard-corridor-832x576.png",
+      "role": "native-scale gameplay mock: door triptych (closed+card / open prepped / open trashed-fresh), sconce glows, staff hero",
+      "size": "832x576",
+      "alpha": false,
+      "source": "scripts/art/generate-alternative-styleboard.py (deterministic Pillow, no generation model)",
+      "license": "original work, repo-owned",
+      "qa": "visual pass: ellipse-stepped glows, silhouette-first trash, ivory figure separates from wall and carpet",
+      "approval": "pending — art workstream + design owner"
+    },
+    {
+      "path": "apps/client/public/art/floors/mezzanine-band.png",
+      "role": "cycle 3.C: mezzanine floor band — restaurant corridor strip, same 32 px/tile integer grid as the lobby band (AD-030), no door segments (the mezzanine has no rooms)",
+      "size": "960x146",
+      "alpha": false,
+      "source": "pending authoring (scripts/art/generate-corridor-band.py extension) — manifest entry lands BEFORE authoring per the Phase 3 rule",
+      "license": "original work, repo-owned",
+      "qa": "pending",
+      "approval": "pending — art workstream"
+    },
+    {
+      "path": "apps/client/public/art/furniture/restaurant.png",
+      "role": "cycle 3.C: restaurant furniture — dining slot markers (table + stool silhouettes) anchored to the dining slots east of x=18 tiles on the mezzanine lane; geometric Deco ornament, no outlines (value-separation gate)",
+      "size": "64x48 per slot",
+      "alpha": true,
+      "source": "pending authoring — manifest entry lands BEFORE authoring per the Phase 3 rule",
+      "license": "original work, repo-owned",
+      "qa": "pending",
+      "approval": "pending — art workstream"
+    },
+    {
+      "path": "apps/client/public/art/items/suitcase.png",
+      "role": "cycle 3.C manifest entry for the 3.B suitcase (carried/resting marker): hard pixel clusters, brass trim accent, readable at gray-box marker scale; no role tell (FR-9)",
+      "size": "24x16",
+      "alpha": true,
+      "source": "pending authoring — manifest entry lands BEFORE authoring per the Phase 3 rule",
+      "license": "original work, repo-owned",
+      "qa": "pending",
+      "approval": "pending — art workstream"
+    }
+  ]
 }
