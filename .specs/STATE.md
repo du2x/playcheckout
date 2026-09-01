@@ -1063,6 +1063,78 @@
 - **Date**: 2026-09-01
 - **Status**: active
 
+### AD-037
+- **Decision**: One E-affordance module in `packages/shared/src/affordances.ts`
+  owning the spatial expressions behind every range-gated interaction: the
+  desk zone (AD-031), room-door range (AD-033), landing zone (AD-022), and
+  accusation range predicates, nearest-resting-Suitcase selection (ties to
+  lowest guest ordinal, SUI-08), and the E-key decision tables —
+  `resolveEKeydown` (the SUI-25 ladder: desk → place → pickup → hold) and
+  `resolveEKeyup` (the JUST-17 swallow rule). The interface unit is TILES
+  (the TUNING vocabulary, the movement sim's `positionOf`, and the wire all
+  agree there; `work.positionOf` callers convert MILLI → tiles once at the
+  guard). BOTH the sim's authority guards (`roundSim.accuse/deskInteract`,
+  `guests.placeSuitcase/pickupSuitcase`) and the client's prediction mirror
+  (`WorldScene`) consume the same expressions; a mirrored range expression in
+  a caller is henceforth a defect, not a pattern. Pinch rule: nothing that
+  emits, mutates, or knows about transport crosses the module's interface;
+  liveness filtering (fired/ghosted/left) stays with the caller.
+- **Reason**: Architecture review (`/improve-codebase-architecture`,
+  candidate 1, user-accepted grilling rulings 1-a/2-a/3-b/same-change): the
+  client hand-mirrored six server range rules in two unit dialects and the
+  ordering-sensitive E ladder was reachable only through Playwright. Two
+  adapters (sim authority + client prediction) make the seam real; the
+  ladder's bug surface moves to a table-tested pure module.
+- **Trade-off**: One behavior refinement on the mirror side: `doorRoomAt` is
+  null on the mezzanine (matching the server's REST-05 rejection) where the
+  old client predicate only excluded the lobby — the client now withholds a
+  place intent the server would silently ignore. Riding keydown needs no
+  explicit gate: riders have no floor (AD-009) so `own` is null, exactly as
+  the scene contract already behaved.
+- **Scope**: `packages/shared/src/affordances.ts` (+25 test cases),
+  `packages/sim/src/{roundSim,guests}.ts`, `apps/client/src/scenes/
+  WorldScene.ts`, `CONTEXT.md`. The harness suitcase spec's hand-pinned
+  `doorXTiles` now derives from the shared layout — the same anti-pattern
+  this AD closes (it broke silently under the AD-036 geometry re-derivation,
+  with a corrective walk added for the 900 ms exit-hop overshoot).
+- **Date**: 2026-09-01
+- **Status**: active
+
+### AD-038
+- **Decision**: The `ElevatorPresenter` becomes the single clock authority for
+  elevator presentation. It absorbs the three state homes the scene had
+  co-owned alongside it: the per-car hall-call lights (AD-024 — lit on a call
+  the car is NOT standing at, cleared on that car's arrival), the ART-17
+  landing-panel flash window (700 ms, every call registers, decoys included),
+  and the rider's in-car screen transit sweep (the leg clock, re-anchored
+  from the own car's press queue — now advanced by `tick`'s dtMs instead of
+  wall-clock re-anchoring). `tick(dtMs, viewFloor, rider)` takes the Rider
+  session read-only; the scene's `syncCarScreenReadouts` applies the
+  presenter's readout to the DOM verbatim and `updatePanel`/`syncPanelFlash`
+  read `panelState()`/`isFlashing()`. Snapshot car-floor seeding now flows
+  through `onMoved` (unifying the scene's `cars` map, which keeps only
+  `view`; its duplicate `floor` field is deleted), and the scene's per-frame
+  `car.view.y = laneY(floor) + 30` write is deleted — the presenter's `setY`
+  already overwrote it every frame (dead write; commit 6e8ea4b removed the
+  +30 offset from the presenter's base years ago).
+- **Reason**: Architecture review candidate 4 (user-accepted): elevator
+  behavior was one domain spread over three state homes with a redundant
+  sweep clock — the scene's re-anchoring (`carScreenLeg` vs the presenter's
+  clocks) was a drift bug surface only Gate 3 could observe, and `updatePanel`
+  re-filled DOM every frame from scene-copied state. The presenter seam
+  already existed and was node-tested; completing it keeps one test surface.
+- **Trade-off**: `tick` gains a third parameter (the rider facts); the
+  flash's `until` stays wall-clock-anchored inside `onCalled` (cosmetic only,
+  never compared against sim time). The presenter now imports two pure
+  helpers from `ui/carScreen` (`transitFloorReadout`, `floorLabel`) — still
+  Phaser-free and node-testable.
+- **Scope**: `apps/client/src/scenes/elevatorPresenter.ts` (+7 state tests),
+  `apps/client/src/scenes/WorldScene.ts`. No protocol, sim, or CONTEXT
+  changes; the deleted scene fields are `calledLights`, `panelFlash`,
+  `carScreenLeg`.
+- **Date**: 2026-09-01
+- **Status**: active
+
 ## Handoff
 - **Feature**: `restaurant-floor` (cycle 3.C, prd v1.4, AD-035) — **CLOSED
   (PASS)**. All 8 tasks committed (T1 `c9ec84d` layout, T2 `e9b6cd1` dials,
@@ -1078,12 +1150,15 @@
 - **Gates at close**: typecheck 4/4 ✓ · lint ✓ · test:sim 394 ✓ ·
   test:client 37/37 ✓ (workers=2, shift seam 60 s) · `client:restaurant`
   2× consecutive ✓ · `sim:dining` 7 scenarios ✓.
-- **Follow-ups (non-blocking, Verifier-ranked)**: (1) REG-18 seq flake —
-  `TurnoverRoom.test.ts:522` exact `buzzer.seq + 4` pin breaks when 3.C guest
-  events land in the buzzer flush window; pin the room seed in
-  `roomWithFour()` or relax the pin. (2) REST-14 mezzanine hall-call lights
-  and (3) REST-17 spectator mezzanine lane are structurally implemented
-  without dedicated assertions.
+- **Follow-ups (non-blocking, Verifier-ranked)**: (1) ~~REG-18 seq flake~~ —
+  **RESOLVED 2026-09-01 (AD-037 session)**: the exact `buzzer.seq + 4` pin
+  relaxed to ordered floor assertions (buzzer < ended < recap < started, gap
+  `≥ recap + 2`, re-deal adjacency kept exact) — guest lifecycle events may
+  share the buzzer flush window with seed-dependent volume, so the property
+  under test is per-connection seq continuity, not flush size; 10/10 isolated
+  + 2× full-suite green (previously ~3/5 flaky). (2) REST-14 mezzanine
+  hall-call lights and (3) REST-17 spectator mezzanine lane are structurally
+  implemented without dedicated assertions.
 - **Notes**: the pre-3.C flake class (justice/lobby/round) was root-caused
   into two fixable seams — shift length (buzzer fired mid-choreography after
   the lobby ride legs doubled) and stale per-test timeout/selector budgets —
