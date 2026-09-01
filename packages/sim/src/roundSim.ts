@@ -449,6 +449,13 @@ export class RoundSim {
     return this.justice.saboteurId
   }
 
+  /** The guest economy's settle score (cycle 3.D, AD-039) — the buzzer
+   *  verdict's input and the recap/resume payload's source; 0 when no
+   *  movement port was supplied. */
+  get settledCount(): number {
+    return this.guests?.settledCount ?? 0
+  }
+
   /**
    * A round player's dealt role — the reconnection seat restore re-sends the
    * exact role card, saboteur card included (prd reconnection contract).

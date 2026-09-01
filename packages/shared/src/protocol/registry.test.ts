@@ -481,8 +481,18 @@ describe('protocol registry', () => {
       cardedRooms: [{ floor: 'floor1', rooms: [3] }],
     }
     expect(Object.keys(snapshot).sort()).toEqual(['cardedRooms', 'cars', 'players', 'rooms'])
-    const resumed: RoundResumed = { remainingTicks: 100, playerIds: ['p1'], ownFired: false }
-    expect(Object.keys(resumed).sort()).toEqual(['ownFired', 'playerIds', 'remainingTicks'])
+    const resumed: RoundResumed = {
+      remainingTicks: 100,
+      playerIds: ['p1'],
+      ownFired: false,
+      settleScore: 0,
+    }
+    expect(Object.keys(resumed).sort()).toEqual([
+      'ownFired',
+      'playerIds',
+      'remainingTicks',
+      'settleScore',
+    ])
   })
 
   it('accuse intent accepts exactly a non-empty targetId and rejects the rest (FR-17)', () => {

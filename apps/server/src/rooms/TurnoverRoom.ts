@@ -19,6 +19,7 @@ import {
   moveStopIntentSchema,
   suitcasePickupIntentSchema,
   suitcasePlaceIntentSchema,
+  settleTargetFor,
   TUNING,
   workStartIntentSchema,
 } from '@turnover/shared'
@@ -415,6 +416,7 @@ export class TurnoverRoom extends Room {
       remainingTicks: sim.clockTicksRemaining,
       playerIds: sim.playerIds,
       ownFired,
+      settleScore: sim.settledCount,
     })
     if (ownFired) {
       this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
@@ -617,7 +619,14 @@ export class TurnoverRoom extends Room {
       : [...this.rideJournal]
     entries.sort((a, b) => a.tick - b.tick)
     this.rideJournal = []
-    this.router.toAll('round:recap', { entries })
+    // The verdict's inputs ride the recap (cycle 3.D, AD-039): final settle
+    // score vs the §7 target for the lobby size.
+    const lobbySize = sim?.playerIds.length ?? this.players.size
+    this.router.toAll('round:recap', {
+      entries,
+      settleScore: sim?.settledCount ?? 0,
+      settleTarget: settleTargetFor(lobbySize),
+    })
     this.phase = 'results'
     // Roles were the sim's alone — dropping it wipes the deal (AD-002); the
     // reveal already happened on the wire, so nothing is lost.

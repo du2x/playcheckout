@@ -2241,6 +2241,10 @@ describe('server:round_end', () => {
       expect(typeof ended.payload.saboteurId).toBe('string')
       const recap = await hostCollector.waitFor('round:recap')
       expect(Array.isArray(recap.payload.entries)).toBe(true)
+      // Cycle 3.D (AD-039): the verdict's inputs ride the recap — a 5 s shift
+      // spawns no guests, so the score is 0 against the 4p target of 5.
+      expect(recap.payload.settleScore).toBe(0)
+      expect(recap.payload.settleTarget).toBe(5)
       await vi.waitFor(() => expect(instance.__phase()).toBe('results'))
 
       // Results is lobby-like: a fresh join flows, and the host starts again.
@@ -2489,6 +2493,8 @@ describe('server:reconnect', () => {
       expect((resumed.payload.playerIds as string[]).length).toBe(4)
       expect(typeof resumed.payload.remainingTicks).toBe('number')
       expect(resumed.payload.remainingTicks).toBeGreaterThan(0)
+      // Cycle 3.D (AD-039): the restore re-seeds the HUD settle counter.
+      expect(typeof resumed.payload.settleScore).toBe('number')
       await restoredCollector.waitFor('movement:snapshot')
       // Others see the rectangle come back: one re-announcing player:moved.
       instance.__driveTicks(2)

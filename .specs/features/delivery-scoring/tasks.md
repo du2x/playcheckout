@@ -165,9 +165,9 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Recap payload carries the exact `settledCount` and target at build time (both fields asserted by value)
-- [ ] `round:resumed` payload carries the current settle score
-- [ ] Registry row policies unchanged (`round:recap`/`round:resumed` stay `'all'`/self)
+- [x] Recap payload carries the exact `settledCount` and target at build time (both fields asserted by value)
+- [x] `round:resumed` payload carries the current settle score
+- [x] Registry row policies unchanged (`round:recap`/`round:resumed` stay `'all'`/self)
 
 **Tests**: integration
 **Gate**: quick

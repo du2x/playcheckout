@@ -226,10 +226,12 @@ describe('round-end mappers (cycle 2.9)', () => {
     })
   })
 
-  it('maps round:recap 1:1 carrying the entries array (FR-22)', () => {
+  it('maps round:recap 1:1 carrying the entries array and the verdict inputs (FR-22, 3.D)', () => {
     const entries = [{ kind: 'crime', tick: 4, floor: 'floor1', room: 2, fresh: true }] as const
-    const action = first(MAPPERS['round:recap']({ entries }))
-    expect(action).toEqual({ type: 'round-recap', entries })
+    const action = first(
+      MAPPERS['round:recap']({ entries, settleScore: 3, settleTarget: 7 }),
+    )
+    expect(action).toEqual({ type: 'round-recap', entries, settleScore: 3, settleTarget: 7 })
   })
 
   it('wraps spectator:snapshot whole — every baseline row survives (FR-20)', () => {
@@ -243,15 +245,21 @@ describe('round-end mappers (cycle 2.9)', () => {
     expect(action).toEqual({ type: 'spectator-snapshot', snapshot: snapshotPayload })
   })
 
-  it('maps round:resumed 1:1 with the honest clock inputs (REND-18)', () => {
+  it('maps round:resumed 1:1 with the honest clock inputs and the settle score (REND-18, 3.D)', () => {
     const action = first(
-      MAPPERS['round:resumed']({ remainingTicks: 500, playerIds: ['p1', 'p2'], ownFired: false }),
+      MAPPERS['round:resumed']({
+        remainingTicks: 500,
+        playerIds: ['p1', 'p2'],
+        ownFired: false,
+        settleScore: 2,
+      }),
     )
     expect(action).toEqual({
       type: 'round-resumed',
       remainingTicks: 500,
       playerIds: ['p1', 'p2'],
       ownFired: false,
+      settleScore: 2,
     })
   })
 })

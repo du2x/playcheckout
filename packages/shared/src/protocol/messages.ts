@@ -453,6 +453,10 @@ export type RecapEntry =
 /** server → all players. The FR-22 recap timeline, emitted right after round:ended. */
 export interface RoundRecap {
   readonly entries: readonly RecapEntry[]
+  /** Final settle score and the §7 v1.5 target (cycle 3.D, AD-039) — the
+   *  buzzer verdict's inputs, public post-round. */
+  readonly settleScore: number
+  readonly settleTarget: number
 }
 
 /** One room-state row of the spectator baseline. */
@@ -489,6 +493,9 @@ export interface RoundResumed {
   readonly remainingTicks: number
   readonly playerIds: readonly string[]
   readonly ownFired: boolean
+  /** The current settle score (cycle 3.D, AD-039): the reconnecting client
+   *  re-seeds its HUD counter — it never saw the settle stream it missed. */
+  readonly settleScore: number
 }
 
 /**
