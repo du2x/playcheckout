@@ -140,6 +140,8 @@ export type ViewAction =
       remainingTicks: number
       playerIds: readonly string[]
       ownFired: boolean
+      /** The current settle score (cycle 3.D, AD-039): re-seeds the HUD. */
+      settleScore: number
     }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }

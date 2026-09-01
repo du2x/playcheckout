@@ -220,6 +220,7 @@ describe('round-end reducer', () => {
         remainingTicks: 100,
         playerIds: ['p1', 'p2'],
         ownFired: false,
+        settleScore: 0,
       })
       expect(s.view).toBe('round')
       expect(s.roundPlayerIds).toEqual(['p1', 'p2'])
@@ -272,6 +273,7 @@ describe('reconnecting client', () => {
       remainingTicks: 500,
       playerIds: ['p1', 'p2'],
       ownFired: false,
+      settleScore: 0,
     })
     expect(s.view).toBe('round')
     expect(s.reconnecting).toBe(false)

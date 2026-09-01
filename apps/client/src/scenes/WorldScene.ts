@@ -32,6 +32,7 @@ import {
 import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
 import { setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
+import { ScoreHud } from '../ui/scoreHud'
 import { ElevatorPresenter } from './elevatorPresenter'
 
 /**
@@ -134,6 +135,10 @@ export class WorldScene extends Phaser.Scene {
   // gone with the walkie-broadcast model (the suitcase replaces it).
   private deskHint: HTMLElement | null = null
   private walkieLog: HTMLElement | null = null
+  /** The settle-score HUD (cycle 3.D, AD-039): a pure presenter over the
+   *  public guest:settled stream; DOM lives with the other HUD layers. */
+  private scoreHud: ScoreHud = new ScoreHud(0)
+  private scoreHudEl: HTMLElement | null = null
   /** Suitcase markers (cycle 3.B, SUI-24): one Rectangle per suitcase —
    *  carried rides the carrier, rest pins the doorway (never a Sprite —
    *  scene-children contract). */
@@ -478,6 +483,9 @@ export class WorldScene extends Phaser.Scene {
         this.impatientGuests.delete(action.guestId)
         // SUI-21: settle is a lifecycle fact — the room becomes public here.
         this.appendWalkieLine(`a guest settles into ${action.floor}:${action.room}`)
+        // The settle score ticks on the same public fact (cycle 3.D).
+        this.scoreHud.onSettled()
+        this.renderScoreHud()
         break
       }
       case 'guest-checked-out': {
@@ -979,6 +987,20 @@ export class WorldScene extends Phaser.Scene {
     gameEl.appendChild(log)
     this.walkieLog = log
 
+    const score = document.createElement('div')
+    score.id = 'score-hud'
+    score.style.position = 'absolute'
+    score.style.left = '8px'
+    score.style.top = '12px'
+    score.style.padding = '4px 8px'
+    score.style.fontSize = '13px'
+    score.style.color = '#8ad07a'
+    score.style.background = 'rgba(20, 28, 34, 0.85)'
+    score.style.borderRadius = '4px'
+    score.textContent = this.scoreHud.render()
+    gameEl.appendChild(score)
+    this.scoreHudEl = score
+
     const assignment = document.createElement('div')
     assignment.id = 'suitcase-assignment'
     assignment.style.position = 'absolute'
@@ -1307,6 +1329,32 @@ export class WorldScene extends Phaser.Scene {
     this.cardMarkers.clear()
     this.cueNodes.clear()
     if (this.evidenceLayer !== null) this.evidenceLayer.replaceChildren()
+  }
+
+  // --- Settle-score HUD (cycle 3.D, AD-039): the counter lives in the scene
+  // because guest:settled is scene-routed; App drives reset (fresh deal)
+  // and seed (reconnect re-store).
+
+  /** Fresh deal: zero the counter against the new lobby's target. */
+  resetScore(target: number): void {
+    this.scoreHud.reset(target)
+    this.renderScoreHud()
+  }
+
+  /** Reconnect re-store: re-seed to the server's settle truth (round:resumed). */
+  seedScore(count: number): void {
+    this.scoreHud.seed(count)
+    this.renderScoreHud()
+  }
+
+  /** Round over: freeze at the final value — late settles are ignored. */
+  freezeScore(): void {
+    this.scoreHud.freeze()
+    this.renderScoreHud()
+  }
+
+  private renderScoreHud(): void {
+    if (this.scoreHudEl !== null) this.scoreHudEl.textContent = this.scoreHud.render()
   }
 
   /** Short gray-box tone for audible cues; silent in environments without audio. */

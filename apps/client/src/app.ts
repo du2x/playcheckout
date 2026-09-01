@@ -1,4 +1,4 @@
-import type { FloorId, GuestFloorId, RoomIndex } from '@turnover/shared'
+import { type FloorId, type GuestFloorId, type RoomIndex, settleTargetFor } from '@turnover/shared'
 import type Phaser from 'phaser'
 import {
   ACCUSE_TOAST_MS,
@@ -141,7 +141,15 @@ export class App {
             this.world()?.syncRoster(action.snapshot.roster)
           }
           // A fresh deal resets every room: cards and cues die with the sim.
-          if (action.type === 'round-started') this.world()?.resetEvidence()
+          if (action.type === 'round-started') {
+            this.world()?.resetEvidence()
+            // The settle counter restarts against the new lobby's target (3.D).
+            this.world()?.resetScore(settleTargetFor(action.playerIds.length))
+          }
+          // Reconnect re-store: re-seed the counter to the server's truth (3.D).
+          if (action.type === 'round-resumed') this.world()?.seedScore(action.settleScore)
+          // Round over: freeze the counter at its final value (3.D).
+          if (action.type === 'round-ended') this.world()?.freezeScore()
         }
         if (viewChanged) this.render()
       },

@@ -191,9 +191,9 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Presenter state tests: count increments, reset on round start, freeze after end, target from roster size
-- [ ] Render string is exactly `Settled N / T` form
-- [ ] WorldScene dispatch wires `guest:settled` → presenter; HUD visible in-scene
+- [x] Presenter state tests: count increments, reset on round start, freeze after end, target from roster size
+- [x] Render string is exactly `Settled N / T` form
+- [x] WorldScene dispatch wires `guest:settled` → presenter; HUD visible in-scene
 
 **Tests**: unit
 **Gate**: quick
