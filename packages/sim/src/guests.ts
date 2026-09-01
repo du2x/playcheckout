@@ -141,6 +141,10 @@ export class GuestSim {
   private readonly reserved = new Set<string>()
   /** guestId → suitcase (cycle 3.B): one per checked-in guest. */
   private readonly suitcases = new Map<string, SuitcaseState>()
+  /** Per-round settle score (cycle 3.D, AD-039): one per committed settleAt,
+   *  both the suitcase-match and the self-assign path. Monotonic; reset only
+   *  by constructing a fresh sim at round start. */
+  private settledTotal = 0
   /** Checked-in guests dining in the mezzanine restaurant, FIFO by check-in
    *  (the dining slot index). */
   private readonly dining: string[] = []
@@ -593,6 +597,7 @@ export class GuestSim {
     events: SimEvent[],
   ): void {
     g.phase = 'settling'
+    this.settledTotal += 1
     this.tenanted.set(roomKey(floor, room), g.id)
     this.reserved.delete(roomKey(floor, room))
     const dwellSeconds = this.rng.uniform(
@@ -732,6 +737,13 @@ export class GuestSim {
   /** Snapshot query for tests and the room's routing helpers. */
   tenantedRooms(): { floor: GuestFloorId; room: RoomIndex }[] {
     return this.allRoomKeys().filter((r) => this.tenanted.has(roomKey(r.floor, r.room)))
+  }
+
+  /** The per-round settle score (cycle 3.D, AD-039): committed settles on
+   *  both the suitcase-match and the self-assign path — the §6.6 buzzer
+   *  verdict and the recap read this. */
+  get settledCount(): number {
+    return this.settledTotal
   }
 
   /**

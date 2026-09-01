@@ -111,9 +111,9 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Counter starts at 0, +1 per settle event, on BOTH the suitcase-match and self-assign paths
-- [ ] Wrong-delivery complaints, carry-clock firings, and re-queued assignments produce no change (edge cases pinned)
-- [ ] New describe block `sim:settle_score` passes
+- [x] Counter starts at 0, +1 per settle event, on BOTH the suitcase-match and self-assign paths
+- [x] Wrong-delivery complaints, carry-clock firings, and re-queued assignments produce no change (edge cases pinned)
+- [x] New describe block `sim:settle_score` passes
 
 **Tests**: unit
 **Gate**: quick

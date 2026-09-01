@@ -496,6 +496,79 @@ describe('sim:wrong_delivery', () => {
   })
 })
 
+// --- Settle score (cycle 3.D, AD-039): the §6.6 buzzer verdict's source.
+
+describe('sim:settle_score', () => {
+  it('starts at zero and counts every settle event on the self-assign path identically (DLVR-01/03)', () => {
+    const movement = new MovementSim()
+    // Impatience override keeps the lifecycle from waiting 20 s per guest.
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      impatienceTicks: 200,
+    })
+    expect(guests.settledCount).toBe(0)
+    const events = run(movement, guests, 3000).guestEvents
+    const settled = of(events, 'guest:settled')
+    expect(settled.length).toBeGreaterThanOrEqual(1)
+    // No check-in ever happened — every settle here is a self-assignment.
+    expect(of(events, 'guest:assigned')).toHaveLength(0)
+    expect(guests.settledCount).toBe(settled.length)
+  })
+
+  it('a wrong-delivery complaint adds nothing; only the corrected settle does (DLVR-02/04)', () => {
+    const { movement, guests } = deskScenario()
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    const flushed = of(flush(movement, guests, CADENCE_5P + 2), 'guest:assigned')[0] as {
+      floor: GuestFloorId
+      room: RoomIndex
+    }
+    const wrongRoom = ((flushed.room % ROOMS_PER_FLOOR) + 1) as RoomIndex
+    movement.join('p1', { floor: flushed.floor, xMilli: roomDoorXMilli(wrongRoom) })
+    expect(guests.placeSuitcase('p1', wrongRoom, CADENCE_5P + 3)).toBe('placed')
+    flush(movement, guests, CADENCE_5P + 4)
+    let t = CADENCE_5P + 5
+    for (; t < CADENCE_5P + 5 + 2000; t++) {
+      const evts = flush(movement, guests, t)
+      if (evts.some((e) => e.type === 'guest:complained')) break
+    }
+    // The door complaint fired and the score did not move.
+    expect(guests.settledCount).toBe(0)
+    // Correction: re-carry to the assigned room, place, settle → exactly +1.
+    movement.join('p2', { floor: flushed.floor, xMilli: roomDoorXMilli(wrongRoom) })
+    expect(guests.pickupSuitcase('p2', t)).toBe('picked_up')
+    flush(movement, guests, t + 1)
+    movement.join('p2', { floor: flushed.floor, xMilli: roomDoorXMilli(flushed.room) })
+    expect(guests.placeSuitcase('p2', flushed.room, t + 2)).toBe('placed')
+    flush(movement, guests, t + 3)
+    let settled = false
+    for (; t < CADENCE_5P + 5 + 4000 && !settled; t++) {
+      settled = flush(movement, guests, t).some((e) => e.type === 'guest:settled')
+    }
+    expect(settled).toBe(true)
+    expect(guests.settledCount).toBe(1)
+  })
+
+  it('a carry-clock firing re-queues the guest and moves the score by nothing (DLVR-04)', () => {
+    const movement = new MovementSim()
+    const guests = new GuestSim(7, 5, new RealMovementPort(movement), {
+      carryClockTicks: 50,
+      impatienceTicks: 100000,
+    })
+    movement.join('p1')
+    run(movement, guests, CADENCE_5P + 1)
+    expect(guests.checkIn('p1', CADENCE_5P + 1)).toBe('accepted')
+    flush(movement, guests, CADENCE_5P + 2)
+    // The suitcase is never placed; the 50-tick leg expires and fires p1.
+    let t = CADENCE_5P + 2
+    for (; t < CADENCE_5P + 62; t++) void flush(movement, guests, t)
+    expect(guests.drainExpiredCarriers()).toEqual(['p1'])
+    // The guest re-queues and the score stands at zero.
+    expect(guests.settledCount).toBe(0)
+    expect(of(run(movement, guests, 50, t).guestEvents, 'guest:settled')).toHaveLength(0)
+    expect(guests.settledCount).toBe(0)
+  })
+})
+
 describe('sim:suitcase_carry (door-waiting)', () => {
   it('a mid-walk pickup strands the guest at the old door; the next rest there resolves the outcome (SUI-13)', () => {
     const { movement, guests } = deskScenario()
