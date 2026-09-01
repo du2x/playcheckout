@@ -137,11 +137,11 @@ T7 → T8
 
 **Done when**:
 
-- [ ] `sim:win_checks` REND-03 scenarios assert the two new verdicts in the same flush as the buzzer
-- [ ] Saboteur-fired and staff-reduced legs unchanged (existing scenarios stay green)
-- [ ] Abort path emits no settle-target verdict
-- [ ] `sim:wrong_delivery` free-misplacement pin still green (no score/loss-shaped events)
-- [ ] No `coverage-met|coverage-failed` string remains in `packages/`
+- [x] `sim:win_checks` REND-03 scenarios assert the two new verdicts in the same flush as the buzzer
+- [x] Saboteur-fired and staff-reduced legs unchanged (existing scenarios stay green)
+- [x] Abort path emits no settle-target verdict
+- [x] `sim:wrong_delivery` free-misplacement pin still green (no score/loss-shaped events)
+- [x] No `coverage-met|coverage-failed` string remains in `packages/`
 
 **Tests**: unit
 **Gate**: quick

@@ -3,6 +3,7 @@ import {
   type GuestFloorId,
   roomDoorXMilli,
   type SimEvent,
+  settleTargetFor,
   TUNING,
 } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
@@ -68,14 +69,15 @@ describe('sim:role_deal', () => {
     const sim = new RoundSim({ seed: 42, playerIds: IDS })
     for (let t = 1; t < RoundSim.TOTAL_TICKS; t++) sim.tick()
     const last = sim.tick()
-    // Cycle 2.9: the buzzer flush now carries the coverage verdict right
-    // after the buzzer (zero preps by default → saboteur win, coverage-failed).
+    // Cycle 3.D: the buzzer flush carries the settle-target verdict right
+    // after the buzzer (no movement port → no guests → score 0 → saboteur
+    // win, settle-target-failed).
     expect(last).toEqual([
       { type: 'round:buzzer' },
       {
         type: 'round:ended',
         winner: 'saboteur',
-        reason: 'coverage-failed',
+        reason: 'settle-target-failed',
         saboteurId: expect.any(String),
       },
     ])
@@ -174,21 +176,6 @@ describe('sim:win_checks', () => {
     return { sim, saboteur, staff, feed }
   }
 
-  /** Prep one room by one staff member and return the ticks consumed. */
-  function prepRoom(
-    sim: RoundSim,
-    worker: string,
-    floor: GuestFloorId,
-    room: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8,
-    placement: Map<string, { floor: GuestFloorId | 'lobby'; x: number }>,
-  ): number {
-    placement.set(worker, { floor, x: roomX(room) })
-    void sim.tick(placement)
-    expect(sim.startWork(worker, floor, room)).toBe('accepted')
-    for (let i = 0; i < PREP_TICKS; i++) void sim.tick(placement)
-    return PREP_TICKS + 1
-  }
-
   it('walk-in conviction ends the round: staff win on the same flush as the firing (REND-01)', () => {
     const { sim, saboteur, staff, feed } = dealtRound()
     const [prepper, catcher] = staff as [string, string]
@@ -275,7 +262,7 @@ describe('sim:win_checks', () => {
     expect(sim.accuse(saboteur, b)).toBe('round-not-active')
   })
 
-  it('buzzer with zero preps: buzzer first, then coverage-failed saboteur win, same flush (REND-03)', () => {
+  it('buzzer with zero settles: buzzer first, then settle-target-failed saboteur win, same flush (REND-03)', () => {
     const { sim, saboteur } = dealtRound(1, 20)
     const events: SimEvent[] = []
     for (let t = 0; t < 20; t++) events.push(...sim.tick(new Map()))
@@ -283,43 +270,48 @@ describe('sim:win_checks', () => {
     expect(events.at(-1)).toEqual({
       type: 'round:ended',
       winner: 'saboteur',
-      reason: 'coverage-failed',
+      reason: 'settle-target-failed',
       saboteurId: saboteur,
     })
     expect(events.filter((e) => e.type === 'round:ended')).toHaveLength(1)
   })
 
-  it('buzzer with ≥80% coverage: staff win, coverage-met (REND-03)', () => {
-    const { sim, saboteur, staff } = dealtRound(1, 2300)
-    const placement = new Map([[saboteur, { floor: 'lobby' as const, x: 15000 }]])
-    // Three staff sequentially prep 20 of the 24 rooms (7+7+6) — the first 20
-    // rooms in deterministic order: floor1 1..8, floor2 1..8, floor3 1..4.
-    const allRooms: [GuestFloorId, 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8][] = []
-    for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
-      for (
-        let room = 1 as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-        room <= 8;
-        room = (room + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-      ) {
-        if (allRooms.length < 20) allRooms.push([floor, room])
-      }
-    }
-    const plan = allRooms.map(([floor, room], index) => {
-      const worker = staff[Math.floor(index / 7)] ?? staff[0]
-      return [worker as string, floor, room] as [
-        string,
-        GuestFloorId,
-        1 | 2 | 3 | 4 | 5 | 6 | 7 | 8,
-      ]
+  it('buzzer with the settle score at target: staff win, settle-target-met (REND-03, 3.D)', () => {
+    // The guest economy runs inside the round (movement port): impatient
+    // guests self-assign at 2.5 s and settle; by the buzzer the score
+    // reaches the 4p SETTLE_TARGET (5 of 24 rooms, prd §7 v1.5).
+    const movement = new MovementSim()
+    const sim = new RoundSim({
+      seed: 1,
+      playerIds: IDS,
+      movement: {
+        joinGuest: (id, floor, xTiles) =>
+          movement.join(id, { kind: 'guest', floor, xMilli: Math.round(xTiles * 1000) }),
+        removeGuest: (id) => movement.leave(id),
+        announceGuest: (id) => movement.announcePosition(id),
+        positionOf: (id) => {
+          const p = movement.positionOf(id)
+          return p === undefined ? undefined : { floor: p.floor, x: p.x }
+        },
+        viewOf: (id) => movement.viewOf(id),
+        startMove: (id, dir) => movement.startMove(id, dir),
+        stopMove: (id) => movement.stopMove(id),
+        callElevator: (id) => movement.callElevator(id),
+        pressFloor: (id, floor) => movement.pressFloor(id, floor),
+      },
+      guestTiming: { cadenceTicks: 300, impatienceTicks: 50 },
     })
-    for (const [worker, floor, target] of plan) {
-      prepRoom(sim, worker, floor, target, placement)
-    }
-    // Run the shift to the buzzer, collecting events.
     const events: SimEvent[] = []
-    while (sim.clockTicksRemaining > 0) events.push(...sim.tick(placement))
-    expect(events.map((e) => e.type)).toEqual(['round:buzzer', 'round:ended'])
-    expect(events[1]).toMatchObject({ winner: 'staff', reason: 'coverage-met' })
+    // The room drives movement and the round in production order: the
+    // movement sim ticks first, then the round flushes the guest economy.
+    while (sim.clockTicksRemaining > 0) {
+      movement.tick()
+      events.push(...sim.tick(new Map()))
+    }
+    const settles = events.filter((e) => e.type === 'guest:settled')
+    expect(settles.length).toBeGreaterThanOrEqual(settleTargetFor(IDS.length))
+    expect(events.map((e) => e.type).at(-2)).toBe('round:buzzer')
+    expect(events.at(-1)).toMatchObject({ winner: 'staff', reason: 'settle-target-met' })
   })
 
   it('journals a crime per trash with freshness resolved at recap time (REND-08)', () => {

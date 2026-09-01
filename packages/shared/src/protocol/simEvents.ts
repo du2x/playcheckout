@@ -145,7 +145,11 @@ export type FireReason = 'walkin' | 'wrong-accusation' | 'correct-accusation' | 
  * `saboteur-disconnected` directly on the wire payload (FR-25); the sim never
  * emits it (disconnects are transport-shaped, AD-002).
  */
-export type RoundEndReason = 'saboteur-fired' | 'staff-reduced' | 'coverage-met' | 'coverage-failed'
+export type RoundEndReason =
+  | 'saboteur-fired'
+  | 'staff-reduced'
+  | 'settle-target-met'
+  | 'settle-target-failed'
 
 /**
  * Movement events (cycle 2.4, AD-005): emitted by the room-owned MovementSim in

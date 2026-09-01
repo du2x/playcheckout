@@ -740,8 +740,8 @@ export class GuestSim {
   }
 
   /** The per-round settle score (cycle 3.D, AD-039): committed settles on
-   *  both the suitcase-match and the self-assign path — the §6.6 buzzer
-   *  verdict and the recap read this. */
+   *  both the suitcase-match and the self-assign path — the buzzer win
+   *  check and the recap read this. */
   get settledCount(): number {
     return this.settledTotal
   }

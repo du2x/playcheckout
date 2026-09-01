@@ -2236,8 +2236,8 @@ describe('server:round_end', () => {
       instance.__driveTicks(99)
       await hostCollector.waitFor('round:buzzer')
       const ended = await hostCollector.waitFor('round:ended')
-      expect(ended.payload.winner).toBe('saboteur') // zero preps → coverage-failed
-      expect(ended.payload.reason).toBe('coverage-failed')
+      expect(ended.payload.winner).toBe('saboteur') // zero settles → settle-target-failed
+      expect(ended.payload.reason).toBe('settle-target-failed')
       expect(typeof ended.payload.saboteurId).toBe('string')
       const recap = await hostCollector.waitFor('round:recap')
       expect(Array.isArray(recap.payload.entries)).toBe(true)

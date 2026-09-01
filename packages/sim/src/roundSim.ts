@@ -4,12 +4,12 @@ import {
   inDeskZone,
   type LobbySize,
   type RecapEntry,
-  ROOM_COUNT,
   type Role,
   type RoomIndex,
   type RoomState,
   type RoundEndReason,
   roomIndexAtMilli,
+  settleTargetFor,
   TUNING,
 } from '@turnover/shared'
 import { dealRoles } from './deal.js'
@@ -262,14 +262,15 @@ export class RoundSim {
     }
     this.ticksLeft--
     if (this.ticksLeft === 0) {
-      // Buzzer (REND-03): the clock-expiry event first, then the coverage
-      // verdict in the same flush — `prepped × 5 ≥ ROOM_COUNT × 4` is the
-      // integer-safe ≥80% of the locked 24 rooms.
+      // Buzzer (REND-03, prd v1.5/AD-039): the clock-expiry event first, then
+      // the settle-target verdict in the same flush — staff win when the
+      // round's settle score reached SETTLE_TARGET for the lobby size.
       events.push({ type: 'round:buzzer' })
-      if (this.work.preppedCount * 5 >= ROOM_COUNT * 4) {
-        this.end('staff', 'coverage-met')
+      const score = this.guests?.settledCount ?? 0
+      if (score >= settleTargetFor(this.playerIds.length)) {
+        this.end('staff', 'settle-target-met')
       } else {
-        this.end('saboteur', 'coverage-failed')
+        this.end('saboteur', 'settle-target-failed')
       }
       this.emitResult(events)
     }

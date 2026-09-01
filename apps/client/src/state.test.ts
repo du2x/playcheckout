@@ -196,7 +196,7 @@ describe('round-end reducer', () => {
     const ended = reduce(inRound(), {
       type: 'round-ended',
       winner: 'saboteur',
-      reason: 'coverage-failed',
+      reason: 'settle-target-failed',
       saboteurId: 'p2',
     })
     const entries = [
@@ -241,7 +241,7 @@ describe('round-end reducer', () => {
     s = reduce(s, {
       type: 'round-ended',
       winner: 'saboteur',
-      reason: 'coverage-failed',
+      reason: 'settle-target-failed',
       saboteurId: 'p2',
     })
     expect(s.view).toBe('results')
