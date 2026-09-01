@@ -53,11 +53,14 @@ the saboteur learns the assignment for free; the contested gameplay is
 physical interception of the suitcase, not information.
 _Avoid_: earshot, overhear radius, hearing range, desk-earshot
 
-**Holding area**:
-The lobby-lane stub east of the desk where checked-in guests wait (3.B) until
-their suitcase first rests; replaced by the 3.C mezzanine restaurant. Guests
-there are patient — impatience times only the check-in wait.
-_Avoid_: waiting room, lobby queue (the queue is the unchecked line)
+**Restaurant (mezzanine)**:
+The 3.C dining floor directly above the lobby: checked-in guests wait in
+deterministic dining slots there (`GUEST_RESTAURANT_START_TILES` eastward,
+one per `GUEST_QUEUE_SPACING_TILES`) with a seeded 15–30 s dwell that is a
+wait buffer, not a schedule — a guest whose suitcase rests leaves
+immediately, and a guest whose dwell elapses simply keeps dining. Replaces
+the 3.B lobby holding-area stub.
+_Avoid_: holding area, waiting room, lobby queue (the queue is the unchecked line)
 
 **Rider session**:
 The client's single derivation of the local player's in-car state — car,

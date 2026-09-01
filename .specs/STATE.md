@@ -996,20 +996,65 @@
   event volume at `TURNOVER_TEST_GUEST_SCALE=0.2`; gates typecheck/lint/
   test:sim 385/`client:suitcase` 2× green).
 
+### AD-035
+- **Decision**: Cycle 3.C `restaurant-floor` — the mezzanine lands as the
+  building's fifth floor and checked-in guests dine there. (a) `FLOOR_IDS`
+  becomes `['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3']` (mezzanine
+  directly above the lobby; amends AD-010's floor SET — room geometry is
+  untouched, the mezzanine has no rooms); elevator ride cost keeps deriving
+  from `indexOf`, so lobby↔floor1 doubles to two strides (5-stop economy,
+  bought deliberately by the roadmap). (b) The guest `waiting` phase renames
+  to `dining` (internal, never transmitted); the 3.B holding stub is replaced
+  by dining slots on the mezzanine at
+  `GUEST_RESTAURANT_START_TILES + slot × GUEST_QUEUE_SPACING_TILES` (renames
+  AD-033(b)'s `GUEST_HOLD_START_TILES`, value 18 kept; re-places now compare
+  FLOORS, not only x, so queue↔dining teleports cannot strand a guest). (c)
+  Each dining stay draws a seeded uniform 15–30 s dwell
+  (`GUEST_DINING_MIN/MAX_SECONDS`, guest Rng stream, `diningScale` test seam)
+  — a wait BUFFER with no behavioral consumer (proposal: "not a schedule"):
+  the drawn value is queryable via `GuestSim.diningDwellOf` for tests and
+  telemetry; a suitcase rest departs the diner immediately (existing
+  retarget). (d) Wrong-delivery returns (AD-033(c)) re-dine instead of
+  re-holding. (e) `suitcase:place` on the mezzanine is ignored (no room
+  doors). (f) Autonomous-run defaults (user absent): M (KeyM) presses the
+  mezzanine in-car and lights the M indicator; dining arrival is the
+  established NPC teleport (re-place), not a walk driver; no new registry
+  messages (FloorId widening is the only protocol surface); the harness
+  shift seam rises 30 → 60 s and buzzer-spanning waits/timeout re-pin to it
+  (test-only, AD-004 seam).
+- **Reason**: Roadmap 3.C (prd v1.4/FR-3): the restaurant gives the trash
+  race its timing texture and empties the desk area. Conforming choices
+  where the docs pinned them; the rest recorded here per the autonomous-run
+  precedent.
+- **Trade-off**: Elevator economy slows (every lobby trip +1 stride) — the
+  3.5 balance gate re-proves; the Rng stream shifted (one draw per dining
+  stay) so seeded suite expectations re-pinned; harness scenarios re-timed
+  (the justice approach walk is now events-driven — the fixed sleep drifted
+  into the AD-031 desk-suppression zone).
+- **Scope**: `packages/shared/src/{layout,tuning}.ts`, `packages/sim/src/
+  guests.ts` (+tests), `apps/server` (snapshot/overview seams), `apps/client`
+  (mezzanine view, M affordances, dining cue, snapshot guest ingestion),
+  `apps/client/harness/*`, `docs/art/alternative/asset-manifest.json`,
+  `CONTEXT.md`, `docs/elevator-behavior.md`.
+- **Date**: 2026-08-31
+- **Status**: active
+
 ## Handoff
-- **Feature**: `suitcase-transport` (cycle 3.B, prd v1.4/AD-032) — **CLOSED
-  (PASS)**. All six tasks + the AD-034 rework implemented and committed
-  (`5ad1d1c`); Verifier iteration 3 = **PASS** (26/26 active ACs, sensor 3/3
-  mutants killed incl. the SUI-23 volume-driven re-proof, leak audit clean,
-  `validate_state.py` exit 0) — report in
-  `.specs/features/suitcase-transport/validation.md`, committed `4acf1db`.
-- **Phase / Task**: Execute → Validate ✅ done.
-- **Next step**: none for 3.B. Next work per roadmap: cycle 3.C
-  `restaurant-floor` (mezzanine restaurant replaces the holding-area stub;
-  ~30 s guest dwell).
-- **Gates at close**: typecheck 4/4 ✅ · lint ✅ · test:sim 385 ✅ ·
-  `client:suitcase` 2/2 ×2 consecutive (scale 0.2) · Verifier scratch runs
-  green · flake class (justice/lobby/round/art-doors, REG-18) pre-existing —
-  reproduced on pre-rework HEAD `d242c72` at scale 0.5 in a clean worktree.
+- **Feature**: `restaurant-floor` (cycle 3.C, prd v1.4, AD-035) — Execute
+  complete, Verifier pending. All 8 tasks committed (T1 `c9ec84d` layout,
+  T2 `e9b6cd1` dials, T3 `45fadb5` dining sim, T4 `db68015` server seams,
+  T5 `b90351e` client view, T6 `464554e` dining cue + gate, T7 `b90242d`
+  manifest, T8 this commit).
+- **Phase / Task**: Execute → Validate (Verifier next).
+- **Gates at close**: typecheck 4/4 ✓ · lint ✓ · test:sim 394 ✓ ·
+  test:client 37/37 ✓ (workers=2, shift seam 60 s) · `client:restaurant`
+  2× consecutive ✓ · `sim:dining` 7 scenarios ✓.
+- **Notes**: the pre-3.C flake class (justice/lobby/round) was root-caused
+  into two fixable seams — shift length (buzzer fired mid-choreography after
+  the lobby ride legs doubled) and stale per-test timeout/selector budgets —
+  plus two genuine test bugs (missing keyup after cancel; fixed-sleep walk
+  drifting into the desk E-suppression zone). Full suite now green at
+  workers=2; residual cross-test bleed under 4-worker parallelism remains
+  the documented flake class, unchanged by 3.C.
 - **Blockers**: none.
 - **Branch**: master

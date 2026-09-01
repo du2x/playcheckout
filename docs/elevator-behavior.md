@@ -16,7 +16,9 @@ there (see [AGENTS.md](../AGENTS.md)).
   2 per car. Deterministic cycle: call → car arrives 3s → ride 2s **per floor
   traveled**. One pending destination per car; a call for the floor a car is
   already heading to is ignored, but the panel still flashes (decoys look
-  registered).
+  registered). Cycle 3.C: the building is FIVE stops (`lobby`, `mezzanine`,
+  `floor1..3` — FLOOR_IDS order), so a lobby↔floor1 ride costs two strides
+  and the mezzanine is a full press/call citizen.
 - **FR-6** (prd.md:91): Public elevator panels show both cars' current
   positions only — never occupants (decoy calls emerge naturally; "who rode
   when" stays voice testimony).
