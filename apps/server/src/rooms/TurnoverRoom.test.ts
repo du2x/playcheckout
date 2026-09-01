@@ -2451,8 +2451,12 @@ describe('server:reconnect', () => {
     room.connection.close()
   }
 
-  it('holds the seat on an unconsented drop and restores it exactly (REND-17/18)', async () => {
+  it(
+    'holds the seat on an unconsented drop and restores it exactly (REND-17/18) with the live settle score (3.D)',
+    { timeout: 60000 },
+    async () => {
     vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    vi.stubEnv('TURNOVER_TEST_GUEST_SCALE', '0.1')
     try {
       const [host, a, b, c] = await roomWithFour()
       const clients = [host, a, b, c]
@@ -2465,6 +2469,19 @@ describe('server:reconnect', () => {
       if (hostCollector === undefined) throw new Error('no collector')
       const originalRole = (await collectorOf2(collectors, clients, leaver).waitFor('role:dealt'))
         .payload.role as string
+
+      // Drive the guest economy until at least one settle is on the wire
+      // (cadence 2.4 s, impatience 2 s at scale 0.1) — the resume payload's
+      // settleScore must equal this live count, not a constant.
+      const settledCount = (col: ReturnType<typeof collectAll>) =>
+        col.types().filter((t) => t === 'guest:settled').length
+      let settledBeforeDrop = 0
+      for (let driven = 0; driven < 600 && settledBeforeDrop === 0; driven += 50) {
+        instance.__driveTicks(50)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        settledBeforeDrop = settledCount(hostCollector)
+      }
+      expect(settledBeforeDrop).toBeGreaterThanOrEqual(1)
 
       TurnoverRoom.reconnectSeconds = 5
       // A side channel on a non-leaver client counts player:left broadcasts.
@@ -2493,13 +2510,29 @@ describe('server:reconnect', () => {
       expect((resumed.payload.playerIds as string[]).length).toBe(4)
       expect(typeof resumed.payload.remainingTicks).toBe('number')
       expect(resumed.payload.remainingTicks).toBeGreaterThan(0)
-      // Cycle 3.D (AD-039): the restore re-seeds the HUD settle counter.
-      expect(typeof resumed.payload.settleScore).toBe('number')
+      // Cycle 3.D (AD-039): the restore re-seeds the HUD settle counter —
+      // the EXACT live count at drop time (a hardcoded constant fails here).
+      expect(resumed.payload.settleScore).toBe(settledBeforeDrop)
       await restoredCollector.waitFor('movement:snapshot')
       // Others see the rectangle come back: one re-announcing player:moved.
       instance.__driveTicks(2)
       const back = await hostCollector.waitFor('player:moved')
       expect(back.payload.playerId).toBe(leaver.sessionId)
+
+      // Drive out the shift: the recap must carry the LIVE final score —
+      // not a constant, and not zero in a scenario where settles happened
+      // (3.D: the M3/M5 sensors are killed here, not only in the e2e).
+      for (let driven = 0; driven < 2000 && instance.__phase() === 'round'; driven += 50) {
+        instance.__driveTicks(50)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      await vi.waitFor(() => expect(instance.__phase()).toBe('results'))
+      const recap = await hostCollector.waitFor('round:recap')
+      const settledFinal = settledCount(hostCollector)
+      expect(settledFinal).toBeGreaterThanOrEqual(settledBeforeDrop)
+      expect(recap.payload.settleScore).toBe(settledFinal)
+      expect(recap.payload.settleScore).toBeGreaterThan(0)
+      expect(recap.payload.settleTarget).toBe(5)
       off()
       restored.leave()
       host.leave()
