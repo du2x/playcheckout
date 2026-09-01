@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUNING } from './tuning'
+import { TUNING, settleTargetFor } from './tuning'
 
 // Expected values copied verbatim from prd §7 (single source of truth, locked).
 describe('tuning table', () => {
@@ -55,5 +55,24 @@ describe('tuning table', () => {
     expect(TUNING.GUEST_QUEUE_SPACING_TILES).toBe(1)
     // AD-031: the desk E receive/release zone (cycle 3.2).
     expect(TUNING.DESK_RANGE_TILES).toBe(1)
+  })
+})
+
+// prd §7 v1.5 win dial (AD-039): settle-target values are provisional pending
+// the 3.5 exit-bot balance gate — the helper is the only sanctioned read.
+describe('settleTargetFor (prd §7 v1.5, AD-039)', () => {
+  it('returns the §7 provisional target per lobby size', () => {
+    expect(TUNING.SETTLE_TARGET[4]).toBe(5)
+    expect(TUNING.SETTLE_TARGET[5]).toBe(7)
+    expect(TUNING.SETTLE_TARGET[6]).toBe(9)
+    expect(settleTargetFor(4)).toBe(5)
+    expect(settleTargetFor(5)).toBe(7)
+    expect(settleTargetFor(6)).toBe(9)
+  })
+
+  it('clamps out-of-range lobbies deterministically (small → 4p, large → 6p)', () => {
+    expect(settleTargetFor(3)).toBe(5)
+    expect(settleTargetFor(7)).toBe(9)
+    expect(settleTargetFor(100)).toBe(9)
   })
 })

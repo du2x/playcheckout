@@ -72,4 +72,17 @@ export const TUNING = {
    *  schedule — a guest whose suitcase rests leaves immediately. */
   GUEST_DINING_MIN_SECONDS: 15,
   GUEST_DINING_MAX_SECONDS: 30,
+  /** Buzzer win dial (prd §7 v1.5, AD-039): staff win when the settle score
+   *  reaches this many settled guests at the buzzer — replaces the 80%
+   *  coverage target as the §6.6 buzzer leg. Provisional pending the 3.5
+   *  exit-bot balance gate; read it through settleTargetFor, never raw. */
+  SETTLE_TARGET: { 4: 5, 5: 7, 6: 9 } as Record<LobbySize, number>,
 } as const
+
+/** The §6.6 buzzer win threshold for a lobby size (prd §7 v1.5, AD-039).
+ *  Out-of-range counts clamp to the nearest supported lobby (small → 4p,
+ *  large → 6p) until the prd row scales by lobby size. */
+export function settleTargetFor(playerCount: number): number {
+  const size = Math.min(Math.max(Math.round(playerCount), 4), 6) as LobbySize
+  return TUNING.SETTLE_TARGET[size]
+}
