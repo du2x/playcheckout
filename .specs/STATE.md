@@ -1171,6 +1171,61 @@
 - **Date**: 2026-09-01
 - **Status**: active
 
+### AD-040
+- **Decision**: PRD v1.6 — the west elevator is replaced by a staff-side
+  **stairwell** (cycle 3.E `stairs`, inserted before 3.3 per the letter
+  precedent 3.A–3.D). One elevator (car 1, east landing) serves all five
+  stops; car 2 and its machinery (AD-023 pinned dispatch, AD-024 per-car
+  lights, AD-019 both-parked decoy semantics, closest-landing/empty-idle
+  choice predicates) collapse to the single car — wire payloads keep their
+  `car` field, always 1. The stairwell sits at the west landing (x=0,
+  `ELEVATOR_LANDING_TILES` mouth) on every floor, usable in both phases:
+  directional entry (ArrowUp/ArrowDown at the mouth; E accepted as the only
+  valid direction on terminal floors), 3 s transit per floor stride, then a
+  2 s breath catch on the arrival floor (immobile). Entry emits
+  `player:left-floor` (observable like boarding), transit is unobservable
+  (no floor stream, black-box interior, no identity exposure between
+  co-transiting players), arrival is observable via the arrival floor's
+  stream. **Ambush**: when the saboteur and a live staff member pass
+  mid-stairs in opposite directions, the staff member is stunned for 20 s —
+  automatic, saboteur-only, anonymous to the victim (the victim's payload
+  carries no identity, only "you were ambushed" + duration; the saboteur
+  receives a private confirmation), no limiter; the victim resumes the
+  interrupted transit on recovery (arrival breath still applies).
+  Stationary players (breathing, waiting at the mouth) neither ambush nor
+  can be ambushed; same-direction passes are inert; guests never use
+  stairs; fired/ghosted players are immune. New §7-external constants:
+  `STAIRS_TRANSIT_SECONDS = 3`, `STAIRS_BREATH_SECONDS = 2`,
+  `STAIRS_STUN_SECONDS = 20`. **Balance kill checks** (3.5 gate): (1) an
+  ambush never creates a complaint — it only enables one the saboteur
+  already set up; (2) single-car guest throughput must keep the v1.3
+  cadence dials honest (Specify-phase §8 recompute, the 3.1 precedent).
+- **Reason**: The saboteur had no unobserved channel — same-floor streams,
+  panels, and car co-presence make their movement fully reconstructable —
+  and no counter-tool to FR-15's walk-in catch. The stairs trade speed for
+  anonymity: slow (3 s + 2 s breath, ≥ an elevator ride) but publishing
+  nothing about the encounter, while the forced-automatic trigger doubles
+  as the saboteur's signature trace (stun times/places are testimony
+  without identity). User-confirmed rulings 2026-09-01: timed knockout ~20 s
+  ("stunned"), anonymous, no limiter, staff-only stairs, finish-the-walk,
+  W fully replaced.
+- **Trade-off**: W removal halves guest elevator capacity and deletes
+  two-car machinery (AD-012…027 predicates narrow or vanish); the ambush is
+  a forced trigger — the saboteur cannot share stairs with staff without
+  leaving a trace (intended); anonymity is identity-only, not
+  event-secrecy (the victim's stream-stop at the west end is public).
+  AD-036's fresh front-facing west landing doors are immediately amended by
+  the stairwell visual.
+- **Scope**: `packages/shared` (tuning, layout stairwell, protocol stairs
+  messages + one-car shapes, affordances), `packages/sim` (movement car
+  collapse + stairs channel + ambush), `apps/server` (router policies),
+  `apps/client` (stairwell rendering, stairs chip, ambush toast, single-car
+  panels/presenter), `apps/client/harness`, `prd.md` v1.6, `roadmap.md`
+  (3.E insert), `CONTEXT.md`, `docs/elevator-behavior.md`. Implementation
+  via cycle 3.E before 3.3.
+- **Date**: 2026-09-01
+- **Status**: active
+
 ## Handoff
 - **Feature**: `delivery-scoring` (cycle 3.D, prd v1.5, AD-039) — all 8 tasks
   committed (T1 `settleTargetFor`, T2 `GuestSim.settledCount`, T3 buzzer

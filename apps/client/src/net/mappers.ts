@@ -19,6 +19,8 @@ export const MAPPERS: {
   // Movement (cycle 2.4): the high-frequency events map to actions the App
   // routes to the world scene (render state); the reducer no-ops them.
   'player:moved': (p) => [{ type: 'player-moved', ...p }],
+  'stairs:ambushed': (p) => [{ type: 'stairs-ambushed', ...p }],
+  'stairs:ambush': (p) => [{ type: 'stairs-ambush', ...p }],
   'guest:moved': (p) => [{ type: 'guest-moved', ...p }],
   'guest:arrived': (p) => [{ type: 'guest-arrived', ...p }],
   'guest:impatient': (p) => [{ type: 'guest-impatient', ...p }],

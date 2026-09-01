@@ -54,6 +54,20 @@ export const elevatorPressIntentSchema = z
 export type ElevatorPressIntent = z.infer<typeof elevatorPressIntentSchema>
 
 /**
+ * Enter the stairwell at the west end of the sender's floor (cycle 3.E,
+ * AD-040): one floor stride per activation in the pressed direction. The
+ * server validates the mouth zone, the direction's adjacent floor, and that
+ * the sender is a standing player — every rejection is silent.
+ */
+export const stairsEnterIntentSchema = z
+  .object({
+    type: z.literal('stairs:enter'),
+    dir: z.enum(['up', 'down']),
+  })
+  .strict()
+export type StairsEnterIntent = z.infer<typeof stairsEnterIntentSchema>
+
+/**
  * Start a work channel inside the named room's segment (FR-7/8/9). The action
  * (prep / un-prep / fake prep) is derived server-side from the caller's role
  * and the room's state — the client never sends it.

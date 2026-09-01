@@ -67,6 +67,16 @@ export const TUNING = {
    *  GUEST_HOLD_START_TILES, value unchanged): dining slots extend eastward
    *  at GUEST_QUEUE_SPACING_TILES on the mezzanine. */
   GUEST_RESTAURANT_START_TILES: 18,
+  /** Stairs transit per floor stride (cycle 3.E, AD-040 — new constant, not
+   *  in prd §7): the west stairwell moves one floor per activation. */
+  STAIRS_TRANSIT_SECONDS: 3,
+  /** Breath catch on stairs arrival (cycle 3.E, AD-040 — new constant, not
+   *  in prd §7): immobile at the arrival stairwell mouth before acting. */
+  STAIRS_BREATH_SECONDS: 2,
+  /** Saboteur ambush stun (cycle 3.E, AD-040 — new constant, not in prd §7):
+   *  an opposite-direction stairs pass with the saboteur stuns a live staff
+   *  member for this long; the victim then resumes their transit. */
+  STAIRS_STUN_SECONDS: 20,
   /** Dining dwell bounds (cycle 3.C, roadmap v1.4 dial — §7-external): the
    *  seeded uniform wait in the mezzanine restaurant. A wait buffer, not a
    *  schedule — a guest whose suitcase rests leaves immediately. */

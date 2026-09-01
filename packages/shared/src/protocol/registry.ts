@@ -37,6 +37,8 @@ import type {
   RoundResumed,
   RoundStarted,
   SpectatorSnapshot,
+  StairsAmbush,
+  StairsAmbushed,
   SuitcaseCarried,
   SuitcasePickedUp,
   SuitcasePlaced,
@@ -144,6 +146,11 @@ export interface Payloads {
   'elevator:pressed': ElevatorPressed
   /** server → the car's riders ONLY. The car's occupants + press queue (AD-013). */
   'elevator:riders': ElevatorRiders
+  /** server → the ambushed staff member ONLY (cycle 3.E, AD-040). Anonymous —
+   *  never names the saboteur. */
+  'stairs:ambushed': StairsAmbushed
+  /** server → the saboteur ONLY (cycle 3.E, AD-040): their ambush landed. */
+  'stairs:ambush': StairsAmbush
   /** server → all players. A player disconnected; remove their rectangle. */
   'player:left': PlayerLeft
   /** server → the departed floor's viewers: drop the rectangle (AD-009). */
@@ -400,6 +407,26 @@ export const PROTOCOL_REGISTRY = {
       },
       visibility: { car: event.car },
     })) as SimProjection<'elevator:riders'>,
+  },
+  // --- Stairs (cycle 3.E, AD-040): ambush knowledge is exactly as wide as
+  // its two ends — the victim (anonymous payload) and the saboteur (their
+  // own confirmation). Both rows are 'self'; nothing about the stairs
+  // interior is ever broadcast.
+  'stairs:ambushed': {
+    payload: {} as StairsAmbushed,
+    recipients: 'self',
+    fromSim: ((event) => ({
+      self: event.playerId,
+      payload: { playerId: event.playerId, stunSeconds: event.stunSeconds },
+    })) as SimProjection<'stairs:ambushed'>,
+  },
+  'stairs:ambush': {
+    payload: {} as StairsAmbush,
+    recipients: 'self',
+    fromSim: ((event) => ({
+      self: event.playerId,
+      payload: { playerId: event.playerId, victimId: event.victimId },
+    })) as SimProjection<'stairs:ambush'>,
   },
   'player:left': {
     payload: {} as PlayerLeft,

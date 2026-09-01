@@ -103,6 +103,11 @@ export type ViewAction =
   | { type: 'player-left'; playerId: string }
   | { type: 'player-left-floor'; playerId: string; floor: FloorId }
   | { type: 'movement-snapshot'; snapshot: MovementSnapshot }
+  // Stairs (cycle 3.E, AD-040): scene-kind actions — the ambush toast and
+  // saboteur confirmation are DOM display state; the victim's payload never
+  // names the saboteur and the saboteur's names only the victim.
+  | { type: 'stairs-ambushed'; playerId: string; stunSeconds: number }
+  | { type: 'stairs-ambush'; playerId: string; victimId: string }
   // Work render-state actions (cycle 2.5): the reducer no-ops all five —
   // channel progress and room interiors are scene/DOM display state, and no
   // payload names a role or a channel kind (FR-9).
@@ -230,6 +235,8 @@ export const ACTION_ROUTES = {
   'player-left': 'scene',
   'player-left-floor': 'scene',
   'movement-snapshot': 'scene',
+  'stairs-ambushed': 'scene',
+  'stairs-ambush': 'scene',
   'work-started': 'scene',
   'work-ended': 'scene',
   'room-observed': 'scene',
@@ -384,6 +391,8 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     // The scene consumes the snapshot itself (applySnapshot); storing it in
     // ViewState too was a pre-AD-005 leftover — written, never rendered.
     case 'movement-snapshot':
+    case 'stairs-ambushed':
+    case 'stairs-ambush':
       return state
     case 'work-started':
     case 'work-ended':

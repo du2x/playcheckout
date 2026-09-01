@@ -695,6 +695,12 @@ export class WorldScene extends Phaser.Scene {
         if (this.spectator) this.seedFromSpectatorSnapshot()
         break
       }
+      case 'stairs-ambushed':
+      case 'stairs-ambush':
+        // Cycle 3.E (AD-040): the ambush toast + confirmation land with the
+        // stairs client slice (T6) — the reducer routes them here as scene
+        // display state; no render exists yet.
+        break
       default: {
         // Exhaustiveness: SceneAction covers every 'scene'-routed member of
         // ACTION_ROUTES; an unhandled one must fail the build, not slip.

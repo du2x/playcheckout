@@ -56,6 +56,12 @@ describe('tuning table', () => {
     // AD-031: the desk E receive/release zone (cycle 3.2).
     expect(TUNING.DESK_RANGE_TILES).toBe(1)
   })
+
+  it('pins the AD-040 stairs timings (not in §7 — recorded decisions)', () => {
+    expect(TUNING.STAIRS_TRANSIT_SECONDS).toBe(3)
+    expect(TUNING.STAIRS_BREATH_SECONDS).toBe(2)
+    expect(TUNING.STAIRS_STUN_SECONDS).toBe(20)
+  })
 })
 
 // prd §7 v1.5 win dial (AD-039): settle-target values are provisional pending

@@ -151,6 +151,8 @@ describe('protocol registry', () => {
     'elevator:doors': 'all',
     'elevator:pressed': 'riders',
     'elevator:riders': 'riders',
+    'stairs:ambushed': 'self',
+    'stairs:ambush': 'self',
     'player:left': 'all',
     'player:left-floor': 'sameFloor',
     'movement:snapshot': 'self',

@@ -1,4 +1,10 @@
-import { GUEST_FLOOR_IDS, HALL_LENGTH_TILES, type RoomIndex, roomDoorXMilli } from './layout'
+import {
+  FLOOR_IDS,
+  GUEST_FLOOR_IDS,
+  HALL_LENGTH_TILES,
+  type RoomIndex,
+  roomDoorXMilli,
+} from './layout'
 import type { FloorId } from './protocol/messages'
 import { TUNING } from './tuning'
 
@@ -40,6 +46,24 @@ export function onLanding(xTiles: number): boolean {
     xTiles <= TUNING.ELEVATOR_LANDING_TILES ||
     xTiles >= HALL_LENGTH_TILES - TUNING.ELEVATOR_LANDING_TILES
   )
+}
+
+/** The stairwell mouth zone (cycle 3.E, AD-040): within
+ * ELEVATOR_LANDING_TILES of the west end (x=0) — the stairwell replaced the
+ * west elevator landing, and reuses the landing scale for its mouth. */
+export function atStairwellMouth(xTiles: number): boolean {
+  return xTiles <= TUNING.ELEVATOR_LANDING_TILES
+}
+
+/** The stairs directions available from a floor (cycle 3.E, AD-040): 'up'
+ * everywhere but the top floor, 'down' everywhere but the lobby — the entry
+ * guard and the client's key map consume this one table. */
+export function stairsDirections(floor: FloorId): readonly ('up' | 'down')[] {
+  const idx = FLOOR_IDS.indexOf(floor)
+  const dirs: ('up' | 'down')[] = []
+  if (idx < FLOOR_IDS.length - 1) dirs.push('up')
+  if (idx > 0) dirs.push('down')
+  return dirs
 }
 
 /** A room-door E zone (AD-033): within ROOM_DOOR_RANGE_TILES of the room's

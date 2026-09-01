@@ -206,3 +206,18 @@ export type MovementEvent =
       /** Guests aboard (cycle 3.1, GUEST-07) — present only when non-empty. */
       readonly guests?: readonly string[]
     }
+  // --- Stairs ambush (cycle 3.E, AD-040): both ends are private knowledge.
+  // `stairs:ambushed` reaches ONLY the victim and names nobody (the ambush is
+  // anonymous by design — "you were ambushed" + duration); `stairs:ambush`
+  // reaches ONLY the saboteur (their own action's confirmation). Neither is
+  // ever broadcast; the stairs interior has no other wire surface.
+  | {
+      readonly type: 'stairs:ambushed'
+      readonly playerId: string
+      readonly stunSeconds: number
+    }
+  | {
+      readonly type: 'stairs:ambush'
+      readonly playerId: string
+      readonly victimId: string
+    }

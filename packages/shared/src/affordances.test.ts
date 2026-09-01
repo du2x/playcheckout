@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   accuseTargetAtHoldExpiry,
+  atStairwellMouth,
   carriedGuestIdOf,
   doorInRange,
   doorRoomAt,
@@ -12,6 +13,7 @@ import {
   resolveEKeydown,
   resolveEKeyup,
   type SuitcaseRef,
+  stairsDirections,
 } from './affordances'
 
 import { type RoomIndex, roomDoorXMilli } from './layout'
@@ -215,5 +217,26 @@ describe('accuseTargetAtHoldExpiry', () => {
   it('is undefined while riding or without a position', () => {
     expect(accuseTargetAtHoldExpiry(true, pos('lobby', 10), [])).toBeUndefined()
     expect(accuseTargetAtHoldExpiry(false, null, [])).toBeUndefined()
+  })
+})
+
+describe('atStairwellMouth', () => {
+  it('covers the west end within ELEVATOR_LANDING_TILES, inclusive', () => {
+    expect(atStairwellMouth(0)).toBe(true)
+    expect(atStairwellMouth(1)).toBe(true)
+    expect(atStairwellMouth(1.01)).toBe(false)
+  })
+})
+
+describe('stairsDirections', () => {
+  it('offers only up on the lobby (bottom floor)', () => {
+    expect(stairsDirections('lobby')).toEqual(['up'])
+  })
+  it('offers only down on the top floor', () => {
+    expect(stairsDirections('floor3')).toEqual(['down'])
+  })
+  it('offers both directions on middle floors', () => {
+    expect(stairsDirections('mezzanine')).toEqual(['up', 'down'])
+    expect(stairsDirections('floor2')).toEqual(['up', 'down'])
   })
 })

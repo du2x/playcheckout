@@ -244,12 +244,43 @@ export interface PlayerLeft {
 }
 
 /**
- * server → the floor's viewers (AD-009 coherence): a player departed this
+ * server → the departed floor's viewers (AD-009 coherence): a player departed this
  * floor by elevator — drop their rectangle. The destination is NOT conveyed.
  */
 export interface PlayerLeftFloor {
   readonly playerId: string
   readonly floor: FloorId
+}
+
+// --- Stairs (cycle 3.E, AD-040): the west stairwell replaced the W elevator.
+// The ambush is private knowledge on both ends: the victim learns only that
+// they were ambushed (never by whom — anonymity is the design), the saboteur
+// learns only that their ambush landed. Both rows are `self`-policy.
+
+/** server → the ambushed staff member (self). No saboteur identity, ever. */
+export interface StairsAmbushed {
+  readonly playerId: string
+  readonly stunSeconds: number
+}
+
+/** server → the saboteur (self): their ambush landed on this victim. */
+export interface StairsAmbush {
+  readonly playerId: string
+  readonly victimId: string
+}
+
+/**
+ * Movement snapshot row for the recipient's own stairs transit (cycle 3.E) —
+ * present ONLY while the recipient is in the stairwell (transit, breath, or
+ * stunned). The interior is a black box to everyone else; this is the
+ * recipient's own legitimate knowledge of their own state.
+ */
+export interface MovementSnapshotStairs {
+  readonly from: FloorId
+  readonly to: FloorId
+  readonly phase: 'transit' | 'breath' | 'stunned'
+  /** Seconds remaining of the CURRENT phase (transit, breath, or stun). */
+  readonly remainingSeconds: number
 }
 
 /** Movement snapshot row for one player — public position data only. */
@@ -307,6 +338,12 @@ export interface MovementSnapshot {
    * baselines carry every floor's rows.
    */
   readonly suitcases?: readonly MovementSnapshotSuitcase[]
+  /**
+   * The recipient's own stairs state (cycle 3.E, AD-040) — present ONLY while
+   * the recipient is in the stairwell. Everyone else's stairs transit is
+   * invisible (the interior is a black box).
+   */
+  readonly stairs?: MovementSnapshotStairs
   readonly carOccupants?: {
     readonly car: CarId
     readonly riders: readonly string[]
