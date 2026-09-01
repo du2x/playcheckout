@@ -244,9 +244,9 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Scenario `client:score_hud` passes 2× consecutively
-- [ ] Counter equality with recap score asserted
-- [ ] Full gate green
+- [x] Scenario `client:score_hud` passes 2× consecutively
+- [x] Counter equality with recap score asserted
+- [x] Full gate green (typecheck, lint, sim 436, client e2e — `client:lobby_join` room-full re-flaked in-suite, green isolated; known bleed class, predates 3.D)
 
 **Tests**: e2e
 **Gate**: full
