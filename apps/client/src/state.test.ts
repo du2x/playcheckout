@@ -177,6 +177,8 @@ describe('round-end reducer', () => {
       reason: 'saboteur-fired',
       saboteurId: 'p2',
       entries: [],
+      settleScore: null,
+      settleTarget: null,
     })
   })
 
@@ -202,10 +204,18 @@ describe('round-end reducer', () => {
     const entries = [
       { kind: 'crime' as const, tick: 40, floor: 'floor1' as const, room: 2 as const, fresh: true },
     ]
-    const s = reduce(ended, { type: 'round-recap', entries })
+    const s = reduce(ended, { type: 'round-recap', entries, settleScore: 4, settleTarget: 7 })
     expect(s.results?.entries).toEqual(entries)
+    // Cycle 3.D (AD-039): the recap carries the verdict's inputs to the view.
+    expect(s.results?.settleScore).toBe(4)
+    expect(s.results?.settleTarget).toBe(7)
     // A recap with no stored result is absorbed without creating one.
-    const stray = reduce(joinedLobby(), { type: 'round-recap', entries })
+    const stray = reduce(joinedLobby(), {
+      type: 'round-recap',
+      entries,
+      settleScore: 4,
+      settleTarget: 7,
+    })
     expect(stray.results).toBeNull()
     expect(stray.view).toBe('lobby')
   })

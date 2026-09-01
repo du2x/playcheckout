@@ -217,10 +217,10 @@ T7 → T8
 
 **Done when**:
 
-- [ ] Results screen renders `reason` without stale `coverage` text anywhere in `apps/client/src`
-- [ ] Recap view shows final score and target
-- [ ] Reconnect mid-round re-seeds the counter to the resumed payload's score
-- [ ] `pnpm test:client` green (existing 37 scenarios unaffected)
+- [x] Results screen renders `reason` without stale `coverage` text anywhere in `apps/client/src`
+- [x] Recap view shows final score and target
+- [x] Reconnect mid-round re-seeds the counter to the resumed payload's score
+- [x] `pnpm test:client` green (existing 37 scenarios unaffected)
 
 **Tests**: e2e
 **Gate**: full

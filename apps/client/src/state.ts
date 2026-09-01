@@ -26,6 +26,10 @@ export interface ResultsState {
   reason: string
   saboteurId: string | null
   entries: readonly RecapEntry[]
+  /** The verdict's inputs (cycle 3.D, AD-039) — null until round:recap lands
+   *  (an aborted round has no recap and no verdict inputs). */
+  settleScore: number | null
+  settleTarget: number | null
 }
 
 export interface ViewState {
@@ -132,7 +136,12 @@ export type ViewAction =
       reason: string
       saboteurId: string | null
     }
-  | { type: 'round-recap'; entries: readonly RecapEntry[] }
+  | {
+      type: 'round-recap'
+      entries: readonly RecapEntry[]
+      settleScore: number
+      settleTarget: number
+    }
   | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
   | { type: 'connection-dropped' }
   | {
@@ -301,13 +310,22 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
           reason: action.reason,
           saboteurId: action.saboteurId,
           entries: state.results?.entries ?? [],
+          settleScore: null,
+          settleTarget: null,
         },
       }
     case 'round-recap':
       return {
         ...state,
         results:
-          state.results === null ? state.results : { ...state.results, entries: action.entries },
+          state.results === null
+            ? state.results
+            : {
+                ...state.results,
+                entries: action.entries,
+                settleScore: action.settleScore,
+                settleTarget: action.settleTarget,
+              },
       }
     case 'round-resumed':
       // Seat restore (FR-25): back into the round with an honest clock — the

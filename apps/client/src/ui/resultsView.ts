@@ -39,6 +39,13 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
   }
 
   const nameOf = (id: string): string => state.snapshot?.roster.find((e) => e.id === id)?.name ?? id
+  // The verdict's inputs (cycle 3.D, AD-039): final score vs the §7 target.
+  const scoreLine = el('p', { id: 'results-score' })
+  if (results !== null && results.settleScore !== null && results.settleTarget !== null) {
+    scoreLine.textContent = `settled ${results.settleScore} of ${results.settleTarget} guests`
+  } else {
+    scoreLine.setAttribute('hidden', '')
+  }
   const recapList = el(
     'ul',
     { id: 'recap-list' },
@@ -55,6 +62,7 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
     el('div', { id: 'results-view' }, [
       banner,
       traitorLine,
+      scoreLine,
       el('h3', {}, ['recap']),
       recapList,
       startButton,
