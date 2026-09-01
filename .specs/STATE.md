@@ -1040,15 +1040,26 @@
 - **Status**: active
 
 ## Handoff
-- **Feature**: `restaurant-floor` (cycle 3.C, prd v1.4, AD-035) — Execute
-  complete, Verifier pending. All 8 tasks committed (T1 `c9ec84d` layout,
-  T2 `e9b6cd1` dials, T3 `45fadb5` dining sim, T4 `db68015` server seams,
-  T5 `b90351e` client view, T6 `464554e` dining cue + gate, T7 `b90242d`
-  manifest, T8 this commit).
-- **Phase / Task**: Execute → Validate (Verifier next).
+- **Feature**: `restaurant-floor` (cycle 3.C, prd v1.4, AD-035) — **CLOSED
+  (PASS)**. All 8 tasks committed (T1 `c9ec84d` layout, T2 `e9b6cd1` dials,
+  T3 `45fadb5` dining sim, T4 `db68015` server seams, T5 `b90351e` client
+  view, T6 `464554e` dining cue + gate, T7 `b90242d` manifest, T8 `abc8ce6`
+  docs); Verifier = **PASS** (18/18 ACs, sensor 3/3 mutants killed, leak
+  audit clean, `validate_state.py` exit 0) — report in
+  `.specs/features/restaurant-floor/validation.md`.
+- **Phase / Task**: Execute → Validate ✅ done.
+- **Next step**: none for 3.C. Next work per roadmap: cycle 3.3
+  `complaint-budget` (the evidence + loss loop consumes 3.B's complaint
+  triggers — already unblocked).
 - **Gates at close**: typecheck 4/4 ✓ · lint ✓ · test:sim 394 ✓ ·
   test:client 37/37 ✓ (workers=2, shift seam 60 s) · `client:restaurant`
   2× consecutive ✓ · `sim:dining` 7 scenarios ✓.
+- **Follow-ups (non-blocking, Verifier-ranked)**: (1) REG-18 seq flake —
+  `TurnoverRoom.test.ts:522` exact `buzzer.seq + 4` pin breaks when 3.C guest
+  events land in the buzzer flush window; pin the room seed in
+  `roomWithFour()` or relax the pin. (2) REST-14 mezzanine hall-call lights
+  and (3) REST-17 spectator mezzanine lane are structurally implemented
+  without dedicated assertions.
 - **Notes**: the pre-3.C flake class (justice/lobby/round) was root-caused
   into two fixable seams — shift length (buzzer fired mid-choreography after
   the lobby ride legs doubled) and stale per-test timeout/selector budgets —

@@ -176,6 +176,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: client:suitcase SUI-23 / mutant E (apps/client/harness)
 - last seen: 2026-08-31T20:43:17Z
 
+### L-028 - Exact seq-gap pins like REG-18 (buzzer.seq+4) flake when 3.C guest lifecycle events land in the buzzer flush window — pin room seeds in test helpers or relax exact seq-gap pins to >= when guest events can interleave.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `apps/server` · harmful: 0
+- features: restaurant-floor
+- evidence: apps/server/src/rooms/TurnoverRoom.test.ts:522 (apps/server)
+- last seen: 2026-09-01T01:06:49Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
