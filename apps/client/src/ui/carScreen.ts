@@ -67,18 +67,17 @@ const STYLE = `
   position: fixed;
   inset: 0;
   z-index: 30;
-  background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at center, rgba(10, 16, 24, 0.9) 0%, rgba(4, 7, 11, 0.985) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  background: transparent;
 }
 #elevator-car-screen[hidden] { display: none; }
 .car-screen-inner {
   pointer-events: auto;
-  min-width: 320px;
+  min-width: 340px;
+  max-width: 420px;
   background: linear-gradient(180deg, #1b2530 0%, #131b24 60%, #0f161e 100%);
   border: 1px solid #7a6a42;
   border-radius: 14px;
@@ -188,6 +187,37 @@ const STYLE = `
   50% { content: '..'; }
   100% { content: '...'; }
 }
+.car-screen-doors {
+  position: relative;
+  width: 100%;
+  height: 32px;
+  margin-top: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #1a2530;
+  background: #050a0f;
+  display: flex;
+}
+.car-door-leaf {
+  flex: 1 1 50%;
+  background: linear-gradient(90deg, #243040 0%, #1e2d3a 50%, #243040 100%);
+  border-right: 1px solid #2a3542;
+  transition: transform 220ms ease;
+  position: relative;
+}
+.car-door-leaf:last-child { border-right: none; border-left: 1px solid #2a3542; }
+.car-door-leaf::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 14px;
+  background: #3d4a58;
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+.car-door-left::after { right: 4px; }
+.car-door-right::after { left: 4px; }
 .car-buttons { display: grid; grid-template-rows: repeat(5, 44px); gap: 9px; align-content: center; }
 .car-button {
   width: 44px;
@@ -233,32 +263,53 @@ const STYLE = `
   min-height: 26px;
 }
 .car-screen-aboard-label { font-size: 10px; letter-spacing: 3px; color: #5a6b7c; }
-.car-screen-occupants { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.car-occupant {
-  display: inline-flex;
+.car-screen-occupants { display: inline-flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.car-occupant-visual {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #c7d3de;
-  background: #1d2a38;
-  border: 1px solid #3d4a58;
-  border-radius: 999px;
-  padding: 3px 10px 3px 4px;
+  gap: 4px;
+  min-width: 54px;
+  padding: 5px 4px 4px;
+  background: #0f1a24;
+  border: 1px solid #2a3542;
+  border-radius: 8px;
 }
-.car-occupant.you { border-color: #e6c56a; color: #ffd98a; }
-.car-occupant-ava {
-  width: 18px;
-  height: 18px;
+.car-occupant-visual.you { border-color: #e6c56a; background: #1a2214; }
+.char-figure { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.char-head {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  display: inline-flex;
+  border: 2px solid rgba(255,255,255,0.9);
+  display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-weight: bold;
-  color: #14100a;
-  background: #8fa3b5;
+  color: #0f1419;
+  text-shadow: none;
 }
-.car-occupant.you .car-occupant-ava { background: #e6c56a; }
+.char-body {
+  width: 22px;
+  height: 14px;
+  border-radius: 4px 4px 2px 2px;
+  border: 1px solid rgba(255,255,255,0.12);
+  position: relative;
+}
+.char-body::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 8px;
+  height: 5px;
+  background: rgba(255,255,255,0.22);
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+.char-name { font-size: 9px; color: #aab8c8; letter-spacing: 0.5px; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.car-occupant-visual.you .char-name { color: #ffd98a; }
 .car-screen-hint { font-size: 10px; color: #556677; margin-top: 10px; letter-spacing: 1px; }
 `
 
@@ -275,6 +326,10 @@ export function buildCarScreen(): HTMLElement {
       el('div', { class: 'car-screen-header' }, [
         el('div', { class: 'car-screen-title' }, ['elevator']),
         el('div', { class: 'car-screen-car' }, ['']),
+      ]),
+      el('div', { class: 'car-screen-doors' }, [
+        el('div', { class: 'car-door-leaf car-door-left' }, []),
+        el('div', { class: 'car-door-leaf car-door-right' }, []),
       ]),
       el('div', { class: 'car-screen-body' }, [
         el('div', { class: 'car-screen-display' }, [
@@ -307,13 +362,22 @@ function floorFromLabel(label: string): FloorId | null {
   return FLOOR_ORDER.find((floor) => floorLabel(floor) === label) ?? null
 }
 
+function occupantPalette(name: string): { head: string; body: string } {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  const hue = hash % 360
+  const head = `hsl(${hue} 58% 68%)`
+  const body = `hsl(${(hue + 14) % 360} 34% 34%)`
+  return { head, body }
+}
+
 /**
  * Mirror the rider session onto the screen: visible only while riding, each
  * button lit while its floor is in the own car's queue. Idempotent — safe to
  * call on every rider-session change and after every view re-render. `press`
  * forwards button taps to the same channel the keymap uses; pointerdown (not
  * click) keeps the button from taking focus and stealing the game's Space key.
- * `ownName` highlights the local player's chip (optional, lobby-snapshot name).
+ * `ownName` highlights the local player's visual (optional, lobby-snapshot name).
  */
 export function syncCarScreen(
   riding: RiderUpdate,
@@ -333,12 +397,19 @@ export function syncCarScreen(
   const aboard = screen.querySelector('.car-screen-occupants')
   if (aboard !== null) {
     aboard.replaceChildren(
-      ...occupantNames.map((name) =>
-        el('span', { class: `car-occupant${name === ownName ? ' you' : ''}` }, [
-          el('span', { class: 'car-occupant-ava' }, [name.slice(0, 1).toUpperCase()]),
-          name,
-        ]),
-      ),
+      ...occupantNames.map((name) => {
+        const palette = occupantPalette(name)
+        const isYou = name === ownName
+        return el('span', { class: `car-occupant-visual${isYou ? ' you' : ''}` }, [
+          el('span', { class: 'char-figure' }, [
+            el('span', { class: 'char-head', style: `background:${palette.head}` }, [
+              name.slice(0, 1).toUpperCase(),
+            ]),
+            el('span', { class: 'char-body', style: `background:${palette.body}` }, []),
+          ]),
+          el('span', { class: 'char-name' }, [name + (isYou ? ' (you)' : '')]),
+        ])
+      }),
     )
   }
   for (const button of screen.querySelectorAll<HTMLElement>('.car-button')) {
@@ -405,4 +476,20 @@ export function setCarScreenState(state: string | null): void {
   arrow.classList.toggle('up', dir === 'up')
   arrow.classList.toggle('down', dir === 'down')
   arrow.textContent = dir === 'down' ? '▼' : '▲'
+}
+
+/**
+ * Door leaves (world-scene driven every frame): `openAmount` 0 = fully closed,
+ * 1 = fully open. The leaves slide from the center outward — purely
+ * presentation, never a new wire message.
+ */
+export function setCarScreenDoors(openAmount: number): void {
+  const screen = document.getElementById('elevator-car-screen')
+  if (screen === null) return
+  const clamped = Math.max(0, Math.min(1, openAmount))
+  for (const leaf of screen.querySelectorAll<HTMLElement>('.car-door-leaf')) {
+    const isLeft = leaf.classList.contains('car-door-left')
+    const shift = isLeft ? -clamped * 100 : clamped * 100
+    leaf.style.transform = `translateX(${shift}%)`
+  }
 }

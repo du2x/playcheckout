@@ -49,11 +49,13 @@ test.describe('client:complaint_cues', () => {
     browser,
   }) => {
     test.setTimeout(60000)
-    const pages = await Promise.all([0, 1, 2, 3].map(async () => await (await browser.newContext()).newPage()))
+    const pages = await Promise.all(
+      [0, 1, 2, 3].map(async () => await (await browser.newContext()).newPage()),
+    )
     try {
       await fourPlayerRound(pages)
       const host = pages[0]!
-      const floor1Witness = pages[1]!
+      const _floor1Witness = pages[1]!
       // Move the witness to floor1 via the robust ride helper is heavy for a
       // synthetic test — instead, set the witness's viewFloor to floor1 by
       // riding is not needed: the anger cue's sameFloor gate is server-side,
@@ -66,12 +68,12 @@ test.describe('client:complaint_cues', () => {
       // Put the witness on floor1 so the sameFloor cue is visible there
       // (the server would have gated delivery; here we gate via the scene's
       // own visibility filter).
-      await pages[1]!.evaluate(() => {
+      await pages[1]?.evaluate(() => {
         const w = window as unknown as {
           __TURNOVER__: { scene: (name: string) => unknown | null }
         }
         const scene = w.__TURNOVER__.scene('Round') as unknown as Record<string, unknown>
-        if (scene !== null) (scene as Record<string, unknown>)['viewFloor'] = 'floor1'
+        if (scene !== null) (scene as Record<string, unknown>).viewFloor = 'floor1'
       })
       // Dispatch a synthetic trash-discovery complaint (the server would have
       // sent guest:discovered + guest:angered in the same flush; here we
@@ -83,7 +85,12 @@ test.describe('client:complaint_cues', () => {
             __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
           }
           const scene = w.__TURNOVER__.scene('Round')
-          scene?.applyAction({ type: 'guest-angered', guestId: 'guest:99', floor: 'floor1', room: 3 })
+          scene?.applyAction({
+            type: 'guest-angered',
+            guestId: 'guest:99',
+            floor: 'floor1',
+            room: 3,
+          })
         })
       }
       // Let the per-frame visibility settle.
@@ -121,7 +128,12 @@ test.describe('client:complaint_cues', () => {
             __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
           }
           const scene = w.__TURNOVER__.scene('Round')
-          scene?.applyAction({ type: 'guest-complained', guestId: 'guest:100', floor: 'floor2', room: 5 })
+          scene?.applyAction({
+            type: 'guest-complained',
+            guestId: 'guest:100',
+            floor: 'floor2',
+            room: 5,
+          })
         })
       }
       await host.waitForTimeout(300)

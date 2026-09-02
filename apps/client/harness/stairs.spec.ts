@@ -57,37 +57,21 @@ test.describe('client:stairs', () => {
     // The stairwell marker renders at the west landing (STAIRS-17).
     await host.waitForFunction(() => document.querySelector('#stairwell-marker') !== null)
 
-    // Pre-round stairs (phase-free, AD-005/015): bruno walks west and rides
-    // the stairs up — the screen shows the transit leg and its countdown
-    // (STAIRS-18), rolls into the breath, then frees.
+    // Elevator-only: the stairwell screen stays hidden — the lift is the star.
+    // Stairs still work (phase-free), but the fullscreen stair overlay is gone.
     const bruno = pages[1] as Page
     await walkToMouth(bruno)
     await bruno.keyboard.press('ArrowUp')
-    await bruno.waitForFunction(
-      () =>
-        document.querySelector('#elevator-stair-screen') !== null &&
-        !document.querySelector('#elevator-stair-screen')?.hasAttribute('hidden'),
-      undefined,
-      { timeout: 5000 },
-    )
-    expect(await bruno.textContent('.stair-screen-route')).toBe('L → M')
-    expect(await bruno.textContent('.stair-screen-dir')).toBe('▲ up')
-    expect(await bruno.textContent('.stair-screen-phase')).toBe('moving')
-    const clockText = await bruno.textContent('.stair-screen-clock')
-    expect(clockText?.endsWith('s')).toBe(true)
-    // The breath window is 2 s — start waiting for it BEFORE the transit
-    // reads finish so slow text round-trips cannot miss it.
-    const breathShown = bruno.waitForFunction(
-      () => document.querySelector('.stair-screen-phase')?.textContent === 'catching breath',
-      undefined,
-      { timeout: 10_000 },
-    )
-    await breathShown
-    await bruno.waitForFunction(
-      () => document.querySelector('#elevator-stair-screen')?.hasAttribute('hidden') === true,
-      undefined,
-      { timeout: 6000 },
-    )
+    await bruno.waitForTimeout(800)
+    expect(
+      await bruno.evaluate(
+        () =>
+          document.querySelector('#elevator-stair-screen') === null ||
+          document.querySelector('#elevator-stair-screen')?.hasAttribute('hidden') === true,
+      ),
+    ).toBe(true)
+    // Let bruno finish the stair transit off-screen before starting the round
+    await bruno.waitForTimeout(5000)
 
     // Round: stage an ambush between the dealt saboteur and a staff member.
     await host.click('#start-button')
@@ -115,58 +99,29 @@ test.describe('client:stairs', () => {
     const victimName = ['ada', 'bruno', 'caro', 'dina'][victimIdx]
 
     // Opposite transits, staged around who the saboteur is: bruno (pages[1])
-    // already rode the stairs pre-round and stands at the mezzanine mouth —
-    // everyone else is on the lobby.
+    // already rode the stairs pre-round — elevator-only keeps the stair
+    // screen hidden, but the ambush still fires.
     if (saboteurIdx === 1) {
       await walkToMouth(victim) // the victim is on the lobby floor
       await victim.keyboard.press('ArrowUp') // lobby → mezzanine
-      await victim.waitForFunction(
-        () => document.querySelector('.stair-screen-route')?.textContent === 'L → M',
-        undefined,
-        { timeout: 5000 },
-      )
+      await victim.waitForTimeout(800)
       await saboteur.keyboard.press('ArrowDown') // mezzanine → lobby
-      await saboteur.waitForFunction(
-        () => document.querySelector('.stair-screen-route')?.textContent === 'M → L',
-        undefined,
-        { timeout: 5000 },
-      )
+      await saboteur.waitForTimeout(800)
     } else {
       // Both on the lobby: the victim rides up first, frees at the mezzanine
       // mouth, then descends into the saboteur's up-transit.
       await walkToMouth(victim)
       await walkToMouth(saboteur)
       await victim.keyboard.press('ArrowUp') // lobby → mezzanine (3 s + 2 s breath)
-      await victim.waitForFunction(
-        () =>
-          document.querySelector('#elevator-stair-screen') !== null &&
-          !document.querySelector('#elevator-stair-screen')?.hasAttribute('hidden'),
-        undefined,
-        { timeout: 5000 },
-      )
-      await victim.waitForFunction(
-        () => document.querySelector('#elevator-stair-screen')?.hasAttribute('hidden') === true,
-        undefined,
-        { timeout: 12_000 },
-      )
-      await victim.waitForTimeout(500)
+      await victim.waitForTimeout(6000)
       await victim.keyboard.press('ArrowDown')
-      await victim.waitForFunction(
-        () => document.querySelector('.stair-screen-route')?.textContent === 'M → L',
-        undefined,
-        { timeout: 5000 },
-      )
+      await victim.waitForTimeout(800)
       await saboteur.waitForTimeout(400)
       await saboteur.keyboard.press('ArrowUp')
-      await saboteur.waitForFunction(
-        () => document.querySelector('.stair-screen-route')?.textContent === 'L → M',
-        undefined,
-        { timeout: 5000 },
-      )
+      await saboteur.waitForTimeout(800)
     }
 
-    // The victim feels the ambush: the toast counts down (STAIRS-19) and the
-    // stairs screen reads stunned.
+    // The victim feels the ambush: the toast counts down (STAIRS-19).
     await victim.waitForFunction(
       () => document.querySelector('#ambush-toast') !== null,
       undefined,
@@ -177,11 +132,6 @@ test.describe('client:stairs', () => {
         (document.querySelector('#ambush-toast')?.textContent ?? '').includes('you were ambushed'),
       undefined,
       { timeout: 3000 },
-    )
-    await victim.waitForFunction(
-      () => document.querySelector('.stair-screen-phase')?.textContent === 'stunned',
-      undefined,
-      { timeout: 8000 },
     )
     // The saboteur's private confirmation names the victim.
     await saboteur.waitForFunction(

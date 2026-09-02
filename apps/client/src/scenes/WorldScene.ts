@@ -33,11 +33,11 @@ import {
 } from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
-import { setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
+import { setCarScreenDoors, setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
 import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
-import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
-import { ElevatorPresenter } from './elevatorPresenter'
+import { type StairAnchor, stairPhaseReadout } from '../ui/stairScreen'
+import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
 
 /**
  * The persistent world (cycle 2.4, AD-005): mounts when the player first joins
@@ -1763,11 +1763,11 @@ export class WorldScene extends Phaser.Scene {
     // floor swept through transition floors mid-ride, state line naming the
     // door/motion phase. Both cleared when not riding.
     this.syncCarScreenReadouts()
-    // The stairwell screen ticks the own stairs clock locally between
-    // personal snapshots; hidden whenever no phase readout is live. The
-    // prediction mirror (AD-040): when the local clock says the visit is
-    // over, the arrival is applied to the own display — the sameFloor stream
-    // resumed while the client was floorless, so the event never reached us.
+    // The stairwell clock prediction mirror (AD-040): when the local clock
+    // says the visit is over, the arrival is applied to the own display —
+    // the sameFloor stream resumed while the client was floorless, so the
+    // event never reached us. The stairwell screen itself is hidden —
+    // elevator-only — but the clock still ticks for movement.
     if (this.stairsAnchor !== null) {
       const readout = stairPhaseReadout(this.stairsAnchor, Date.now())
       if (readout === null) {
@@ -1793,7 +1793,16 @@ export class WorldScene extends Phaser.Scene {
         }
       }
     }
-    syncStairScreen(this.stairsAnchor, Date.now())
+    // Doors on the elevator screen — the leaves slide with the presenter's
+    // clock (the single car, cycle 3.E). The screen is the star, so the
+    // doors read live even before the car sprite animates.
+    {
+      const carForDoors = this.riderSession?.car ?? (1 as const)
+      const doorClock = this.elevatorPresenter?.clockOf(carForDoors)
+      const amount =
+        doorClock !== undefined ? doorsOpenAmount(doorClock, DEFAULT_ANIMATION_CONFIG) : 0
+      setCarScreenDoors(amount)
+    }
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
     if (this.stairMarker !== null) {
