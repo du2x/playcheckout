@@ -385,9 +385,11 @@ export class WorldScene extends Phaser.Scene {
     container.setScrollFactor(0)
     container.setDepth(50)
     container.setVisible(false)
-    const bg = this.add.rectangle(0, 0, 420, 260, 0x1b2530)
-    bg.setStrokeStyle(3, 0xe6c56a)
+    const bg = this.add.rectangle(0, 0, 960, 576, 0x0f1419)
     container.add(bg)
+    const panelBg = this.add.rectangle(0, 0, 420, 260, 0x1b2530)
+    panelBg.setStrokeStyle(3, 0xe6c56a)
+    container.add(panelBg)
     const title = this.add.text(-160, -95, 'ELEVATOR', {
       fontSize: '10px',
       color: '#8899aa',
