@@ -1227,9 +1227,22 @@
 - **Status**: active
 
 ## Handoff
-- **Feature**: `stairs` (cycle 3.E, AD-040) — tasks T1–T6 committed (T1 `e327e03` shared rows, T2 `62bef10` one-car collapse, T3 `7611a71` stairs channel, T4 `e594e8e` ambush, T5 `bc78ff3` server wiring, T6 `1b68a8b` client slice). Verifier: `.specs/features/stairs/validation.md` — PASS, sensor 5/5 mutants killed, 21/21 implemented requirements traced (evidence-or-zero).
-- **Phase / Task**: Execute → T6 done. Remaining: T7 (prd v1.6 + roadmap 3.E + CONTEXT vocabulary + docs/elevator-behavior + art manifest) and T8 (full gate ladder + verifier rerun).
-- **Gates**: typecheck ✓ · lint ✓ · test:sim 475 ✓ · server+sim+shared 369/369 (verifier re-run) · test:client 35/35 green with `--workers=2` (the default worker count oversubscribes this machine — documented bleed class; three specs re-fail at default workers but pass isolated and at 2 workers).
-- **Follow-ups (non-blocking, from the Verifier)**: (1) spec.md's reconnect edge case contradicts the design/delivered behavior (leave() deletes stairs state; the spec text says the seat continues transit) — resolve the spec text in T7. (2) Suitcase-during-stun and stunned-victim pass-through edges lack dedicated scenarios (safe by construction). (3) The harness guest-traffic dials (scale 0.2) contend with the single car — §8 recompute in T7 calibrates; two ride waits were loosened to 25-30 s.
+- **Feature**: `stairs` (cycle 3.E, AD-040) — COMPLETE. T1 `e327e03` shared
+  rows · T2 `62bef10` one-car collapse · T3 `7611a71` stairs channel ·
+  T4 `e594e8e` ambush · T5 `bc78ff3` server wiring · T6 `1b68a8b` client
+  slice · T7 `9b74d5b` prd v1.6 + §8 recompute + roadmap/CONTEXT/docs ·
+  `5ef4ac6` harness east-landing re-staging · T8 validation addendum.
+- **Phase / Task**: Validate → done. Verifier: `.specs/features/stairs/
+  validation.md` PASS (T2–T6 full re-derivation, sensor 5/5 mutants killed)
+  + T7/T8 delta addendum. `validate_state.py stairs` exit 0.
+- **Gates**: typecheck ✓ · lint ✓ · test:sim 475 ✓ · test:client 38/39 at
+  `--workers=2` (the only failure is the documented `client:lobby_join`
+  room-full bleed class, green isolated).
+- **Next step**: cycle 3.3 `complaint-budget` (scope: trash-discovery
+  complaints only per 3.D) — its dials now tune against the one-car economy
+  and the ambush kill check. Non-blockers from the verifier: suitcase-during-
+  stun and stunned-victim pass-through edges are safe by construction
+  (dedicated scenarios optional); harness guest-traffic contention is the
+  §8-documented relief-valve (stairs).
 - **Blockers**: none.
 - **Branch**: master

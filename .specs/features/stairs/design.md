@@ -84,9 +84,14 @@ interface StairsState {
 - **Buzzer / round end**: the room calls `movement.resolveStairsForResults()` —
   every stairs occupant is placed at their destination floor (stun cleared, no
   breath), so the results snapshot (MOVE-18) shows honest positions.
-- **Disconnect mid-stairs**: `leave()` deletes the state with the player
-  (reconnect seats restore into a fresh join; the round:resumed snapshot path
-  re-sends whatever state exists at restore).
+- **Disconnect mid-stairs**: a mid-round drop HOLDS the seat (FR-25/AD-021) —
+  the movement slot is frozen, never left, so the `StairsState` persists and
+  the `round:resumed` snapshot re-sends the remaining transit/stun (the
+  personal snapshot carries the `stairs` row). `leave()` — expiry, firing,
+  or a deliberate leave — deletes the state with the player; a post-expiry
+  rejoin is a fresh join. (Verifier gap 1 resolved: the spec's
+  continue-the-transit wording describes the seat-hold path and stands;
+  this text previously conflated it with the leave path.)
 
 ## Code Reuse Analysis
 

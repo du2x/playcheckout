@@ -131,3 +131,35 @@ sensor.
 - Mutants: 5 injected, 5 killed, 0 survived.
 - Gate 3 (client): author's run 35/35 green (`--workers=2`); not re-run by the
   Verifier per the handoff instruction.
+
+---
+
+## T7/T8 addendum (delta verification, 2026-09-02)
+
+The main report above covers T2–T6 (`62bef10^..1b68a8b`). The remaining tasks
+landed afterwards and were verified as a delta:
+
+**T7 — docs + §8 recompute** (`9b74d5b`): prd v1.6 (changelog, FR-5/FR-6 amend,
+new §6.10 FR-34/35, §7 stairs rows, §9 risks) with the §8 v1.6 recompute —
+single-car guest trip ≈ 8–12 s against the 18 s 6p cadence ≈ 1.5× headroom,
+the v1.3 cadence dials hold; ambush kill check restated. roadmap 3.E row +
+sequencing note; CONTEXT.md stairwell/ambush/breath/stun vocabulary;
+`docs/elevator-behavior.md` one-car amendment; art manifest stairwell entry.
+Verifier follow-up (1) resolved in design.md: the reconnect wording — a
+mid-round drop HOLDS the seat (movement slot frozen, stairs state persists,
+`round:resumed` re-sends it); `leave()` (expiry/fired/leave) discards it.
+
+**T8 — gate ladder** (run at HEAD `9b74d5b` + the harness staging commit):
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | ✅ exit 0 |
+| `pnpm lint` | ✅ exit 0, 119 files |
+| `pnpm test:sim` | ✅ 475 passed / 0 failed (26 files) |
+| `pnpm test:client --workers=2` | 38/39 ✅ — the only failure is `client:lobby_join` room-full, the documented bleed class (3.D handoff), green isolated at HEAD |
+
+**T8 code delta**: three harness specs re-staged their west-landing walks to
+the east landing (commit `5ef4ac6` — doors, art-elevator, art-doors ×2), the
+T6 slice's unamended fallout; each re-run green in place, `client:stairs`
+green in the full run. Verifier follow-ups (2)/(3) stand as recorded
+non-blockers (safe-by-construction edges; §8 recompute landed).

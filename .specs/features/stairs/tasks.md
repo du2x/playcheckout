@@ -246,7 +246,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T8: Gate ladder + verification handoff
+### T8: Gate ladder + verification handoff ✅
 
 **What**: Run the full verification ladder (typecheck, lint, test:sim, test:client), fix anything found, and record gate evidence in the feature dir for the Verifier.
 **Where**: repo-wide; evidence in `.specs/features/stairs/`
