@@ -31,13 +31,13 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
   root.append(
     el('div', { id: 'round-hud' }, [
       clock,
+      // Elevator + stairs — inline HUD bars at the top of the main window
+      // (directly under the clock), no modal window.
+      buildCarScreen(),
+      buildStairScreen(),
       el('div', { id: 'role-label' }, ['your role']),
       roleCard,
       errorLine,
-      // In-car + stairwell — inline on the main window HUD, right below the
-      // clock/role so the ride is visible without scrolling or a modal.
-      buildCarScreen(),
-      buildStairScreen(),
       // Position-only elevator panel (AD-024, single car — cycle 3.E/AD-040):
       // one hall-call light + floor readout for the east car; car floors,
       // never occupants (privacy rule).

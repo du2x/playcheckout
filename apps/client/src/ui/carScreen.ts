@@ -67,10 +67,10 @@ const STYLE = `
   position: relative;
   display: block;
   width: 100%;
-  max-width: 420px;
-  margin: 16px auto;
+  margin: 0;
   z-index: 1;
-  background: transparent;
+  background: #0f1419;
+  border-bottom: 1px solid #2a3542;
   pointer-events: none;
 }
 #elevator-car-screen[hidden] { display: none; }
@@ -78,24 +78,17 @@ const STYLE = `
   pointer-events: auto;
   width: 100%;
   min-width: 0;
-  background: linear-gradient(180deg, #1b2530 0%, #131b24 60%, #0f161e 100%);
-  border: 1px solid #7a6a42;
-  border-radius: 14px;
-  outline: 1px solid #2a3542;
-  outline-offset: -6px;
-  padding: 22px 30px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: transparent;
   color: #dfe8f2;
   font-family: ui-monospace, monospace;
-  text-align: center;
-  box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.76),
-    0 0 0 1px rgba(0, 0, 0, 0.62) inset,
-    0 1px 0 rgba(230, 197, 106, 0.12) inset;
-  animation: car-screen-in 220ms ease-out;
-}
-@keyframes car-screen-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  text-align: left;
+  border: none;
+  box-shadow: none;
 }
 .car-screen-header {
   display: flex;

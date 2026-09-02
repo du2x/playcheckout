@@ -64,10 +64,10 @@ const STYLE = `
   position: relative;
   display: block;
   width: 100%;
-  max-width: 420px;
-  margin: 16px auto;
+  margin: 0;
   z-index: 1;
-  background: transparent;
+  background: #0f1419;
+  border-bottom: 1px solid #2a3542;
   pointer-events: none;
 }
 #elevator-stair-screen[hidden] { display: none; }
@@ -75,6 +75,11 @@ const STYLE = `
   pointer-events: auto;
   width: 100%;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
   background: linear-gradient(180deg, #1b2530 0%, #131b24 60%, #0f161e 100%);
   border: 1px solid #7a6a42;
   border-radius: 14px;

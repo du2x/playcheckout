@@ -46,11 +46,11 @@ export function renderLobby(
 
   root.append(
     el('div', { id: 'lobby-view' }, [
-      el('h2', {}, [`lobby — room ${roomCode}`]),
-      // Elevator + stairs — inline on the main window, directly under the
-      // heading so the in-car view is visible without scrolling (no modal).
+      // Elevator + stairs — inline HUD bars at the very top of the main
+      // window, directly under the game canvas (no modal, no separate window).
       buildCarScreen(),
       buildStairScreen(),
+      el('h2', {}, [`lobby — room ${roomCode}`]),
       roster,
       startButton,
       errorLine,
