@@ -104,7 +104,7 @@ in simEvents.ts
 
 ---
 
-### T2: Trash-discovery complaint loop + budget loss (sim)
+### T2: Trash-discovery complaint loop + budget loss (sim) — DONE
 
 **What**: Add the `RoomIntelPort` (state + un-prep boolean, never the owner) and
 wire it from RoundSim; replace the direct `settleAt` convergence with the arrival
@@ -141,7 +141,13 @@ dropCarry absorb precedent
       saboteur/`budget-exhausted` in the same flush; wrong-delivery complaints never
       move the count; buzzer tie resolves to the budget
 - [x] Pre-3.3 GuestSim constructions (no port) keep settle semantics (existing suites green)
-- [x] `pnpm vitest run packages/sim` green
+- [x] `pnpm vitest run packages/sim` green (216)
+- Note: the SUI-16 round-integration pin ("settles silently in 3.B") was
+  amended to pin its own scheduled supersession (the discovery loop) — the
+  test's deferral comment named 3.3 explicitly.
+- Note: `runUntil`-style staging helpers keep the tick cursor honest (one
+  sim.tick = one cursor tick, breaks included) so seeded replays align —
+  the tie scenario depends on it.
 
 **Tests**: unit
 **Gate**: quick

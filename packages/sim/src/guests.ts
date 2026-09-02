@@ -1,4 +1,11 @@
-import type { FloorId, GuestFloorId, LobbySize, RoomIndex, SimEvent } from '@turnover/shared'
+import type {
+  FloorId,
+  GuestFloorId,
+  LobbySize,
+  RoomIndex,
+  RoomState,
+  SimEvent,
+} from '@turnover/shared'
 import {
   doorInRange,
   GUEST_FLOOR_IDS,
@@ -36,6 +43,21 @@ export interface MovementPort {
   pressFloor(id: string, floor: FloorId): 'accepted' | 'ignored' | 'rejected'
 }
 
+/**
+ * The read-only interior view a guest consumes at arrival (cycle 3.3,
+ * FR-29(b)/FR-30): the room's state and whether an un-prep channel is
+ * running in it — never the channel OWNER. The RoundSim implements it over
+ * the work channels and boolean-izes the owner away, so the guest sim learns
+ * "the room is dangerous", not "who is in there" (leak rule 3 — the guest's
+ * testimony never names an actor). Optional: absent (pre-3.3 direct
+ * constructions and their tests), every arrival settles — the pre-3.3
+ * semantics; production always supplies the port.
+ */
+export interface RoomIntelPort {
+  roomStateOf(floor: GuestFloorId, room: RoomIndex): RoomState
+  unprepActiveIn(floor: GuestFloorId, room: RoomIndex): boolean
+}
+
 export type GuestPhase = 'queued' | 'impatient' | 'dining' | 'toRoom' | 'settling' | 'toExit'
 
 interface Guest {
@@ -57,6 +79,11 @@ interface Guest {
   diningDwellTicks: number | null
   /** Absolute tick a settling guest checks out (settle + seeded dwell). */
   dwellEndsAt: number | null
+  /** The trash-discovery report of an angered guest (cycle 3.3, FR-29(b)) —
+   *  the room they discovered and the freshness tier they observed. Set at
+   *  the discovery tick, consumed (and cleared) at the desk-arrival tick;
+   *  null for every guest not on the complaint path. */
+  complaintReport: { floor: GuestFloorId; room: RoomIndex; fresh: boolean } | null
 }
 
 /**
@@ -170,6 +197,7 @@ export class GuestSim {
     playerCount: LobbySize,
     private readonly movement: MovementPort,
     timing?: GuestTiming,
+    private readonly roomIntel?: RoomIntelPort,
   ) {
     this.rng = new Rng(seed)
     this.cadenceTicks = timing?.cadenceTicks ?? TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
@@ -309,6 +337,7 @@ export class GuestSim {
       impatienceRemaining: null,
       diningDwellTicks: null,
       dwellEndsAt: null,
+      complaintReport: null,
     }
     this.guests.set(id, guest)
     this.queue.push(id)
@@ -576,7 +605,7 @@ export class GuestSim {
       if (Math.abs(pos.x - doorX) <= ARRIVAL_TOLERANCE_TILES) {
         this.movement.stopMove(g.id)
         this.movement.removeGuest(g.id) // enters the room — leaves hall view
-        this.settleAt(g, target.floor, target.room, tick, events)
+        this.resolveArrival(g, target.floor, target.room, tick, events)
         return
       }
       this.movement.startMove(g.id, doorX < pos.x ? 'left' : 'right')
@@ -608,6 +637,69 @@ export class GuestSim {
     const dwellTicks = Math.max(1, Math.round(dwellSeconds * this.dwellScale * TICK_HZ))
     g.dwellEndsAt = tick + dwellTicks
     events.push({ type: 'guest:settled', guestId: g.id, floor, room })
+  }
+
+  /**
+   * Arrival resolution (cycle 3.3, FR-29(b)/COMP-01): the guest is at their
+   * assigned room's door and enters — what they find decides the beat. An
+   * active un-prep (they walk in on the act) or fresh-tier trash reads as a
+   * fresh discovery; aged or churn trash as an aged one; a clean (`prepped`)
+   * or pristine (`fresh`) room settles exactly as before. Tick ordering
+   * makes the read deterministic: the RoundSim ticks the work channels
+   * before the guests, so a same-tick un-prep completion reads as discovery,
+   * not flee. No port (pre-3.3 callers) → settle, preserving those
+   * semantics.
+   */
+  private resolveArrival(
+    g: Guest,
+    floor: GuestFloorId,
+    room: RoomIndex,
+    tick: number,
+    events: SimEvent[],
+  ): void {
+    const intel = this.roomIntel
+    if (intel !== undefined) {
+      if (intel.unprepActiveIn(floor, room)) {
+        this.beginDiscovery(g, floor, room, true, events)
+        return
+      }
+      const state = intel.roomStateOf(floor, room)
+      if (state === 'trashed') {
+        this.beginDiscovery(g, floor, room, true, events)
+        return
+      }
+      if (state === 'settled') {
+        this.beginDiscovery(g, floor, room, false, events)
+        return
+      }
+    }
+    this.settleAt(g, floor, room, tick, events)
+  }
+
+  /**
+   * The discovery tick (COMP-02/03, FR-29(b) stage 1): the anger cue fires
+   * at the room — room-number level, no interior detail, no actor — and the
+   * guest storms out: the reservation releases, the resting suitcase is
+   * absorbed (the dropCarry absorb precedent — the guest is gone, an orphaned
+   * suitcase has no game consequence), and the guest re-enters the hall at
+   * the room door carrying their report, walking home like a checkout. The
+   * room stays trashed and vacant; tenancy never committed, the settle score
+   * untouched, no retry.
+   */
+  private beginDiscovery(
+    g: Guest,
+    floor: GuestFloorId,
+    room: RoomIndex,
+    fresh: boolean,
+    events: SimEvent[],
+  ): void {
+    events.push({ type: 'guest:angered', guestId: g.id, floor, room })
+    this.reserved.delete(roomKey(floor, room))
+    this.suitcases.delete(g.id)
+    g.complaintReport = { floor, room, fresh }
+    g.phase = 'toExit'
+    // Storm out: re-enter hall view at the room door (the checkout re-entry).
+    this.movement.joinGuest(g.id, floor, roomDoorXMilli(room) / 1000)
   }
 
   /**
@@ -654,7 +746,9 @@ export class GuestSim {
         this.movement.removeGuest(g.id) // at the door — leaves hall view
         const assigned = g.assigned
         if (assigned !== null && assigned.floor === target.floor && assigned.room === target.room) {
-          this.settleAt(g, target.floor, target.room, tick, events)
+          // The suitcase rests at the assignment: what the guest finds inside
+          // decides — settle or the trash-discovery complaint path (3.3).
+          this.resolveArrival(g, target.floor, target.room, tick, events)
         } else {
           events.push({
             type: 'guest:complained',
@@ -702,9 +796,24 @@ export class GuestSim {
 
     if (pos.floor === 'lobby') {
       if (Math.abs(pos.x - DESK_X) <= ARRIVAL_TOLERANCE_TILES) {
-        // Reached the desk: the hotel exit (GUEST-09 despawn).
+        // Reached the desk: the hotel exit (GUEST-09 despawn). An angered
+        // guest (cycle 3.3, FR-29(b) stage 2) delivers their fuzzy-timestamp
+        // report FIRST — the building-wide trash-discovery complaint, the
+        // only budget-counting trigger (FR-31) — then leaves in the same
+        // flush. One complaint, no retry.
         this.movement.stopMove(g.id)
         this.movement.removeGuest(g.id)
+        const report = g.complaintReport
+        if (report !== null) {
+          g.complaintReport = null
+          events.push({
+            type: 'guest:discovered',
+            guestId: g.id,
+            floor: report.floor,
+            room: report.room,
+            fresh: report.fresh,
+          })
+        }
         this.guests.delete(g.id)
         events.push({ type: 'guest:left', guestId: g.id })
         return

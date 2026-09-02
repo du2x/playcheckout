@@ -97,6 +97,10 @@ export class RoundSim {
   /** Crimes, catches, accusations in tick order — the FR-22 recap's sim half
    *  (rides are the room's half; the sim never sees movement). */
   private readonly journal: RecapEntry[] = []
+  /** Trash-discovery complaints so far (cycle 3.3, FR-31): the budget's only
+   *  input — wrong-delivery door complaints never touch it (AD-039). The 8th
+   *  (COMPLAINT_BUDGET, §7) is an instant staff loss. */
+  private complaintTotal = 0
 
   constructor(config: RoundSimConfig) {
     if (
@@ -117,6 +121,12 @@ export class RoundSim {
             this.playerIds.length as LobbySize,
             config.movement,
             config.guestTiming,
+            // The arrival-intel port (cycle 3.3): state + an owner-free
+            // un-prep boolean — the identity never crosses to the guest sim.
+            {
+              roomStateOf: (floor, room) => this.work.stateOf(floor, room),
+              unprepActiveIn: (floor, room) => this.work.activeUnprepOwner(floor, room) !== null,
+            },
           )
     const totalTicks = config.totalTicks ?? RoundSim.TOTAL_TICKS
     if (!Number.isInteger(totalTicks) || totalTicks < 1) {
@@ -229,6 +239,8 @@ export class RoundSim {
         if (guestEvent.type === 'guest:checked_out') {
           this.work.churnTrash(guestEvent.floor as GuestFloorId, guestEvent.room)
         }
+        // FR-31: the desk report is the ONLY budget-counting complaint.
+        if (guestEvent.type === 'guest:discovered') this.complaintTotal++
         events.push(guestEvent)
       }
       // Carry-clock expiry (cycle 3.B, SUI-18): fire the current carrier
@@ -254,6 +266,11 @@ export class RoundSim {
       this.end('staff', 'saboteur-fired')
     } else if (this.liveStaffCount() === 1) {
       this.end('saboteur', 'staff-reduced')
+    } else if (this.complaintTotal >= TUNING.COMPLAINT_BUDGET) {
+      // FR-31 (cycle 3.3): the 8th trash-discovery complaint is an instant
+      // staff loss — same flush as the triggering `guest:discovered`, and
+      // ahead of the buzzer verdict (the tie resolves to the budget).
+      this.end('saboteur', 'budget-exhausted')
     }
     this.emitResult(events)
     if (this.ended) {
@@ -453,6 +470,13 @@ export class RoundSim {
   /** The deal's single saboteur — the room needs it for the abort path (FR-25). */
   get saboteurId(): string {
     return this.justice.saboteurId
+  }
+
+  /** The trash-discovery complaint count (cycle 3.D-style public query,
+   *  cycle 3.3): the recap/resume payloads' source and the HUD's truth; 0
+   *  when no movement port was supplied. */
+  get complaintCount(): number {
+    return this.complaintTotal
   }
 
   /** The guest economy's settle score (cycle 3.D, AD-039) — the buzzer

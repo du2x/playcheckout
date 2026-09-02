@@ -563,7 +563,7 @@ describe('sim:suitcase_carry (round integration — SUI-11/16/20 sub-clauses)', 
     expect(completed).toBe(true)
   })
 
-  it('a guest settling into a TRASHED room settles silently in 3.B — no complaint fires (SUI-16)', () => {
+  it('a guest walking into a TRASHED assigned room discovers it — cue, desk report, no settle (SUI-16 superseded by 3.3)', () => {
     const movement = new MovementSim()
     const sim = new RoundSim({
       seed: 7,
@@ -579,31 +579,39 @@ describe('sim:suitcase_carry (round integration — SUI-11/16/20 sub-clauses)', 
     const flushed = sim.tick(positions)
     const o = flushed.find((e) => e.type === 'guest:assigned')
     if (o === undefined || o.type !== 'guest:assigned') throw new Error('missing overheard')
-    ;(
-      sim as unknown as {
-        work: { stateOf: (f: GuestFloorId, r: number) => string; trashRoom?: unknown }
-      }
-    ).work.stateOf(o.floor, o.room)
     // Direct state poke: force the assigned room trashed (the saboteur-shaped
-    // un-prep needs role/state choreography the suite pins elsewhere).
+    // un-prep needs role/state choreography the complaint suite pins for real).
+    // 3.B pinned the silent settle here; cycle 3.3 (FR-29b) replaces it with
+    // the discovery loop — this scenario now pins the replacement behavior.
     const states = (sim as unknown as { work: { states: Map<string, string> } }).work.states
     const entry = states.get(`${o.floor}:${o.room}`)
     if (entry === undefined) throw new Error('room state missing')
     states.set(`${o.floor}:${o.room}`, 'trashed')
-    // Deliver: place at the assignment door, wait for the settle.
+    // Deliver: place at the assignment door, wait for the discovery loop.
     movement.join('p1', { floor: o.floor, xMilli: roomDoorXMilli(o.room) })
     expect(sim.suitcasePlace('p1', o.room)).toBe('placed')
+    let angered: SimEvent | null = null
+    let discovered: SimEvent | null = null
+    let leftAfterReport = false
     let settled = false
-    let complained = false
-    for (let t = 0; t < 4000 && !settled; t++) {
+    for (let t = 0; t < 4000 && discovered === null; t++) {
       movement.tick()
-      for (const e of sim.tick(positions)) {
+      const flushed = sim.tick(positions)
+      for (const e of flushed) {
+        if (e.type === 'guest:angered') angered = e
         if (e.type === 'guest:settled') settled = true
-        if (e.type === 'guest:complained') complained = true
+        if (e.type === 'guest:discovered') {
+          discovered = e
+          // The report and the departure share the flush (COMP-04).
+          const guestId = e.guestId
+          leftAfterReport = flushed.some((l) => l.type === 'guest:left' && l.guestId === guestId)
+        }
       }
     }
-    expect(settled).toBe(true)
-    expect(complained).toBe(false) // discovery cost lands in cycle 3.3
+    expect(angered).toMatchObject({ floor: o.floor, room: o.room })
+    expect(discovered).toMatchObject({ floor: o.floor, room: o.room, fresh: true })
+    expect(settled).toBe(false) // no settle, no score — the discovery replaces it
+    expect(leftAfterReport).toBe(true)
   })
 
   it('a DISCONNECTED carrier drops the suitcase through the leave path; the guest re-queues (SUI-20)', () => {
