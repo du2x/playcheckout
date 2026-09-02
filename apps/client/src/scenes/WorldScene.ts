@@ -165,6 +165,17 @@ export class WorldScene extends Phaser.Scene {
    *  the in-car screen readout (ELAN + AD-038): the single clock authority for
    *  elevator presentation — built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
+  /** Phaser canvas elevator interior — drawn inside the main window, not as a
+   *  DOM modal. Visible only while riding. */
+  private elevatorCanvas: Phaser.GameObjects.Container | null = null
+  private elevatorCanvasFloor: Phaser.GameObjects.Text | null = null
+  private elevatorCanvasState: Phaser.GameObjects.Text | null = null
+  private elevatorCanvasDoors: {
+    left: Phaser.GameObjects.Rectangle
+    right: Phaser.GameObjects.Rectangle
+  } | null = null
+  private elevatorCanvasOccupants: Phaser.GameObjects.Container | null = null
+  private elevatorCanvasButtons = new Map<FloorId, Phaser.GameObjects.Rectangle>()
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
@@ -335,6 +346,7 @@ export class WorldScene extends Phaser.Scene {
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
     this.elevatorPresenter = new ElevatorPresenter(this.cars, (car) => this.carLaneY(car))
+    this.createElevatorCanvasInterior()
 
     const keyboard = this.input.keyboard
     if (keyboard !== null) {
@@ -366,6 +378,146 @@ export class WorldScene extends Phaser.Scene {
       // rectangle stands in; the server validates role and room state (FR-7).
       keyboard.on('keydown-SPACE', () => this.startWorkHere())
     }
+  }
+
+  private createElevatorCanvasInterior(): void {
+    const container = this.add.container(480, 288)
+    container.setScrollFactor(0)
+    container.setDepth(50)
+    container.setVisible(false)
+    const bg = this.add.rectangle(0, 0, 420, 260, 0x1b2530)
+    bg.setStrokeStyle(3, 0xe6c56a)
+    container.add(bg)
+    const title = this.add.text(-160, -95, 'ELEVATOR', {
+      fontSize: '10px',
+      color: '#8899aa',
+      fontFamily: 'monospace',
+    })
+    title.setOrigin(0, 0.5)
+    container.add(title)
+    const carLabel = this.add.text(160, -95, '', {
+      fontSize: '10px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    carLabel.setOrigin(1, 0.5)
+    carLabel.setName('carLabel')
+    container.add(carLabel)
+    const floor = this.add.text(0, -50, '', {
+      fontSize: '48px',
+      color: '#ffd98a',
+      fontFamily: 'monospace',
+    })
+    floor.setOrigin(0.5)
+    floor.setName('floor')
+    container.add(floor)
+    this.elevatorCanvasFloor = floor
+    const state = this.add.text(0, -10, '', {
+      fontSize: '11px',
+      color: '#8ad07a',
+      fontFamily: 'monospace',
+    })
+    state.setOrigin(0.5)
+    state.setName('state')
+    container.add(state)
+    this.elevatorCanvasState = state
+    const left = this.add.rectangle(-36, 30, 68, 70, 0x243040)
+    left.setStrokeStyle(1, 0x2a3542)
+    const right = this.add.rectangle(36, 30, 68, 70, 0x243040)
+    right.setStrokeStyle(1, 0x2a3542)
+    container.add([left, right])
+    this.elevatorCanvasDoors = { left, right }
+    const occ = this.add.container(0, 85)
+    container.add(occ)
+    this.elevatorCanvasOccupants = occ
+    const floors: FloorId[] = ['floor3', 'floor2', 'floor1', 'mezzanine', 'lobby']
+    const labels = ['3', '2', '1', 'M', 'L']
+    floors.forEach((floorId, i) => {
+      const x = -80 + i * 40
+      const btn = this.add.rectangle(x, 65, 30, 30, 0x1a2530)
+      btn.setStrokeStyle(1, 0x3d4a58)
+      btn.setInteractive({ useHandCursor: true })
+      btn.on('pointerdown', () => this.pressFloor(floorId))
+      const label = this.add.text(x, 65, labels[i] ?? '', {
+        fontSize: '13px',
+        color: '#9fb0c0',
+        fontFamily: 'monospace',
+      })
+      label.setOrigin(0.5)
+      container.add([btn, label])
+      this.elevatorCanvasButtons.set(floorId, btn)
+    })
+    this.elevatorCanvas = container
+  }
+
+  private syncElevatorCanvas(): void {
+    if (this.elevatorCanvas === null) return
+    const riding = this.riderSession
+    if (riding === null) {
+      this.elevatorCanvas.setVisible(false)
+      return
+    }
+    this.elevatorCanvas.setVisible(true)
+    const readout = this.elevatorPresenter?.carScreen()
+    if (this.elevatorCanvasFloor !== null) {
+      const label = readout?.floor ?? null
+      this.elevatorCanvasFloor.setText(
+        label === null
+          ? ''
+          : label === 'lobby'
+            ? 'L'
+            : label === 'mezzanine'
+              ? 'M'
+              : label.slice(-1),
+      )
+    }
+    if (this.elevatorCanvasState !== null) {
+      this.elevatorCanvasState.setText(readout?.state ?? '')
+    }
+    const carLabel = this.elevatorCanvas.getByName('carLabel') as Phaser.GameObjects.Text | null
+    if (carLabel !== null) carLabel.setText(`car ${riding.car}`)
+    if (this.elevatorCanvasDoors !== null) {
+      const carForDoors = riding.car as 1 | 2
+      const clock = this.elevatorPresenter?.clockOf(carForDoors)
+      const amount = clock !== undefined ? doorsOpenAmount(clock, DEFAULT_ANIMATION_CONFIG) : 0
+      this.elevatorCanvasDoors.left.x = -36 - amount * 34
+      this.elevatorCanvasDoors.right.x = 36 + amount * 34
+    }
+    for (const [floor, btn] of this.elevatorCanvasButtons) {
+      const lit = riding.queue.includes(floor)
+      btn.setFillStyle(lit ? 0xc8a24a : 0x1a2530)
+      btn.setStrokeStyle(1, lit ? 0xe6c56a : 0x3d4a58)
+    }
+    if (this.elevatorCanvasOccupants !== null) {
+      this.elevatorCanvasOccupants.removeAll(true)
+      const names = riding.occupants.map((id) => this.rosterNames.get(id) ?? id)
+      const isYou = (name: string) => name === (this.rosterNames.get(this.ownId) ?? '')
+      names.forEach((name, idx) => {
+        const x = -60 + idx * 50
+        const headColor = this.occupantColor(name)
+        const head = this.add.circle(x, 0, 10, headColor)
+        const body = this.add.rectangle(x, 18, 20, 14, 0x2a3a4a)
+        const label = this.add.text(x, 32, name.slice(0, 6), {
+          fontSize: '8px',
+          color: isYou(name) ? '#ffd98a' : '#dfe8f2',
+          fontFamily: 'monospace',
+        })
+        label.setOrigin(0.5)
+        if (isYou(name)) {
+          head.setStrokeStyle(2, 0xe6c56a)
+          body.setStrokeStyle(1, 0xe6c56a)
+        }
+        this.elevatorCanvasOccupants?.add([head, body, label])
+      })
+    }
+  }
+
+  private occupantColor(name: string): number {
+    let hash = 0
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+    const hue = hash % 360
+    const c = Phaser.Display.Color.HSLToColor(hue / 360, 0.58, 0.5)
+    return (c.red << 16) | (c.green << 8) | c.blue
   }
 
   /** Send work:start when the own predicted position is inside a segment. */
@@ -1803,7 +1955,7 @@ export class WorldScene extends Phaser.Scene {
         doorClock !== undefined ? doorsOpenAmount(doorClock, DEFAULT_ANIMATION_CONFIG) : 0
       setCarScreenDoors(amount)
     }
-    syncStairScreen(this.stairsAnchor, Date.now())
+    this.syncElevatorCanvas()
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
     if (this.stairMarker !== null) {

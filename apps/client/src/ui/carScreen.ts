@@ -64,16 +64,9 @@ const STYLE_ID = 'elevator-car-screen-styles'
 
 const STYLE = `
 #elevator-car-screen {
-  position: relative;
-  display: block;
-  width: 100%;
-  margin: 0;
-  z-index: 1;
-  background: #0f1419;
-  border-bottom: 1px solid #2a3542;
-  pointer-events: none;
+  display: none !important;
 }
-#elevator-car-screen[hidden] { display: none; }
+#elevator-car-screen[hidden] { display: none !important; }
 .car-screen-inner {
   pointer-events: auto;
   width: 100%;
