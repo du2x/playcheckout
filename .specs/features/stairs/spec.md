@@ -231,12 +231,12 @@ asserts zero complaints; §8 recompute lands as a prd edit reviewed at Design.
 | STAIRS-03 | P1: One-elevator building | Design | Implemented |
 | STAIRS-04 | P1: One-elevator building | Design | Pending |
 | STAIRS-05 | P1: Stairs transit | Execute | Implementing |
-| STAIRS-06 | P1: Stairs transit | Design | Pending |
-| STAIRS-07 | P1: Stairs transit | Design | Pending |
-| STAIRS-08 | P1: Stairs transit | Design | Pending |
-| STAIRS-09 | P1: Stairs transit | Design | Pending |
-| STAIRS-10 | P1: Stairs transit | Design | Pending |
-| STAIRS-11 | P1: Stairs transit | Design | Pending |
+| STAIRS-06 | P1: Stairs transit | Design | Implemented |
+| STAIRS-07 | P1: Stairs transit | Design | Implemented |
+| STAIRS-08 | P1: Stairs transit | Design | Implemented |
+| STAIRS-09 | P1: Stairs transit | Design | Implemented |
+| STAIRS-10 | P1: Stairs transit | Design | Implemented |
+| STAIRS-11 | P1: Stairs transit | Design | Implemented |
 | STAIRS-12 | P1: Ambush | Design | Pending |
 | STAIRS-13 | P1: Ambush | Design | Pending |
 | STAIRS-14 | P1: Ambush | Execute | Implementing |

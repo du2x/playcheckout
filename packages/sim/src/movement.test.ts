@@ -1500,3 +1500,206 @@ describe('sim:stairs_one_car', () => {
     }
   })
 })
+
+// --- Cycle 3.E (AD-040): the stairs transit channel. sim:stairs_transit pins
+// the west stairwell: 3 s transit + 2 s breath per floor stride, departure
+// observable / interior silent / arrival via the resumed stream, the
+// floorless black-box policy, and every silent rejection branch.
+
+/** Join a player standing exactly at the stairwell mouth (x=0, any floor). */
+function joinAtMouth(sim: MovementSim, playerId: string, floor: FloorId = 'lobby'): void {
+  sim.join(playerId, { floor, xMilli: 0 })
+}
+
+/** The whole stairs visit in ticks: entry flush, 60-tick transit, 40-tick breath. */
+function runTransit(
+  sim: MovementSim,
+  playerId: string,
+  dir: 'up' | 'down',
+): { arrivalAt: number; breathEndsAt: number } {
+  expect(sim.enterStairs(playerId, dir)).toBe('entered')
+  sim.tick() // the entry flush: player:left-floor
+  let arrivalAt = -1
+  let breathEndsAt = -1
+  for (let i = 1; i <= 200; i++) {
+    const st = sim.stairsStateOf(playerId)
+    if (st === undefined) {
+      breathEndsAt = i
+      break
+    }
+    if (st.phase === 'breath' && arrivalAt === -1) arrivalAt = i
+    sim.tick()
+  }
+  return { arrivalAt, breathEndsAt }
+}
+
+describe('sim:stairs_transit', () => {
+  it('enters at the west mouth and rides STAIRS_TRANSIT_SECONDS per stride (STAIRS-05)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    expect(sim.enterStairs('p1', 'up')).toBe('entered')
+    expect(sim.stairsStateOf('p1')).toMatchObject({
+      from: 'lobby',
+      to: 'mezzanine',
+      dir: 1,
+      phase: 'transit',
+    })
+    // Entry flushes on the NEXT tick (MOVE-10 intent-time pattern). The flush
+    // tick is transit tick 1 of 60.
+    expect(sim.tick()).toEqual([{ type: 'player:left-floor', playerId: 'p1', floor: 'lobby' }])
+    for (let i = 0; i < 58; i++) sim.tick() // transit ticks 2..59
+    expect(sim.stairsStateOf('p1')?.phase).toBe('transit')
+    sim.tick() // transit tick 60: arrival
+    expect(sim.positionOf('p1')).toMatchObject({ floor: 'mezzanine', x: 0 })
+    expect(sim.stairsStateOf('p1')?.phase).toBe('breath')
+  })
+
+  it('holds the arrival breath for STAIRS_BREATH_SECONDS, then frees the player (STAIRS-06)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    const { arrivalAt, breathEndsAt } = runTransit(sim, 'p1', 'up')
+    expect(arrivalAt).toBe(TUNING.STAIRS_TRANSIT_SECONDS * TICK_HZ)
+    expect(breathEndsAt).toBe(
+      TUNING.STAIRS_TRANSIT_SECONDS * TICK_HZ + TUNING.STAIRS_BREATH_SECONDS * TICK_HZ,
+    )
+    expect(sim.stairsStateOf('p1')).toBeUndefined()
+    // Freed: the player acts normally again.
+    expect(sim.enterStairs('p1', 'up')).toBe('entered')
+  })
+
+  it('the breath is immobile: held direction keys change nothing (STAIRS-06)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    sim.enterStairs('p1', 'up')
+    for (let i = 0; i < 60; i++) sim.tick()
+    expect(sim.stairsStateOf('p1')?.phase).toBe('breath')
+    const before = sim.positionOf('p1')
+    sim.startMove('p1', 'right')
+    const events: MovementEvent[] = []
+    for (let i = 0; i < 10; i++) events.push(...sim.tick())
+    expect(sim.positionOf('p1')).toEqual(before)
+    expect(movedEvents(events).filter((e) => e.playerId === 'p1')).toHaveLength(1) // arrival flush only
+    sim.stopMove('p1')
+  })
+
+  it('publishes only the departure and the arrival — the interior is silent (STAIRS-07)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    joinAtMouth(sim, 'p2', 'floor1')
+    expect(sim.enterStairs('p1', 'up')).toBe('entered')
+    const events: MovementEvent[] = []
+    for (let i = 0; i <= 60 + TUNING.STAIRS_BREATH_SECONDS * TICK_HZ; i++) {
+      events.push(...sim.tick())
+    }
+    const own = events.filter((e) => e.type === 'player:moved' && e.playerId === 'p1')
+    // Exactly ONE player:moved for the transiter across the whole visit: the
+    // arrival flush (next tick after arrival — mirrors exitCar).
+    expect(own).toHaveLength(1)
+    expect(own[0]).toMatchObject({ playerId: 'p1', floor: 'mezzanine', x: 0 })
+    // The departure is observable to the origin floor: player:left-floor.
+    expect(events).toContainEqual({ type: 'player:left-floor', playerId: 'p1', floor: 'lobby' })
+  })
+
+  it('is floorless inside: viewOf, allPositions, and floor snapshots exclude the occupant (STAIRS-07)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    joinAtMouth(sim, 'watcher')
+    sim.enterStairs('p1', 'up')
+    sim.tick()
+    expect(sim.viewOf('p1')).toEqual({ floor: null, roomKey: null, car: null, x: null })
+    expect(sim.allPositions().some((r) => r.playerId === 'p1')).toBe(false)
+    expect(sim.allPositions().some((r) => r.playerId === 'watcher')).toBe(true)
+    expect(sim.snapshotForFloor('lobby').players.some((r) => r.playerId === 'p1')).toBe(false)
+    expect(sim.snapshotForFloor('lobby').players.some((r) => r.playerId === 'watcher')).toBe(true)
+  })
+
+  it("the occupant's personal snapshot carries the stairs row; others' stay byte-identical (STAIRS-08)", () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    joinAtMouth(sim, 'p2')
+    sim.enterStairs('p1', 'up')
+    sim.tick()
+    const own = sim.snapshotFor('p1')
+    expect(own.players).toEqual([])
+    expect(own.stairs).toMatchObject({ from: 'lobby', to: 'mezzanine', phase: 'transit' })
+    expect(own.stairs?.remainingSeconds).toBeGreaterThan(0)
+    expect(own.stairs?.remainingSeconds).toBeLessThanOrEqual(TUNING.STAIRS_TRANSIT_SECONDS)
+    const other = sim.snapshotFor('p2')
+    expect('stairs' in other).toBe(false)
+    expect(other.players.some((r) => r.playerId === 'p1')).toBe(false)
+    // Breath phase keeps the row (the recipient is still in the stairwell).
+    for (let i = 0; i < 59; i++) sim.tick()
+    expect(sim.snapshotFor('p1').stairs?.phase).toBe('breath')
+  })
+
+  it('ignores direction keys mid-transit and a second entry while inside (STAIRS-09)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    expect(sim.enterStairs('p1', 'up')).toBe('entered')
+    sim.tick()
+    expect(sim.enterStairs('p1', 'up')).toBe('ignored')
+    expect(sim.enterStairs('p1', 'down')).toBe('ignored')
+    const pos = sim.positionOf('p1')
+    sim.startMove('p1', 'left')
+    sim.startMove('p1', 'right')
+    expect(sim.positionOf('p1')).toEqual(pos)
+    expect(sim.stairsStateOf('p1')?.phase).toBe('transit')
+    // The held-move attempt must not leak events either.
+    expect(movedEvents(sim.tick()).filter((e) => e.playerId === 'p1')).toHaveLength(0)
+  })
+
+  it('rejects silently: mid-hall, beyond the mouth scale, and terminal directions (STAIRS-10)', () => {
+    const sim = new MovementSim()
+    sim.join('mid', { xMilli: 15000 })
+    expect(sim.enterStairs('mid', 'up')).toBe('ignored')
+    sim.join('edge', { xMilli: 1001 }) // one milli past the mouth scale
+    expect(sim.enterStairs('edge', 'up')).toBe('ignored')
+    sim.join('rim', { xMilli: 1000 }) // exactly ELEVATOR_LANDING_TILES: inside
+    expect(sim.enterStairs('rim', 'up')).toBe('entered')
+    sim.join('top', { floor: 'floor3', xMilli: 0 })
+    expect(sim.enterStairs('top', 'up')).toBe('ignored')
+    joinAtMouth(sim, 'bottom')
+    expect(sim.enterStairs('bottom', 'down')).toBe('ignored') // lobby down
+  })
+
+  it('rejects silently: in a car, a guest, and elevator calls from inside (STAIRS-11)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'rider')
+    boardParkedCar(sim, 'rider')
+    expect(sim.enterStairs('rider', 'up')).toBe('ignored')
+    sim.join('guest', { kind: 'guest', xMilli: 0 })
+    expect(sim.enterStairs('guest', 'up')).toBe('ignored')
+    // The call channel is shut inside the black box: no flash leaves the
+    // stairwell, and a mid-breath player summons nothing.
+    joinAtMouth(sim, 'breather')
+    sim.enterStairs('breather', 'up')
+    for (let i = 0; i < 60; i++) sim.tick()
+    expect(sim.stairsStateOf('breather')?.phase).toBe('breath')
+    expect(sim.callElevator('breather')).toBe('rejected')
+    expect(sim.tick().some((e) => e.type === 'elevator:called')).toBe(false)
+  })
+
+  it('rides the FLOOR_IDS adjacency both ways through the mezzanine (STAIRS-05)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'up1', 'floor1')
+    joinAtMouth(sim, 'down1', 'mezzanine')
+    expect(sim.enterStairs('up1', 'up')).toBe('entered')
+    expect(sim.enterStairs('down1', 'down')).toBe('entered')
+    expect(sim.stairsStateOf('up1')).toMatchObject({ from: 'floor1', to: 'floor2' })
+    expect(sim.stairsStateOf('down1')).toMatchObject({ from: 'mezzanine', to: 'lobby', dir: -1 })
+    for (let i = 0; i < 61; i++) sim.tick()
+    expect(sim.positionOf('up1')).toMatchObject({ floor: 'floor2', x: 0 })
+    expect(sim.positionOf('down1')).toMatchObject({ floor: 'lobby', x: 0 })
+  })
+
+  it('drops the stairs state when the player leaves mid-transit (FR-25 seat loss)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    sim.enterStairs('p1', 'up')
+    sim.tick()
+    sim.leave('p1')
+    expect(sim.stairsStateOf('p1')).toBeUndefined()
+    sim.join('p1')
+    expect(sim.viewOf('p1').floor).toBe('lobby')
+  })
+})

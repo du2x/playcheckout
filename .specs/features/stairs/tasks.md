@@ -116,7 +116,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T3: Stairs transit channel
+### T3: Stairs transit channel ✅
 
 **What**: Implement `enterStairs` + the per-player `StairsState` machine (transit 3 s → arrival at stairwell mouth → breath 2 s), tick integration, floorless `viewOf`, stream silence (no `player:moved` in stairs), `allPositions` exclusion, snapshot `stairs` field for occupants, rejections (mid-hall, in-car, guest, terminal direction, mid-transit/breath keys).
 **Where**: `packages/sim/src/movement.ts` (+ `movement.test.ts`)

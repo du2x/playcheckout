@@ -1,9 +1,11 @@
-import type { MovementEvent, RoomIndex } from '@turnover/shared'
+import type { MovementEvent, MovementSnapshotStairs, RoomIndex } from '@turnover/shared'
 import {
+  atStairwellMouth,
   FLOOR_IDS,
   type FloorId,
   HALL_LENGTH_TILES,
   roomIndexAtMilli,
+  stairsDirections,
   TUNING,
 } from '@turnover/shared'
 import { TICK_HZ } from './tick.js'
@@ -36,6 +38,10 @@ export const DOOR_TICKS = TUNING.ELEVATOR_DOOR_SECONDS * TICK_HZ
  * x=HALL_MAX_MILLI and the car field stays `1` on the wire everywhere.
  */
 export const CAR_LANDING_MILLI = HALL_MAX_MILLI
+/** Stairs stride timings (cycle 3.E, AD-040): 3 s transit + 2 s breath. */
+export const STAIRS_TRANSIT_TICKS = TUNING.STAIRS_TRANSIT_SECONDS * TICK_HZ
+export const STAIRS_BREATH_TICKS = TUNING.STAIRS_BREATH_SECONDS * TICK_HZ
+export const STAIRS_STUN_TICKS = TUNING.STAIRS_STUN_SECONDS * TICK_HZ
 
 export type MoveDir = 'left' | 'right'
 
@@ -94,6 +100,25 @@ interface QueuedCall {
 }
 
 /**
+ * Per-player stairs state (cycle 3.E, AD-040 design): the west stairwell's
+ * black-box transit. One floor stride per activation — transit (3 s) →
+ * arrival breath (2 s) → free. A stun (ambush, T4) pauses the transit and
+ * preserves `transitTicksLeft` for the resume.
+ */
+export interface StairsState {
+  from: FloorId
+  to: FloorId
+  /** −1 = down, +1 = up (FLOOR_IDS strides). */
+  dir: -1 | 1
+  phase: 'transit' | 'breath' | 'stunned'
+  /** Ticks left of the current phase (transit or breath). */
+  ticksLeft: number
+  /** Remaining transit ticks — preserved through a stun. */
+  transitTicksLeft: number
+  stunTicksLeft: number
+}
+
+/**
  * Pending announce for the next tick (MOVE-10 pattern): call flashes (public)
  * and accepted in-car presses (rider-exclusive — routed by the `riders`
  * policy, AD-013). Single car (AD-040): `car` is always 1.
@@ -122,6 +147,10 @@ export class MovementSim {
   /** The car's rider list changed since the last tick — one coalesced
    * `elevator:riders` at tick start (AD-013). */
   private ridersDirty = false
+  /** The stairwell's occupants (cycle 3.E, AD-040): per-player stairs state.
+   *  The interior is a black box — occupants are floorless (no stream, no
+   *  floor snapshots, no spectator baseline rows) until they arrive. */
+  private readonly stairs = new Map<string, StairsState>()
 
   // --- roster / lifecycle -------------------------------------------------
 
@@ -150,6 +179,7 @@ export class MovementSim {
 
   leave(playerId: string): void {
     this.players.delete(playerId)
+    this.stairs.delete(playerId) // FR-25: the stairwell state dies with the seat
     const car = this.car
     if (car.pendingBoarders.includes(playerId)) {
       car.pendingBoarders = car.pendingBoarders.filter((b) => b !== playerId)
@@ -179,7 +209,9 @@ export class MovementSim {
    */
   allPositions(): { playerId: string; floor: FloorId; x: number }[] {
     return [...this.players.entries()]
-      .filter(([, p]) => p.inCar === null && p.kind === 'player')
+      .filter(
+        ([playerId, p]) => p.inCar === null && p.kind === 'player' && !this.stairs.has(playerId),
+      )
       .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI }))
   }
 
@@ -216,6 +248,10 @@ export class MovementSim {
   startMove(playerId: string, dir: MoveDir): void {
     const p = this.players.get(playerId)
     if (p === undefined) return
+    // Cycle 3.E (AD-040): stairs occupants are on no floor — direction keys
+    // are ignored mid-transit (STAIRS-09) and the breath is immobile
+    // (STAIRS-06). The stream stays silent either way.
+    if (this.stairs.has(playerId)) return
     if (p.inCar !== null) {
       const car = this.car
       if (car.phase !== 'dwelling') {
@@ -267,6 +303,76 @@ export class MovementSim {
     p.pendingExit = null
   }
 
+  // --- stairs (cycle 3.E, AD-040) -------------------------------------------
+
+  /**
+   * Enter the west stairwell toward `dir` — one floor stride per activation.
+   * Silent-reject ('ignored') unless the sender is a live player (never a
+   * guest), on foot, not already inside, standing at the stairwell mouth
+   * (`atStairwellMouth`), and `dir` has an adjacent floor
+   * (`stairsDirections`). Entry ends the walk, drops any stale facing event,
+   * and publishes ONLY the `player:left-floor` departure (STAIRS-07) on the
+   * next tick (MOVE-10). The room answers with a personal snapshot (T5).
+   */
+  enterStairs(playerId: string, dir: 'up' | 'down'): 'entered' | 'ignored' {
+    const p = this.players.get(playerId)
+    if (p === undefined || p.kind !== 'player') return 'ignored'
+    if (p.inCar !== null || this.stairs.has(playerId)) return 'ignored'
+    if (!atStairwellMouth(p.x / MILLI)) return 'ignored'
+    if (!stairsDirections(p.floor).includes(dir)) return 'ignored'
+    const step = dir === 'up' ? 1 : -1
+    const to = FLOOR_IDS[FLOOR_IDS.indexOf(p.floor) + step] as FloorId
+    p.moving = null
+    p.facingDirty = false // interior silence: no stale event may publish
+    p.pendingExit = null
+    this.stairs.set(playerId, {
+      from: p.floor,
+      to,
+      dir: step,
+      phase: 'transit',
+      ticksLeft: STAIRS_TRANSIT_TICKS,
+      transitTicksLeft: STAIRS_TRANSIT_TICKS,
+      stunTicksLeft: 0,
+    })
+    this.pendingEvents.push({ type: 'player:left-floor', playerId, floor: p.floor })
+    return 'entered'
+  }
+
+  /** Read-only view of one player's stairs state (tests / the room snapshot). */
+  stairsStateOf(playerId: string): StairsState | undefined {
+    const st = this.stairs.get(playerId)
+    return st === undefined ? undefined : { ...st }
+  }
+
+  /** Advance every stairs occupant's phase clock one tick. (T4 wires the
+   *  stun/ambush checks here; arrival and breath emit nothing — the interior
+   *  is silent by design.) */
+  private tickStairs(_events: MovementEvent[]): void {
+    for (const [playerId, st] of this.stairs) {
+      if (st.phase === 'transit') {
+        st.ticksLeft--
+        if (st.ticksLeft > 0) continue
+        // Arrival: place at the destination mouth; the arrival floor's stream
+        // resumes NEXT tick via facingDirty (mirrors exitCar) — the arrival
+        // itself emits no dedicated event (design: sameFloor self-visibility).
+        const p = this.players.get(playerId)
+        if (p === undefined) {
+          this.stairs.delete(playerId)
+          continue
+        }
+        p.floor = st.to
+        p.x = 0
+        p.facingDirty = true
+        st.phase = 'breath'
+        st.ticksLeft = STAIRS_BREATH_TICKS
+      } else if (st.phase === 'breath') {
+        st.ticksLeft--
+        if (st.ticksLeft <= 0) this.stairs.delete(playerId) // free to act again
+      }
+      // 'stunned' ticks with the ambush authority (cycle 3.E T4).
+    }
+  }
+
   // --- elevator calls and in-car presses ------------------------------------
 
   /**
@@ -287,7 +393,11 @@ export class MovementSim {
    */
   callElevator(playerId: string): 'dispatched' | 'ignored' | 'rejected' {
     const caller = this.players.get(playerId)
-    if (caller === undefined || caller.inCar !== null) return 'rejected'
+    // Cycle 3.E (AD-040): a stairs occupant is on no floor — the call channel
+    // is shut inside the black box (STAIRS-07's silence outranks the call).
+    if (caller === undefined || caller.inCar !== null || this.stairs.has(playerId)) {
+      return 'rejected'
+    }
     const car = this.car
     const pickup = caller.floor
     // AD-025: a caller standing at the landing whose car stands at their floor
@@ -513,7 +623,13 @@ export class MovementSim {
     )
     return {
       players: [...this.players.entries()]
-        .filter(([, p]) => p.kind === 'player' && p.floor === floor && p.inCar === null)
+        .filter(
+          ([playerId, p]) =>
+            p.kind === 'player' &&
+            p.floor === floor &&
+            p.inCar === null &&
+            !this.stairs.has(playerId),
+        )
         .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI })),
       cars: [{ car: 1 as const, floor: this.car.floor }],
       cardedRooms: [...cardedRooms],
@@ -553,28 +669,48 @@ export class MovementSim {
       queue: FloorId[]
       guests?: string[]
     }
+    stairs?: MovementSnapshotStairs
   } {
     const p = this.players.get(playerId)
-    if (p === undefined || p.inCar === null) {
-      return this.snapshotForFloor(p?.floor ?? 'lobby', cardedRooms)
+    if (p === undefined) return this.snapshotForFloor('lobby', cardedRooms)
+    if (p.inCar !== null) {
+      const car = this.car
+      const carGuests = car.riders.filter((rid) => this.players.get(rid)?.kind === 'guest')
+      return {
+        players: [],
+        cars: [{ car: 1 as const, floor: car.floor }],
+        // A rider's card set is empty: cards are floor knowledge and riders
+        // have no floor while in a car (AD-009).
+        cardedRooms: [],
+        carOccupants: {
+          car: 1,
+          riders: car.riders.filter((rid) => this.players.get(rid)?.kind === 'player'),
+          queue: [...car.queue],
+          // GUEST-07: guests are public NPCs and count toward capacity — rider
+          // knowledge includes them. Absent when no guests are aboard.
+          ...(carGuests.length > 0 ? { guests: carGuests } : {}),
+        },
+      }
     }
-    const car = this.car
-    const carGuests = car.riders.filter((rid) => this.players.get(rid)?.kind === 'guest')
-    return {
-      players: [],
-      cars: [{ car: 1 as const, floor: car.floor }],
-      // A rider's card set is empty: cards are floor knowledge and riders
-      // have no floor while in a car (AD-009).
-      cardedRooms: [],
-      carOccupants: {
-        car: 1,
-        riders: car.riders.filter((rid) => this.players.get(rid)?.kind === 'player'),
-        queue: [...car.queue],
-        // GUEST-07: guests are public NPCs and count toward capacity — rider
-        // knowledge includes them. Absent when no guests are aboard.
-        ...(carGuests.length > 0 ? { guests: carGuests } : {}),
-      },
+    // Cycle 3.E (AD-040): a stairs occupant's own snapshot is the floorless
+    // black-box shape plus their own stairs row (self-legitimate knowledge) —
+    // present in every phase (transit, breath, stunned), absent otherwise.
+    const st = this.stairs.get(playerId)
+    if (st !== undefined) {
+      return {
+        players: [],
+        cars: [{ car: 1 as const, floor: this.car.floor }],
+        cardedRooms: [],
+        stairs: {
+          from: st.from,
+          to: st.to,
+          phase: st.phase,
+          remainingSeconds:
+            st.phase === 'stunned' ? st.stunTicksLeft / TICK_HZ : st.ticksLeft / TICK_HZ,
+        },
+      }
     }
+    return this.snapshotForFloor(p.floor, cardedRooms)
   }
 
   /**
@@ -594,6 +730,9 @@ export class MovementSim {
     const p = this.players.get(playerId)
     if (p === undefined) return { floor: null, roomKey: null, car: null, x: null }
     if (p.inCar !== null) return { floor: null, roomKey: null, car: p.inCar, x: null }
+    // Cycle 3.E (AD-040): stairs occupants are floorless — the interior is a
+    // black box, so no sameFloor/room/earshot routing can see them.
+    if (this.stairs.has(playerId)) return { floor: null, roomKey: null, car: null, x: null }
     if (p.floor === 'lobby') return { floor: p.floor, roomKey: null, car: null, x: p.x }
     const room = roomIndexAtMilli(p.x)
     return {
@@ -656,6 +795,7 @@ export class MovementSim {
       }
     }
 
+    this.tickStairs(events)
     this.tickCars(events)
     return events
   }
