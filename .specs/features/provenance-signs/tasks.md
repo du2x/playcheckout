@@ -184,9 +184,9 @@ T5 → T6
 
 **Done when**:
 
-- [ ] Scenario passes twice consecutively at `--workers=1` and once in the full suite at `--workers=2`
-- [ ] Floor-gating asserted (floor1 viewers see sign, lobby viewer does not)
-- [ ] Results view carries provenance lines (sabotage names actor)
+- [x] Scenario passes twice consecutively at `--workers=1` and once in the full suite at `--workers=2`
+- [x] Floor-gating asserted (floor1 viewers see sign, lobby viewer does not)
+- [x] Results view carries provenance lines (sabotage names actor)
 
 **Tests**: e2e
 **Gate**: full
