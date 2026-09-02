@@ -47,6 +47,10 @@ export function renderLobby(
   root.append(
     el('div', { id: 'lobby-view' }, [
       el('h2', {}, [`lobby — room ${roomCode}`]),
+      // Elevator + stairs — inline on the main window, directly under the
+      // heading so the in-car view is visible without scrolling (no modal).
+      buildCarScreen(),
+      buildStairScreen(),
       roster,
       startButton,
       errorLine,
@@ -74,10 +78,6 @@ export function renderLobby(
         ]),
         el('span', { id: 'elevator-press' }, []),
       ]),
-      // In-car screen (AD-013): rides are possible pre-round (AD-011).
-      buildCarScreen(),
-      // Stairwell screen (AD-040): same inline treatment as the lift.
-      buildStairScreen(),
       // Accusation HUD (cycle 2.8): firing toasts + fired banner ride in both
       // views so a firing is visible wherever the player is looking.
       buildAccuseHud(),

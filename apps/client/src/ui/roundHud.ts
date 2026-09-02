@@ -34,6 +34,10 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       el('div', { id: 'role-label' }, ['your role']),
       roleCard,
       errorLine,
+      // In-car + stairwell — inline on the main window HUD, right below the
+      // clock/role so the ride is visible without scrolling or a modal.
+      buildCarScreen(),
+      buildStairScreen(),
       // Position-only elevator panel (AD-024, single car — cycle 3.E/AD-040):
       // one hall-call light + floor readout for the east car; car floors,
       // never occupants (privacy rule).
@@ -57,12 +61,6 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
         ]),
         el('span', { id: 'elevator-press' }, []),
       ]),
-      // In-car screen (AD-013): floor buttons over the world while riding —
-      // lit = queued or being served; synced by the App from the rider session.
-      buildCarScreen(),
-      // Stairwell screen (AD-040): same inline HUD treatment as the lift —
-      // visible only while the local player is in the west stairwell.
-      buildStairScreen(),
       // Accusation HUD (cycle 2.8): firing toasts + fired banner.
       buildAccuseHud(),
       // Work channels (cycle 2.5): the own progress bar (world scene drives
