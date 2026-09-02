@@ -142,7 +142,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T4: Saboteur ambush
+### T4: Saboteur ambush ✅
 
 **What**: Implement the ambush authority (`setAmbushAuthority`), per-tick opposite-transit pair detection, the 20 s stun state (pause + resume with preserved `transitTicksLeft`), the `stairs:ambushed`/`stairs:ambush` event emissions, and the ambush-only zero-complaint kill-check scenario.
 **Where**: `packages/sim/src/movement.ts` (+ `movement.test.ts`)

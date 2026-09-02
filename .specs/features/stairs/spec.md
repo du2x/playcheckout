@@ -230,23 +230,23 @@ asserts zero complaints; §8 recompute lands as a prd edit reviewed at Design.
 | STAIRS-02 | P1: One-elevator building | Design | Implemented |
 | STAIRS-03 | P1: One-elevator building | Design | Implemented |
 | STAIRS-04 | P1: One-elevator building | Design | Implemented |
-| STAIRS-05 | P1: Stairs transit | Execute | Implementing |
+| STAIRS-05 | P1: Stairs transit | Design | Implemented |
 | STAIRS-06 | P1: Stairs transit | Design | Implemented |
 | STAIRS-07 | P1: Stairs transit | Design | Implemented |
 | STAIRS-08 | P1: Stairs transit | Design | Implemented |
 | STAIRS-09 | P1: Stairs transit | Design | Implemented |
 | STAIRS-10 | P1: Stairs transit | Design | Implemented |
 | STAIRS-11 | P1: Stairs transit | Design | Implemented |
-| STAIRS-12 | P1: Ambush | Design | Pending |
-| STAIRS-13 | P1: Ambush | Design | Pending |
-| STAIRS-14 | P1: Ambush | Execute | Implementing |
-| STAIRS-15 | P1: Ambush | Design | Pending |
-| STAIRS-16 | P1: Ambush | Design | Pending |
-| STAIRS-17 | P2: Client presentation | Execute | Implementing |
+| STAIRS-12 | P1: Ambush | Design | Implemented |
+| STAIRS-13 | P1: Ambush | Design | Implemented |
+| STAIRS-14 | P1: Ambush | Design | Implemented |
+| STAIRS-15 | P1: Ambush | Design | Implemented |
+| STAIRS-16 | P1: Ambush | Design | Implemented |
+| STAIRS-17 | P2: Client presentation | Design | Implemented |
 | STAIRS-18 | P2: Client presentation | Design | Implemented |
 | STAIRS-19 | P2: Client presentation | Design | Implemented |
 | STAIRS-20 | P2: Client presentation | Design | Implemented |
-| STAIRS-21 | P2: Balance properties | Design | Pending |
+| STAIRS-21 | P2: Balance properties | Design | Implemented |
 | STAIRS-22 | P2: Balance properties | Design | Pending |
 
 **Coverage:** 22 total, 0 mapped to tasks yet (Tasks phase pending), 22 unmapped ⚠️

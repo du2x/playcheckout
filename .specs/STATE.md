@@ -1227,26 +1227,9 @@
 - **Status**: active
 
 ## Handoff
-- **Feature**: `delivery-scoring` (cycle 3.D, prd v1.5, AD-039) — all 8 tasks
-  committed (T1 `settleTargetFor`, T2 `GuestSim.settledCount`, T3 buzzer
-  verdict swap + reason rename, T4 recap/resume payloads, T5 score HUD,
-  T6 results + resume wiring, T7 `client:score_hud` ×2, T8 docs). Verifier
-  report: `.specs/features/delivery-scoring/validation.md`.
-- **Phase / Task**: Execute → Validate.
-- **Next step**: cycle 3.3 `complaint-budget` (scope amended by 3.D:
-  trash-discovery complaints only) or the 3.5 gate for `SETTLE_TARGET`
-  calibration.
-- **Gates**: typecheck ✓ · lint ✓ · test:sim 436 ✓ · test:client 38/38
-  (one in-suite re-flake of `client:lobby_join` room-full — green isolated
-  and 2× full green at HEAD; documented bleed class, predates 3.D).
-- **Follow-ups (non-blocking)**: (1) **Elevator boarding jam at high guest
-  density** (found while building `client:score_hud`, pre-existing): a FULL
-  car parked at a landing with a lit same-floor hall call keeps its doors
-  open indefinitely — boarders queue behind capacity and the car never
-  departs ("dwell extends while a call remains to attend", AD-027 wording).
-  Needs ~7+ simultaneous self-assigned boarders (harness timing only at
-  §7 dials); movement quirk, not 3.D scope — investigate before the 3.5
-  bot sims which may hit it at scale. (2) `SETTLE_TARGET` values are
-  provisional by design — 3.5 calibrates.
+- **Feature**: `stairs` (cycle 3.E, AD-040) — tasks T1–T6 committed (T1 `e327e03` shared rows, T2 `62bef10` one-car collapse, T3 `7611a71` stairs channel, T4 `e594e8e` ambush, T5 `bc78ff3` server wiring, T6 `1b68a8b` client slice). Verifier: `.specs/features/stairs/validation.md` — PASS, sensor 5/5 mutants killed, 21/21 implemented requirements traced (evidence-or-zero).
+- **Phase / Task**: Execute → T6 done. Remaining: T7 (prd v1.6 + roadmap 3.E + CONTEXT vocabulary + docs/elevator-behavior + art manifest) and T8 (full gate ladder + verifier rerun).
+- **Gates**: typecheck ✓ · lint ✓ · test:sim 475 ✓ · server+sim+shared 369/369 (verifier re-run) · test:client 35/35 green with `--workers=2` (the default worker count oversubscribes this machine — documented bleed class; three specs re-fail at default workers but pass isolated and at 2 workers).
+- **Follow-ups (non-blocking, from the Verifier)**: (1) spec.md's reconnect edge case contradicts the design/delivered behavior (leave() deletes stairs state; the spec text says the seat continues transit) — resolve the spec text in T7. (2) Suitcase-during-stun and stunned-victim pass-through edges lack dedicated scenarios (safe by construction). (3) The harness guest-traffic dials (scale 0.2) contend with the single car — §8 recompute in T7 calibrates; two ride waits were loosened to 25-30 s.
 - **Blockers**: none.
 - **Branch**: master
