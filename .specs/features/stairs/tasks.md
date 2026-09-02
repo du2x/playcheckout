@@ -90,7 +90,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T2: Single-car collapse
+### T2: Single-car collapse ✅
 
 **What**: Replace the two-car `Record<1 | 2, CarState>` with one car whose landing is the east end (x=30); collapse dispatch (no pinned-choice, no empty-idle draft, no both-parked predicate — parked-at-pickup mid-hall call flashes); `carFloors()`/snapshots return exactly one row; guest riding unchanged. Keep `CarId` as the wire alias (`1` at runtime). If client compile requires it, fold minimal client compatibility into this commit.
 **Where**: `packages/sim/src/movement.ts` (+ `packages/sim/src/movement.test.ts`; minimal `apps/client` compile fixes only if needed)

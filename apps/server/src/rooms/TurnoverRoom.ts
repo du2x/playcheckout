@@ -688,6 +688,11 @@ export class TurnoverRoom extends Room {
   }
 
   /** Test hook: read the phase without poking private state from tests. */
+  /** Test seam: the round sim's remaining ticks (null outside a round). */
+  __clockTicksRemaining(): number | null {
+    return this.sim?.clockTicksRemaining ?? null
+  }
+
   __phase(): 'lobby' | 'round' | 'results' {
     return this.phase
   }

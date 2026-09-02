@@ -226,9 +226,9 @@ asserts zero complaints; §8 recompute lands as a prd edit reviewed at Design.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| STAIRS-01 | P1: One-elevator building | Design | Pending |
-| STAIRS-02 | P1: One-elevator building | Design | Pending |
-| STAIRS-03 | P1: One-elevator building | Design | Pending |
+| STAIRS-01 | P1: One-elevator building | Design | Implemented |
+| STAIRS-02 | P1: One-elevator building | Design | Implemented |
+| STAIRS-03 | P1: One-elevator building | Design | Implemented |
 | STAIRS-04 | P1: One-elevator building | Design | Pending |
 | STAIRS-05 | P1: Stairs transit | Execute | Implementing |
 | STAIRS-06 | P1: Stairs transit | Design | Pending |

@@ -2,6 +2,7 @@ import type { FloorId, GuestFloorId, LobbySize, RoomIndex, SimEvent } from '@tur
 import {
   doorInRange,
   GUEST_FLOOR_IDS,
+  HALL_LENGTH_TILES,
   nearestRestingSuitcase,
   ROOM_INDEXES,
   roomDoorXMilli,
@@ -715,17 +716,21 @@ export class GuestSim {
     this.driveToLandingAndCall(g, pos)
   }
 
-  /** Hall behavior on a guest floor (toRoom's first leg, toExit's first leg). */
+  /**
+   * Hall behavior on a guest floor (toRoom's first leg, toExit's first leg).
+   * Single car (cycle 3.E, AD-040): the landing is the EAST end — the
+   * stairwell took the west landing, so there is no nearest-landing choice
+   * anymore. Press the call every tick in the landing zone — the press
+   * BOARDS through open doors (AD-025), summons, queues (AD-023/019), or
+   * flashes as a duplicate: all safe to re-issue idempotently.
+   */
   private driveToLandingAndCall(g: Guest, pos: { floor: FloorId; x: number }): void {
-    const west = Math.abs(pos.x - 0)
-    const east = Math.abs(pos.x - 30)
-    const landingX = west <= east ? 0 : 30
-    if (Math.abs(pos.x - landingX) <= TUNING.ELEVATOR_LANDING_TILES) {
+    if (Math.abs(pos.x - HALL_LENGTH_TILES) <= TUNING.ELEVATOR_LANDING_TILES) {
       this.movement.stopMove(g.id)
       this.movement.callElevator(g.id)
       return
     }
-    this.movement.startMove(g.id, landingX < pos.x ? 'left' : 'right')
+    this.movement.startMove(g.id, 'right')
   }
 
   /** Carriers whose carry leg expired — the RoundSim drains this right after

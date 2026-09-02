@@ -28,24 +28,23 @@ function carEvents(events: readonly MovementEvent[]) {
 }
 
 /**
- * Walk a player from the lobby center to a PARKED car's landing and board it
+ * Walk a player from the lobby center to the PARKED car's landing (the EAST
+ * end — cycle 3.E, AD-040: the stairwell took the west landing) and board it
  * with the landing call press (AD-025: proximity auto-boarding is disabled —
  * the call press at a parked car's landing IS the boarding action). AD-026:
  * the parked doors are shut, so the press swings them open (0.5 s) and the
  * board lands the tick they finish opening. Ends after the boarding's
  * next-tick event flush.
  */
-function boardParkedCar(sim: MovementSim, playerId: string, carId: 1 | 2): void {
-  sim.startMove(playerId, carId === 1 ? 'left' : 'right')
-  for (let i = 0; i < 100 && lastX(sim, playerId) !== (carId === 1 ? 0 : HALL_LENGTH_TILES); i++) {
-    sim.tick()
-  }
+function boardParkedCar(sim: MovementSim, playerId: string): void {
+  sim.startMove(playerId, 'right')
+  for (let i = 0; i < 100 && lastX(sim, playerId) !== HALL_LENGTH_TILES; i++) sim.tick()
   sim.stopMove(playerId)
-  expect(lastX(sim, playerId)).toBe(carId === 1 ? 0 : HALL_LENGTH_TILES)
+  expect(lastX(sim, playerId)).toBe(HALL_LENGTH_TILES)
   expect(sim.callElevator(playerId)).toBe('ignored') // parked-car press: boards
   // The doors swing open for DOOR_TICKS before the board lands (AD-026).
   for (let i = 0; i <= DOOR_TICKS && sim.viewOf(playerId).car === null; i++) sim.tick()
-  expect(sim.viewOf(playerId).car).toBe(carId)
+  expect(sim.viewOf(playerId).car).toBe(1)
   // Consume the boarding + flash + reopen events that flush on the next tick
   // (full payload pins live in the ELR P1 describe below).
   sim.tick()
@@ -61,7 +60,7 @@ function huntFlash(sim: MovementSim, max = 90): readonly MovementEvent[] | null 
 }
 
 /** Tick until the car reports a moved event for `floor`; returns the tick offset. */
-function runUntilCarMoved(sim: MovementSim, car: 1 | 2, floor: FloorId, max = 400): number {
+function runUntilCarMoved(sim: MovementSim, car: 1, floor: FloorId, max = 400): number {
   for (let i = 1; i <= max; i++) {
     const hit = carEvents(sim.tick()).some(
       (e) => e.type === 'elevator:moved' && e.car === car && e.floor === floor,
@@ -140,17 +139,8 @@ describe('sim:motion', () => {
   it('flips facing on direction change even when x cannot change (MOVE-01)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('p2')
-    // Evacuate the west landing first: p2 boards the parked car and rides to
-    // floor1 (a parked open-doors car auto-boards anyone walking into range).
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    // Press during the stop's dwell: the surviving dwell + closing swing
-    // (AD-026) precede the ride — the boarding flush tick ate one dwell tick.
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    // Walk to the west wall — car 1 no longer parks there.
+    // Walk to the west wall — the stairwell replaced the west landing
+    // (AD-040): no car ever parks there, and walking is unrestricted.
     sim.startMove('p1', 'left')
     for (let i = 0; i < 60; i++) sim.tick()
     expect(lastX(sim, 'p1')).toBe(0)
@@ -166,19 +156,8 @@ describe('sim:motion', () => {
   it('clamps x to the hall bounds 0..HALL_LENGTH_TILES (MOVE-04)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('p2')
-    sim.join('p3')
-    // Park both cars on guest floors so both landings are free to walk past.
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 3 * RIDE_TICKS_PER_FLOOR - 1,
-    )
+    // Walking past the parked car's landing never boards (AD-025: the call
+    // press is the only board) — both walls are free to walk to.
     sim.startMove('p1', 'left')
     for (let i = 0; i < 100; i++) sim.tick()
     expect(lastX(sim, 'p1')).toBe(0)
@@ -193,12 +172,6 @@ describe('sim:motion', () => {
   it('emits nothing while a player is pinned at a wall with the intent held (WORK-21, M5b)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('p2')
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
     sim.startMove('p1', 'left')
     for (let i = 0; i < 100; i++) sim.tick()
     expect(lastX(sim, 'p1')).toBe(0)
@@ -212,8 +185,8 @@ describe('sim:motion', () => {
   it('lets a player walk on floor1 during an active round (MOVE-06 positive half, WORK-22)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // walk to the west landing
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick() // walk to the east landing
     sim.stopMove('p1')
     expect(sim.callElevator('p1')).toBe('ignored') // parked-car press: doors open (AD-026)
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p1').car === null; i++) sim.tick()
@@ -226,13 +199,13 @@ describe('sim:motion', () => {
     )
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
     // Exit through the open doors during the dwell: hold a direction.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     const exitTick = movedEvents(sim.tick())
     expect(sim.viewOf('p1').car).toBeNull()
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
     expect(exitTick.some((e) => e.type === 'player:moved' && e.playerId === 'p1')).toBe(true)
     for (let i = 0; i < 9; i++) sim.tick()
-    expect(lastX(sim, 'p1')).toBe(3) // 10 walk ticks × 300 millitiles = 3.0 tiles
+    expect(lastX(sim, 'p1')).toBe(27) // 30 − 10 walk ticks × 300 millitiles
   })
 
   it('lets two players pass through each other and broadcasts both (MOVE-05)', () => {
@@ -281,24 +254,24 @@ describe('sim:motion', () => {
   it('allows walking on guest floors in lobby phase (AD-015)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    // Ride the west car to floor1 pre-round, exit, and stop near the landing.
-    boardParkedCar(sim, 'p1', 1)
+    // Ride the car to floor1 pre-round, exit, and stop near the landing.
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
       DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
     )
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     sim.tick()
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
     sim.stopMove('p1')
     sim.tick()
     const xStart = lastX(sim, 'p1')
     // Lobby phase: walking on floor1 is now allowed.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     for (let i = 0; i < 10; i++) sim.tick()
     sim.stopMove('p1')
-    expect(lastX(sim, 'p1')).toBe(xStart + 3)
+    expect(lastX(sim, 'p1')).toBe(xStart - 3)
   })
 
   it('treats duplicate start and stray stop as no-ops (spec edges)', () => {
@@ -319,7 +292,7 @@ describe('sim:motion', () => {
 // WORK-18 (AD-008/AD-009): snapshots are filtered to the viewer's floor; the
 // Router view context puts riders outside any floor stream (WORK-17).
 describe('movement visibility (AD-008)', () => {
-  it('snapshotForFloor keeps only the viewer-floor players and both cars (WORK-18)', () => {
+  it('snapshotForFloor keeps only the viewer-floor players and the single car (WORK-18, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
@@ -329,15 +302,9 @@ describe('movement visibility (AD-008)', () => {
         .players.map((p) => p.playerId)
         .sort(),
     ).toEqual(['p1', 'p2'])
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'lobby' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'lobby' }])
     expect(sim.snapshotForFloor('floor1').players).toEqual([])
-    expect(sim.snapshotForFloor('floor1').cars).toEqual([
-      { car: 1, floor: 'lobby' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([{ car: 1, floor: 'lobby' }])
   })
 
   it('viewOf: lobby player gets no roomKey, riders get no floor, segments map to keys', () => {
@@ -346,11 +313,11 @@ describe('movement visibility (AD-008)', () => {
     // Lobby center is outside every segment (lobby floor has none).
     expect(sim.viewOf('p1')).toEqual({ floor: 'lobby', roomKey: null, car: null, x: 15000 })
 
-    // Board the parked west car with the landing call press: the rider
+    // Board the parked east car with the landing call press: the rider
     // context loses its floor while in the car (AD-008) and names the ride
     // (AD-013).
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // walk to the landing
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick() // walk to the landing (x=30)
     sim.stopMove('p1')
     expect(sim.callElevator('p1')).toBe('ignored') // parked-car press: doors open (AD-026)
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p1').car === null; i++) sim.tick()
@@ -362,11 +329,11 @@ describe('movement visibility (AD-008)', () => {
     // (AD-026) precede the ride; the boarding flush tick ate one dwell tick.
     for (let i = 0; i < DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1; i++) sim.tick()
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'right') // exit through the open doors at the stop
+    sim.startMove('p1', 'left') // exit through the open doors at the stop
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
 
-    // Exited riders stand at the landing x=0 — outside every segment (AD-010).
-    expect(sim.viewOf('p1')).toEqual({ floor: 'floor1', roomKey: null, car: null, x: 0 })
+    // Exited riders stand at the landing x=30 — outside every segment (AD-010).
+    expect(sim.viewOf('p1')).toEqual({ floor: 'floor1', roomKey: null, car: null, x: 30000 })
   })
 })
 
@@ -378,8 +345,8 @@ describe('sim:elevator_doors (AD-027 public door state)', () => {
   it('announces doors-open at every opening swing and doors-close only into a departure', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 100 && sim.positionOf('p1')?.x !== 0; i++) sim.tick()
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 100 && sim.positionOf('p1')?.x !== 30; i++) sim.tick()
     sim.stopMove('p1')
     // The boarding press at the parked (doors-shut) car: the swing opens and
     // the board lands when the doors are fully open.
@@ -414,40 +381,24 @@ describe('sim:elevator_doors (AD-027 public door state)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    // Stage car 1 away (doors-open at floor1 with its rider aboard).
-    boardParkedCar(sim, 'p2', 1)
+    // Stage the single car away: p2 rides to floor1 and stays aboard (doors
+    // open there, ELR P3 AC2).
+    boardParkedCar(sim, 'p2')
     expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    // p1 walks to the EAST landing and calls: the call pins to car 2 (AD-023)
-    // — car 2 is dwelling shut at the lobby, so it opens up and boards p1.
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBeGreaterThan(0) // the car left
+    // p1 walks to the EAST landing and calls: the car is busy (dwelling at
+    // floor1), so the call queues — the car's attend check closes for it and
+    // dispatches to the lobby.
     sim.startMove('p1', 'right')
     for (let i = 0; i < 60; i++) sim.tick() // clamps at the east landing
     sim.stopMove('p1')
-    expect(sim.callElevator('p1')).toBe('ignored') // parked-car press: boards
-    for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p1').car === null; i++) sim.tick()
-    sim.tick() // flush the boarding events
-    expect(sim.viewOf('p1').car).toBe(2)
-    // Ride to floor2, step off, walk into the hall, and re-summon a car:
-    // while the attending car is still ARRIVING, a landing press pends the
-    // board — one press, boarded the moment the doors open (AD-027).
-    expect(sim.pressFloor('p1', 'floor2')).toBe('accepted')
-    for (let i = 0; i < DWELL_TICKS - 1 + DOOR_TICKS; i++) sim.tick()
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(3 * RIDE_TICKS_PER_FLOOR)
-    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'left') // step off at the floor2 east landing
-    sim.stopMove('p1')
-    sim.startMove('p1', 'left') // walk into the hall (out of boarding range)
-    for (let i = 0; i < 7; i++) sim.tick() // x ≈ 27.9: 2.1 tiles from the landing
-    sim.stopMove('p1')
-    // Car 2 stands doors-open here (nothing to attend) and car 1 is at
-    // floor1: the call queues and car 1 attends — closes and comes over.
     expect(sim.callElevator('p1')).toBe('dispatched')
-    // Walk to the WEST landing (car 1's — car 2 stands doors-open at the east
-    // landing) and press while car 1 is still arriving: the press pends the
-    // board (AD-027) — no second press needed once the doors open.
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 100 && sim.positionOf('p1')?.x !== 0; i++) sim.tick()
-    sim.stopMove('p1')
-    expect(sim.callElevator('p1')).toBe('ignored') // pends the board while arriving
+    const flash = huntFlash(sim, 400)
+    expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
+    // While the car is ARRIVING to the lobby, p1 presses again at the landing:
+    // the press pends the board (AD-027) — no second press needed once the
+    // doors open.
+    expect(sim.callElevator('p1')).toBe('ignored')
     for (let i = 0; i < 250 && sim.viewOf('p1').car === null; i++) sim.tick()
     sim.tick() // flush the boarding events
     expect(sim.viewOf('p1').car).toBe(1)
@@ -456,7 +407,7 @@ describe('sim:elevator_doors (AD-027 public door state)', () => {
   it('a doors-open car re-arms its minimum dwell when a ride is queued', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     // The stop's minimum dwell runs out with nothing to attend: doors stay
     // open, no events.
     for (let i = 0; i < DWELL_TICKS + DOOR_TICKS; i++) expect(carEvents(sim.tick())).toEqual([])
@@ -488,39 +439,19 @@ describe('sim:elevator', () => {
     expect(DWELL_TICKS).toBe(60)
   })
 
-  it('arrives at exactly tick 60, dwells at least 60 ticks, and KEEPS the doors open for a caller who never boards (MOVE-11, ELR-14, ELR P3 AC4, AD-027)', () => {
+  it('arrives at exactly tick 59 after the attend dispatch, dwells at least 60 ticks, and KEEPS the doors open for a caller who never boards (MOVE-11, ELR-14, ELR P3 AC4, AD-027, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    sim.join('p3')
-    // Stage: car 1 empty-idle on floor1, car 2 occupied-idle on floor2 — no
-    // car stands at the lobby, so p1's call dispatches.
-    boardParkedCar(sim, 'p2', 1)
+    // Stage: the car occupied-dwelling at floor1 (p2 stays aboard) — no car
+    // stands at the lobby, so p1's mid-hall call queues.
+    boardParkedCar(sim, 'p2')
     expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p2', 'right') // step off through the open doors
-    expect(sim.viewOf('p2').car).toBeNull()
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 3 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    expect(sim.viewOf('p3').car).toBe(2) // stay-in-car: no auto-exit (ELR P3 AC2)
 
     expect(sim.callElevator('p1')).toBe('dispatched')
-    // AD-027: no idle car exists (both stand doors-open at their stops), so
-    // the call queues — and is served by the FIRST car whose attend check
-    // fires (car 1's floor1 dwell already elapsed): it closes and dispatches.
-    const flash = (() => {
-      for (let i = 0; i < 120; i++) {
-        const events = carEvents(sim.tick())
-        if (events.some((e) => e.type === 'elevator:called')) return events
-      }
-      return null
-    })()
+    // The attend check closes for the queued call and dispatches: the flash
+    // announces it (MOVE-10).
+    const flash = huntFlash(sim, 400)
     expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
     // The flash tick above already counted toward the 60-tick arrival.
     expect(runUntilCarMoved(sim, 1, 'lobby')).toBe(59)
@@ -536,116 +467,71 @@ describe('sim:elevator', () => {
       expect(carEvents(sim.tick())).toEqual([])
       expect(sim.snapshotForFloor('lobby').cars[0]).toEqual({ car: 1, floor: 'lobby' })
     }
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'lobby' },
-      { car: 2, floor: 'floor2' },
-    ])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'lobby' }])
+    expect(sim.viewOf('p2').car).toBe(1) // the carried rider stayed aboard
   })
 
-  it('a mid-hall call with both cars dwelling elsewhere queues and is served by the first car to reach its attend check (AD-027)', () => {
+  it('a mid-hall call with the car occupied-dwelling elsewhere queues; the attending car cannot be re-pressed for its pickup (AD-027, ELR edge, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    sim.join('p3')
-    // Both cars stand doors-open at their stops: car 1 at floor1 (rider
-    // stepped off), car 2 at floor2 (rider stays aboard).
-    boardParkedCar(sim, 'p2', 1)
+    // The car occupied-dwelling on floor1 (rider stays aboard).
+    boardParkedCar(sim, 'p2')
     expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p2', 'right')
-    expect(sim.viewOf('p2').car).toBeNull()
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 3 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    // p1 calls from near the EAST landing but OUTSIDE it (mid-hall): no idle
-    // car exists — the call queues, and the FIRST car whose attend check runs
-    // (car 1: lobby ≠ floor1) closes its doors and dispatches to the lobby.
-    sim.startMove('p1', 'right')
-    for (let i = 0; i < 46; i++) sim.tick() // 15 + 46 × 0.3 = x 28.8 (> 1 tile from the landing)
-    sim.stopMove('p1')
-    expect(lastX(sim, 'p1')).toBe(28.8)
+    // p1 calls from the lobby center: the call queues — the car's attend
+    // check closes and dispatches to the lobby.
     expect(sim.callElevator('p1')).toBe('dispatched')
-    const flash = huntFlash(sim)
-    expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
-    // The flash tick above already counted toward the 60-tick arrival.
-    expect(runUntilCarMoved(sim, 1, 'lobby')).toBe(59)
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'lobby' },
-      { car: 2, floor: 'floor2' },
-    ])
-  })
-
-  it('a call pressed at a landing whose car is busy elsewhere queues PINNED to that car (AD-023) and that car attends it (AD-027)', () => {
-    const sim = new MovementSim()
-    sim.join('p1')
-    sim.join('p2')
-    sim.join('p3')
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    sim.startMove('p2', 'right')
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 3 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    sim.startMove('p3', 'left') // p3 steps off on floor2
-    // p1 at the EAST landing (AD-023 pin): car 2 is the landing's car — it is
-    // BUSY (dwelling at floor2), so the call queues PINNED to it and car 1 is
-    // never summoned. Car 2's dwell already elapsed: its attend check serves
-    // the pinned call — closing swing, then the dispatch.
-    sim.startMove('p1', 'right')
-    for (let i = 0; i < 50; i++) sim.tick()
-    sim.stopMove('p1')
-    expect(sim.callElevator('p1')).toBe('dispatched')
-    expect(carEvents(sim.tick())).toEqual([]) // no flash yet: queued pinned
-    const flash = huntFlash(sim)
-    expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 2 }])
-    expect(runUntilCarMoved(sim, 2, 'lobby')).toBe(59)
-  })
-
-  it('a mid-hall call with both cars occupied-dwelling queues; the attending car cannot be re-pressed for its pickup (AD-027, ELR edge)', () => {
-    const sim = new MovementSim()
-    sim.join('p1')
-    sim.join('p2')
-    sim.join('p3')
-    // Both cars occupied-dwelling on guest floors (riders stay aboard).
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 3 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    // p1 calls from the lobby center: the call queues — car 1 (tie → car 1)
-    // attends first, closes, and dispatches to the lobby.
-    expect(sim.callElevator('p1')).toBe('dispatched')
-    const flash = huntFlash(sim)
+    const flash = huntFlash(sim, 400)
     expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
     // The carried rider presses the pickup floor while the car is arriving:
     // the pickup is being served — silently ignored (no zero-tick rides).
     expect(sim.pressFloor('p2', 'lobby')).toBe('ignored')
-    // The walk staging above consumed much of the car's minimum dwell, so
-    // the attend check fires shortly after the call — assert only that the
-    // arrival lands with the carried rider kept aboard.
+    // The attend check above fired shortly after the call — assert only that
+    // the arrival lands with the carried rider kept aboard.
     expect(runUntilCarMoved(sim, 1, 'lobby')).toBeGreaterThan(0)
     expect(sim.viewOf('p2').car).toBe(1) // the carried rider stays aboard
+  })
+
+  it('a call pressed at the landing whose car is busy elsewhere queues and that car attends it (AD-023 degenerate, AD-027, AD-040)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    boardParkedCar(sim, 'p2')
+    expect(sim.pressFloor('p2', 'floor2')).toBe('accepted')
+    expect(runUntilCarMoved(sim, 1, 'floor2')).toBeGreaterThan(0) // the car left
+    // p1 at the EAST landing: the car is BUSY (dwelling at floor2), so the
+    // call queues — no flash yet — and the car's attend check serves it:
+    // closing swing, then the dispatch.
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick()
+    sim.stopMove('p1')
+    expect(sim.callElevator('p1')).toBe('dispatched')
+    expect(carEvents(sim.tick())).toEqual([]) // no flash yet: queued
+    const flash = huntFlash(sim, 400)
+    expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
+    expect(runUntilCarMoved(sim, 1, 'lobby')).toBe(59)
+  })
+
+  it('a call queued while the car RIDES is served at the arrival stop (AD-040)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    boardParkedCar(sim, 'p2')
+    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted') // long ride departs
+    // p1 calls from the lobby center while the car RIDES: queued, no flash —
+    // departures are silent and the queued call flashes only at dispatch.
+    expect(sim.callElevator('p1')).toBe('dispatched')
+    expect(runUntilCarMoved(sim, 1, 'floor3')).toBeGreaterThan(0)
+    const flash = huntFlash(sim, 400)
+    expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
+    expect(runUntilCarMoved(sim, 1, 'lobby')).toBeGreaterThan(0)
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'lobby' }])
   })
 
   it('serves presses FIFO in press order at 2 s per floor; a stay-in-car rider keeps riding (ELR P2 AC4, ELR P3 AC2)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor3')).toBe('accepted')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted') // queued behind floor3
     // Press during the just-opened stop: the surviving dwell + closing swing
@@ -678,7 +564,7 @@ describe('sim:elevator', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'lobby')).toBe('ignored') // current floor, doors just opened
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted')
     expect(sim.pressFloor('p1', 'floor2')).toBe('ignored') // being served (queue head)
@@ -705,7 +591,7 @@ describe('sim:elevator', () => {
   it('rejects a press of a queued non-head floor silently — exactly one pressed event per accepted press (ELR P2 AC2)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor3')).toBe('accepted') // departs: the served head
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // queued behind the head
     // The queued (non-head) floor is already lit: re-pressing it while it
@@ -725,337 +611,217 @@ describe('sim:elevator', () => {
     })
   })
 
-  it("boards a call pressed at a parked car's landing and keeps mid-hall calls a decoy flash when BOTH cars are parked at the pickup floor (AD-019: narrowed MOVE-12, AD-025)", () => {
+  it("boards a call pressed at the parked car's landing; a mid-hall call with the car parked at the pickup floor is a decoy flash (AD-019 degenerate, AD-025, AD-040)", () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('p2')
-    // p1 rides car 1 to floor1 and steps off; car 1 idles there, doors open.
-    boardParkedCar(sim, 'p1', 1)
+    // p1 rides the car to floor1 and steps off; the car idles there, doors open.
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
       DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
     )
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'right')
-    sim.stopMove('p1') // step off and STAY at the west landing
+    sim.startMove('p1', 'left')
+    sim.stopMove('p1') // step off and STAY at the east landing
     expect(sim.viewOf('p1').car).toBeNull()
-    // p2 joins p1 on floor1 via car 2 (east landing), also stepping off.
-    boardParkedCar(sim, 'p2', 2)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p2', 'left')
-    sim.stopMove('p2') // step off and STAY at the east landing
-    expect(sim.viewOf('p2').car).toBeNull()
     // Consume the walk-off occupancy update (AD-013) before the calls.
     expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
-      { type: 'elevator:riders', car: 2, riders: [], queue: [] },
+      { type: 'elevator:riders', car: 1, riders: [], queue: [] },
     ])
-    // At the landings, the call press IS boarding (AD-025) — and with
-    // AD-027 both cars stand with their doors OPEN (nothing to attend), so
-    // each caller boards instantly; no car is summoned anywhere.
+    // At the landing, the call press IS boarding (AD-025) — and with AD-027
+    // the car stands doors-OPEN (nothing to attend), so the caller boards
+    // instantly; no car is summoned anywhere.
     expect(sim.callElevator('p1')).toBe('ignored')
-    expect(sim.callElevator('p2')).toBe('ignored')
     const events = sim.tick()
     const called = events.filter((e) => e.type === 'elevator:called')
-    expect(called).toEqual([
-      { type: 'elevator:called', floor: 'floor1', car: 1 },
-      { type: 'elevator:called', floor: 'floor1', car: 2 },
-    ])
+    expect(called).toEqual([{ type: 'elevator:called', floor: 'floor1', car: 1 }])
     // No door events and no car moved: the boarding happens through the
     // already-open doors.
     expect(
       events.filter((e) => e.type === 'elevator:moved' || e.type === 'elevator:doors'),
     ).toEqual([])
     expect(sim.viewOf('p1').car).toBe(1)
-    expect(sim.viewOf('p2').car).toBe(2)
-    // Mid-hall, with BOTH cars parked open-doors at the pickup floor, nothing
-    // can arrive: the call stays a decoy flash naming car 1 (AD-019 line).
-    const mid = new MovementSim()
-    mid.join('p1')
-    mid.join('p2')
-    boardParkedCar(mid, 'p1', 1)
-    mid.pressFloor('p1', 'floor1')
-    expect(runUntilCarMoved(mid, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) mid.tick() // the doors finish opening
-    mid.startMove('p1', 'right') // steps off at the west landing...
-    mid.startMove('p1', 'right')
-    for (let i = 0; i < 7; i++) mid.tick() // ...and walks mid-hall (2.1 tiles)
-    mid.stopMove('p1')
-    boardParkedCar(mid, 'p2', 2)
-    mid.pressFloor('p2', 'floor1')
-    expect(runUntilCarMoved(mid, 2, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) mid.tick() // the doors finish opening
-    mid.startMove('p2', 'left') // car 2 parked empty at floor1, east landing
-    expect(mid.viewOf('p2').car).toBeNull()
-    mid.tick() // consume the walk-off riders update
-    expect(mid.callElevator('p1')).toBe('ignored')
-    const decoy = mid.tick().filter((e) => e.type === 'elevator:called')
+    // Mid-hall, with the car parked open-doors at the pickup floor, nothing
+    // can arrive: the call stays a decoy flash naming car 1 (AD-019's
+    // both-parked case, degenerate for the single car).
+    sim.startMove('p1', 'left') // walk off through the open doors...
+    for (let i = 0; i < 7; i++) sim.tick() // ...and walk mid-hall (2.1 tiles)
+    sim.stopMove('p1')
+    expect(sim.viewOf('p1').car).toBeNull()
+    sim.tick() // consume the walk-off riders update
+    expect(sim.callElevator('p1')).toBe('ignored')
+    const decoy = sim.tick().filter((e) => e.type === 'elevator:called')
     expect(decoy).toEqual([{ type: 'elevator:called', floor: 'floor1', car: 1 }])
-    expect(mid.viewOf('p1').car).toBeNull()
+    expect(sim.viewOf('p1').car).toBeNull()
   })
 
-  it("never summons the OTHER car for a call pressed at the parked car's own landing — the press boards (AD-023, AD-025)", () => {
+  it("never dispatches for a call pressed at the parked car's own landing — the press boards (AD-023 degenerate, AD-025, AD-040)", () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('p2')
-    // Car 1 idles open-doors at floor1 (p1 rode it there and stepped off).
-    boardParkedCar(sim, 'p1', 1)
+    // The car idles open-doors at floor1 (p1 rode it there and stepped off).
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
       DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
     )
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'right')
-    sim.stopMove('p1') // step off and STAY at car 1's west landing
+    sim.startMove('p1', 'left')
+    sim.stopMove('p1') // step off and STAY at the east landing
     expect(sim.viewOf('p1').car).toBeNull()
     // Consume the walk-off occupancy update (AD-013) before the call.
     expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
       { type: 'elevator:riders', car: 1, riders: [], queue: [] },
     ])
-    // p1 stands at car 1's west landing (the exit places him there): the call
-    // press boards him into car 1 (AD-025) — and car 2 is NEVER summoned
-    // (AD-023 overrides AD-019 at landings).
+    // p1 stands at the landing (the exit places him there): the call press
+    // boards him into the car (AD-025) — nothing is dispatched (AD-023's
+    // pinned-car rule, degenerate for the single car).
     expect(sim.callElevator('p1')).toBe('ignored')
     expect(sim.tick().filter((e) => e.type === 'elevator:called')).toEqual([
       { type: 'elevator:called', floor: 'floor1', car: 1 },
     ])
     for (let i = 0; i < 80; i++) expect(carEvents(sim.tick())).toEqual([])
     expect(sim.viewOf('p1').car).toBe(1) // re-boarded by his own press
-    expect(sim.snapshotForFloor('floor1').cars).toEqual([
-      { car: 1, floor: 'floor1' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([{ car: 1, floor: 'floor1' }])
   })
 
-  it('summons the OTHER car for a mid-hall call when one is parked open-doors at the pickup floor (AD-019, mid-hall branch)', () => {
+  it('a mid-hall call with the car parked at the pickup floor flashes and NEVER moves the car (AD-019 degenerate, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('p2')
-    // Car 1 idles doors-shut at floor1 (p1 rode it there and stepped off).
-    boardParkedCar(sim, 'p1', 1)
+    // The car idles doors-open at floor1 (p1 rode it there and stepped off).
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
       DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
     )
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     expect(sim.viewOf('p1').car).toBeNull()
     // Consume the walk-off occupancy update (AD-013) before the call.
     expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
       { type: 'elevator:riders', car: 1, riders: [], queue: [] },
     ])
     // p1 walks OFF the landing (the stock client's gate would not send from
-    // here, but the sim stays robust): car 1 is parked here, so car 2 is
-    // summoned (AD-019 mid-hall policy).
-    sim.startMove('p1', 'right')
-    for (let i = 0; i < 7; i++) sim.tick() // 0.3 + 7 × 0.3 = 2.4 tiles from the landing
+    // here, but the sim stays robust): the car is parked at the pickup floor
+    // with no other car to summon — the call is the decoy flash.
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 7; i++) sim.tick() // 2.1 tiles from the landing
     sim.stopMove('p1')
-    expect(sim.callElevator('p1')).toBe('dispatched')
+    expect(sim.callElevator('p1')).toBe('ignored')
     expect(sim.tick().filter((e) => e.type === 'elevator:called')).toEqual([
-      { type: 'elevator:called', floor: 'floor1', car: 2 },
+      { type: 'elevator:called', floor: 'floor1', car: 1 },
     ])
-    // The flash tick above already counted toward the 60-tick arrival.
-    expect(runUntilCarMoved(sim, 2, 'floor1')).toBe(3 * TICK_HZ - 1)
-    // Car 2 finishes its stop (opening + dwell + closing, AD-026) and idles
-    // with doors shut beside car 1; nobody boarded (p1 stands 2+ tiles from
-    // BOTH landings, out of car 2's boarding range).
-    for (let i = 0; i < 2 * DOOR_TICKS + DWELL_TICKS; i++) {
-      expect(carEvents(sim.tick())).toEqual([])
+    // Nothing ever moves: boarding/pressing a parked car is how it moves.
+    for (let i = 0; i < 250; i++) {
+      expect(carEvents(sim.tick()).some((e) => e.type === 'elevator:moved')).toBe(false)
     }
-    expect(sim.snapshotForFloor('floor1').cars).toEqual([
-      { car: 1, floor: 'floor1' },
-      { car: 2, floor: 'floor1' },
-    ])
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([{ car: 1, floor: 'floor1' }])
   })
 
-  it('pins a call pressed at a landing to its busy car; the other car is never summoned (AD-023, AD-027)', () => {
+  it('serves two queued calls for different pickups strictly in queue order across attend cycles (MOVE-15, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    // Car 1 departs on p2's floor3 press (after its minimum dwell); car 2
-    // stays parked shut at the lobby (never called).
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor3')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 4 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    // p1 walks to the WEST landing (car 1's) while car 1 stands at floor3,
-    // and calls: the call pins to car 1 (dwelling, busy) — car 2 must never
-    // be summoned.
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 60; i++) sim.tick() // clamps at the west landing
-    sim.stopMove('p1')
-    expect(lastX(sim, 'p1')).toBe(0)
+    sim.join('p3', { floor: 'floor1', xMilli: 15000 })
+    boardParkedCar(sim, 'p2')
+    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted') // long ride, rider aboard
+    // p1 (lobby center) queues the first call; p3 (standing on floor1) queues
+    // the second while the car rides.
     expect(sim.callElevator('p1')).toBe('dispatched')
-    // No flash yet: the call waits in the FIFO pinned to car 1.
-    expect(carEvents(sim.tick())).toEqual([])
-    // Car 1's attend check fires (lobby ≠ floor3): closing swing, dispatch,
-    // 60-tick arrival, and its stop keeps the doors open at the lobby; car 2
-    // never moves.
-    const seen: MovementEvent[] = []
-    for (let i = 0; i < 400; i++) seen.push(...sim.tick())
-    expect(seen.filter((e) => e.type === 'elevator:called')).toEqual([
+    expect(sim.callElevator('p3')).toBe('dispatched')
+    // The floor3 attend check serves the FIRST call (lobby): flash, dispatch,
+    // arrival. The lobby stop's attend check then serves the SECOND (floor1).
+    expect(huntFlash(sim, 500)).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
+    expect(runUntilCarMoved(sim, 1, 'lobby')).toBeGreaterThan(0)
+    expect(huntFlash(sim, 500)).toEqual([{ type: 'elevator:called', floor: 'floor1', car: 1 }])
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBeGreaterThan(0)
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([{ car: 1, floor: 'floor1' }])
+  })
+
+  it('a duplicate call for an already-queued pickup flashes without double-queuing (AD-012 narrowed, AD-040)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    sim.join('p3')
+    boardParkedCar(sim, 'p2')
+    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted') // car rides away
+    // p1 (lobby center) queues the first lobby call — no flash while queued;
+    // the tick after the call flushes p2's rider-exclusive press announce.
+    expect(sim.callElevator('p1')).toBe('dispatched')
+    expect(carEvents(sim.tick())).toEqual([
+      { type: 'elevator:pressed', playerId: 'p2', floor: 'floor3', car: 1 },
+    ])
+    // p3's call for the SAME pickup is a queued-duplicate: it flashes
+    // immediately (the panel pulse) without adding a second queue entry.
+    expect(sim.callElevator('p3')).toBe('ignored')
+    expect(sim.tick().filter((e) => e.type === 'elevator:called')).toEqual([
       { type: 'elevator:called', floor: 'lobby', car: 1 },
     ])
-    expect(seen.some((e) => e.type === 'elevator:moved' && e.car === 2)).toBe(false)
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'lobby' },
-      { car: 2, floor: 'lobby' },
-    ])
-  })
-
-  it('queues the call for a busy other car when one is parked open-doors at the pickup floor (AD-019, MOVE-15)', () => {
-    const sim = new MovementSim()
-    sim.join('p1')
-    sim.join('p2')
-    sim.join('p3')
-    // Car 2 departs to floor1 (rider stays aboard); car 1 departs to floor3.
-    boardParkedCar(sim, 'p2', 2)
-    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    boardParkedCar(sim, 'p3', 1)
-    expect(sim.pressFloor('p3', 'floor3')).toBe('accepted')
-    // p1 calls from the lobby center with car 1 riding: no car is parked at
-    // the LOBBY, both cars busy → sim-level FIFO queue, no flash yet.
-    expect(sim.callElevator('p1')).toBe('dispatched')
-    // Car 2 frees first (floor1, ~tick 40) and serves the queued lobby pickup;
-    // car 1 is still mid-ride to floor3.
-    const seen: MovementEvent[] = []
-    for (let i = 0; i < 250; i++) seen.push(...sim.tick())
-    expect(seen.filter((e) => e.type === 'elevator:called')).toEqual([
-      { type: 'elevator:called', floor: 'lobby', car: 2 },
-    ])
-    expect(
-      seen.some((e) => e.type === 'elevator:moved' && e.car === 2 && e.floor === 'lobby'),
-    ).toBe(true)
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'floor3' },
-      { car: 2, floor: 'lobby' },
-    ])
-  })
-
-  it('queues a call when both cars are busy and serves it with the first car to free (MOVE-15)', () => {
-    const sim = new MovementSim()
-    sim.join('p1')
-    sim.join('p2')
-    sim.join('p3')
-    sim.join('p4')
-    // Both cars depart on presses (car 1: 120-tick ride, car 2: 40-tick ride).
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted')
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor1')).toBe('accepted')
-    // p4 calls from the lobby center: both cars riding → sim-level FIFO queue.
-    expect(sim.callElevator('p4')).toBe('dispatched')
-    // The next tick announces p3's press (rider-exclusive; it also eats one
-    // dwell tick — AD-026's stop anatomy precedes the ride) and the queued
-    // call itself flashes only at dispatch time.
-    expect(carEvents(sim.tick())).toEqual([
-      { type: 'elevator:pressed', playerId: 'p3', floor: 'floor1', car: 2 },
-    ])
-    expect(runUntilCarMoved(sim, 2, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 2,
-    )
-    // Car 2 frees first: once its minimum dwell elapses, its attend check
-    // serves the queued call — closing swing, then the dispatch announces.
-    const flash = huntFlash(sim)
-    expect(flash).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 2 }])
-    // The flash tick above already counted toward the 60-tick arrival.
-    expect(runUntilCarMoved(sim, 2, 'lobby')).toBe(59)
+    // Exactly one dispatch flash follows (the attend check serving the single
+    // queue entry) — a double entry would flash and dispatch twice.
+    const flashes: MovementEvent[] = []
+    for (let i = 0; i < 400; i++) {
+      flashes.push(...carEvents(sim.tick()).filter((e) => e.type === 'elevator:called'))
+    }
+    expect(flashes).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'lobby' }])
   })
 
   it('drops a boarding player queued call (AD-012 #3: no car to an abandoned floor)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    sim.join('p3')
-    // 3.C re-stage: car 2 (the SHORT round trip) departs FIRST so that p1
-    // boards its return before car 1's attend check can serve the queued
-    // call — the 5-floor economy lengthened car 1's floor3 ride and flipped
-    // the original race.
-    // p3 pre-steps to 28.8 (1.2 tiles out of car 2's boarding range → walks in).
+    sim.join('p3', { floor: 'floor1', xMilli: 15000 })
+    boardParkedCar(sim, 'p2')
+    expect(sim.pressFloor('p2', 'floor1')).toBe('accepted') // car departs, rider aboard
+    // p3 (on floor1) queues a floor1 call while the car rides.
+    expect(sim.callElevator('p3')).toBe('dispatched')
+    // p3 walks to the landing; the queued call makes his landing press a
+    // queued-duplicate flash (the car is still riding).
     sim.startMove('p3', 'right')
-    for (let i = 0; i < 46; i++) sim.tick()
+    for (let i = 0; i < 50; i++) sim.tick()
     sim.stopMove('p3')
-    expect(lastX(sim, 'p3')).toBe(28.8)
-    sim.startMove('p3', 'right')
-    for (let i = 0; i < 10 && lastX(sim, 'p3') !== HALL_LENGTH_TILES; i++) sim.tick()
-    sim.stopMove('p3')
-    expect(sim.callElevator('p3')).toBe('ignored') // parked-car press: doors open
+    expect(sim.callElevator('p3')).toBe('ignored')
+    // The car arrives at floor1 (carrying p2) and opens its doors: p3's
+    // landing press boards him instantly.
+    expect(runUntilCarMoved(sim, 1, 'floor1')).toBeGreaterThan(0)
+    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
+    expect(sim.callElevator('p3')).toBe('ignored') // parked-car press: boards
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p3').car === null; i++) sim.tick()
     sim.tick() // flush the boarding events
-    expect(sim.pressFloor('p3', 'floor1')).toBe('accepted') // car 2: 80-tick ride
-    boardParkedCar(sim, 'p2', 1)
-    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted') // car 1: 160-tick ride
-    // p1 calls from the lobby center: both cars riding → the call waits in
-    // the sim-level FIFO (MOVE-15) — no flash, no dispatch yet.
-    expect(sim.callElevator('p1')).toBe('dispatched')
-    // p1 heads for the east landing. p3 (stay-in-car) queues the lobby return
-    // during the floor1 dwell, so car 2 comes back and p1 boards it with the
-    // landing call press (AD-025).
-    sim.startMove('p1', 'right')
-    // Offsets are relative to p1's call — p2's boarding staging sits between
-    // p3's press and here, so the exact anatomy pins live in the other tests;
-    // this test only needs the arrivals to happen in order.
-    expect(runUntilCarMoved(sim, 2, 'floor1')).toBeGreaterThan(0)
-    expect(sim.pressFloor('p3', 'lobby')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'lobby')).toBeGreaterThan(0)
-    expect(sim.callElevator('p1')).toBe('ignored') // parked-car press: doors open
-    for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p1').car === null; i++) sim.tick()
-    sim.tick() // flush the boarding events
-    expect(sim.viewOf('p1').car).toBe(2) // boarded the other car at its landing
+    expect(sim.viewOf('p3').car).toBe(1)
     // Boarding drops the boarder's own queued call (AD-012 #3): no car may
-    // ever be summoned to a floor they left. Tick past car 1's arrival, dwell,
-    // and idle transition — a surviving call would flash there and dispatch
-    // car 1 to the lobby.
+    // ever be summoned to a floor they left. Tick past the stop's end — a
+    // surviving call would flash at the attend check and dispatch a phantom
+    // floor1 pickup.
     const tail: MovementEvent[] = []
-    for (let i = 0; i < 150; i++) tail.push(...sim.tick())
+    for (let i = 0; i < 200; i++) tail.push(...sim.tick())
     expect(tail.filter((e) => e.type === 'elevator:called')).toEqual([])
-    expect(
-      tail.some((e) => e.type === 'elevator:moved' && e.car === 1 && e.floor === 'lobby'),
-    ).toBe(false)
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'floor3' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(sim.snapshotForFloor('floor1').cars).toEqual([{ car: 1, floor: 'floor1' }])
   })
 
-  it('serves a call queued at the buzzer once a car frees (EL-02, AD-011)', () => {
+  it('serves a call queued at the buzzer once the car frees (EL-02, AD-011)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    sim.join('p3')
-    sim.join('p4')
-    boardParkedCar(sim, 'p2', 1)
+    boardParkedCar(sim, 'p2')
     expect(sim.pressFloor('p2', 'floor3')).toBe('accepted')
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor1')).toBe('accepted')
-    expect(sim.callElevator('p4')).toBe('dispatched') // queued: both cars busy
+    expect(sim.callElevator('p1')).toBe('dispatched') // queued: the car is busy
     sim.tick()
     // AD-011: the queue is NOT cleared (it belongs to the car, never to the
-    // phase). Car 2's attend check fires first (its stop ended earlier), it
-    // dispatches the queued lobby pickup (one flash) and completes the trip.
+    // phase). The car's attend check dispatches the queued lobby pickup (one
+    // flash) and completes the trip.
     let flashes = 0
     for (let i = 0; i < 400; i++) {
       flashes += carEvents(sim.tick()).filter((e) => e.type === 'elevator:called').length
     }
     expect(flashes).toBe(1)
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'floor3' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'lobby' }])
   })
 
   it('serves the queue as a ghost trip after the presser walks off (ELR P3 AC3)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
       DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
@@ -1071,7 +837,7 @@ describe('sim:elevator', () => {
       { type: 'elevator:pressed', playerId: 'p1', floor: 'floor2', car: 1 },
     ])
     for (let i = 0; i < DOOR_TICKS - 1; i++) sim.tick() // T+2..T+10: swing ends
-    sim.startMove('p1', 'right') // walk-off through the open doors
+    sim.startMove('p1', 'left') // walk-off through the open doors
     // T+11 flushes the walk-off's occupancy update (empty riders, surviving
     // queue).
     expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
@@ -1083,10 +849,7 @@ describe('sim:elevator', () => {
       expect(carEvents(sim.tick())).toEqual([])
     }
     expect(runUntilCarMoved(sim, 1, 'floor2')).toBe(RIDE_TICKS_PER_FLOOR) // floor1 → floor2: one floor
-    expect(sim.snapshotForFloor('lobby').cars).toEqual([
-      { car: 1, floor: 'floor2' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'floor2' }])
   })
 
   it('declines a call press into a full car; a freed slot admits the next press (MOVE-13 capacity, ELR P2 AC8, AD-025)', () => {
@@ -1094,11 +857,12 @@ describe('sim:elevator', () => {
     sim.join('p1')
     sim.join('p2')
     sim.join('p3')
-    // Fill the parked west car to capacity 2 via landing call presses.
-    boardParkedCar(sim, 'p1', 1)
-    boardParkedCar(sim, 'p2', 1)
-    // p3 walks to the west landing: the car stands full with doors open.
-    sim.startMove('p3', 'left')
+    sim.join('p4')
+    // Fill the parked east car to capacity 2 via landing call presses.
+    boardParkedCar(sim, 'p1')
+    boardParkedCar(sim, 'p2')
+    // p3 walks to the east landing: the car stands full with doors open.
+    sim.startMove('p3', 'right')
     for (let i = 0; i < 50; i++) sim.tick()
     sim.stopMove('p3')
     // Full car: the landing press declines silently — no board, no summon.
@@ -1109,7 +873,7 @@ describe('sim:elevator', () => {
     expect(sim.viewOf('p1').car).toBe(1)
     expect(sim.viewOf('p2').car).toBe(1)
     // p1 walks off through the open doors: a slot frees.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     expect(sim.viewOf('p1').car).toBeNull()
     // The freed slot admits p3's next press (the car is still dwelling).
     expect(sim.callElevator('p3')).toBe('ignored') // parked-car press boards
@@ -1122,18 +886,18 @@ describe('sim:elevator', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     // p1 exits and stays inside the boarding radius: no proximity re-board,
     // no board/exit oscillation, no event spam — boarding is the explicit
     // call press now.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     sim.stopMove('p1')
     expect(sim.viewOf('p1').car).toBeNull()
-    expect(lastX(sim, 'p1')).toBe(0)
+    expect(lastX(sim, 'p1')).toBe(30)
     for (let i = 0; i < 30; i++) {
       sim.tick()
       expect(sim.viewOf('p1').car).toBeNull()
-      expect(lastX(sim, 'p1')).toBe(0)
+      expect(lastX(sim, 'p1')).toBe(30)
     }
     // The car's doors stay OPEN here (AD-027: nothing to attend): p1's call
     // press boards him instantly through them (AD-025).
@@ -1141,7 +905,7 @@ describe('sim:elevator', () => {
     sim.tick() // flush the boarding events
     expect(sim.viewOf('p1').car).toBe(1)
     // p2 boards alongside (capacity 2) and the re-boarded rider rides along.
-    boardParkedCar(sim, 'p2', 1)
+    boardParkedCar(sim, 'p2')
     expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
     // The minimum dwell long elapsed: the attend check fires the next tick —
     // closing swing, then the ride.
@@ -1153,8 +917,8 @@ describe('sim:elevator', () => {
   it('serves presses pre-round and lets a pre-round exiter walk away (EL-01, EL-04, AD-015, ELR edge)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    // Pre-round: board the parked west car and press floor1 — no round needed.
-    boardParkedCar(sim, 'p1', 1)
+    // Pre-round: board the parked east car and press floor1 — no round needed.
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
       DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
@@ -1162,21 +926,22 @@ describe('sim:elevator', () => {
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
     // Exit through the open doors pre-round: allowed in ANY door-open moment
     // (AD-015, AD-026 gate).
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     expect(sim.viewOf('p1').car).toBeNull()
     expect(sim.positionOf('p1')?.floor).toBe('floor1')
-    expect(lastX(sim, 'p1')).toBe(0)
+    expect(lastX(sim, 'p1')).toBe(30)
     // Hallway walking is now allowed pre-round (AD-015): the exiter leaves the
     // landing and cannot board by walking — boarding is the explicit call
-    // press (AD-025); they only walk back 1.5 tiles here, and never press.
-    sim.startMove('p1', 'right')
+    // press (AD-025); they only walk 1.5 tiles into the hall here, and never
+    // press.
+    sim.startMove('p1', 'left')
     for (let i = 0; i < 25; i++) {
       sim.tick()
       expect(sim.viewOf('p1').car).toBeNull()
     }
-    expect(lastX(sim, 'p1')).toBeGreaterThan(0)
+    expect(lastX(sim, 'p1')).toBe(22.5)
     // Walking back part-way does not board either (no press, no board).
-    sim.startMove('p1', 'left')
+    sim.startMove('p1', 'right')
     for (let i = 0; i < 5; i++) sim.tick()
     expect(sim.viewOf('p1').car).toBeNull()
   })
@@ -1184,7 +949,7 @@ describe('sim:elevator', () => {
   it('a direction held through the opening swing exits the tick the doors are fully open (AD-026)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted')
     // Ride to floor2 (two floors): the stop must finish first (dwell tail +
     // closing).
@@ -1193,7 +958,7 @@ describe('sim:elevator', () => {
     // The arrival moved lands at the START of the opening swing (AD-026):
     // the rider holds a direction NOW (the client sends the intent once) —
     // the hop-off applies the tick the doors are fully open, never mid-swing.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     for (let i = 0; i < DOOR_TICKS - 1; i++) {
       sim.tick()
       expect(sim.viewOf('p1').car).toBe(1) // still aboard: doors not fully open
@@ -1201,21 +966,21 @@ describe('sim:elevator', () => {
     sim.tick() // the doors finish opening: the held exit applies now
     expect(sim.viewOf('p1').car).toBeNull()
     expect(sim.positionOf('p1')?.floor).toBe('floor2')
-    expect(sim.positionOf('p1')?.x).toBe(0) // the exit pins the landing x
+    expect(sim.positionOf('p1')?.x).toBe(30) // the exit pins the landing x
     sim.tick() // the held walk resumes on the floor
-    expect(sim.positionOf('p1')?.x).toBe(0.3)
+    expect(sim.positionOf('p1')?.x).toBe(29.7)
   })
 
   it('releasing the direction while the exit is pending cancels it (AD-026 held-intent rule)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted')
     for (let i = 0; i < DWELL_TICKS - 1 + DOOR_TICKS; i++) sim.tick()
     expect(runUntilCarMoved(sim, 1, 'floor2')).toBe(3 * RIDE_TICKS_PER_FLOOR)
     // Pend the exit during the opening swing, then release before the doors
     // are fully open: the hop-off never applies.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     sim.stopMove('p1')
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
     expect(sim.viewOf('p1').car).toBe(1) // still aboard: the exit was cancelled
@@ -1224,13 +989,13 @@ describe('sim:elevator', () => {
   it('a direction held during the ride or the closing swing never exits (MOVE-09, AD-026)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted')
     // Let the boarding stop finish: attend → closing swing → departure.
     for (let i = 0; i < DWELL_TICKS - 1 + DOOR_TICKS; i++) sim.tick()
     // Held during the ride: consumed while the doors are shut — no pending
     // exit, no exit when the doors open at the stop.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     expect(runUntilCarMoved(sim, 1, 'floor2')).toBe(3 * RIDE_TICKS_PER_FLOOR)
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
     expect(sim.viewOf('p1').car).toBe(1) // still aboard through the dwell
@@ -1242,7 +1007,7 @@ describe('sim:elevator', () => {
     // before the attend check closes for the departure.
     for (let i = 0; i < DWELL_TICKS - 1; i++) sim.tick()
     sim.tick() // the dwell expires; the attend evaluation closes the doors
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the closing swing runs
     expect(sim.viewOf('p1').car).toBe(1) // departing with the doors shut
     expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(RIDE_TICKS_PER_FLOOR)
@@ -1256,13 +1021,13 @@ describe('sim:elevator', () => {
   it('ignores in-car move intents while doors are shut; open doors let the rider walk off (MOVE-09, MOVE-16, AD-015, AD-026)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
-    expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // 80-tick ride
+    boardParkedCar(sim, 'p1')
+    expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // 120-tick ride
     // The just-opened stop must finish first (surviving dwell + closing
     // swing, AD-026) — holding a direction NOW would walk off instead.
     for (let i = 0; i < DWELL_TICKS - 1 + DOOR_TICKS; i++) sim.tick()
     const xInCar = lastX(sim, 'p1')
-    sim.startMove('p1', 'right') // doors shut: riding — ignored (MOVE-09)
+    sim.startMove('p1', 'left') // doors shut: riding — ignored (MOVE-09)
     for (let i = 0; i < 40; i++) sim.tick()
     expect(lastX(sim, 'p1')).toBe(xInCar)
     expect(sim.viewOf('p1').car).toBe(1) // still riding: the held ticks never exit
@@ -1271,48 +1036,32 @@ describe('sim:elevator', () => {
     // Open doors: the same intent now exits at the served floor.
     // MOVE-16 payload purity: occupancy never rides any public event (the
     // registry pins in T4 carry the wire half of this guarantee).
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     sim.tick()
     expect(sim.viewOf('p1').car).toBeNull()
     expect(sim.positionOf('p1')?.floor).toBe('floor2')
-    expect(sim.positionOf('p1')?.x).toBe(0.3) // walking continues (AD-015)
+    expect(sim.positionOf('p1')?.x).toBe(29.7) // walking continues (AD-015)
   })
 
-  it('dispatches across floors while a car is mid-arrival elsewhere (AD-012 narrowed: pickup-only predicate)', () => {
+  it('dispatches a different-pickup call while the car is mid-arrival elsewhere (AD-012 narrowed: pickup-only predicate, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    sim.join('p3')
-    // Park both cars on guest floors, riders stepped off (empty idle).
-    boardParkedCar(sim, 'p2', 1)
+    sim.join('p3', { floor: 'floor1', xMilli: 15000 })
+    // The car departs to floor1 with p2 aboard.
+    boardParkedCar(sim, 'p2')
     expect(sim.pressFloor('p2', 'floor1')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 1, 'floor1')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p2', 'right')
-    boardParkedCar(sim, 'p3', 2)
-    expect(sim.pressFloor('p3', 'floor2')).toBe('accepted')
-    expect(runUntilCarMoved(sim, 2, 'floor2')).toBe(
-      DWELL_TICKS + DOOR_TICKS + 3 * RIDE_TICKS_PER_FLOOR - 1,
-    )
-    for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p3', 'left')
-    // Consume the walk-off occupancy update (AD-013) before the calls.
-    expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
-      { type: 'elevator:riders', car: 2, riders: [], queue: [] },
-    ])
-    // p1 (lobby center, tie → car 1) calls: no idle car exists — the call
-    // queues and car 1 (lobby ≠ floor1) attends: closing swing, dispatch,
-    // and the flash announces (MOVE-10). Car 1 is now ARRIVING to the lobby.
+    // p1 (lobby center) calls: the call queues and the car's attend check
+    // dispatches it — the flash announces the dispatch (MOVE-10). The car is
+    // now ARRIVING to the lobby.
     expect(sim.callElevator('p1')).toBe('dispatched')
-    expect(huntFlash(sim)).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
-    // p2's call from floor1 is a DIFFERENT pickup: the mid-arrival car must
-    // not swallow it (the old destination-only decoy is dead — AD-012). Car 2
-    // is still mid-dwell, so the call queues and dispatches when it idles.
-    expect(sim.callElevator('p2')).toBe('dispatched')
-    const flash2 = huntFlash(sim, 120)
-    expect(flash2).toEqual([{ type: 'elevator:called', floor: 'floor1', car: 2 }])
+    expect(huntFlash(sim, 500)).toEqual([{ type: 'elevator:called', floor: 'lobby', car: 1 }])
+    // p3's call from floor1 is a DIFFERENT pickup: the mid-arrival car must
+    // not swallow it (the old destination-only decoy is dead — AD-012). The
+    // call queues and dispatches when the car idles at the lobby.
+    expect(sim.callElevator('p3')).toBe('dispatched')
+    const flash2 = huntFlash(sim, 500)
+    expect(flash2).toEqual([{ type: 'elevator:called', floor: 'floor1', car: 1 }])
   })
 
   it('replays a 200-tick scripted dwell+queue sequence bit-for-bit across two runs (MOVE-17 determinism)', () => {
@@ -1320,7 +1069,7 @@ describe('sim:elevator', () => {
       const sim = new MovementSim()
       sim.join('p1')
       sim.join('p2')
-      boardParkedCar(sim, 'p1', 1)
+      boardParkedCar(sim, 'p1')
       sim.pressFloor('p1', 'floor2')
       sim.startMove('p2', 'left')
       const trace: string[] = []
@@ -1345,10 +1094,7 @@ describe('sim:elevator', () => {
         { playerId: 'p2', floor: 'lobby', x: 15 },
       ],
       cardedRooms: [],
-      cars: [
-        { car: 1, floor: 'lobby' },
-        { car: 2, floor: 'lobby' },
-      ],
+      cars: [{ car: 1, floor: 'lobby' }],
     })
     sim.leave('p1')
     expect(sim.snapshotForFloor('lobby').players).toEqual([
@@ -1364,8 +1110,8 @@ describe('boarding left-floor event (WORK-19)', () => {
   it('emits player:left-floor once per boarding, naming the boarded floor only', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // walk to the west landing
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick() // walk to the east landing
     sim.stopMove('p1')
     expect(sim.callElevator('p1')).toBe('ignored') // parked-car press boards
     let leftFloor: MovementEvent | undefined
@@ -1394,8 +1140,8 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
   it('emits elevator:riders on boarding with the full occupant + queue payload (ELR-01)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // walk to the west landing
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick() // walk to the east landing
     sim.stopMove('p1')
     expect(sim.callElevator('p1')).toBe('ignored') // parked-car press boards
     let ridersEvent: MovementEvent | undefined
@@ -1411,8 +1157,8 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    boardParkedCar(sim, 'p1', 1) // flushes ['p1']
-    boardParkedCar(sim, 'p2', 1) // flushes ['p1', 'p2']
+    boardParkedCar(sim, 'p1') // flushes ['p1']
+    boardParkedCar(sim, 'p2') // flushes ['p1', 'p2']
     expect(sim.pressFloor('p2', 'floor1')).toBe('accepted') // departs after the stop
     // The staging walk consumed much of the minimum dwell — the attend
     // check fires shortly after the press; only the arrival matters here.
@@ -1422,7 +1168,7 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     // floors.
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
     expect(sim.pressFloor('p2', 'floor2')).toBe('accepted')
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     expect(sim.viewOf('p1').car).toBeNull()
     let ridersEvent: MovementEvent | undefined
     for (let i = 0; i < 20 && ridersEvent === undefined; i++) {
@@ -1442,8 +1188,8 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    boardParkedCar(sim, 'p1', 1)
-    boardParkedCar(sim, 'p2', 1) // boarding updates flushed by the helper
+    boardParkedCar(sim, 'p1')
+    boardParkedCar(sim, 'p2') // boarding updates flushed by the helper
     sim.leave('p1')
     expect(sim.tick().filter((e) => e.type === 'elevator:riders')).toEqual([
       { type: 'elevator:riders', car: 1, riders: ['p2'], queue: [] },
@@ -1453,18 +1199,15 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     }
   })
 
-  it('gives riders players:[], public car floors, and carOccupants; floor snapshots never carry occupancy (ELR-03, ELR-04)', () => {
+  it('gives riders players:[], the public car floor, and carOccupants; floor snapshots never carry occupancy (ELR-03, ELR-04, AD-040)', () => {
     const sim = new MovementSim()
     sim.join('p1')
     sim.join('p2')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     expect(sim.pressFloor('p1', 'floor2')).toBe('accepted') // queue into the snapshot
     const riderSnap = sim.snapshotFor('p1')
     expect(riderSnap.players).toEqual([]) // no floor stream in a car (AD-009)
-    expect(riderSnap.cars).toEqual([
-      { car: 1, floor: 'lobby' },
-      { car: 2, floor: 'lobby' },
-    ])
+    expect(riderSnap.cars).toEqual([{ car: 1, floor: 'lobby' }])
     expect(riderSnap.carOccupants).toEqual({ car: 1, riders: ['p1'], queue: ['floor2'] })
     // Non-rider snapshots are byte-identical to the public shape — no
     // occupancy field anywhere.
@@ -1472,10 +1215,7 @@ describe('elevator riders events and snapshot (ELR P1, AD-013)', () => {
     expect(floorSnap).toEqual({
       players: [{ playerId: 'p2', floor: 'lobby', x: 15 }],
       cardedRooms: [],
-      cars: [
-        { car: 1, floor: 'lobby' },
-        { car: 2, floor: 'lobby' },
-      ],
+      cars: [{ car: 1, floor: 'lobby' }],
     })
     expect('carOccupants' in floorSnap).toBe(false)
     // The rider never appears in any floor snapshot while aboard (AD-009).
@@ -1494,13 +1234,13 @@ describe('re-boarding after an exit (AD-025)', () => {
   it('an exiter lingering in the zone is never re-boarded by proximity', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     // Exit with a 3-tick walk (0.9 tiles): still inside the 1-tile radius.
-    sim.startMove('p1', 'right')
+    sim.startMove('p1', 'left')
     for (let i = 0; i < 3; i++) sim.tick()
     sim.stopMove('p1')
     sim.tick()
-    expect(lastX(sim, 'p1')).toBe(0.9)
+    expect(lastX(sim, 'p1')).toBe(29.1)
     // Linger: no proximity board/exit oscillation exists anymore.
     for (let i = 0; i < 10; i++) {
       sim.tick()
@@ -1511,13 +1251,13 @@ describe('re-boarding after an exit (AD-025)', () => {
   it('a re-boarded exiter (via the landing call press) presses and rides normally', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
-    sim.startMove('p1', 'right')
+    boardParkedCar(sim, 'p1')
+    sim.startMove('p1', 'left')
     for (let i = 0; i < 10; i++) sim.tick() // walk away from the landing
     sim.stopMove('p1')
     sim.tick()
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // walk back to the landing (x=0)
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick() // walk back to the landing (x=30)
     sim.stopMove('p1')
     expect(sim.callElevator('p1')).toBe('ignored') // parked-car press: boards
     sim.tick() // flush the boarding events
@@ -1538,8 +1278,8 @@ describe('movement snapshot: carded rooms', () => {
   function riderOnFloor1(): MovementSim {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) sim.tick() // walk to the west landing
+    sim.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) sim.tick() // walk to the east landing
     sim.stopMove('p1')
     sim.callElevator('p1') // parked-car press: doors open, then boards (AD-025/026)
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p1').car === null; i++) sim.tick()
@@ -1547,7 +1287,7 @@ describe('movement snapshot: carded rooms', () => {
     sim.pressFloor('p1', 'floor1')
     for (let i = 0; i < DWELL_TICKS + DOOR_TICKS + 2 * RIDE_TICKS_PER_FLOOR - 1; i++) sim.tick()
     for (let i = 0; i < DOOR_TICKS; i++) sim.tick() // the doors finish opening
-    sim.startMove('p1', 'right') // exit at the floor1 landing
+    sim.startMove('p1', 'left') // exit at the floor1 landing
     for (let i = 0; i < 5 && sim.viewOf('p1').car !== null; i++) sim.tick()
     return sim
   }
@@ -1569,8 +1309,8 @@ describe('movement snapshot: carded rooms', () => {
     // passes a set (the rider policy wins, AD-009).
     const riding = new MovementSim()
     riding.join('p1')
-    riding.startMove('p1', 'left')
-    for (let i = 0; i < 50; i++) riding.tick() // walk to the west landing
+    riding.startMove('p1', 'right')
+    for (let i = 0; i < 50; i++) riding.tick() // walk to the east landing
     riding.stopMove('p1')
     riding.callElevator('p1') // parked-car press: doors open, then boards (AD-025/026)
     for (let i = 0; i <= DOOR_TICKS && riding.viewOf('p1').car === null; i++) riding.tick()
@@ -1585,6 +1325,7 @@ describe('movement snapshot: carded rooms', () => {
 // in rider knowledge. Guests are never in player rows or player:* events.
 describe('sim:guest_movers', () => {
   const DESK_X = TUNING.DESK_X_TILES * 1000
+  const LANDING_X = HALL_LENGTH_TILES * 1000
 
   it('a guest walking emits guest:moved — never player:moved (GUEST-06)', () => {
     const sim = new MovementSim()
@@ -1618,10 +1359,10 @@ describe('sim:guest_movers', () => {
   it('a guest boarding counts toward capacity and rides in rider knowledge (GUEST-07)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: 0 })
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: LANDING_X })
     sim.join('p2')
     sim.tick()
-    // The guest boards car 1 via the parked-car landing press (AD-025).
+    // The guest boards the car via the parked-car landing press (AD-025).
     sim.callElevator('guest:1')
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('guest:1').car === null; i++) sim.tick()
     expect(sim.viewOf('guest:1').car).toBe(1)
@@ -1629,12 +1370,12 @@ describe('sim:guest_movers', () => {
     expect(sim.guestIds()).toEqual(['guest:1'])
     // p2 presses at the same landing: the car has 1 guest + 0 players = room
     // for one more; a third candidate would be declined silently.
-    sim.join('p2', { floor: 'lobby', xMilli: 0 })
+    sim.join('p2', { floor: 'lobby', xMilli: LANDING_X })
     sim.callElevator('p2')
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('p2').car === null; i++) sim.tick()
     expect(sim.viewOf('p2').car).toBe(1)
     // Now the car is full (1 player + 1 guest = capacity 2): a third press declines.
-    sim.join('p3', { floor: 'lobby', xMilli: 0 })
+    sim.join('p3', { floor: 'lobby', xMilli: LANDING_X })
     const before = sim.viewOf('p3')
     sim.callElevator('p3')
     for (let i = 0; i <= DOOR_TICKS + 2; i++) sim.tick()
@@ -1643,8 +1384,8 @@ describe('sim:guest_movers', () => {
 
   it('riders learn about a guest co-rider via elevator:riders guests — absent when none', () => {
     const sim = new MovementSim()
-    sim.join('p1', { floor: 'lobby', xMilli: 0 })
-    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: 0 })
+    sim.join('p1', { floor: 'lobby', xMilli: LANDING_X })
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: LANDING_X })
     sim.tick()
     sim.callElevator('guest:1')
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('guest:1').car === null; i++) sim.tick()
@@ -1665,7 +1406,7 @@ describe('sim:guest_movers', () => {
   it('a rider snapshot with no guests aboard keeps the pre-3.1 shape (no guests key)', () => {
     const sim = new MovementSim()
     sim.join('p1')
-    boardParkedCar(sim, 'p1', 1)
+    boardParkedCar(sim, 'p1')
     const snap = sim.snapshotFor('p1')
     expect(snap.carOccupants).toBeDefined()
     expect(snap.carOccupants?.guests).toBeUndefined()
@@ -1674,8 +1415,8 @@ describe('sim:guest_movers', () => {
 
   it('a guest press in-car queues silently — no elevator:pressed testimony event', () => {
     const sim = new MovementSim()
-    sim.join('p1', { floor: 'lobby', xMilli: 0 })
-    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: 0 })
+    sim.join('p1', { floor: 'lobby', xMilli: LANDING_X })
+    sim.join('guest:1', { kind: 'guest', floor: 'lobby', xMilli: LANDING_X })
     sim.tick()
     sim.callElevator('guest:1')
     for (let i = 0; i <= DOOR_TICKS && sim.viewOf('guest:1').car === null; i++) sim.tick()
@@ -1687,5 +1428,75 @@ describe('sim:guest_movers', () => {
     // The queue still holds the floor (visible via the riders payload).
     const snap = sim.snapshotFor('p1')
     expect(snap.carOccupants?.queue).toEqual(['floor2'])
+  })
+})
+
+// --- Cycle 3.E (AD-040): the single-car collapse. sim:stairs_one_car pins:
+// exactly one car in state/snapshots/payloads, its landing at the EAST end,
+// and the west end free of any elevator interaction.
+describe('sim:stairs_one_car', () => {
+  it('reports exactly one car in carFloors, floor snapshots, and rider snapshots (STAIRS-01)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    sim.tick()
+    expect(sim.carFloors()).toEqual([{ car: 1, floor: 'lobby' }])
+    expect(sim.snapshotForFloor('lobby').cars).toEqual([{ car: 1, floor: 'lobby' }])
+    boardParkedCar(sim, 'p1')
+    expect(sim.pressFloor('p1', 'floor2')).toBe('accepted')
+    expect(sim.snapshotFor('p1').cars).toEqual([{ car: 1, floor: 'lobby' }])
+    expect(sim.snapshotFor('p2').cars).toEqual([{ car: 1, floor: 'lobby' }])
+    // No payload anywhere ever names car 2.
+    sim.tick()
+  })
+
+  it("the car's landing is the EAST end; the west end is never an elevator landing (STAIRS-01, AD-040)", () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    // A caller at the west end (where the stairwell now sits) summons the car
+    // as a MID-HALL caller: the car dispatches to the lobby from wherever it
+    // is — no landing-pin semantics apply at x=0.
+    sim.startMove('p1', 'left')
+    for (let i = 0; i < 60; i++) sim.tick()
+    sim.stopMove('p1')
+    expect(lastX(sim, 'p1')).toBe(0)
+    // The car is parked at the pickup floor (the lobby) with no other car:
+    // AD-019's mid-hall degenerate — the decoy flash, never a dispatch. The
+    // caller walks east and boards through the landing press.
+    expect(sim.callElevator('p1')).toBe('ignored')
+    expect(sim.tick().filter((e) => e.type === 'elevator:called')).toEqual([
+      { type: 'elevator:called', floor: 'lobby', car: 1 },
+    ])
+    for (let i = 0; i < 100; i++) {
+      expect(carEvents(sim.tick()).some((e) => e.type === 'elevator:moved')).toBe(false)
+    }
+    // The east landing is the boarding zone: a caller there with the parked
+    // car boards through the landing press (AD-025).
+    boardParkedCar(sim, 'p2')
+    expect(sim.viewOf('p2').car).toBe(1)
+  })
+
+  it('every elevator event names car 1 only (STAIRS-02)', () => {
+    const sim = new MovementSim()
+    sim.join('p1')
+    sim.join('p2')
+    boardParkedCar(sim, 'p1')
+    expect(sim.pressFloor('p1', 'floor1')).toBe('accepted')
+    boardParkedCar(sim, 'p2')
+    expect(sim.pressFloor('p2', 'floor3')).toBe('accepted')
+    const seen: MovementEvent[] = []
+    for (let i = 0; i < 500; i++) seen.push(...sim.tick())
+    for (const e of seen) {
+      if (
+        e.type === 'elevator:called' ||
+        e.type === 'elevator:moved' ||
+        e.type === 'elevator:doors' ||
+        e.type === 'elevator:pressed' ||
+        e.type === 'elevator:riders'
+      ) {
+        expect(e.car).toBe(1)
+      }
+    }
   })
 })
