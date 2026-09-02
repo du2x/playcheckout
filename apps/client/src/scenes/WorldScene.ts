@@ -36,7 +36,7 @@ import type { SceneAction } from '../state'
 import { setCarScreenDoors, setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
 import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
-import { type StairAnchor, stairPhaseReadout } from '../ui/stairScreen'
+import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
 import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
 
 /**
@@ -1803,6 +1803,7 @@ export class WorldScene extends Phaser.Scene {
         doorClock !== undefined ? doorsOpenAmount(doorClock, DEFAULT_ANIMATION_CONFIG) : 0
       setCarScreenDoors(amount)
     }
+    syncStairScreen(this.stairsAnchor, Date.now())
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
     if (this.stairMarker !== null) {

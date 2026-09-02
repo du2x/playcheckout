@@ -61,20 +61,18 @@ const STYLE_ID = 'elevator-stair-screen-styles'
 
 const STYLE = `
 #elevator-stair-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at center, rgba(10, 16, 24, 0.9) 0%, rgba(4, 7, 11, 0.985) 100%);
+  position: relative;
+  z-index: 5;
   display: flex;
-  align-items: center;
   justify-content: center;
+  margin: 16px 0;
   pointer-events: none;
+  background: transparent;
 }
 #elevator-stair-screen[hidden] { display: none; }
 .stair-screen-inner {
-  min-width: 320px;
+  min-width: 340px;
+  max-width: 420px;
   background: linear-gradient(180deg, #1b2530 0%, #131b24 60%, #0f161e 100%);
   border: 1px solid #7a6a42;
   border-radius: 14px;

@@ -2,6 +2,7 @@ import { clockRemainingMs, type ViewState } from '../state'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { buildStairScreen } from './stairScreen'
 
 /**
  * Round HUD (LIGHT-09..12): countdown clock from the round:started receipt
@@ -58,8 +59,10 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       ]),
       // In-car screen (AD-013): floor buttons over the world while riding —
       // lit = queued or being served; synced by the App from the rider session.
-      // Elevator-only: the stairwell screen is hidden — the lift is the star.
       buildCarScreen(),
+      // Stairwell screen (AD-040): same inline HUD treatment as the lift —
+      // visible only while the local player is in the west stairwell.
+      buildStairScreen(),
       // Accusation HUD (cycle 2.8): firing toasts + fired banner.
       buildAccuseHud(),
       // Work channels (cycle 2.5): the own progress bar (world scene drives

@@ -2,6 +2,7 @@ import type { LobbySnapshot } from '@turnover/shared'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { buildStairScreen } from './stairScreen'
 
 /**
  * Lobby view (LIGHT-05..08): roster names, host marker, start control for the
@@ -74,8 +75,9 @@ export function renderLobby(
         el('span', { id: 'elevator-press' }, []),
       ]),
       // In-car screen (AD-013): rides are possible pre-round (AD-011).
-      // Elevator-only: the lift is the star.
       buildCarScreen(),
+      // Stairwell screen (AD-040): same inline treatment as the lift.
+      buildStairScreen(),
       // Accusation HUD (cycle 2.8): firing toasts + fired banner ride in both
       // views so a firing is visible wherever the player is looking.
       buildAccuseHud(),
