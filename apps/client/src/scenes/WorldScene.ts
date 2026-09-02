@@ -176,6 +176,12 @@ export class WorldScene extends Phaser.Scene {
   } | null = null
   private elevatorCanvasOccupants: Phaser.GameObjects.Container | null = null
   private elevatorCanvasButtons = new Map<FloorId, Phaser.GameObjects.Rectangle>()
+  /** Phaser canvas stairwell interior — full-screen when in the west stairwell. */
+  private stairCanvas: Phaser.GameObjects.Container | null = null
+  private stairCanvasClock: Phaser.GameObjects.Text | null = null
+  private stairCanvasRoute: Phaser.GameObjects.Text | null = null
+  private stairCanvasPhase: Phaser.GameObjects.Text | null = null
+  private stairCanvasArrow: Phaser.GameObjects.Text | null = null
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
@@ -347,6 +353,7 @@ export class WorldScene extends Phaser.Scene {
     // Fresh presenter per scene restart (its constructor resets both clocks).
     this.elevatorPresenter = new ElevatorPresenter(this.cars, (car) => this.carLaneY(car))
     this.createElevatorCanvasInterior()
+    this.createStairCanvasInterior()
 
     const keyboard = this.input.keyboard
     if (keyboard !== null) {
@@ -520,6 +527,130 @@ export class WorldScene extends Phaser.Scene {
     const hue = hash % 360
     const c = Phaser.Display.Color.HSLToColor(hue / 360, 0.58, 0.5)
     return (c.red << 16) | (c.green << 8) | c.blue
+  }
+
+  private createStairCanvasInterior(): void {
+    const container = this.add.container(480, 288)
+    container.setScrollFactor(0)
+    container.setDepth(100)
+    container.setVisible(false)
+    const bg = this.add.rectangle(0, 0, 960, 576, 0x0f1419)
+    container.add(bg)
+    const panelBg = this.add.rectangle(0, 0, 420, 260, 0x1b2530)
+    panelBg.setStrokeStyle(3, 0x8a6a2e)
+    container.add(panelBg)
+    const title = this.add.text(-160, -105, 'STAIRWELL', {
+      fontSize: '10px',
+      color: '#8899aa',
+      fontFamily: 'monospace',
+    })
+    title.setOrigin(0, 0.5)
+    container.add(title)
+    const dirLabel = this.add.text(160, -105, '', {
+      fontSize: '10px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    dirLabel.setOrigin(1, 0.5)
+    dirLabel.setName('stairDir')
+    container.add(dirLabel)
+    const clock = this.add.text(0, -50, '', {
+      fontSize: '48px',
+      color: '#ffd98a',
+      fontFamily: 'monospace',
+    })
+    clock.setOrigin(0.5)
+    clock.setName('stairClock')
+    container.add(clock)
+    this.stairCanvasClock = clock
+    const route = this.add.text(0, -10, '', {
+      fontSize: '12px',
+      color: '#9fb0c0',
+      fontFamily: 'monospace',
+    })
+    route.setOrigin(0.5)
+    route.setName('stairRoute')
+    container.add(route)
+    this.stairCanvasRoute = route
+    const phase = this.add.text(0, 10, '', {
+      fontSize: '11px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    phase.setOrigin(0.5)
+    phase.setName('stairPhase')
+    container.add(phase)
+    this.stairCanvasPhase = phase
+    const arrow = this.add.text(0, 40, '', {
+      fontSize: '32px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    arrow.setOrigin(0.5)
+    arrow.setName('stairArrow')
+    container.add(arrow)
+    this.stairCanvasArrow = arrow
+    const hint = this.add.text(0, 95, 'slow · unobserved · staff only', {
+      fontSize: '9px',
+      color: '#556677',
+      fontFamily: 'monospace',
+    })
+    hint.setOrigin(0.5)
+    container.add(hint)
+    this.stairCanvas = container
+  }
+
+  private syncStairCanvas(): void {
+    if (this.stairCanvas === null) return
+    const anchor = this.stairsAnchor
+    if (anchor === null) {
+      this.stairCanvas.setVisible(false)
+      return
+    }
+    const readout = stairPhaseReadout(anchor, Date.now())
+    if (readout === null) {
+      this.stairCanvas.setVisible(false)
+      return
+    }
+    this.stairCanvas.setVisible(true)
+    const dir = anchor.to === anchor.from ? 'up' : anchor.to > anchor.from ? 'up' : 'down'
+    // Use building order for correct up/down
+    const dir2 = (() => {
+      const order = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as const
+      return order.indexOf(anchor.to) > order.indexOf(anchor.from) ? 'up' : 'down'
+    })()
+    if (this.stairCanvasClock !== null) {
+      this.stairCanvasClock.setText(`${Math.ceil(readout.remainingMs / 1000)}s`)
+      this.stairCanvasClock.setColor(readout.phase === 'stunned' ? '#ff9a8a' : '#ffd98a')
+    }
+    if (this.stairCanvasRoute !== null) {
+      const fromLabel =
+        anchor.from === 'lobby' ? 'L' : anchor.from === 'mezzanine' ? 'M' : anchor.from.slice(-1)
+      const toLabel =
+        anchor.to === 'lobby' ? 'L' : anchor.to === 'mezzanine' ? 'M' : anchor.to.slice(-1)
+      this.stairCanvasRoute.setText(`${fromLabel} → ${toLabel}`)
+    }
+    if (this.stairCanvasPhase !== null) {
+      const labels: Record<string, string> = {
+        transit: 'moving',
+        breath: 'catching breath',
+        stunned: 'stunned',
+      }
+      this.stairCanvasPhase.setText(labels[readout.phase] ?? readout.phase)
+      this.stairCanvasPhase.setColor(
+        readout.phase === 'breath'
+          ? '#8ad07a'
+          : readout.phase === 'stunned'
+            ? '#ff7a6a'
+            : '#e6c56a',
+      )
+    }
+    if (this.stairCanvasArrow !== null) {
+      this.stairCanvasArrow.setText(dir2 === 'up' ? '▲' : '▼')
+      this.stairCanvasArrow.setColor(readout.phase === 'stunned' ? '#ff7a6a' : '#e6c56a')
+    }
+    const dirLabel = this.stairCanvas.getByName('stairDir') as Phaser.GameObjects.Text | null
+    if (dirLabel !== null) dirLabel.setText(dir2 === 'up' ? '▲ up' : '▼ down')
   }
 
   /** Send work:start when the own predicted position is inside a segment. */
@@ -1958,6 +2089,7 @@ export class WorldScene extends Phaser.Scene {
       setCarScreenDoors(amount)
     }
     this.syncElevatorCanvas()
+    this.syncStairCanvas()
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
     if (this.stairMarker !== null) {
