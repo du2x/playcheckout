@@ -65,19 +65,20 @@ const STYLE_ID = 'elevator-car-screen-styles'
 const STYLE = `
 #elevator-car-screen {
   position: fixed;
-  inset: 0;
-  z-index: 30;
+  top: 72px;
+  right: 16px;
+  width: 380px;
+  z-index: 5;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   pointer-events: none;
   background: transparent;
 }
 #elevator-car-screen[hidden] { display: none; }
 .car-screen-inner {
   pointer-events: auto;
-  min-width: 340px;
-  max-width: 420px;
+  width: 100%;
+  min-width: 0;
   background: linear-gradient(180deg, #1b2530 0%, #131b24 60%, #0f161e 100%);
   border: 1px solid #7a6a42;
   border-radius: 14px;
