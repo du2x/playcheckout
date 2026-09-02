@@ -506,7 +506,7 @@ export class WorldScene extends Phaser.Scene {
         const headColor = this.occupantColor(name)
         const head = this.add.circle(x, 0, 10, headColor)
         const body = this.add.rectangle(x, 18, 20, 14, 0x2a3a4a)
-        const label = this.add.text(x, 32, name.slice(0, 6), {
+        const label = this.add.text(x, 32, name.slice(0, 5 + 1), {
           fontSize: '8px',
           color: isYou(name) ? '#ffd98a' : '#dfe8f2',
           fontFamily: 'monospace',
