@@ -179,6 +179,7 @@ describe('round-end reducer', () => {
       entries: [],
       settleScore: null,
       settleTarget: null,
+      complaints: null,
     })
   })
 

@@ -30,6 +30,8 @@ export interface ResultsState {
    *  (an aborted round has no recap and no verdict inputs). */
   settleScore: number | null
   settleTarget: number | null
+  /** The complaint budget input (cycle 3.3, FR-31) — null until round:recap. */
+  complaints: number | null
 }
 
 export interface ViewState {
@@ -326,6 +328,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
           entries: state.results?.entries ?? [],
           settleScore: null,
           settleTarget: null,
+          complaints: null,
         },
       }
     case 'round-recap':
@@ -339,6 +342,7 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
                 entries: action.entries,
                 settleScore: action.settleScore,
                 settleTarget: action.settleTarget,
+                complaints: action.complaints,
               },
       }
     case 'round-resumed':

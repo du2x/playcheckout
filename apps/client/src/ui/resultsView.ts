@@ -46,6 +46,20 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
   } else {
     scoreLine.setAttribute('hidden', '')
   }
+  // The complaint budget input (cycle 3.3, FR-31): final complaints vs the
+  // §7 budget and the budget-exhausted reason (COMP-25).
+  const complaintsLine = el('p', { id: 'results-complaints' })
+  if (results !== null && results.complaints !== null) {
+    complaintsLine.textContent = `complaints ${results.complaints} / 8`
+  } else {
+    complaintsLine.setAttribute('hidden', '')
+  }
+  const reasonLine = el('p', { id: 'results-reason' })
+  if (results?.reason === 'budget-exhausted') {
+    reasonLine.textContent = 'Complaint budget exhausted — 8 complaints'
+  } else {
+    reasonLine.setAttribute('hidden', '')
+  }
   const recapList = el(
     'ul',
     { id: 'recap-list' },
@@ -63,6 +77,8 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
       banner,
       traitorLine,
       scoreLine,
+      complaintsLine,
+      reasonLine,
       el('h3', {}, ['recap']),
       recapList,
       startButton,

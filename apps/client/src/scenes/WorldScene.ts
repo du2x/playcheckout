@@ -34,6 +34,7 @@ import {
 import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
 import { setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
+import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
 import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
 import { ElevatorPresenter } from './elevatorPresenter'
@@ -145,6 +146,13 @@ export class WorldScene extends Phaser.Scene {
    *  public guest:settled stream; DOM lives with the other HUD layers. */
   private scoreHud: ScoreHud = new ScoreHud(0)
   private scoreHudEl: HTMLElement | null = null
+  /** The complaint-budget HUD (cycle 3.3, FR-31/FR-14): the budget counter
+   *  over the public guest:discovered stream; pulses when nearing the budget. */
+  private complaintHud: ComplaintHud = new ComplaintHud(TUNING.COMPLAINT_BUDGET)
+  private complaintHudEl: HTMLElement | null = null
+  /** In-world anger cues (cycle 3.3, FR-29b stage 1): short-lived Text "!" at
+   *  the room door — sameFloor only — TTL-bound and pruned per frame. */
+  private angerCues: { view: Phaser.GameObjects.Text; until: number; floor: FloorId }[] = []
   /** Suitcase markers (cycle 3.B, SUI-24): one Rectangle per suitcase —
    *  carried rides the carrier, rest pins the doorway (never a Sprite —
    *  scene-children contract). */
@@ -739,12 +747,39 @@ export class WorldScene extends Phaser.Scene {
         // their own: they are mid-transit, anchored by their snapshot.
         this.showAmbushConfirm(action.victimId)
         break
-      case 'guest-angered':
-      case 'guest-discovered':
-        // Cycle 3.3 (FR-29b): the anger cue + desk-report line land with the
-        // complaint client slice (T4) — the reducer routes them here as scene
-        // display state; no render exists yet.
+      case 'guest-angered': {
+        // FR-29(b) stage 1: in-world anger cue at the room — room-number
+        // level, no detail — the guest storms out. SameFloor delivery is the
+        // transport gate; the client just renders the short-lived cue here.
+        const x = (roomDoorXMilli(action.room) / 1000) * TILE_PX
+        const y = this.laneY(action.floor) - 40
+        const cue = this.add.text(x, y, '!', {
+          fontSize: '28px',
+          color: '#ff3b30',
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 3,
+        })
+        cue.setOrigin(0.5, 0.5)
+        cue.setDepth(100)
+        cue.setVisible(this.spectator || action.floor === this.viewFloor)
+        this.angerCues.push({ view: cue, until: Date.now() + 2500, floor: action.floor })
+        this.beep(320)
         break
+      }
+      case 'guest-discovered': {
+        // FR-29(b) stage 2: the desk report — the walkie line with the
+        // fuzzy-timestamp flavor — and the budget counter tick. Wrong-delivery
+        // complaints (guest:complained above) never touch the counter.
+        const when = action.fresh ? 'maybe a minute ago' : 'a while ago now'
+        this.appendWalkieLine(
+          `a guest reports: someone hit ${action.floor}:${action.room} — ${when}`,
+        )
+        this.complaintHud.onDiscovered()
+        this.renderComplaintHud()
+        this.beep(220)
+        break
+      }
       default: {
         // Exhaustiveness: SceneAction covers every 'scene'-routed member of
         // ACTION_ROUTES; an unhandled one must fail the build, not slip.
@@ -1091,6 +1126,20 @@ export class WorldScene extends Phaser.Scene {
     score.textContent = this.scoreHud.render()
     gameEl.appendChild(score)
     this.scoreHudEl = score
+
+    const complaints = document.createElement('div')
+    complaints.id = 'complaint-hud'
+    complaints.style.position = 'absolute'
+    complaints.style.left = '8px'
+    complaints.style.top = '40px'
+    complaints.style.padding = '4px 8px'
+    complaints.style.fontSize = '13px'
+    complaints.style.color = '#ff8a8a'
+    complaints.style.background = 'rgba(20, 28, 34, 0.85)'
+    complaints.style.borderRadius = '4px'
+    complaints.textContent = this.complaintHud.render()
+    gameEl.appendChild(complaints)
+    this.complaintHudEl = complaints
 
     const assignment = document.createElement('div')
     assignment.id = 'suitcase-assignment'
@@ -1458,6 +1507,34 @@ export class WorldScene extends Phaser.Scene {
     if (this.scoreHudEl !== null) this.scoreHudEl.textContent = this.scoreHud.render()
   }
 
+  // --- Complaint-budget HUD (cycle 3.3, FR-31/FR-14): the budget counter lives
+  // in the scene because guest:discovered is scene-routed; App drives reset
+  // (fresh deal) and seed (reconnect re-store).
+
+  /** Fresh deal: zero the counter. */
+  resetComplaints(): void {
+    this.complaintHud.reset()
+    this.renderComplaintHud()
+  }
+
+  /** Reconnect re-store: re-seed to the server's truth (round:resumed). */
+  seedComplaints(count: number): void {
+    this.complaintHud.seed(count)
+    this.renderComplaintHud()
+  }
+
+  /** Round over: freeze at the final value — late reports are ignored. */
+  freezeComplaints(): void {
+    this.complaintHud.freeze()
+    this.renderComplaintHud()
+  }
+
+  private renderComplaintHud(): void {
+    if (this.complaintHudEl === null) return
+    this.complaintHudEl.textContent = this.complaintHud.render()
+    this.complaintHudEl.classList.toggle('pulse', this.complaintHud.pulsing)
+  }
+
   /** Short gray-box tone for audible cues; silent in environments without audio. */
   private beep(freq: number): void {
     try {
@@ -1648,6 +1725,20 @@ export class WorldScene extends Phaser.Scene {
     // The presenter drives every car's y (base lane + arrival slide) in tick.
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId, this.riderSession)
     this.syncGuests(delta)
+    // Anger cues (cycle 3.3, FR-29b stage 1): TTL-bound Text "!" at the room
+    // door — sameFloor visibility, pruned here so the harness pollution
+    // window stays short.
+    {
+      const now = Date.now()
+      this.angerCues = this.angerCues.filter((cue) => {
+        if (now >= cue.until) {
+          cue.view.destroy()
+          return false
+        }
+        cue.view.setVisible(this.spectator || cue.floor === this.viewFloor)
+        return true
+      })
+    }
     this.syncSuitcases()
     this.syncDesk()
     // Card glyph position/visibility follow the floor lanes; cues expire here.

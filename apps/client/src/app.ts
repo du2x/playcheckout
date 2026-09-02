@@ -145,11 +145,19 @@ export class App {
             this.world()?.resetEvidence()
             // The settle counter restarts against the new lobby's target (3.D).
             this.world()?.resetScore(settleTargetFor(action.playerIds.length))
+            // The complaint counter restarts against the §7 budget (3.3).
+            this.world()?.resetComplaints()
           }
-          // Reconnect re-store: re-seed the counter to the server's truth (3.D).
-          if (action.type === 'round-resumed') this.world()?.seedScore(action.settleScore)
-          // Round over: freeze the counter at its final value (3.D).
-          if (action.type === 'round-ended') this.world()?.freezeScore()
+          // Reconnect re-store: re-seed the counters to the server's truth.
+          if (action.type === 'round-resumed') {
+            this.world()?.seedScore(action.settleScore)
+            this.world()?.seedComplaints(action.complaints)
+          }
+          // Round over: freeze the counters at their final values.
+          if (action.type === 'round-ended') {
+            this.world()?.freezeScore()
+            this.world()?.freezeComplaints()
+          }
         }
         if (viewChanged) this.render()
       },

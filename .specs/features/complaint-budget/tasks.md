@@ -191,7 +191,7 @@ by value in the room tests.
 
 ---
 
-### T4: Complaint HUD, desk-report lines, anger cues (client)
+### T4: Complaint HUD, desk-report lines, anger cues (client) — DONE
 
 **What**: Pure `ComplaintHud` presenter (onDiscovered/seed/reset/freeze,
 `Complaints N / 8`, pulse at ≥6 per FR-14); map `guest:angered`/`guest:discovered`
