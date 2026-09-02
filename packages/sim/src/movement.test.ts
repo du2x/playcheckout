@@ -1703,3 +1703,201 @@ describe('sim:stairs_transit', () => {
     expect(sim.viewOf('p1').floor).toBe('lobby')
   })
 })
+
+// --- Cycle 3.E (AD-040): the saboteur ambush. sim:stairs_ambush pins the
+// automatic anonymous stun on an opposite-direction stairs pass: trigger,
+// 20 s stun with resume-to-destination, victim payload anonymity, every
+// inert case, no limiter, and the zero-complaint kill check.
+
+const STUN_TICKS = TUNING.STAIRS_STUN_SECONDS * TICK_HZ
+
+/** Saboteur transiting up from floor1, staff victim transiting down from floor2.
+ *  The ambush fires on the FIRST tick after both intents land — tests collect
+ *  from that tick. */
+function joinOppositePair(sim: MovementSim): void {
+  sim.join('sab', { floor: 'floor1', xMilli: 0 })
+  sim.join('victim', { floor: 'floor2', xMilli: 0 })
+  sim.setAmbushAuthority({
+    isSaboteur: (id) => id === 'sab',
+    isLiveStaff: (id) => id === 'victim' || id === 'staff2',
+  })
+  expect(sim.enterStairs('sab', 'up')).toBe('entered')
+  expect(sim.enterStairs('victim', 'down')).toBe('entered')
+}
+
+describe('sim:stairs_ambush', () => {
+  it('stuns the opposing live staff for STAIRS_STUN_SECONDS (STAIRS-12)', () => {
+    const sim = new MovementSim()
+    joinOppositePair(sim)
+    const events = [...sim.tick()] // tick 1: the ambush fires
+    expect(events).toContainEqual({
+      type: 'stairs:ambushed',
+      playerId: 'victim',
+      stunSeconds: TUNING.STAIRS_STUN_SECONDS,
+    })
+    expect(events).toContainEqual({ type: 'stairs:ambush', playerId: 'sab', victimId: 'victim' })
+    expect(sim.stairsStateOf('victim')).toMatchObject({ phase: 'stunned' })
+    // The stun holds for exactly 400 ticks: still stunned at 400.
+    for (let i = 0; i < STUN_TICKS - 1; i++) sim.tick()
+    expect(sim.stairsStateOf('victim')?.phase).toBe('stunned')
+    sim.tick()
+    expect(sim.stairsStateOf('victim')?.phase).toBe('transit') // resumed
+  })
+
+  it('resumes the interrupted transit to the intended floor with the normal breath (STAIRS-13)', () => {
+    const sim = new MovementSim()
+    joinOppositePair(sim)
+    const events = [...sim.tick()] // tick 1: the ambush fires
+    expect(events.some((e) => e.type === 'stairs:ambushed')).toBe(true)
+    const remaining = sim.stairsStateOf('victim')?.transitTicksLeft ?? -1
+    expect(remaining).toBe(TUNING.STAIRS_TRANSIT_SECONDS * TICK_HZ - 1)
+    for (let i = 0; i < STUN_TICKS - 1; i++) sim.tick()
+    expect(sim.stairsStateOf('victim')?.phase).toBe('stunned')
+    sim.tick() // the stun ends: the transit resumes
+    expect(sim.stairsStateOf('victim')).toMatchObject({ phase: 'transit', to: 'floor1' })
+    expect(sim.stairsStateOf('victim')?.ticksLeft ?? -1).toBe(remaining)
+    for (let i = 0; i < remaining; i++) sim.tick()
+    expect(sim.positionOf('victim')).toMatchObject({ floor: 'floor1', x: 0 })
+    expect(sim.stairsStateOf('victim')?.phase).toBe('breath')
+  })
+
+  it('names nobody in the victim payload — anonymity is exact (STAIRS-14)', () => {
+    const sim = new MovementSim()
+    joinOppositePair(sim)
+    const events = [...sim.tick()]
+    const ambushed = events.find((e) => e.type === 'stairs:ambushed')
+    expect(ambushed).toBeDefined()
+    expect(Object.keys(ambushed as object).sort()).toEqual(['playerId', 'stunSeconds', 'type'])
+    // The saboteur's own confirmation is the only place the pair is named.
+    const confirm = events.find((e) => e.type === 'stairs:ambush')
+    expect(confirm).toMatchObject({ playerId: 'sab', victimId: 'victim' })
+  })
+
+  it('is inert for two staff members passing in opposite directions (STAIRS-15)', () => {
+    const sim = new MovementSim()
+    sim.join('a', { floor: 'floor1', xMilli: 0 })
+    sim.join('b', { floor: 'floor2', xMilli: 0 })
+    sim.setAmbushAuthority({ isSaboteur: () => false, isLiveStaff: () => true })
+    sim.enterStairs('a', 'up')
+    sim.enterStairs('b', 'down')
+    for (let i = 0; i < 10; i++) {
+      expect(sim.tick().some((e) => e.type.startsWith('stairs:'))).toBe(false)
+    }
+    expect(sim.stairsStateOf('a')?.phase).toBe('transit')
+  })
+
+  it('is inert for a same-direction pass, a stationary pair, and an unset authority (STAIRS-15)', () => {
+    // Same direction.
+    const same = new MovementSim()
+    same.join('sab', { floor: 'floor1', xMilli: 0 })
+    same.join('victim', { floor: 'floor2', xMilli: 0 })
+    same.setAmbushAuthority({ isSaboteur: (id) => id === 'sab', isLiveStaff: () => true })
+    same.enterStairs('sab', 'up')
+    same.enterStairs('victim', 'up')
+    for (let i = 0; i < 10; i++) {
+      expect(same.tick().some((e) => e.type.startsWith('stairs:'))).toBe(false)
+    }
+    // Stationary: the victim is mid-breath when the saboteur's transit begins.
+    const still = new MovementSim()
+    still.join('victim', { floor: 'floor1', xMilli: 0 })
+    still.setAmbushAuthority({ isSaboteur: (id) => id === 'sab', isLiveStaff: () => true })
+    still.enterStairs('victim', 'up')
+    for (let i = 0; i < 60; i++) still.tick() // victim arrives, breathes
+    still.join('sab', { floor: 'floor2', xMilli: 0 })
+    still.enterStairs('sab', 'down')
+    for (let i = 0; i < 10; i++) {
+      expect(still.tick().some((e) => e.type.startsWith('stairs:'))).toBe(false)
+    }
+    // Authority unset (pre-round / results): the pair is inert.
+    const unset = new MovementSim()
+    unset.join('sab', { floor: 'floor1', xMilli: 0 })
+    unset.join('victim', { floor: 'floor2', xMilli: 0 })
+    unset.enterStairs('sab', 'up')
+    unset.enterStairs('victim', 'down')
+    for (let i = 0; i < 10; i++) {
+      expect(unset.tick().some((e) => e.type.startsWith('stairs:'))).toBe(false)
+    }
+  })
+
+  it('spares a fired or ghosted victim (isLiveStaff false) and a guest (STAIRS-15)', () => {
+    const sim = new MovementSim()
+    sim.join('sab', { floor: 'floor1', xMilli: 0 })
+    sim.join('fired', { floor: 'floor2', xMilli: 0 })
+    sim.setAmbushAuthority({
+      isSaboteur: (id) => id === 'sab',
+      isLiveStaff: () => false, // fired/ghosted: invisible to the trigger
+    })
+    sim.enterStairs('sab', 'up')
+    sim.enterStairs('fired', 'down')
+    for (let i = 0; i < 10; i++) {
+      expect(sim.tick().some((e) => e.type.startsWith('stairs:'))).toBe(false)
+    }
+    // Guests can never enter stairs (T3 guard) — the trigger never sees one.
+  })
+
+  it('stuns every opposing staff member in the stride — no limiter (STAIRS-16)', () => {
+    const sim = new MovementSim()
+    sim.join('sab', { floor: 'floor1', xMilli: 0 })
+    sim.join('victim', { floor: 'floor2', xMilli: 0 })
+    sim.join('staff2', { floor: 'floor2', xMilli: 500 })
+    sim.setAmbushAuthority({
+      isSaboteur: (id) => id === 'sab',
+      isLiveStaff: (id) => id === 'victim' || id === 'staff2',
+    })
+    sim.enterStairs('sab', 'up')
+    sim.enterStairs('victim', 'down')
+    sim.enterStairs('staff2', 'down')
+    const events = [...sim.tick()]
+    expect(events.filter((e) => e.type === 'stairs:ambushed')).toHaveLength(2)
+    expect(events.filter((e) => e.type === 'stairs:ambush')).toHaveLength(2)
+    expect(sim.stairsStateOf('victim')?.phase).toBe('stunned')
+    expect(sim.stairsStateOf('staff2')?.phase).toBe('stunned')
+  })
+
+  it('fires again when the recovered victim passes the saboteur opposite once more (edge)', () => {
+    const sim = new MovementSim()
+    joinOppositePair(sim)
+    expect([...sim.tick()].some((e) => e.type === 'stairs:ambushed')).toBe(true)
+    for (let i = 0; i < STUN_TICKS + 200; i++) sim.tick() // stun out, both arrive + breathe
+    expect(sim.stairsStateOf('victim')).toBeUndefined()
+    expect(sim.stairsStateOf('sab')).toBeUndefined()
+    // Both re-enter from opposite floors, opposite directions: ambush #2.
+    expect(sim.enterStairs('victim', 'up')).toBe('entered')
+    expect(sim.enterStairs('sab', 'down')).toBe('entered')
+    const events = [...sim.tick()]
+    expect(events.filter((e) => e.type === 'stairs:ambushed')).toHaveLength(1)
+    expect(sim.stairsStateOf('victim')?.phase).toBe('stunned')
+  })
+
+  it('resolves every stairs occupant to their destination for the results (MOVE-18)', () => {
+    const sim = new MovementSim()
+    joinOppositePair(sim)
+    sim.tick() // the ambush fires; the victim is stunned mid-transit
+    sim.resolveStairsForResults()
+    expect(sim.stairsStateOf('victim')).toBeUndefined()
+    expect(sim.stairsStateOf('sab')).toBeUndefined()
+    // Stun cleared, no breath: both stand at their destination mouths, and
+    // the resumed stream re-announces them (facingDirty).
+    expect(sim.positionOf('victim')).toMatchObject({ floor: 'floor1', x: 0 })
+    expect(sim.positionOf('sab')).toMatchObject({ floor: 'floor2', x: 0 })
+    const events = sim.tick()
+    expect(
+      movedEvents(events)
+        .map((e) => e.playerId)
+        .sort(),
+    ).toEqual(['sab', 'victim'])
+  })
+
+  it('the ambush-only scenario records zero complaints — the kill check (STAIRS-21)', () => {
+    const sim = new MovementSim()
+    joinOppositePair(sim)
+    const seen: string[] = []
+    for (let i = 0; i < 60 + STUN_TICKS + 200; i++) seen.push(...sim.tick().map((e) => e.type))
+    // The ambush machinery's ONLY wire surface is the two stairs rows: the
+    // full visit emits no complaint/fired/loss-shaped event anywhere.
+    for (const type of new Set(seen)) {
+      expect(type).toMatch(/^(player:moved|player:left-floor|stairs:ambushed|stairs:ambush)$/)
+    }
+    expect(seen).toContain('stairs:ambushed')
+  })
+})

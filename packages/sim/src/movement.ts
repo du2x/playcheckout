@@ -119,6 +119,19 @@ export interface StairsState {
 }
 
 /**
+ * The room-injected role view (cycle 3.E, AD-040 design — the AD-028 adapter
+ * pattern inverted): ambush detection stays pure and role-blind between
+ * rounds. `isSaboteur` is true only for the round's live saboteur;
+ * `isLiveStaff` true for round players who are neither fired, ghosted, nor
+ * the saboteur. Both `false` whenever no round is active (the room clears
+ * the authority at results and never sets it pre-round).
+ */
+export interface AmbushAuthority {
+  isSaboteur(playerId: string): boolean
+  isLiveStaff(playerId: string): boolean
+}
+
+/**
  * Pending announce for the next tick (MOVE-10 pattern): call flashes (public)
  * and accepted in-car presses (rider-exclusive — routed by the `riders`
  * policy, AD-013). Single car (AD-040): `car` is always 1.
@@ -151,6 +164,9 @@ export class MovementSim {
    *  The interior is a black box — occupants are floorless (no stream, no
    *  floor snapshots, no spectator baseline rows) until they arrive. */
   private readonly stairs = new Map<string, StairsState>()
+  /** The ambush authority (cycle 3.E T4): null outside an active round —
+   *  no ambush pre-round or at results. */
+  private ambushAuthority: AmbushAuthority | null = null
 
   // --- roster / lifecycle -------------------------------------------------
 
@@ -344,10 +360,36 @@ export class MovementSim {
     return st === undefined ? undefined : { ...st }
   }
 
-  /** Advance every stairs occupant's phase clock one tick. (T4 wires the
-   *  stun/ambush checks here; arrival and breath emit nothing — the interior
-   *  is silent by design.) */
-  private tickStairs(_events: MovementEvent[]): void {
+  /**
+   * Set (or clear) the ambush authority — the room wires it at round start
+   * and clears it at results (T5). Null means no ambush can fire: the stairs
+   * are a plain transit pre-round and post-buzzer (spec assumption).
+   */
+  setAmbushAuthority(authority: AmbushAuthority | null): void {
+    this.ambushAuthority = authority
+  }
+
+  /**
+   * Buzzer / round-end resolution (design: MOVE-18 honest results positions):
+   * every stairs occupant — mid-transit, mid-breath, or stunned — is placed
+   * at their destination floor with the stun cleared and no breath. The
+   * resumed stream re-announces them next tick (facingDirty).
+   */
+  resolveStairsForResults(): void {
+    for (const [playerId, st] of this.stairs) {
+      const p = this.players.get(playerId)
+      if (p === undefined) continue
+      p.floor = st.to
+      p.x = 0
+      p.facingDirty = true
+    }
+    this.stairs.clear()
+  }
+
+  /** Advance every stairs occupant's phase clock one tick, then run the
+   *  ambush detection (design: checked every tick, AFTER the timers — a
+   *  player who arrived this tick is stationary and inert). */
+  private tickStairs(events: MovementEvent[]): void {
     for (const [playerId, st] of this.stairs) {
       if (st.phase === 'transit') {
         st.ticksLeft--
@@ -368,8 +410,48 @@ export class MovementSim {
       } else if (st.phase === 'breath') {
         st.ticksLeft--
         if (st.ticksLeft <= 0) this.stairs.delete(playerId) // free to act again
+      } else {
+        // Stunned (cycle 3.E T4): the transit is paused, its remainder
+        // preserved; the resume carries no breath — the breath comes at the
+        // real arrival.
+        st.stunTicksLeft--
+        if (st.stunTicksLeft <= 0) {
+          st.phase = 'transit'
+          st.ticksLeft = st.transitTicksLeft
+        }
       }
-      // 'stunned' ticks with the ambush authority (cycle 3.E T4).
+    }
+    this.detectAmbushes(events)
+  }
+
+  /**
+   * The ambush (STAIRS-12/14/16): for every opposing-transit pair where the
+   * authority says exactly one is the live saboteur and the other a live
+   * staff member, the staff member is stunned for STAIRS_STUN_SECONDS at the
+   * meeting point. Phase gating makes each pair single-fire per stride (a
+   * stunned player is out of `transit`); multiple opposing staff each
+   * trigger (no limiter). The victim payload names nobody but the victim;
+   * the saboteur's confirmation is their own private knowledge.
+   */
+  private detectAmbushes(events: MovementEvent[]): void {
+    const authority = this.ambushAuthority
+    if (authority === null) return
+    const transiting = [...this.stairs.entries()].filter(([, st]) => st.phase === 'transit')
+    for (const [saboteurId, sabState] of transiting) {
+      if (!authority.isSaboteur(saboteurId)) continue
+      for (const [victimId, victimState] of transiting) {
+        if (victimId === saboteurId || victimState.dir === sabState.dir) continue
+        if (!authority.isLiveStaff(victimId)) continue
+        victimState.phase = 'stunned'
+        victimState.transitTicksLeft = victimState.ticksLeft
+        victimState.stunTicksLeft = STAIRS_STUN_TICKS
+        events.push({
+          type: 'stairs:ambushed',
+          playerId: victimId,
+          stunSeconds: TUNING.STAIRS_STUN_SECONDS,
+        })
+        events.push({ type: 'stairs:ambush', playerId: saboteurId, victimId })
+      }
     }
   }
 
