@@ -148,6 +148,7 @@ describe('protocol registry', () => {
     'guest:complained': 'all',
     'guest:angered': 'sameFloor',
     'guest:discovered': 'all',
+    'room:tenancy': 'sameFloor',
     'elevator:called': 'all',
     'elevator:moved': 'all',
     'elevator:doors': 'all',
@@ -390,6 +391,17 @@ describe('protocol registry', () => {
     })
     expect(PROTOCOL_REGISTRY['guest:discovered'].recipients).toBe('all')
     expect(Object.keys(fresh.payload).sort()).toEqual(['floor', 'fresh', 'guestId', 'room'])
+  })
+
+  it('projects room:tenancy sameFloor at the door — hallway-visible tenancy flag (PROV-09)', () => {
+    const row = PROTOCOL_REGISTRY['room:tenancy']
+    expect(row.recipients).toBe('sameFloor')
+    const occ = row.fromSim({ type: 'room:tenancy', floor: 'floor1', room: 2, occupied: true })
+    expect(occ.payload).toEqual({ floor: 'floor1', room: 2, occupied: true })
+    expect(occ.visibility).toEqual({ floor: 'floor1' })
+    expect(Object.keys(occ.payload).sort()).toEqual(['floor', 'occupied', 'room'])
+    const vac = row.fromSim({ type: 'room:tenancy', floor: 'floor2', room: 5, occupied: false })
+    expect(vac.payload).toEqual({ floor: 'floor2', room: 5, occupied: false })
   })
 
   it('projects work events to the actor only — no kind, no role in any payload (FR-9)', () => {

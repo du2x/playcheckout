@@ -32,6 +32,7 @@ import type {
   RoomPrepped,
   RoomRustle,
   RoomSettled,
+  RoomTenancy,
   RoomTrashed,
   RoundBuzzer,
   RoundEnded,
@@ -144,6 +145,8 @@ export interface Payloads {
   /** server → all players. The FR-29(b) desk report — the ONLY budget-counting
    *  complaint (FR-31, cycle 3.3). */
   'guest:discovered': GuestDiscovered
+  /** server → same-floor viewers. Tenancy flip-sign per guest door (FR-33, cycle 3.4). */
+  'room:tenancy': RoomTenancy
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -394,6 +397,14 @@ export const PROTOCOL_REGISTRY = {
         fresh: event.fresh,
       },
     })) as SimProjection<'guest:discovered'>,
+  },
+  'room:tenancy': {
+    payload: {} as RoomTenancy,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { floor: event.floor, room: event.room, occupied: event.occupied },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'room:tenancy'>,
   },
   'elevator:called': {
     payload: {} as ElevatorCalled,

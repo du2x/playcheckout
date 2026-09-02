@@ -1032,6 +1032,10 @@ export class WorldScene extends Phaser.Scene {
         // their own: they are mid-transit, anchored by their snapshot.
         this.showAmbushConfirm(action.victimId)
         break
+      case 'room-tenancy':
+        // FR-33 (cycle 3.4): tenancy flip-sign per guest door — tenancy not
+        // presence. Minimal T1 plumbing; substantive overlay lands in T4.
+        break
       case 'guest-angered': {
         // FR-29(b) stage 1: in-world anger cue at the room — room-number
         // level, no detail — the guest storms out. SameFloor delivery is the

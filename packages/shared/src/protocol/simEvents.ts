@@ -156,6 +156,15 @@ export type SimEvent =
       readonly room: RoomIndex
       readonly fresh: boolean
     }
+  // --- Tenancy signs (cycle 3.4, FR-33): hallway-visible Occupied/Vacant
+  // flip-sign per guest door — tenancy not presence. Settle flips Occupied
+  // (sameFloor-visible); checkout or discovery departure flips Vacant.
+  | {
+      readonly type: 'room:tenancy'
+      readonly floor: FloorId
+      readonly room: RoomIndex
+      readonly occupied: boolean
+    }
 
 /**
  * Why a player was fired — server-internal only, never projected to the wire.

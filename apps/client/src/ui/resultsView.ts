@@ -24,6 +24,7 @@ const KIND_LABEL: Record<RecapEntry['kind'], string> = {
   catch: 'walk-in catch',
   accusation: 'accusation',
   ride: 'elevator ride',
+  complaint: 'complaint',
 }
 
 export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCallbacks): void {
@@ -88,9 +89,13 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
 }
 
 function describe(entry: RecapEntry, nameOf: (id: string) => string): string {
-  const floorRoom = entry.kind === 'crime' ? ` floor ${entry.floor} room ${entry.room}` : ''
+  const floorRoom = entry.kind === 'crime' || entry.kind === 'complaint' ? ` floor ${entry.floor} room ${entry.room}` : ''
   const freshness =
-    entry.kind === 'crime' ? (entry.fresh ? ' (evidence fresh)' : ' (evidence aged)') : ''
+    entry.kind === 'crime' || entry.kind === 'complaint'
+      ? entry.fresh
+        ? ' (evidence fresh)'
+        : ' (evidence aged)'
+      : ''
   switch (entry.kind) {
     case 'crime':
       return `${KIND_LABEL.crime}:${floorRoom} — trash dumped${freshness}`
@@ -101,6 +106,13 @@ function describe(entry: RecapEntry, nameOf: (id: string) => string): string {
     case 'ride': {
       const riders = entry.riderIds.map(nameOf)
       return `${KIND_LABEL.ride}: ${riders.length === 0 ? 'empty car' : riders.join(', ')} — ${entry.from} → ${entry.to}`
+    }
+    case 'complaint': {
+      const prov =
+        entry.provenance === 'sabotage'
+          ? `sabotage (by ${nameOf(entry.actorId ?? entry.guestId)})`
+          : 'checkout churn'
+      return `${KIND_LABEL.complaint}:${floorRoom} — ${prov}${freshness}`
     }
   }
 }

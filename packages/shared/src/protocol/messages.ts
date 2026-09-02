@@ -344,6 +344,17 @@ export interface MovementSnapshotSuitcase {
 }
 
 /**
+ * Tenancy sign row (cycle 3.4, FR-33): Occupied/Vacant flip-sign per guest
+ * door — tenancy, not presence. Hallway-visible (sameFloor-public); a
+ * resting suitcase has no effect on it, only settle/checkout/discovery.
+ */
+export interface RoomTenancy {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly occupied: boolean
+}
+
+/**
  * server → one player. Public movement state on join and at the buzzer (MOVE-18).
  * `carOccupants` is present ONLY in a rider's personal snapshot (AD-013):
  * viewers standing on a floor get the byte-identical public shape — occupancy
@@ -367,6 +378,12 @@ export interface MovementSnapshot {
    * baselines carry every floor's rows.
    */
   readonly suitcases?: readonly MovementSnapshotSuitcase[]
+  /**
+   * Tenancy signs of the snapshot's floor (cycle 3.4, FR-33) — sameFloor-
+   * public like cardedRooms; present ONLY when non-empty. Occupied/Vacant
+   * flip-sign per guest door, tenancy not presence.
+   */
+  readonly tenancies?: readonly RoomTenancy[]
   /**
    * The recipient's own stairs state (cycle 3.E, AD-040) — present ONLY while
    * the recipient is in the stairwell. Everyone else's stairs transit is
@@ -455,6 +472,18 @@ export interface RoomEntered {
 }
 
 /**
+ * server → same-floor viewers. Tenancy flip-sign per guest door (FR-33
+ * cycle 3.4): Occupied when a guest settles, Vacant on checkout/discovery
+ * departure. Hallway-visible (sameFloor), tenancy not presence, no actor,
+ * no provenance, no freshness — pure tenancy.
+ */
+export interface RoomTenancyPayload {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly occupied: boolean
+}
+
+/**
  * server → all players. A firing resolved (walk-in or accusation, either
  * verdict) — name-only (FR-18): no role, no reason, no validity flag. Why the
  * player was fired and whether the accusation was correct are revealed only on
@@ -515,6 +544,19 @@ export type RecapEntry =
       readonly from: FloorId
       readonly to: FloorId
     }
+  | {
+      readonly kind: 'complaint'
+      readonly tick: number
+      readonly floor: FloorId
+      readonly room: RoomIndex
+      readonly guestId: string
+      /** Freshness tier the discovering guest observed (same as guest:discovered.fresh). */
+      readonly fresh: boolean
+      /** Author dimension — sabotage vs checkout churn (FR-32). Revealed post-round only. */
+      readonly provenance: 'sabotage' | 'churn'
+      /** The saboteur's playerId when provenance is sabotage; absent on churn. */
+      readonly actorId?: string
+    }
 
 /** server → all players. The FR-22 recap timeline, emitted right after round:ended. */
 export interface RoundRecap {
@@ -526,6 +568,13 @@ export interface RoundRecap {
   /** Final trash-discovery complaint count (cycle 3.3, FR-31) — the budget
    *  loss leg's verdict input, public post-round. */
   readonly complaints: number
+}
+
+/** Tenancy sign row of the spectator baseline (FR-33, cycle 3.4). */
+export interface SpectatorTenancy {
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly occupied: boolean
 }
 
 /** One room-state row of the spectator baseline. */
@@ -551,6 +600,8 @@ export interface SpectatorSnapshot {
   readonly cars: readonly MovementSnapshotCar[]
   readonly rooms: readonly SpectatorRoomState[]
   readonly cardedRooms: readonly SpectatorCarded[]
+  /** Tenancy signs per room (FR-33, cycle 3.4) — full-building baseline, present only when non-empty. */
+  readonly tenancies?: readonly SpectatorTenancy[]
 }
 
 /**
