@@ -127,3 +127,26 @@ minute ago", aged churn → "a while ago now"). One complaint then the guest
 leaves the hotel, no retry. A guest who enters mid-un-prep flees along the
 same path (FR-30) and the complaint counts.
 _Avoid_: complaint creation, trash found, discovered
+
+**Trash provenance**:
+The author dimension on trash (FR-32, cycle 3.4): every `trashed`/`settled`
+room carries `sabotage` (fresh-tier un-prep, re-trash) or `churn` (checkout
+`settled`), `prepped`/`fresh` carry `none`. A `settled`+`churn` room laundered
+via staff prep → saboteur un-prep becomes `trashed`+`sabotage` (churn can be
+laundered into suspicious); a sabotage hit never downgrades to churn. Visible
+only inside the room (FR-10) while the round is live; the recap exposes the
+author per complaint post-reveal (sabotage names the actor, churn says checkout
+churn) — pre-round messages carry no provenance.
+_Avoid_: author tag, trash owner, dirt source
+
+**Tenancy sign**:
+The Occupied/Vacant flip-sign per guest door (FR-33, cycle 3.4): the building
+operates it automatically — Occupied when a guest settles, Vacant when they
+check out or leave after a trash-discovery complaint (the vacant-but-trashed
+footprint). Shows tenancy, not presence — a fled guest keeps the sign
+Occupied? No, discovery flips Vacant while the room stays trashed. Separate
+channel from FR-11 cards (card = prep history, sign = tenancy), neither
+timestamped. Hallway-visible sameFloor-public (the at-a-distance verifier for
+suitcase outcomes), seeded via the viewer's own `movement:snapshot`
+`tenancies` and the `spectator:snapshot` full baseline for fired players.
+_Avoid_: occupancy indicator, door occupancy, tenancy tag

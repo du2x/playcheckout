@@ -208,10 +208,10 @@ T5 → T6
 
 **Done when**:
 
-- [ ] CONTEXT.md entries follow term/definition/avoid-row format
-- [ ] AD-042 records every assumption the spec marked `n (assumed)` + the initial-7 seeding choice
-- [ ] Handoff names the next cycle and flags the 3.5 balance gate carryovers
-- [ ] Full ladder green: `pnpm typecheck && pnpm lint && pnpm test:sim && pnpm test:client`
+- [x] CONTEXT.md entries follow term/definition/avoid-row format
+- [x] AD-042 records every assumption the spec marked `n (assumed)` + the initial-7 seeding choice
+- [x] Handoff names the next cycle and flags the 3.5 balance gate carryovers
+- [x] Full ladder green: `pnpm typecheck && pnpm lint && pnpm test:sim && pnpm test:client`
 
 **Tests**: none
 **Gate**: build

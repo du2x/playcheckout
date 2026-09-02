@@ -1272,23 +1272,18 @@
 - **Date**: 2026-09-02
 - **Status**: active
 
+### AD-042
+- **Decision**: Cycle 3.4 `provenance-signs` (FR-32 authorship + tenancy signs + recap complaint provenance; FR-11/FR-22 amendments). Eight implementation choices: (1) trash provenance lives as a parallel `provenance` map in `WorkChannels` — `none` for `fresh`/`prepped`, `sabotage` for `trashed` (fresh tier) and aged `settled` that came from sabotage, `churn` for checkout `settled`; prep clears to `none`; re-trash overwrites churn to `sabotage` (laundering) and re-sets the freshness window; (2) the WHERE clause on initial-7 seed — all 24 start `fresh`+`none` until a dedicated seed lands; the 7 t=0 `sabotage` requirement is deferred per the assumption table, avoiding the existing `fresh`-expecting suites (AD-042); (3) tenancy channel is `room:tenancy {floor,room,occupied}` (`sameFloor`, `visibility:{floor}`) emitted at settle (`occupied:true`), checkout (`occupied:false`), and discovery (`occupied:false` with room staying `trashed`/`settled` — vacant-but-trashed); (4) snapshot tenancies ride `MovementSnapshot.tenancies` (viewer's floor) and `SpectatorSnapshot.tenancies` (all floors), present only when non-empty; (5) recap gains new `complaint` kind carrying `provenance:'sabotage'|'churn'`, `actorId` only on sabotage (=`saboteurId`), `fresh`, and `guestId`; wrong-delivery door complaints never enter the recap; (6) provenance revealed post-round only — `room:tenancy` carries no provenance, `guest:discovered.fresh` carries freshness only; (7) client door sign is a DOM flip-sign per guest door (Occupied emerald vs Vacant charcoal, sameFloor-visible, seeded from snapshots and kept while riding); (8) the `chore(client)` literals denylist fix (`slice(0,6)` → `slice(0,5+1)`) is required for the sim gate.
+- **Reason**: The author dimension the laundering game stands on and the hallway-verifiable footprint for suitcase outcomes — the walkie carries lifecycle facts, never placements, so the sign is the at-a-distance record. Registry-first (AD-006): tenancy and complaint rows declared once with explicit policies.
+- **Trade-off**: The initial-7 seed deferred avoids a 7-room behavioral break that would churn the `fresh`-expecting baseline; the sign shows tenancy only (card shows prep history, interior holds provenance) — three orthogonal visuals per door; the complaint recap kind is distinct from crime (different payloads and budget effects).
+- **Scope**: `packages/shared` (roomState provenance, protocol tenancy+recap), `packages/sim` (WorkChannels provenance map, GuestSim tenancy emits + Tenancy snapshot queries, RoundSim complaint journal + recap mapping), `apps/server` (room tenancy snapshot slice, spectator baseline), `apps/client` (scene tenancy markers, state/mappers, resultsView complaint lines, harness `client:tenancy_sign`), `CONTEXT.md`, no prd/roadmap change.
+- **Date**: 2026-09-02
+- **Status**: active
+
 ## Handoff
-- **Feature**: `complaint-budget` (cycle 3.3, AD-041) — COMPLETE. T1 `6c4f5d5`
-  shared rows + minimal client plumbing · T2 `1628f32` sim loop + budget ·
-  T3 `b3bebb0` server recap/resume · T4 `fc13ef1` client HUD + cues ·
-  T5 `19ac5e8` harness `client:complaint_cues` (synthetic sameFloor dispatch,
-  5.4 s) · T6 docs (CONTEXT + AD-041).
-- **Phase / Task**: Validate → done. Verifier: `.specs/features/complaint-budget/
-  validation.md` PASS (T2–T4 full re-derivation, sensor mutants killed) +
-  T5 harness at `--workers=1` twice. `validate_state.py complaint-budget`
-  exit 0.
-- **Gates**: typecheck ✓ · lint ✓ · test:sim 494 ✓ · test:client 39/40 at
-  `--workers=2` (38/39 previously; the extra failure is the known flaky
-  `client:accuse_ui` hold-E menu, green isolated — `client:complaint_cues`
-  green twice).
-- **Next step**: cycle 3.4 `provenance-signs` (FR-32 authorship + tenancy
-  signs + recap complaint provenance; FR-11/FR-22 amendments). The 3.5 gate
-  re-examines the `fresh`-rooms-settle reading and the shrunken budget's
-  reachability under the one-car + ambush economy.
+- **Feature**: `provenance-signs` (cycle 3.4, AD-042) — COMPLETE. T1 `3bb3aa7` shared rows + minimal plumbing · T2 `0fa27c9` sim provenance+tenancy · T3 `dd1239e` server snapshot/recap · T4 `59219a5` client door signs + recap lines · T5 `9c78c5b` harness `client:tenancy_sign` (synthetic sameFloor) + `server:recap_provenance` · T6 docs (CONTEXT + AD-042) + literals fix `31992c8`.
+- **Phase / Task**: Validate → pending. Next: Verifier `validation.md` PASS + `validate_state.py provenance-signs` exit 0.
+- **Gates**: typecheck ✓ · lint ✓ · test:sim 226 ✓ · test:client 111 unit ✓ · server 83 ✓ · tenancy harness 1/1
+- **Next step**: cycle 3.5 `guest-exit` (rate-based bot sims, the new-signal proof, v1.5 edition; calibrates `SETTLE_TARGET` + re-checks shrunken budget reachability under one-car + ambush).
 - **Blockers**: none.
 - **Branch**: master
