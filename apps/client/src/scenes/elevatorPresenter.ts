@@ -271,18 +271,12 @@ export class ElevatorPresenter {
     return this.clocks.get(car)?.floor ?? null
   }
 
-  /** The building panel's state: both cars' floors and the hall-call lights. */
-  panelState(): {
-    west: FloorId | null
-    east: FloorId | null
-    lightWest: boolean
-    lightEast: boolean
-  } {
+  /** The building panel's state (cycle 3.E, AD-040): the single car's floor
+   *  and its hall-call light — position-only. */
+  panelState(): { floor: FloorId | null; light: boolean } {
     return {
-      west: this.floorOf(1),
-      east: this.floorOf(2),
-      lightWest: this.calledLights[1],
-      lightEast: this.calledLights[2],
+      floor: this.floorOf(1),
+      light: this.calledLights[1],
     }
   }
 

@@ -149,7 +149,7 @@ test.describe('client:art_elevator', () => {
     // AD-026); hold the exit direction until the rider chip hides (the doors
     // are fully open and the pending exit applied).
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )

@@ -54,12 +54,23 @@ test.describe('client:elevator_lobby', () => {
   test('auto-board, ride, hall-call light lifecycle, landing-pinned decoy (EL-01/04, ELR-05/14, AD-023/024)', async ({
     browser,
   }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(150_000)
     const host = await browser.newContext().then((c) => c.newPage())
     await host.goto('/')
     await host.fill('#join-name', 'ada')
     await host.click('#create-button')
     await host.waitForSelector('#lobby-view')
+    const heading = await host.textContent('#lobby-view h2')
+    const code = heading?.match(/room ([A-Z]{4})/)?.[1]
+    if (code === undefined) throw new Error(`no room code in lobby heading: ${heading}`)
+    // A second player waits mid-hall at the spawn (x≈15) — their hall call
+    // dispatches the single car once it stands on another floor.
+    const bruno = await browser.newContext().then((c) => c.newPage())
+    await bruno.goto('/')
+    await bruno.fill('#join-code', code)
+    await bruno.fill('#join-name', 'bruno')
+    await bruno.click('#join-submit')
+    await bruno.waitForSelector('#lobby-view')
 
     // Landing gate (AD-022): a call from mid-hall (spawn x≈15) is a client
     // no-op — no intent is sent, so the panel never flashes.
@@ -80,18 +91,18 @@ test.describe('client:elevator_lobby', () => {
         }
       ).__TURNOVER__
       const list = t.scene('Round')?.children.list ?? []
-      const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:west')
+      const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:east')
       return panel === undefined ? 'missing' : Number(panel.frame.name)
     })
     expect(idleFrame).toBe(0)
-    expect(await host.textContent('#panel-west')).toBe('lobby')
+    expect(await host.textContent('#panel-floor')).toBe('lobby')
 
-    // Walk to the west landing (15 tiles at 6 tiles/s ≈ 2.5 s) and board the
-    // parked car with the landing call press (AD-025): her rider-exclusive
-    // chip appears.
-    await host.keyboard.down('ArrowLeft')
+    // Walk to the east landing (15 tiles at 6 tiles/s ≈ 2.5 s — the single
+    // car parks there, cycle 3.E AD-040) and board the parked car with the
+    // landing call press (AD-025): her rider-exclusive chip appears.
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
@@ -105,14 +116,14 @@ test.describe('client:elevator_lobby', () => {
     // she is already aboard (2 s per floor).
     await host.keyboard.press('1')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
 
-    // Walk off LEFT at the floor1 west landing (exit places her at x=0; the
-    // door-open-episode guard keeps the parked car from re-boarding her),
-    // then cross to the floor1 EAST landing (~30 tiles ≈ 5 s).
+    // 3.E: walk off LEFT at the floor1 landing (the car lands at the EAST
+    // end), then cross back to the landing (the exit hop leaves her a few
+    // tiles west of it).
     await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(ownVisible, undefined, { timeout: 5000 })
     await host.keyboard.up('ArrowLeft')
@@ -120,31 +131,8 @@ test.describe('client:elevator_lobby', () => {
     await host.waitForTimeout(5600)
     await host.keyboard.up('ArrowRight')
 
-    // A call at the east landing (AD-022 gate passes) pins to car 2 (AD-023):
-    // car 2 is idle at the lobby → a real dispatch. The hall-call light
-    // (AD-024) lights amber; the floor readout stays 'lobby' until arrival.
-    await host.keyboard.press('ArrowUp')
-    await host.waitForFunction(
-      (lit) =>
-        (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color === lit,
-      LIGHT_LIT,
-      { timeout: 5000 },
-    )
-    expect(await host.textContent('#panel-east')).toBe('lobby')
-
-    // Car 2 arrives at floor1 (~3 s): the readout updates and the light turns
-    // off — ada presses the call at the landing again to board the parked
-    // car (AD-025: no proximity boarding; the chip reappears).
-    await host.waitForFunction(
-      () => document.querySelector('#panel-east')?.textContent === 'floor1',
-      undefined,
-      { timeout: 10_000 },
-    )
-    expect(
-      await host.evaluate(
-        () => (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color,
-      ),
-    ).toBe(LIGHT_OFF)
+    // Board the parked car again and ride UP to floor2: the ride frees the
+    // floor1 landing so a hall call can actually dispatch the single car.
     await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
@@ -153,90 +141,50 @@ test.describe('client:elevator_lobby', () => {
       undefined,
       { timeout: 5000 },
     )
-
-    // Press lobby (Digit0): the car rides back (~2 s after its 1 s dwell).
-    await host.keyboard.press('0')
+    await host.keyboard.press('2')
     await host.waitForFunction(
-      () => document.querySelector('#panel-east')?.textContent === 'lobby',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor2',
       undefined,
-      { timeout: 10_000 },
+      { timeout: 15000 },
     )
 
-    // Exit LEFT at the lobby east landing (placed at x=30). A call pressed
-    // here (AD-022 gate passes; AD-023 pins to car 2) now BOARDS the parked
-    // open-doors car (AD-025): the chip reappears, the panel pulses (AD-012),
-    // nothing is dispatched — the light stays DARK, car 1 is never summoned
-    // from the east landing (AD-023), and the panel readout never moves.
+    // Exit LEFT at the floor2 landing, off the landing zone: her stream
+    // resumes and the chip hides.
     await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(ownVisible, undefined, { timeout: 5000 })
+    await host.waitForTimeout(800)
     await host.keyboard.up('ArrowLeft')
-    await host.keyboard.press('ArrowUp')
-    // ART contract (cycle 2.10): the decoy call flashes the landing panel
-    // SPRITE (frame 1) then returns to idle — every call looks registered
-    // (AD-012), the light stays dark.
     await host.waitForFunction(
-      () => {
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              scene: (name: string) => {
-                children: {
-                  list: { name: string; type: string; frame: { name: string | number } }[]
-                }
-              } | null
-            }
-          }
-        ).__TURNOVER__
-        const list = t.scene('Round')?.children.list ?? []
-        const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:west')
-        return panel !== undefined && Number(panel.frame.name) === 1
-      },
-      undefined,
-      { timeout: 3000 },
-    )
-    await host.waitForFunction(
-      () => {
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              scene: (name: string) => {
-                children: {
-                  list: { name: string; type: string; frame: { name: string | number } }[]
-                }
-              } | null
-            }
-          }
-        ).__TURNOVER__
-        const list = t.scene('Round')?.children.list ?? []
-        const panel = list.find((c) => c.type === 'Sprite' && c.name === 'panel:west')
-        return panel !== undefined && Number(panel.frame.name) === 0
-      },
-      undefined,
-      { timeout: 3000 },
-    )
-    expect(
-      await host.evaluate(
-        () => (document.querySelector('#panel-light-east') as HTMLElement | null)?.style.color,
-      ),
-    ).toBe(LIGHT_OFF)
-    expect(
-      await host.evaluate(
-        () => (document.querySelector('#panel-light-west') as HTMLElement | null)?.style.color,
-      ),
-    ).toBe(LIGHT_OFF)
-    expect(await host.textContent('#panel-west')).toBe('floor1')
-    // The landing press boarded the parked car (AD-025): the chip is back.
-    await host.waitForFunction(
-      () =>
-        document.querySelector('#elevator-riders') !== null &&
-        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
       undefined,
       { timeout: 5000 },
     )
 
-    // Walk right — the held intent EXITS the parked car (door-open exit) and
-    // pre-round lobby walking is allowed, so prediction and server agree (she
-    // clamps at the east bound).
+    // A hall call from the OTHER floor dispatches the single car (AD-023's
+    // single candidate): bruno walks to the lobby's east landing (the client
+    // gates calls to landings, AD-022) and summons; the hall light (AD-024)
+    // lights amber until the car arrives.
+    await bruno.keyboard.down('ArrowRight')
+    await bruno.waitForTimeout(3000)
+    await bruno.keyboard.up('ArrowRight')
+    await bruno.keyboard.press('ArrowUp')
+    // Ambient guest calls may queue ahead of bruno's (AD-028) — the light
+    // lights when the single car actually dispatches to the lobby.
+    await host.waitForFunction(
+      (lit) => (document.querySelector('#panel-light') as HTMLElement | null)?.style.color === lit,
+      LIGHT_LIT,
+      { timeout: 15000 },
+    )
+    // The car arrives at the lobby: the readout flips and the light clears
+    // (AD-024's arrival-off) — the panel stays dark through the open dwell.
+    await host.waitForFunction(
+      (off) =>
+        document.querySelector('#panel-floor')?.textContent === 'lobby' &&
+        (document.querySelector('#panel-light') as HTMLElement | null)?.style.color === off,
+      LIGHT_OFF,
+      { timeout: 25_000 },
+    )
+
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(500) // keep walking while held
     await host.keyboard.up('ArrowRight')
@@ -256,5 +204,6 @@ test.describe('client:elevator_lobby', () => {
     expect(await host.$('#round-hud')).toBeNull()
 
     await host.context().close()
+    await bruno.context().close()
   })
 })

@@ -90,9 +90,9 @@ test.describe('client:restaurant', () => {
 
       // The rider walks to the west landing and boards with the call press —
       // guests are elevator citizens (AD-028), so press until the chip shows.
-      await rider.keyboard.down('ArrowLeft')
+      await rider.keyboard.down('ArrowRight')
       await rider.waitForTimeout(3000)
-      await rider.keyboard.up('ArrowLeft')
+      await rider.keyboard.up('ArrowRight')
       for (let i = 0; i < 15; i++) {
         await rider.keyboard.press('ArrowUp')
         try {
@@ -130,8 +130,8 @@ test.describe('client:restaurant', () => {
       // floor, so the panel readout switches to 'mezzanine'.
       await rider.waitForFunction(
         () =>
-          document.querySelector('#panel-west')?.textContent === 'mezzanine' ||
-          document.querySelector('#panel-east')?.textContent === 'mezzanine',
+          document.querySelector('#panel-floor')?.textContent === 'mezzanine' ||
+          document.querySelector('#panel-floor')?.textContent === 'mezzanine',
         undefined,
         { timeout: 20000 },
       )

@@ -194,7 +194,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T6: Client slice
+### T6: Client slice ✅
 
 **What**: Single-car presentation (presenter/panels/lights shrink to one car), DOM stairwell marker at the west landing, stairs chip (transit/breath/stun states from the own snapshot + local countdown), ambush toast + saboteur confirmation line, ArrowUp/Down (E alias) input gated by the shared affordances, prediction mirror for stairs state, and the `client:stairs` harness scenario.
 **Where**: `apps/client/src/scenes/{WorldScene,elevatorPresenter}.ts`, `apps/client/src/ui/*`, `apps/client/src/state/*`, `apps/client/harness/stairs.spec.ts`

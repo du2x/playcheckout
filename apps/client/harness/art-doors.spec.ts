@@ -115,7 +115,7 @@ test.describe('client:art_doors', () => {
     // opening swing — hold the exit direction from that event; the pending
     // exit applies when the doors are fully open (inside the 1 s dwell).
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
@@ -266,7 +266,7 @@ test.describe('client:art_doors — cue doorway', () => {
     // in the hallway; the host walks on into room 1).
     for (const page of [host, watcher]) {
       await page.waitForFunction(
-        () => document.querySelector('#panel-west')?.textContent === 'floor1',
+        () => document.querySelector('#panel-floor')?.textContent === 'floor1',
         undefined,
         { timeout: 10_000 },
       )

@@ -2,6 +2,7 @@ import { clockRemainingMs, type ViewState } from '../state'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { buildStairScreen } from './stairScreen'
 
 /**
  * Round HUD (LIGHT-09..12): countdown clock from the round:started receipt
@@ -33,18 +34,14 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       el('div', { id: 'role-label' }, ['your role']),
       roleCard,
       errorLine,
-      // Position-only elevator panels (AD-024): per-car hall-call light (●
-      // lit from the accepted call until the car arrives) and current-floor
-      // readout — car floors, never occupants (privacy rule).
+      // Position-only elevator panel (AD-024, single car — cycle 3.E/AD-040):
+      // one hall-call light + floor readout for the east car; car floors,
+      // never occupants (privacy rule).
       el('div', { id: 'elevator-panel' }, [
-        'elevators  W ',
-        el('span', { id: 'panel-light-west', style: 'color:#4a5568' }, ['●']),
+        'elevator E ',
+        el('span', { id: 'panel-light', style: 'color:#4a5568' }, ['●']),
         ': ',
-        el('span', { id: 'panel-west' }, ['lobby']),
-        ' · E ',
-        el('span', { id: 'panel-light-east', style: 'color:#4a5568' }, ['●']),
-        ': ',
-        el('span', { id: 'panel-east' }, ['lobby']),
+        el('span', { id: 'panel-floor' }, ['lobby']),
       ]),
       // Rider chip (AD-013): occupants, five lit floor indicators (lit =
       // queued or being served), and the last-press line — visible only while
@@ -63,6 +60,10 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       // In-car screen (AD-013): floor buttons over the world while riding —
       // lit = queued or being served; synced by the App from the rider session.
       buildCarScreen(),
+      // Stairwell screen (AD-040): the own stairs clock while in the west
+      // stairwell — synced per frame by the world scene from the personal
+      // snapshot's stairs row + the private ambush event.
+      buildStairScreen(),
       // Accusation HUD (cycle 2.8): firing toasts + fired banner.
       buildAccuseHud(),
       // Work channels (cycle 2.5): the own progress bar (world scene drives

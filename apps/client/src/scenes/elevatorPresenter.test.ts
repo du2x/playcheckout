@@ -283,22 +283,21 @@ describe('ElevatorPresenter — presentation state (AD-038: one clock authority)
 
   it('lights a hall call only when the car is NOT already at the called floor (AD-024 decoy)', () => {
     const { presenter } = makePresenter()
-    expect(presenter.panelState().lightWest).toBe(false)
+    expect(presenter.panelState().light).toBe(false)
     presenter.onCalled(1, 'floor1') // car stands at the lobby: the call registers
-    expect(presenter.panelState().lightWest).toBe(true)
+    expect(presenter.panelState().light).toBe(true)
     const decoy = makePresenter()
     decoy.presenter.onMoved(1, 'floor1')
     decoy.presenter.onCalled(1, 'floor1') // already standing there: nothing to wait for
-    expect(decoy.presenter.panelState().lightWest).toBe(false)
+    expect(decoy.presenter.panelState().light).toBe(false)
   })
 
-  it('clears the hall light on the next arrival, and only that car', () => {
+  it('clears the hall light on the next arrival (single car — cycle 3.E, AD-040)', () => {
     const { presenter } = makePresenter()
     presenter.onCalled(1, 'floor1')
-    presenter.onCalled(2, 'floor1')
+    expect(presenter.panelState().light).toBe(true)
     presenter.onMoved(1, 'floor1')
-    expect(presenter.panelState().lightWest).toBe(false)
-    expect(presenter.panelState().lightEast).toBe(true)
+    expect(presenter.panelState().light).toBe(false)
   })
 
   it('flashes the called-floor panels for the window, then idle (ART-17)', () => {
@@ -315,7 +314,7 @@ describe('ElevatorPresenter — presentation state (AD-038: one clock authority)
     expect(presenter.floorOf(1)).toBe('lobby')
     presenter.onMoved(1, 'floor2') // snapshot seeding uses the same path
     expect(presenter.floorOf(1)).toBe('floor2')
-    expect(presenter.panelState().west).toBe('floor2')
+    expect(presenter.panelState().floor).toBe('floor2')
   })
 
   it('clears the car-screen readout when not riding', () => {

@@ -2,6 +2,7 @@ import type { LobbySnapshot } from '@turnover/shared'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { buildStairScreen } from './stairScreen'
 
 /**
  * Lobby view (LIGHT-05..08): roster names, host marker, start control for the
@@ -49,18 +50,15 @@ export function renderLobby(
       roster,
       startButton,
       errorLine,
-      // Elevators run from room creation (AD-011): the position-only panel is
-      // visible pre-round too, so the machine is observable and testable.
-      // Per-car hall-call light + floor readout (AD-024), position-only.
+      // The elevator runs from room creation (AD-011): the position-only
+      // panel is visible pre-round too, so the machine is observable and
+      // testable. Single car (cycle 3.E, AD-040): one hall-call light +
+      // floor readout (AD-024), position-only.
       el('div', { id: 'elevator-panel' }, [
-        'elevators  W ',
-        el('span', { id: 'panel-light-west', style: 'color:#4a5568' }, ['●']),
+        'elevator E ',
+        el('span', { id: 'panel-light', style: 'color:#4a5568' }, ['●']),
         ': ',
-        el('span', { id: 'panel-west' }, ['lobby']),
-        ' · E ',
-        el('span', { id: 'panel-light-east', style: 'color:#4a5568' }, ['●']),
-        ': ',
-        el('span', { id: 'panel-east' }, ['lobby']),
+        el('span', { id: 'panel-floor' }, ['lobby']),
       ]),
       // Rider chip (AD-013): occupants, five lit floor indicators (lit =
       // queued or being served), and the last-press line — visible only while
@@ -78,6 +76,9 @@ export function renderLobby(
       ]),
       // In-car screen (AD-013): rides are possible pre-round (AD-011).
       buildCarScreen(),
+      // Stairwell screen (AD-040): staff-only stairs, mounted like the car
+      // screen; hidden until the world scene anchors an own stairs clock.
+      buildStairScreen(),
       // Accusation HUD (cycle 2.8): firing toasts + fired banner ride in both
       // views so a firing is visible wherever the player is looking.
       buildAccuseHud(),

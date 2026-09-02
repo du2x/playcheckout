@@ -124,7 +124,7 @@ async function rideTo(
   floorDigit: 'Digit1' | 'Digit2' | 'Digit3',
   floor: 'floor1' | 'floor2' | 'floor3',
 ): Promise<void> {
-  await walkUntil(page, who, 'ArrowLeft', (x) => x <= 1.0)
+  await walkUntil(page, who, 'ArrowRight', (x) => x >= 29.0)
   // Press E until the rider boards (press-as-board, AD-025): the first press
   // summons the car when it is away; once it stands at this floor the press
   // boards. The rider's label hides when the floor stream stops (AD-008).
@@ -381,20 +381,21 @@ test.describe('client:suitcase', () => {
     )
     await own.waitForSelector('#suitcase-assignment', { state: 'visible' })
 
-    // Ride to floor1 and place at the FIRST door east of the landing — the
-    // room is assignment-independent (any door accepts a placement). The
-    // confirm is gone (AD-034): a carrier at a door places directly.
+    // Ride to floor1 and place at the FIRST door west of the (east) landing —
+    // room 8 (cycle 3.E, AD-040). The room is assignment-independent (any
+    // door accepts a placement). The confirm is gone (AD-034): a carrier at a
+    // door places directly.
     await rideTo(own, 'ada', 'Digit1', 'floor1')
-    await walkUntil(own, 'ada', 'ArrowRight', (x) => x >= doorXTiles(1) - 0.4)
+    await walkUntil(own, 'ada', 'ArrowLeft', (x) => x <= doorXTiles(8) + 0.4)
     // The 900ms exit hop overshoots the door zone (6 tiles/s + intent-flush
-    // latency); tap back left until the label sits inside ROOM_DOOR_RANGE so
+    // latency); tap back right until the label sits inside ROOM_DOOR_RANGE so
     // the ladder resolves place rather than the between-doors hold.
     for (let i = 0; i < 6; i++) {
       const p = await readLabel(own, 'ada')
-      if (Math.abs(p.x / TILE - doorXTiles(1)) <= 0.8) break
-      await own.keyboard.down('ArrowLeft')
+      if (Math.abs(p.x / TILE - doorXTiles(8)) <= 0.8) break
+      await own.keyboard.down('ArrowRight')
       await own.waitForTimeout(200)
-      await own.keyboard.up('ArrowLeft')
+      await own.keyboard.up('ArrowRight')
       await own.waitForTimeout(150)
     }
     await pressE(own)
@@ -419,7 +420,7 @@ test.describe('client:suitcase', () => {
           ) === true
         )
       },
-      doorXTiles(1) * TILE,
+      doorXTiles(8) * TILE,
       { timeout: 30_000 },
     )
     const logAfterPlace = await own.textContent('#walkie-log')

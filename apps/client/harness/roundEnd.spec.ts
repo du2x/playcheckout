@@ -76,13 +76,13 @@ test.describe('client:round_end', () => {
     // Ride west to floor1 DURING the round: walk to the landing and board the
     // parked car with the call press (AD-025) — one real ride leg for the
     // recap (rides are journaled while a round is active — cycle 2.9 scope).
-    await host.keyboard.down('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await pressUntilRiderChip(host)
     await host.keyboard.press('1')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )

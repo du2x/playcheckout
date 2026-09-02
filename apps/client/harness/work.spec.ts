@@ -99,9 +99,9 @@ test.describe('client:work_channels', () => {
 
     // Pre-round: walk to the west landing and board the parked car with the
     // landing call press (AD-025); the round begins with her aboard.
-    await host.keyboard.down('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
@@ -120,14 +120,14 @@ test.describe('client:work_channels', () => {
 
     // Ride to floor1 (2 s per floor per §7; no arrival — she is aboard).
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
 
-    // Exit through the open doors: holding right walks her off the car and
-    // then along floor1.
-    await host.keyboard.down('ArrowRight') // held 1.5 s: 0.5 s swing + 1 s walk (AD-026)
+    // Exit through the open doors: holding left walks her off the car (the
+    // landing is the EAST end — cycle 3.E AD-040) and then along floor1.
+    await host.keyboard.down('ArrowLeft') // held 1.5 s: 0.5 s swing + 1 s walk (AD-026)
     // WORK-17 in vivo: while ada walks on floor1, the lobby tab's event stream
     // receives NO new positions for her (sameFloor routing, AD-009).
     const beforeMoves = await adaMoveCount(pages[1] as Page, adaId)
@@ -136,9 +136,10 @@ test.describe('client:work_channels', () => {
     expect(afterMoves).toBe(beforeMoves)
 
     // 1 s of walking (the pending exit ate the first 0.5 s of the hold,
-    // AD-026) lands ~6 tiles out — inside room 2's segment [4.5, 8); the
-    // client derives the room from the same shared geometry as the server.
-    await host.keyboard.up('ArrowRight')
+    // AD-026) lands ~6 tiles west of the landing — inside room 7's segment
+    // [22.5, 26.25); the client derives the room from the same shared
+    // geometry as the server.
+    await host.keyboard.up('ArrowLeft')
     await host.waitForTimeout(300)
 
     // Space starts the channel: the own progress bar appears.
@@ -259,7 +260,7 @@ test.describe('client:work_channels', () => {
     for (const page of pages) {
       const scene = await readScene(page)
       expect(scene.rectCount).toBe(4)
-      expect(scene.carCount).toBe(2)
+      expect(scene.carCount).toBe(1)
     }
 
     for (const page of pages) await page.context().close()

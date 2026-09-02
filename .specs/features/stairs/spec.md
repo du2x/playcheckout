@@ -229,7 +229,7 @@ asserts zero complaints; §8 recompute lands as a prd edit reviewed at Design.
 | STAIRS-01 | P1: One-elevator building | Design | Implemented |
 | STAIRS-02 | P1: One-elevator building | Design | Implemented |
 | STAIRS-03 | P1: One-elevator building | Design | Implemented |
-| STAIRS-04 | P1: One-elevator building | Design | Pending |
+| STAIRS-04 | P1: One-elevator building | Design | Implemented |
 | STAIRS-05 | P1: Stairs transit | Execute | Implementing |
 | STAIRS-06 | P1: Stairs transit | Design | Implemented |
 | STAIRS-07 | P1: Stairs transit | Design | Implemented |
@@ -243,9 +243,9 @@ asserts zero complaints; §8 recompute lands as a prd edit reviewed at Design.
 | STAIRS-15 | P1: Ambush | Design | Pending |
 | STAIRS-16 | P1: Ambush | Design | Pending |
 | STAIRS-17 | P2: Client presentation | Execute | Implementing |
-| STAIRS-18 | P2: Client presentation | Design | Pending |
-| STAIRS-19 | P2: Client presentation | Design | Pending |
-| STAIRS-20 | P2: Client presentation | Design | Pending |
+| STAIRS-18 | P2: Client presentation | Design | Implemented |
+| STAIRS-19 | P2: Client presentation | Design | Implemented |
+| STAIRS-20 | P2: Client presentation | Design | Implemented |
 | STAIRS-21 | P2: Balance properties | Design | Pending |
 | STAIRS-22 | P2: Balance properties | Design | Pending |
 

@@ -87,7 +87,7 @@ test.describe('client:doors_pre_round', () => {
     )
     await page.keyboard.press('1')
     await page.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )

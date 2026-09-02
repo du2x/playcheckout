@@ -54,21 +54,21 @@ test.describe('client:elevator_doors', () => {
     await host.waitForTimeout(200) // let the scene mount and tick at least once
 
     // Harness rendering contract, unchanged by this cycle (spec Goal 4): one
-    // player sprite for the lone player, and both cars start parked open at
-    // the lobby — both car Sprites render visible before any call happens
-    // (ELAN-01 AC1/AC3).
+    // player sprite for the lone player, and the single car starts parked
+    // shut at the east landing — the car Sprite renders visible before any
+    // call happens (ELAN-01 AC1/AC3; cycle 3.E AD-040 collapsed the pair).
     const baseline = await readCars(host)
     expect(baseline.rectCount).toBe(1)
-    expect(baseline.visibleCarCount).toBe(2)
+    expect(baseline.visibleCarCount).toBe(1)
 
-    // Walk to the west landing and board with the call press (AD-025), then
+    // Walk to the east landing and board with the call press (AD-025), then
     // press floor1 in-car. A rider-triggered departure never announces
     // `elevator:called` on the wire (AD-013) — this also exercises the
     // presenter's documented SPEC_DEVIATION path (ground truth
     // `elevator:moved` alone drives the arrival animation).
-    await host.keyboard.down('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
@@ -79,7 +79,7 @@ test.describe('client:elevator_doors', () => {
     )
     await host.keyboard.press('1')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
@@ -91,7 +91,7 @@ test.describe('client:elevator_doors', () => {
     // (TUNING.ELEVATOR_DWELL_SECONDS) before the presenter closes them.
     await host.keyboard.down('ArrowRight')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
     )
     await host.waitForFunction(
       () => {
@@ -134,7 +134,7 @@ test.describe('client:elevator_doors', () => {
     await host.waitForTimeout(2500)
     const terminal = await readCars(host)
     expect(terminal.visibleCarCount).toBe(1)
-    expect(await host.textContent('#panel-west')).toBe('floor1')
+    expect(await host.textContent('#panel-floor')).toBe('floor1')
 
     await host.context().close()
   })

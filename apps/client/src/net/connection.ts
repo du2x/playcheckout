@@ -123,6 +123,12 @@ export class Connection {
     this.room.send('elevator:press', { type: 'elevator:press', floor })
   }
 
+  /** Enter the west stairwell toward `dir` (cycle 3.E, AD-040) — one floor
+   *  stride per activation; the sim rejects silently off the mouth. */
+  sendStairsEnter(dir: 'up' | 'down'): void {
+    this.room.send('stairs:enter', { type: 'stairs:enter', dir })
+  }
+
   /** Start a work channel inside the room's segment the player stands in (FR-7). */
   sendWorkStart(floor: GuestFloorId, room: RoomIndex): void {
     this.room.send('work:start', { type: 'work:start', floor, room })

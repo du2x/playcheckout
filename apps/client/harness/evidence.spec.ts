@@ -67,9 +67,9 @@ function eventsOf(
  * (AD-025, retrying under AD-028 ambient guest traffic) — the rider chip
  * confirms the board. No ride press. */
 async function boardWestCar(page: Page) {
-  await page.keyboard.down('ArrowLeft')
+  await page.keyboard.down('ArrowRight')
   await page.waitForTimeout(3000)
-  await page.keyboard.up('ArrowLeft')
+  await page.keyboard.up('ArrowRight')
   await pressUntilRiderChip(page)
 }
 
@@ -109,19 +109,19 @@ test.describe('client:evidence_cues', () => {
     await staff.keyboard.press('1')
     for (const page of [staff, saboteur]) {
       await page.waitForFunction(
-        () => document.querySelector('#panel-west')?.textContent === 'floor1',
+        () => document.querySelector('#panel-floor')?.textContent === 'floor1',
         undefined,
         { timeout: 15_000 },
       )
     }
     // Each hold starts at the arrival moved = the opening swing (AD-026):
     // the pending exit eats the first 0.5 s, so the staff's 1.5 s hold walks
-    // 1 s — parking inside room 2 ([4.5, 8)). The saboteur exits later (the
+    // 1 s — parking inside room 8 ([26.5, 30)). The saboteur exits later (the
     // doors are already open — the exit applies on the keydown), so a 1.2 s
-    // hold lands them ~1 tile apart.
-    await staff.keyboard.down('ArrowRight')
+    // hold lands them ~1 tile apart (room 8).
+    await staff.keyboard.down('ArrowLeft')
     await staff.waitForTimeout(1500)
-    await staff.keyboard.up('ArrowRight')
+    await staff.keyboard.up('ArrowLeft')
     await staff.waitForTimeout(300)
 
     // Arm the staff page's cue watcher BEFORE the saboteur walks (the DOM cue
@@ -131,11 +131,11 @@ test.describe('client:evidence_cues', () => {
       .then(() => true)
       .catch(() => false)
 
-    // Saboteur walks right from the landing into room 2 beside the staff —
-    // the entry fires the door-open cue the watcher catches.
-    await saboteur.keyboard.down('ArrowRight')
+    // Saboteur walks left from the east landing into room 8 beside the
+    // staff — the entry fires the door-open cue the watcher catches.
+    await saboteur.keyboard.down('ArrowLeft')
     await saboteur.waitForTimeout(1200)
-    await saboteur.keyboard.up('ArrowRight')
+    await saboteur.keyboard.up('ArrowLeft')
     await saboteur.waitForTimeout(300)
     expect(await enteredCue).toBe(true)
 

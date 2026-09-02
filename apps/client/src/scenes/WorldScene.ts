@@ -1,5 +1,6 @@
 import {
   accuseTargetAtHoldExpiry,
+  atStairwellMouth,
   carriedGuestIdOf,
   type FloorId,
   type GuestFloorId,
@@ -17,6 +18,7 @@ import {
   roomSegmentStartMilli,
   type SpectatorSnapshot,
   type SuitcaseRef,
+  stairsDirections,
   TUNING,
 } from '@turnover/shared'
 import Phaser from 'phaser'
@@ -33,6 +35,7 @@ import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
 import { setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
 import { ScoreHud } from '../ui/scoreHud'
+import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
 import { ElevatorPresenter } from './elevatorPresenter'
 
 /**
@@ -90,6 +93,8 @@ export interface WorldStartData {
   sendMoveStop: () => void
   sendElevatorCall: () => void
   sendElevatorPress: (floor: FloorId) => void
+  /** Stairwell entry (cycle 3.E, AD-040): ArrowUp/Down at the west mouth. */
+  sendStairsEnter: (dir: 'up' | 'down') => void
   sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void
   /** Desk E (cycle 3.B): check the front queued guest in — the caller takes
    *  the suitcase. Derived server-side; rejections are silent. */
@@ -121,6 +126,7 @@ export class WorldScene extends Phaser.Scene {
   private sendMoveStop: () => void = () => {}
   private sendElevatorCall: () => void = () => {}
   private sendElevatorPress: (floor: FloorId) => void = () => {}
+  private sendStairsEnter: (dir: 'up' | 'down') => void = () => {}
   private sendWorkStart: (floor: GuestFloorId, room: RoomIndex) => void = () => {}
   private sendDeskInteract: () => void = () => {}
   private sendSuitcasePlace: (room: RoomIndex) => void = () => {}
@@ -160,6 +166,16 @@ export class WorldScene extends Phaser.Scene {
   /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
   private evidence: EvidenceSession = initialEvidenceSession()
   private evidenceLayer: HTMLElement | null = null
+  /** The west stairwell marker (cycle 3.E, AD-040, STAIRS-17): one DOM glyph
+   *  following the viewed floor's lane — the camera-free west end's signpost. */
+  private stairMarker: HTMLElement | null = null
+  /** The ambush toast (STAIRS-19): "you were ambushed" + a local stun
+   *  countdown; the saboteur instead gets a private confirmation line. */
+  private ambushToast: { el: HTMLElement; until: number } | null = null
+  private ambushConfirm: { el: HTMLElement; until: number } | null = null
+  /** The transit remainder captured at the ambush — the resume clock after
+   *  the local stun expiry (the interior publishes no resume event). */
+  private stunResumeMs = 0
   /** Guest NPC markers (cycle 3.1): one Arc per guest — deliberately NOT a
    *  player Sprite (GUEST-12). Created lazily, pruned on guest:left. */
   private guestViews = new Map<string, Phaser.GameObjects.Arc>()
@@ -215,6 +231,10 @@ export class WorldScene extends Phaser.Scene {
   private wallFill: Phaser.GameObjects.Graphics | null = null
   /** Roster names for the reconnection re-add (unknown-id player:moved). */
   private rosterNames = new Map<string, string>()
+  /** The own stairs clock (AD-040 client presentation): anchored by every
+   *  personal snapshot's `stairs` row, stunned by the private ambush event,
+   *  cleared when the own floor stream resumes. */
+  private stairsAnchor: StairAnchor | null = null
 
   constructor() {
     super('Round')
@@ -226,6 +246,7 @@ export class WorldScene extends Phaser.Scene {
     this.sendMoveStop = data.sendMoveStop
     this.sendElevatorCall = data.sendElevatorCall
     this.sendElevatorPress = data.sendElevatorPress
+    this.sendStairsEnter = data.sendStairsEnter
     this.sendWorkStart = data.sendWorkStart
     this.sendDeskInteract = data.sendDeskInteract
     this.sendSuitcasePlace = data.sendSuitcasePlace
@@ -237,6 +258,7 @@ export class WorldScene extends Phaser.Scene {
     this.viewFloor = 'lobby'
     this.work = null
     this.interior = null
+    this.stairsAnchor = null
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
     this.cueNodes.clear()
@@ -283,30 +305,25 @@ export class WorldScene extends Phaser.Scene {
       this.addPlayerDisplay(player.id, player.name)
     }
 
-    // One elevator-car Sprite per car at its landing x (ART-15: frame 0 =
-    // doors-open cage, frame 1 = closed slab; never an occupant list —
-    // privacy rule). The presenter drives frame/visibility from its clock.
-    // The car rests ON the corridor floor line like doors and players
-    // (origin 0.5,1 at laneY) — the gray-box-era +30 center offset is gone.
-    for (const id of [1, 2] as const) {
+    // One elevator-car Sprite for the single car (cycle 3.E, AD-040) at its
+    // EAST landing x (ART-15: frame 0 = doors-open cage, frame 1 = closed
+    // slab; never an occupant list — privacy rule). The presenter drives
+    // frame/visibility from its clock.
+    for (const id of [1] as const) {
       const sprite = this.add.sprite(this.carPx(id), GROUND_Y, 'elevator-car')
       sprite.setOrigin(0.5, 1)
       this.cars.set(id, { view: sprite })
     }
-    // Landing panel sprites (ART-17): position-only panels — a call flashes
-    // them (decoys included); occupants are never rendered (privacy rule).
+    // Landing panel sprite (ART-17): position-only — a call flashes it
+    // (decoys included); occupants are never rendered (privacy rule). The
+    // single car's panel rides the east landing; the west end is the
+    // stairwell.
     if (this.textures.exists('elevator-panel')) {
-      for (const side of ['west', 'east'] as const) {
-        const image = this.add.sprite(
-          side === 'west' ? 16 : 960 - 16,
-          GROUND_Y - 80,
-          'elevator-panel',
-        )
-        image.setFrame(0)
-        image.setName(`panel:${side}`)
-        image.setVisible(!this.spectator)
-        this.panelImages.set(side, image)
-      }
+      const image = this.add.sprite(960 - 16, GROUND_Y - 80, 'elevator-panel')
+      image.setFrame(0)
+      image.setName('panel:east')
+      image.setVisible(!this.spectator)
+      this.panelImages.set('east', image)
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
     this.elevatorPresenter = new ElevatorPresenter(this.cars, (car) => this.carLaneY(car))
@@ -317,11 +334,12 @@ export class WorldScene extends Phaser.Scene {
       keyboard.on('keydown-RIGHT', () => this.beginMove('right'))
       keyboard.on('keyup-LEFT', () => this.endMove('left'))
       keyboard.on('keyup-RIGHT', () => this.endMove('right'))
-      // Elevator calls: up/down summons a car to this floor — destination-
-      // free (AD-014): the destination is chosen inside the car via a press.
+      // Elevator calls / stairwell entry (AD-040): up/down summons a car to
+      // this floor — destination-free (AD-014) — unless the player stands at
+      // the stairwell mouth, where the direction enters the stairs.
       // E is the accusation key (FR-17): a tap calls, a hold opens the menu.
-      keyboard.on('keydown-UP', () => this.callElevator())
-      keyboard.on('keydown-DOWN', () => this.callElevator())
+      keyboard.on('keydown-UP', () => this.callElevatorOrStairs('up'))
+      keyboard.on('keydown-DOWN', () => this.callElevatorOrStairs('down'))
       keyboard.on('keydown-E', (event: KeyboardEvent) => {
         // Key auto-repeat must not re-trigger: the desk branch would toggle
         // receive/release every repeat (a held E would thrash the queue).
@@ -518,6 +536,10 @@ export class WorldScene extends Phaser.Scene {
         if (action.playerId === this.ownId) {
           display.targetX = null
           this.viewFloor = action.floor
+          // The stairs mirror (AD-040) owns the visit-end transition — the
+          // arrival moved event (delivered even while floorless in the
+          // breath) reconciles the display position; the anchor stays until
+          // the local breath clock runs out.
         } else {
           display.targetX = action.x
         }
@@ -696,10 +718,26 @@ export class WorldScene extends Phaser.Scene {
         break
       }
       case 'stairs-ambushed':
+        // Cycle 3.E (AD-040): the private ambush lands ONLY on the victim —
+        // capture the live transit remainder (the resume clock), override
+        // the own stairs clock with the stun phase, and raise the toast with
+        // a local stun countdown (STAIRS-19).
+        if (this.stairsAnchor !== null) {
+          this.stunResumeMs = stairPhaseReadout(this.stairsAnchor, Date.now())?.remainingMs ?? 0
+          this.stairsAnchor = {
+            ...this.stairsAnchor,
+            phase: 'stunned',
+            remainingMs: action.stunSeconds * 1000,
+            anchoredAtMs: Date.now(),
+          }
+        }
+        this.showAmbushToast(action.stunSeconds)
+        break
       case 'stairs-ambush':
-        // Cycle 3.E (AD-040): the ambush toast + confirmation land with the
-        // stairs client slice (T6) — the reducer routes them here as scene
-        // display state; no render exists yet.
+        // The saboteur's own confirmation — a private line naming the victim
+        // (legitimate self-knowledge; never broadcast). No stairs clock of
+        // their own: they are mid-transit, anchored by their snapshot.
+        this.showAmbushConfirm(action.victimId)
         break
       default: {
         // Exhaustiveness: SceneAction covers every 'scene'-routed member of
@@ -779,6 +817,20 @@ export class WorldScene extends Phaser.Scene {
     for (const g of snapshot.guests ?? []) {
       this.guests.set(g.guestId, { floor: g.floor, x: g.x })
     }
+    // Own stairs state (AD-040): the personal snapshot is the anchor — its
+    // presence IS the stairs-truth (present only while the recipient is in
+    // the stairwell), and a fresh row re-anchors the local countdown.
+    const ownStairs = snapshot.stairs
+    this.stairsAnchor =
+      ownStairs === undefined
+        ? null
+        : {
+            from: ownStairs.from,
+            to: ownStairs.to,
+            phase: ownStairs.phase,
+            remainingMs: ownStairs.remainingSeconds * 1000,
+            anchoredAtMs: Date.now(),
+          }
     this.updatePanel()
   }
 
@@ -905,8 +957,33 @@ export class WorldScene extends Phaser.Scene {
         own: this.ownPos(),
       }).kind === 'elevatorCall'
     ) {
+      // AD-040: at the stairwell mouth a terminal floor's E is the stairs
+      // alias — the only valid direction (the E-ladder amendment).
+      const own = this.ownPos()
+      if (own !== null && atStairwellMouth(own.x)) {
+        const dirs = stairsDirections(own.floor)
+        if (dirs.length === 1) {
+          this.sendStairsEnter(dirs[0] as 'up' | 'down')
+          return
+        }
+      }
       this.sendElevatorCall()
     }
+  }
+
+  /**
+   * ArrowUp/Down (AD-040 input): at the stairwell mouth the direction enters
+   * the stairs (gated by the shared affordance table — a terminal direction
+   * falls through); anywhere else it summons the car (destination-free,
+   * AD-014), exactly as before.
+   */
+  private callElevatorOrStairs(dir: 'up' | 'down'): void {
+    const own = this.ownPos()
+    if (own !== null && atStairwellMouth(own.x) && stairsDirections(own.floor).includes(dir)) {
+      this.sendStairsEnter(dir)
+      return
+    }
+    this.callElevator()
   }
 
   /** In-car floor press — sent only while the local player rides a car. */
@@ -916,8 +993,10 @@ export class WorldScene extends Phaser.Scene {
     this.sendElevatorPress(floor)
   }
 
-  private carPx(car: 1 | 2): number {
-    return car === 1 ? 0 : 30 * TILE_PX
+  /** The single car's landing (cycle 3.E, AD-040): the EAST end — the
+   *  stairwell took the west landing. */
+  private carPx(_car: 1 | 2): number {
+    return 30 * TILE_PX
   }
 
   // --- Evidence rendering (cycle 2.7, EVID-19): DOM layer over the canvas ---
@@ -1131,6 +1210,16 @@ export class WorldScene extends Phaser.Scene {
     layer.style.pointerEvents = 'none'
     gameEl.appendChild(layer)
     this.evidenceLayer = layer
+    // The stairwell marker (STAIRS-17): DOM over the canvas at the west
+    // landing of the viewed floor — position mirrors the card markers.
+    const marker = document.createElement('div')
+    marker.id = 'stairwell-marker'
+    marker.textContent = '⇕ stairs'
+    marker.style.cssText =
+      'position:absolute;left:6px;color:#e6c56a;font:11px ui-monospace,monospace;' +
+      'letter-spacing:2px;text-shadow:0 0 8px rgba(230,197,106,0.62);pointer-events:none;'
+    layer.appendChild(marker)
+    this.stairMarker = marker
   }
 
   private roomCenterPx(room: RoomIndex): number {
@@ -1385,21 +1474,16 @@ export class WorldScene extends Phaser.Scene {
   private updatePanel(): void {
     const panel = document.querySelector('#elevator-panel')
     if (panel === null) return
-    // Car floors + hall-call lights read from the presenter (AD-038).
+    // Car floor + hall-call light read from the presenter (AD-038); single
+    // car (cycle 3.E, AD-040) — one readout, position-only.
     const p = this.elevatorPresenter?.panelState()
-    const west = p?.west ?? null
-    const east = p?.east ?? null
-    const w = panel.querySelector('#panel-west')
-    const e = panel.querySelector('#panel-east')
-    if (w !== null) w.textContent = west ?? '?'
-    if (e !== null) e.textContent = east ?? '?'
-    // Hall-call lights (AD-024): amber while the car owes the floor a stop.
-    const lightW = panel.querySelector('#panel-light-west')
-    const lightE = panel.querySelector('#panel-light-east')
-    if (lightW instanceof HTMLElement)
-      lightW.style.color = (p?.lightWest ?? false) ? '#e8c34a' : '#4a5568'
-    if (lightE instanceof HTMLElement)
-      lightE.style.color = (p?.lightEast ?? false) ? '#e8c34a' : '#4a5568'
+    const floorEl = panel.querySelector('#panel-floor')
+    if (floorEl !== null) floorEl.textContent = p?.floor ?? '?'
+    // Hall-call light (AD-024): amber while the car owes the floor a stop.
+    const light = panel.querySelector('#panel-light')
+    if (light instanceof HTMLElement) {
+      light.style.color = (p?.light ?? false) ? '#e8c34a' : '#4a5568'
+    }
   }
 
   /** Per-frame panel sprite sync: idle frame, flash frame inside the window. */
@@ -1419,6 +1503,59 @@ export class WorldScene extends Phaser.Scene {
     const readout = this.elevatorPresenter?.carScreen() ?? { floor: null, state: null }
     setCarScreenFloor(readout.floor)
     setCarScreenState(readout.state)
+  }
+
+  /** The "you were ambushed" toast (STAIRS-19): text + countdown synced per
+   *  frame while the stun window runs. */
+  private showAmbushToast(stunSeconds: number): void {
+    if (this.evidenceLayer === null) return
+    if (this.ambushToast === null) {
+      const el = document.createElement('div')
+      el.id = 'ambush-toast'
+      el.style.cssText =
+        'position:absolute;left:50%;top:64px;transform:translateX(-50%);' +
+        'background:#2a1414;border:1px solid #ff7a6a;color:#ff9a8a;border-radius:8px;' +
+        'padding:8px 16px;font:13px ui-monospace,monospace;letter-spacing:1px;' +
+        'box-shadow:0 0 18px rgba(255,90,70,0.35);'
+      this.evidenceLayer.appendChild(el)
+      this.ambushToast = { el, until: 0 }
+    }
+    this.ambushToast.until = Date.now() + stunSeconds * 1000
+  }
+
+  /** The saboteur's private confirmation line (STAIRS-19), shown briefly. */
+  private showAmbushConfirm(victimId: string): void {
+    if (this.evidenceLayer === null) return
+    if (this.ambushConfirm === null) {
+      const el = document.createElement('div')
+      el.id = 'ambush-confirm'
+      el.style.cssText =
+        'position:absolute;left:50%;bottom:70px;transform:translateX(-50%);' +
+        'background:#14211a;border:1px solid #8ad07a;color:#a8e29a;border-radius:8px;' +
+        'padding:6px 14px;font:12px ui-monospace,monospace;letter-spacing:1px;'
+      this.evidenceLayer.appendChild(el)
+      this.ambushConfirm = { el, until: 0 }
+    }
+    const name = this.rosterNames.get(victimId) ?? victimId
+    this.ambushConfirm.el.textContent = `your ambush landed on ${name}`
+    this.ambushConfirm.until = Date.now() + 6000
+  }
+
+  /** Per-frame ambush DOM sync: the toast counts down, both expire cleanly. */
+  private syncAmbushDom(): void {
+    if (this.ambushToast !== null) {
+      const left = this.ambushToast.until - Date.now()
+      if (left <= 0) {
+        this.ambushToast.el.remove()
+        this.ambushToast = null
+      } else {
+        this.ambushToast.el.textContent = `you were ambushed — ${Math.ceil(left / 1000)}s`
+      }
+    }
+    if (this.ambushConfirm !== null && this.ambushConfirm.until - Date.now() <= 0) {
+      this.ambushConfirm.el.remove()
+      this.ambushConfirm = null
+    }
   }
 
   /** Progress bar is DOM: fill width from the own channel's elapsed time. */
@@ -1475,6 +1612,9 @@ export class WorldScene extends Phaser.Scene {
       const visible =
         !display.left &&
         !(id === this.ownId && this.riderSession !== null) &&
+        // AD-040 prediction mirror: the own body is inside the black box
+        // while in the stairwell — no floor view renders it.
+        !(id === this.ownId && this.stairsAnchor !== null) &&
         (this.spectator || display.floor === this.viewFloor)
       display.sprite.setVisible(visible)
       display.label.setVisible(visible)
@@ -1526,6 +1666,43 @@ export class WorldScene extends Phaser.Scene {
     // floor swept through transition floors mid-ride, state line naming the
     // door/motion phase. Both cleared when not riding.
     this.syncCarScreenReadouts()
+    // The stairwell screen ticks the own stairs clock locally between
+    // personal snapshots; hidden whenever no phase readout is live. The
+    // prediction mirror (AD-040): when the local clock says the visit is
+    // over, the arrival is applied to the own display — the sameFloor stream
+    // resumed while the client was floorless, so the event never reached us.
+    if (this.stairsAnchor !== null) {
+      const readout = stairPhaseReadout(this.stairsAnchor, Date.now())
+      if (readout === null) {
+        if (this.stairsAnchor.phase === 'stunned' && this.stunResumeMs > 0) {
+          // The stun ended: the interrupted transit resumes with its
+          // preserved remainder.
+          this.stairsAnchor = {
+            from: this.stairsAnchor.from,
+            to: this.stairsAnchor.to,
+            phase: 'transit',
+            remainingMs: this.stunResumeMs,
+            anchoredAtMs: Date.now(),
+          }
+          this.stunResumeMs = 0
+        } else {
+          const own = this.players.get(this.ownId)
+          if (own !== undefined) {
+            own.floor = this.stairsAnchor.to
+            own.x = 0
+            own.targetX = null
+          }
+          this.stairsAnchor = null
+        }
+      }
+    }
+    syncStairScreen(this.stairsAnchor, Date.now())
+    // The stairwell marker sits at the west landing of the rendered lane
+    // (every floor has one); the ambush DOM expires per frame.
+    if (this.stairMarker !== null) {
+      this.stairMarker.style.top = `${this.laneY(this.viewFloor) - 150}px`
+    }
+    this.syncAmbushDom()
     // Work-channel DOM state: bar fill follows elapsed time; the interior
     // label lives only while the own rectangle stands inside the segment.
     if (this.work !== null) {

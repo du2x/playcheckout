@@ -91,9 +91,9 @@ test.describe('client:accuse_ui', () => {
     // tapped AT a landing, and the landing call press BOARDS the parked car
     // (AD-025): the accuser walks west, taps ArrowUp to board, rides to
     // floor1 and walks off there. ---
-    await accuser.keyboard.down('ArrowLeft')
+    await accuser.keyboard.down('ArrowRight')
     await accuser.waitForTimeout(3000) // walk to the west landing
-    await accuser.keyboard.up('ArrowLeft')
+    await accuser.keyboard.up('ArrowRight')
     // AD-028: guests are elevator citizens, so car 1 is no longer guaranteed
     // parked here — an ambient call may have it elsewhere. The landing press
     // BOARDS when the car stands here (AD-025) and SUMMONS/pins otherwise;
@@ -122,11 +122,11 @@ test.describe('client:accuse_ui', () => {
     )
     await accuser.keyboard.press('1') // ride to floor1
     await accuser.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 10_000 },
     )
-    await accuser.keyboard.down('ArrowLeft') // walk off at the floor1 landing
+    await accuser.keyboard.down('ArrowRight') // walk off at the floor1 landing
     // The pending exit (AD-026) applies when the doors finish opening — the
     // rider chip hiding is the truth that she is back on the floor stream.
     await accuser.waitForFunction(
@@ -134,7 +134,7 @@ test.describe('client:accuse_ui', () => {
       undefined,
       { timeout: 8000 },
     )
-    await accuser.keyboard.up('ArrowLeft')
+    await accuser.keyboard.up('ArrowRight')
     const calledBefore = await accuser.evaluate(
       () =>
         (
@@ -162,9 +162,9 @@ test.describe('client:accuse_ui', () => {
     await accuser.keyboard.down('ArrowRight')
     await accuser.waitForTimeout(1500) // ~9 tiles out
     await accuser.keyboard.up('ArrowRight')
-    await accuser.keyboard.down('ArrowLeft')
+    await accuser.keyboard.down('ArrowRight')
     await accuser.waitForTimeout(3000) // walk back to the west landing
-    await accuser.keyboard.up('ArrowLeft')
+    await accuser.keyboard.up('ArrowRight')
     // AD-028: guests are elevator citizens, so car 1 is no longer guaranteed
     // parked here — an ambient call may have it elsewhere. The landing press
     // BOARDS when the car stands here (AD-025) and SUMMONS/pins otherwise;
@@ -191,17 +191,19 @@ test.describe('client:accuse_ui', () => {
       undefined,
       { timeout: 8000 },
     )
-    await accuser.keyboard.press('0') // ride back to the lobby
+    await accuser.keyboard.press('0') // ride back to the lobby (guest traffic
+    // may dispatch the single car elsewhere first — AD-028 retries apply)
     await accuser.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'lobby',
+      () => document.querySelector('#panel-floor')?.textContent === 'lobby',
       undefined,
-      { timeout: 10_000 },
+      { timeout: 25000 },
     )
-    await accuser.keyboard.down('ArrowRight') // exit + walk to the approach zone
+    await accuser.keyboard.down('ArrowLeft') // exit + walk to the approach zone
     // 3.C: ride legs doubled, so a fixed walk-sleep drifted into the desk's
-    // E-suppression zone (AD-031) and the menu never opened. Walk until the
-    // own stream reports x ≥ 13.2 — within ACCUSATION_RANGE_TILES of the
-    // spawn cluster (15) but outside DESK_RANGE_TILES of the desk zone.
+    // E-suppression zone (AD-031) and the menu never opened. 3.E: the car
+    // lands at the EAST end, so walk LEFT until the own stream reports
+    // x ≤ 16.8 — within ACCUSATION_RANGE_TILES of the spawn cluster (15) but
+    // outside DESK_RANGE_TILES of the desk zone.
     await accuser.waitForFunction(
       () => {
         const t = (
@@ -219,14 +221,14 @@ test.describe('client:accuse_ui', () => {
           const e = t.events[i]
           if (e === undefined || e.type !== 'player:moved') continue
           if (e.payload?.playerId !== own) continue
-          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) >= 13.2
+          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) <= 16.8
         }
         return false
       },
       undefined,
       { timeout: 15000 },
     )
-    await accuser.keyboard.up('ArrowRight')
+    await accuser.keyboard.up('ArrowLeft')
 
     // --- Hold E (≥ 400 ms): the confirm menu opens naming a nearby player —
     // never the accuser themselves (JUST-16). ---

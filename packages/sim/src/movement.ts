@@ -509,7 +509,13 @@ export class MovementSim {
           car.phase === 'closing' ||
           car.phase === 'arriving'
         ) {
-          if (car.riders.length + car.pendingBoarders.length < TUNING.ELEVATOR_CAPACITY) {
+          // Cycle 3.E: the press-retry pattern (AD-028) can re-press inside
+          // the opening swing — dedupe so one player cannot fill two slots.
+          if (
+            car.riders.length + car.pendingBoarders.length < TUNING.ELEVATOR_CAPACITY &&
+            !car.pendingBoarders.includes(playerId) &&
+            !car.riders.includes(playerId)
+          ) {
             car.pendingBoarders.push(playerId)
             if (car.phase === 'idle') this.pendingEvents.push(this.openDoors())
           }
@@ -1009,6 +1015,7 @@ export class MovementSim {
     if (p === undefined) return false
     const car = this.car
     if (car.riders.length >= TUNING.ELEVATOR_CAPACITY) return false
+    if (car.riders.includes(playerId)) return false // already aboard (retry dedupe)
     const landing = CAR_LANDING_MILLI
     p.inCar = 1
     // Boarding ends the walk: clear the held move so a later move:stop while

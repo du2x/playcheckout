@@ -10,14 +10,14 @@ import { expect, type Page, test } from '@playwright/test'
  * may be away on ambient traffic. The landing press BOARDS when the car
  * stands here (AD-025) and summons/pins otherwise — keep pressing until the
  * rider chip shows, exactly what a real player does. */
-async function pressUntilRiderChip(page: Page, attempts = 15): Promise<void> {
+async function pressUntilRiderChip(page: Page, attempts = 30): Promise<void> {
   const chipShown = () =>
     page.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
         !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
       undefined,
-      { timeout: 2000 },
+      { timeout: 3000 },
     )
   for (let i = 0; i < attempts; i++) {
     await page.keyboard.press('ArrowUp')
@@ -153,7 +153,7 @@ test.describe('client:movement', () => {
     for (const page of [host, guest]) {
       const scene = await readScene(page)
       expect(scene.rectCount).toBe(2)
-      expect(scene.carCount).toBe(2)
+      expect(scene.carCount).toBe(1)
     }
 
     // Own prediction: hold right for 1 s → ~6 tiles of displacement.
@@ -201,9 +201,9 @@ test.describe('client:movement', () => {
     // Walk to the west landing PRE-ROUND (AD-005: lobby walking + position
     // persistence) and board the parked car with the landing call press
     // (AD-025); her rider-exclusive chip appears with her own name.
-    await host.keyboard.down('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await pressUntilRiderChip(host)
     expect((await readChip(host)).names).toContain('ada')
 
@@ -214,9 +214,9 @@ test.describe('client:movement', () => {
     // call, no destination at call time (AD-014).
     await host.keyboard.press('1')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
-      { timeout: 8000 },
+      { timeout: 15000 },
     )
     const panel = await host.textContent('#elevator-panel')
     // Position-only: the panel names floors, never player ids or names, and
@@ -231,8 +231,9 @@ test.describe('client:movement', () => {
     expect(hostScene.labels.find((l) => l.text === 'ada')?.visible).toBe(false)
 
     // Exit through the open doors: the own floor stream resumes at the car's
-    // landing (ELR P3 AC6) and she walks right along floor1.
-    await host.keyboard.down('ArrowRight')
+    // landing (ELR P3 AC6) — the EAST end (cycle 3.E, AD-040) — and she walks
+    // left along floor1, away from the landing.
+    await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(
       () => {
         const t = (
@@ -254,12 +255,12 @@ test.describe('client:movement', () => {
       { timeout: 5000 },
     )
     await host.waitForTimeout(500) // keep walking while held
-    await host.keyboard.up('ArrowRight')
+    await host.keyboard.up('ArrowLeft')
     await host.waitForTimeout(200)
     const afterExit = await readScene(host)
     const adaX = labelX(afterExit, 'ada')
-    expect(adaX).toBeGreaterThan(TILE) // she left the landing
-    expect(adaX).toBeLessThan(5 * TILE) // ~500 ms of walking
+    expect(adaX).toBeLessThan(30 * TILE) // she left the landing clamp
+    expect(adaX).toBeGreaterThan(25 * TILE) // ~500 ms of walking
 
     // Buzzer (30 s test shift, AD-004 seam): the results view covers the
     // world (cycle 2.9) — ada keeps floor1 beneath it.
@@ -324,11 +325,11 @@ test.describe('client:elevator_riders', () => {
     // Both riders walk to the west landing together and board the parked car
     // with landing call presses (AD-025; capacity 2, AD-014) — each chip shows
     // BOTH names (ELR-01).
-    await host.keyboard.down('ArrowLeft')
-    await rider2.keyboard.down('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
+    await rider2.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
-    await rider2.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
+    await rider2.keyboard.up('ArrowRight')
     await pressUntilRiderChip(host)
     await pressUntilRiderChip(rider2)
     for (const page of [host, rider2]) {
@@ -363,9 +364,9 @@ test.describe('client:elevator_riders', () => {
 
     // The car rides to floor1 (2 s): the public panel follows for everyone.
     await watcher.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
-      { timeout: 10_000 },
+      { timeout: 15000 },
     )
 
     // Wire purity on the floor (ELR-03, ELR-06 AC9): no occupancy, queue, or
@@ -438,9 +439,9 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
 
     // Ada rides the WEST car to floor1, exits, and walks ~6 tiles east; then
     // she stands still for the rest of the test — no further events.
-    await host.keyboard.down('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
     await host.waitForFunction(
       () =>
@@ -451,9 +452,9 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     )
     await host.keyboard.press('1')
     await host.waitForFunction(
-      () => document.querySelector('#panel-west')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
-      { timeout: 10_000 },
+      { timeout: 15000 },
     )
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(1000)
@@ -471,9 +472,9 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     await pressUntilRiderChip(follower)
     await follower.keyboard.press('1')
     await follower.waitForFunction(
-      () => document.querySelector('#panel-east')?.textContent === 'floor1',
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
-      { timeout: 10_000 },
+      { timeout: 25000 },
     )
     // Hold PAST the 0.5 s opening swing (AD-026): the exit is a held intent.
     await follower.keyboard.down('ArrowLeft')

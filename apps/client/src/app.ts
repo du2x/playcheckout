@@ -220,6 +220,7 @@ export class App {
       sendMoveStop: () => this.connection?.sendMoveStop(),
       sendElevatorCall: () => this.connection?.sendElevatorCall(),
       sendElevatorPress: (floor: FloorId) => this.connection?.sendElevatorPress(floor),
+      sendStairsEnter: (dir: 'up' | 'down') => this.connection?.sendStairsEnter(dir),
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
         this.connection?.sendWorkStart(floor, room),
       sendDeskInteract: () => this.connection?.sendDeskInteract(),
