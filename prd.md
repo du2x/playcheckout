@@ -1,6 +1,6 @@
 # PRD — Turnover
 
-Version: 1.5 · Status: Gray-box + stack decisions locked · Owner: —
+Version: 1.6 · Status: Gray-box + stack decisions locked · Owner: —
 Name: **Turnover** (codename during docs: "Grand Hotel") · Domains reserved: turnover.game, playturnover.com
 Companion docs: `roadmap.md` (build plan)
 
@@ -22,6 +22,15 @@ Companion docs: `roadmap.md` (build plan)
 > trash-discovery complaints feed the loss leg), and coverage% drops out of
 > the win check into telemetry. §6.6/FR-29/FR-31/§5/§7/§8 amended; cycle 3.D
 > inserted in `roadmap.md`; SETTLE_TARGET provisional pending 3.5.
+>
+> v1.6 changelog: stairs & ambush (AD-040) — the west elevator is replaced by a
+> camera-free stairwell (3s/floor + 2s breath, staff-side only, interior
+> publishes nothing) and the saboteur gains the game's first direct pressure
+> tool: an automatic, anonymous 20s stun on an opposite-direction stairs pass.
+> One elevator remains (the east car; all two-car machinery collapses, payloads
+> keep `car: 1`). §6.2/FR-5/FR-6/§6.10 (FR-34/35)/§7/§8/§9 amended; cycle 3.E
+> inserted before 3.3 in `roadmap.md`; the §8 v1.6 recompute holds the v1.3
+> cadence dials against the single car.
 
 ---
 
@@ -114,11 +123,12 @@ Design pillars:
 - FR-3 Building: grand lobby + mezzanine restaurant floor (v1.4/AD-032) + 3 guest
          floors × 7–8 rooms (~24 rooms total).
 - FR-4 Linear left/right movement only; pass-through bodies (no collision).
-- FR-5 Two elevators at opposite ends of each floor. Capacity 2 per car.
+- FR-5 One elevator at the east end of each floor (v1.6, AD-040 — the west car
+       was replaced by the stairwell, FR-34). Capacity 2 per car.
        Deterministic cycle: call → car arrives 3s → ride 2s **per floor traveled**.
-       One pending destination per car; a call for the floor a car is already heading to
+       One pending destination; a call for the floor the car is already heading to
        is ignored, but the panel still flashes (decoys look registered).
-- FR-6 Public elevator panels show both cars' current positions only — never occupants
+- FR-6 Public elevator panels show the car's current position only — never occupants
        (decoy calls emerge naturally; "who rode when" stays voice testimony).
 
 ### 6.3 Work Actions
@@ -257,6 +267,26 @@ stable across specs and skills.
         only, never placements, so the sign is the at-a-distance record of where a
         guest actually ended up, FR-27).
 
+### 6.10 Stairs & Ambush (v1.6, AD-040)
+
+- FR-34 Stairwell: the west end of every floor is a camera-free stairwell
+        (replacing the west elevator). Staff-side only — guests ride the single
+        elevator. Entry: direction key at the stairwell mouth; one floor stride
+        per activation (3s) then a **2s breath catch** on the arrival floor
+        (immobile). Entry and arrival are observable (departure event on the
+        origin floor, arrival via the floor stream); the interior publishes
+        nothing — no positions, no co-transiting identities, no spectator view.
+        Usable in all phases; ambush requires an active round.
+- FR-35 Ambush: when the saboteur and a live staff member pass mid-stairs in
+        opposite directions, the staff member is **stunned** for 20s —
+        automatic, saboteur-only, no per-round limit. Anonymous: the victim
+        learns only "you were ambushed" + duration, never the saboteur's
+        identity; the saboteur receives a private confirmation. Stationary
+        players (breathing, waiting) neither ambush nor can be ambushed;
+        same-direction passes are inert; guests and fired players are immune.
+        A stunned victim resumes the interrupted transit on recovery and
+        finishes their walk.
+
 ## 7. Tuning Values (single source of truth)
 
 | Parameter | Value | Reserve dial order |
@@ -283,6 +313,8 @@ stable across specs and skills.
 | Desk earshot range | ~3 tiles, snapshot at the check-in tick | v1.4; widen if overhearing feels scarce |
 | Carry clock | 60s per leg (check-in → first placement; fresh 60s per pickup), expiry fires the current carrier | v1.4; the only personal foul — soften to a bell if honest carries fire |
 | Restaurant dwell | 15–30s, seeded (wait buffer; a guest whose suitcase rests leaves immediately) | v1.4 |
+| Stairs transit / breath | 3s per floor stride / 2s breath catch on arrival | v1.6 (AD-040, §7-external); the stairs' speed cost is the price of their anonymity |
+| Stairs stun | 20s (saboteur ambush, anonymous) | v1.6 (AD-040, §7-external); ≈ one guest cadence slot — shorten if ambush pressure starves triage |
 
 All v1.3 rows (AD-022) are provisional pending first playtests; changes are recorded
 decisions, never incidental edits. **v1.4 rows (AD-032) are additionally gated: the
@@ -310,6 +342,22 @@ recomputed when the guest-traffic spec is written (AD-022 trade-off).** **v1.5 n
 buzzer win leg is the settle score, not coverage — the 3.5 exit-bot gate calibrates
 SETTLE_TARGET (and re-checks the shrunken complaint budget's reachability) instead.**
 
+**v1.6 recompute (AD-040, one elevator + stairs):**
+
+- **Guest throughput, single car**: a served guest trip costs ≈ 3s arrival + up to 1s door
+  stages + 2s/stride ride (lobby→floor1 = 2 strides = 4s; floor3 = 8s) ≈ **8–12s per trip**
+  under continuous demand. Against the v1.3 cadence (30/24/18s per arrival at 4/5/6p) the
+  single car holds ≈ 1.5× headroom at the 6p worst case — **the cadence dials hold**; the
+  v1.4 dwell economy and the 3.5 gate re-prove it under live traffic.
+- **Staff–guest car contention is the new pressure**: staff rides now queue behind guests.
+  The stairs are the relief valve — a staff stairs hop (3s + 2s breath = 5s/floor, no wait)
+  is competitive with the elevator for single-floor trips whenever the car is busy, and
+  unobservable. Staff who ride the car remain visible and testifiable (AD-013 co-presence).
+- **Ambush economy**: a 20s stun ≈ one guest arrival slot (18s at 6p) — a stunned floor's
+  triage gap costs ≈ one cadence slot. **Kill check (pinned in the spec): an ambush never
+  creates a complaint — it only enables one the saboteur already set up.** The ambush is
+  also the saboteur's signature trace: stun times/places are testimony without identity.
+
 ## 9. Risks & Mitigations
 
 | Risk | Severity | Mitigation |
@@ -324,6 +372,8 @@ SETTLE_TARGET (and re-checks the shrunken complaint budget's reachability) inste
 | Innocent placer paralysis (staff learn "never place") → pipeline deadlocks at the restaurant | High (new, v1.4) | One-step diegetic confirm on unheard rooms (own-knowledge, not the assignment); 60s carry clock bounds suitcase hoarding; explicit first-playtest kill check |
 | Free mis-placement outpaces interception (budget burns faster than staff correct) | High (new, v1.4) | 3.5 balance gate before §7 v1.4 dials lock; reserve lever: make a wrong placement fire its placer on a second offense |
 | Passive saboteur (churn bleeds the budget with no crime) | High | v1.3: recap provenance exposes ghost play socially; §7 dials; explicit first-playtest kill check |
+| Ambush-into-complaint chain (stun a floor's staff → guest self-assigns into a trashed room → budget complaint; silent and repeatable) | High (new, v1.6) | Spec-pinned property: an ambush never creates a complaint, it only enables one already set up; reserve lever: a victim immunity window after recovery; the 3.5 balance gate re-checks budget reachability under ambush pressure — first-playtest kill check |
+| Single-car bottleneck (guests and staff share the one elevator) | Medium (new, v1.6) | §8 v1.6 recompute holds ≈1.5× headroom at the 6p cadence; the stairs are the staff relief valve — if lobby elevator waits feel miserable in playtests, reserve lever: staff-priority dispatch or a second stairwell |
 | Guest expressiveness underinvested → hotel feels dead, complaints feel like point-loss not story | Medium | v1.3: foot-tap, storm-out, anger cue are load-bearing animations, not polish (art brief scope) |
 | Voice floor raised (walkie lies, desk rotation, triage need talk) | Medium | v1.3: Discord dependency goes from load-bearing to near-required; accepted for MVP |
 

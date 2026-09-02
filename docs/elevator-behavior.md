@@ -1,5 +1,13 @@
 # Elevator Behavior — Accumulated Statements
 
+> **v1.6 amendment (AD-040, cycle 3.E): one elevator.** The west elevator was
+> replaced by the camera-free stairwell (prd §6.10, `.specs/features/stairs/`).
+> The surviving car is **car 1 at the EAST landing**; all two-car choice
+> machinery (AD-019/023/024/026/027 predicates) is collapsed or degenerate, and
+> wire payloads keep the `car` field, always `1`. Guests ride the single car as
+> full citizens (3.1); the stairwell is staff-side only (FR-34) and the ambush
+> (FR-35) lives entirely outside this document's elevator model.
+
 A single document collecting every recorded statement about how elevators
 behave, drawn from the authoritative sources. This doc **accumulates, it does
 not arbitrate**: where a statement was amended by a later decision, the

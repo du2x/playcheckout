@@ -79,3 +79,33 @@ prediction mirror — range expressions have exactly one home, and a mirrored
 expression in a caller is a defect. Nothing that emits, mutates, or knows
 about transport crosses this module's interface.
 _Avoid_: range mirror, client-side predicate, proximity check
+
+**Stairwell**:
+The camera-free transit at the west end of every floor (AD-040): staff-side
+only, one floor stride per activation (3 s) plus a 2 s breath catch on the
+arrival floor. Entry and arrival are observable; the interior publishes
+nothing — no positions, no co-transiting identities, no spectator view
+(FR-34). The speed cost is the price of the anonymity; the elevator is the
+fast-but-observed alternative.
+_Avoid_: west elevator (it no longer exists), back stairs, fire escape
+
+**Ambush**:
+The saboteur's stairs power (FR-35): an automatic, anonymous 20 s stun when
+the saboteur and a live staff member pass mid-stairs in opposite directions.
+No per-round limit; stationary players are inert; guests and fired players
+are immune. The victim learns only that they were ambushed — never by whom;
+the stun times and places are testimony without identity (the saboteur's
+signature trace). Spec-pinned property: an ambush never *creates* a
+complaint — it only enables one already set up.
+_Avoid_: kill, assassination, capture, neutralization (the shipped word is "stun")
+
+**Breath catch**:
+The 2 s immobile window on stairs arrival, for every stairs user. Mechanically
+inert: a player catching their breath neither ambushes nor can be ambushed.
+_Avoid_: cooldown, rest, recovery (recovery is the stun's end, not the breath)
+
+**Stun**:
+The ambush's effect on a staff member: 20 s immobile mid-transit, then the
+interrupted transit resumes to the intended floor. A stun pauses, it never
+drops a carried suitcase or clears a carry clock (a pause, not a foul).
+_Avoid_: knockout, kill, capture

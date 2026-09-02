@@ -52,6 +52,14 @@
       "license": "original work, repo-owned",
       "qa": "pending",
       "approval": "pending — art workstream"
+    },
+    {
+      "path": "apps/client/public/art/props/stairwell-door.png",
+      "role": "cycle 3.E manifest entry for the west stairwell marker (AD-040): a front-facing door frame reading as a stairwell entrance on every floor's west end — same perspective as the AD-036 elevator landing doors, visually distinct from them (no brass car trim), readable at landing-door scale; no role tell (FR-9)",
+      "size": "64x96",
+      "alpha": true,
+      "source": "pending authoring — manifest entry lands BEFORE authoring per the Phase 3 rule",
+      "license": "original work, repo-generated"
     }
   ]
 }

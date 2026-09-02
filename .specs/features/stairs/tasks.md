@@ -220,7 +220,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T7: Docs + §8 recompute
+### T7: Docs + §8 recompute ✅
 
 **What**: prd v1.6 (FR-5 amend, new stairs/ambush FRs, §7 constants rows, §8 one-car+stairs throughput recompute, §9 risks), roadmap 3.E row before 3.3, `CONTEXT.md` stairwell/ambush/stun vocabulary, `docs/elevator-behavior.md` one-car note, art manifest stairwell entry, spec traceability statuses → Implemented.
 **Where**: `prd.md`, `roadmap.md`, `CONTEXT.md`, `docs/elevator-behavior.md`, `docs/art/alternative/asset-manifest.json`, `.specs/features/stairs/spec.md`

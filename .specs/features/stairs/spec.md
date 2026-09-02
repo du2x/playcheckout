@@ -226,30 +226,30 @@ asserts zero complaints; §8 recompute lands as a prd edit reviewed at Design.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| STAIRS-01 | P1: One-elevator building | Design | Implemented |
-| STAIRS-02 | P1: One-elevator building | Design | Implemented |
-| STAIRS-03 | P1: One-elevator building | Design | Implemented |
-| STAIRS-04 | P1: One-elevator building | Design | Implemented |
-| STAIRS-05 | P1: Stairs transit | Design | Implemented |
-| STAIRS-06 | P1: Stairs transit | Design | Implemented |
-| STAIRS-07 | P1: Stairs transit | Design | Implemented |
-| STAIRS-08 | P1: Stairs transit | Design | Implemented |
-| STAIRS-09 | P1: Stairs transit | Design | Implemented |
-| STAIRS-10 | P1: Stairs transit | Design | Implemented |
-| STAIRS-11 | P1: Stairs transit | Design | Implemented |
-| STAIRS-12 | P1: Ambush | Design | Implemented |
-| STAIRS-13 | P1: Ambush | Design | Implemented |
-| STAIRS-14 | P1: Ambush | Design | Implemented |
-| STAIRS-15 | P1: Ambush | Design | Implemented |
-| STAIRS-16 | P1: Ambush | Design | Implemented |
-| STAIRS-17 | P2: Client presentation | Design | Implemented |
-| STAIRS-18 | P2: Client presentation | Design | Implemented |
-| STAIRS-19 | P2: Client presentation | Design | Implemented |
-| STAIRS-20 | P2: Client presentation | Design | Implemented |
-| STAIRS-21 | P2: Balance properties | Design | Implemented |
-| STAIRS-22 | P2: Balance properties | Design | Pending |
+| STAIRS-01 | P1: One-elevator building | Execute | Verified |
+| STAIRS-02 | P1: One-elevator building | Execute | Verified |
+| STAIRS-03 | P1: One-elevator building | Execute | Verified |
+| STAIRS-04 | P1: One-elevator building | Execute | Verified |
+| STAIRS-05 | P1: Stairs transit | Execute | Verified |
+| STAIRS-06 | P1: Stairs transit | Execute | Verified |
+| STAIRS-07 | P1: Stairs transit | Execute | Verified |
+| STAIRS-08 | P1: Stairs transit | Execute | Verified |
+| STAIRS-09 | P1: Stairs transit | Execute | Verified |
+| STAIRS-10 | P1: Stairs transit | Execute | Verified |
+| STAIRS-11 | P1: Stairs transit | Execute | Verified |
+| STAIRS-12 | P1: Ambush | Execute | Verified |
+| STAIRS-13 | P1: Ambush | Execute | Verified |
+| STAIRS-14 | P1: Ambush | Execute | Verified |
+| STAIRS-15 | P1: Ambush | Execute | Verified |
+| STAIRS-16 | P1: Ambush | Execute | Verified |
+| STAIRS-17 | P2: Client presentation | Execute | Verified |
+| STAIRS-18 | P2: Client presentation | Execute | Verified |
+| STAIRS-19 | P2: Client presentation | Execute | Verified |
+| STAIRS-20 | P2: Client presentation | Execute | Verified |
+| STAIRS-21 | P2: Balance properties | Execute | Verified |
+| STAIRS-22 | P2: Balance properties | Execute | Implemented |
 
-**Coverage:** 22 total, 0 mapped to tasks yet (Tasks phase pending), 22 unmapped ⚠️
+**Coverage:** 22 total, 22 mapped to tasks, 0 unmapped — 21 Verified (verifier PASS, `.specs/features/stairs/validation.md`), 1 Implemented (STAIRS-22, docs verified at T8)
 
 ---
 
