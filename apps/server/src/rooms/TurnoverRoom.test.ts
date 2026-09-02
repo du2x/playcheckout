@@ -2680,6 +2680,11 @@ describe('server:reconnect', () => {
         // Cycle 3.D (AD-039): the restore re-seeds the HUD settle counter —
         // the EXACT live count at drop time (a hardcoded constant fails here).
         expect(resumed.payload.settleScore).toBe(settledBeforeDrop)
+        // Cycle 3.3 (FR-31): the same re-seed for the complaint HUD — the
+        // EXACT trash-discovery count at drop time.
+        const discoveredCount = (col: ReturnType<typeof collectAll>) =>
+          col.types().filter((t) => t === 'guest:discovered').length
+        expect(resumed.payload.complaints).toBe(discoveredCount(hostCollector))
         await restoredCollector.waitFor('movement:snapshot')
         // Others see the rectangle come back: one re-announcing player:moved.
         instance.__driveTicks(2)
@@ -2700,6 +2705,9 @@ describe('server:reconnect', () => {
         expect(recap.payload.settleScore).toBe(settledFinal)
         expect(recap.payload.settleScore).toBeGreaterThan(0)
         expect(recap.payload.settleTarget).toBe(5)
+        // Cycle 3.3: the recap carries the final complaint count — the live
+        // trash-discovery stream total (equality, not a constant).
+        expect(recap.payload.complaints).toBe(discoveredCount(hostCollector))
         off()
         restored.leave()
         host.leave()
@@ -3002,6 +3010,47 @@ describe('server:suitcase_carry', () => {
       c.leave()
     } finally {
       delete process.env.TURNOVER_TEST_GUEST_SCALE
+    }
+  })
+})
+
+// Spec COMP-13/14 (gate scenario server:complaint_budget): the recap's
+// complaint count is the LIVE trash-discovery stream total, not a constant —
+// the churn economy saturates the fresh pool, so discoveries are guaranteed
+// once checkout churn outpaces the 24-room pool's cleaning (nobody cleans in
+// this scenario): every later self-assign walks into a churned room.
+describe('server:complaint_budget', () => {
+  it('the recap carries the final complaint count from the live stream (COMP-13)', async () => {
+    process.env.TURNOVER_TEST_GUEST_SCALE = '0.05'
+    process.env.TURNOVER_TEST_SHIFT_SECONDS = '200'
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const collector = collectAll(host)
+      const instance = TurnoverRoom.instances.at(-1)
+      if (instance === undefined) throw new Error('no room instance')
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      // Drive out the shift: the churn economy saturates the fresh pool long
+      // before the buzzer, so at least one trash discovery is guaranteed.
+      for (let driven = 0; driven < 4000 && instance.__phase() === 'round'; driven += 100) {
+        instance.__driveTicks(100)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      await vi.waitFor(() => expect(instance.__phase()).toBe('results'))
+      const recap = await collector.waitFor('round:recap')
+      const discovered = collector.types().filter((t) => t === 'guest:discovered').length
+      expect(discovered).toBeGreaterThanOrEqual(1)
+      expect(recap.payload.complaints).toBe(discovered)
+      // The count rides the recap with the settle verdict inputs (3.D shape).
+      expect(typeof recap.payload.settleScore).toBe('number')
+      collector.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      delete process.env.TURNOVER_TEST_GUEST_SCALE
+      delete process.env.TURNOVER_TEST_SHIFT_SECONDS
     }
   })
 })

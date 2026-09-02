@@ -204,7 +204,13 @@ describe('round-end reducer', () => {
     const entries = [
       { kind: 'crime' as const, tick: 40, floor: 'floor1' as const, room: 2 as const, fresh: true },
     ]
-    const s = reduce(ended, { type: 'round-recap', entries, settleScore: 4, settleTarget: 7 })
+    const s = reduce(ended, {
+      type: 'round-recap',
+      entries,
+      settleScore: 4,
+      settleTarget: 7,
+      complaints: 2,
+    })
     expect(s.results?.entries).toEqual(entries)
     // Cycle 3.D (AD-039): the recap carries the verdict's inputs to the view.
     expect(s.results?.settleScore).toBe(4)
@@ -215,6 +221,7 @@ describe('round-end reducer', () => {
       entries,
       settleScore: 4,
       settleTarget: 7,
+      complaints: 2,
     })
     expect(stray.results).toBeNull()
     expect(stray.view).toBe('lobby')
@@ -231,6 +238,7 @@ describe('round-end reducer', () => {
         playerIds: ['p1', 'p2'],
         ownFired: false,
         settleScore: 0,
+        complaints: 0,
       })
       expect(s.view).toBe('round')
       expect(s.roundPlayerIds).toEqual(['p1', 'p2'])
@@ -284,6 +292,7 @@ describe('reconnecting client', () => {
       playerIds: ['p1', 'p2'],
       ownFired: false,
       settleScore: 0,
+      complaints: 0,
     })
     expect(s.view).toBe('round')
     expect(s.reconnecting).toBe(false)

@@ -433,6 +433,7 @@ export class TurnoverRoom extends Room {
       playerIds: sim.playerIds,
       ownFired,
       settleScore: sim.settledCount,
+      complaints: sim.complaintCount,
     })
     if (ownFired) {
       this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
@@ -649,6 +650,7 @@ export class TurnoverRoom extends Room {
       entries,
       settleScore: sim?.settledCount ?? 0,
       settleTarget: settleTargetFor(lobbySize),
+      complaints: sim?.complaintCount ?? 0,
     })
     this.phase = 'results'
     // Roles were the sim's alone — dropping it wipes the deal (AD-002); the

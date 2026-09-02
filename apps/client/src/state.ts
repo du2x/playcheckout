@@ -148,6 +148,7 @@ export type ViewAction =
       entries: readonly RecapEntry[]
       settleScore: number
       settleTarget: number
+      complaints: number
     }
   | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
   | { type: 'connection-dropped' }
@@ -158,6 +159,8 @@ export type ViewAction =
       ownFired: boolean
       /** The current settle score (cycle 3.D, AD-039): re-seeds the HUD. */
       settleScore: number
+      /** The current complaint count (cycle 3.3, FR-31): re-seeds the HUD. */
+      complaints: number
     }
   | { type: 'role-dealt'; role: Role }
   | { type: 'buzzer' }

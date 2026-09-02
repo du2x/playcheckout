@@ -521,8 +521,10 @@ describe('protocol registry', () => {
       playerIds: ['p1'],
       ownFired: false,
       settleScore: 0,
+      complaints: 0,
     }
     expect(Object.keys(resumed).sort()).toEqual([
+      'complaints',
       'ownFired',
       'playerIds',
       'remainingTicks',

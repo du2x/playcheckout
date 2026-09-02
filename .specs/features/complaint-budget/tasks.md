@@ -156,7 +156,7 @@ dropCarry absorb precedent
 
 ---
 
-### T3: Complaint count on recap + resume (server)
+### T3: Complaint count on recap + resume (server) — DONE
 
 **What**: Extend `RoundRecap` with `complaints` and `RoundResumed` with `complaints`;
 fill both from the sim (`complaintCount`) at build time; assert both payload fields
@@ -178,7 +178,11 @@ by value in the room tests.
 - [x] `round:recap` carries the exact final complaint count (asserted by value)
 - [x] `round:resumed` carries the current complaint count
 - [x] Registry row policies unchanged (recap all / resumed self)
-- [x] `pnpm vitest run apps/server` green
+- [x] `pnpm vitest run apps/server` green (81; new `server:complaint_budget`
+      drives the churn economy to churn-pool saturation so ≥1 discovery is
+      guaranteed and a constant-zero mutant dies)
+- Note: the mapper/state plumbing for the two new payload fields rode this
+  task (mappers.test + state actions) — the exhaustive-typing contract again.
 
 **Tests**: integration
 **Gate**: quick

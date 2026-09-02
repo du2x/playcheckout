@@ -228,8 +228,16 @@ describe('round-end mappers (cycle 2.9)', () => {
 
   it('maps round:recap 1:1 carrying the entries array and the verdict inputs (FR-22, 3.D)', () => {
     const entries = [{ kind: 'crime', tick: 4, floor: 'floor1', room: 2, fresh: true }] as const
-    const action = first(MAPPERS['round:recap']({ entries, settleScore: 3, settleTarget: 7 }))
-    expect(action).toEqual({ type: 'round-recap', entries, settleScore: 3, settleTarget: 7 })
+    const action = first(
+      MAPPERS['round:recap']({ entries, settleScore: 3, settleTarget: 7, complaints: 1 }),
+    )
+    expect(action).toEqual({
+      type: 'round-recap',
+      entries,
+      settleScore: 3,
+      settleTarget: 7,
+      complaints: 1,
+    })
   })
 
   it('wraps spectator:snapshot whole — every baseline row survives (FR-20)', () => {
@@ -250,6 +258,7 @@ describe('round-end mappers (cycle 2.9)', () => {
         playerIds: ['p1', 'p2'],
         ownFired: false,
         settleScore: 2,
+        complaints: 1,
       }),
     )
     expect(action).toEqual({
@@ -258,6 +267,7 @@ describe('round-end mappers (cycle 2.9)', () => {
       playerIds: ['p1', 'p2'],
       ownFired: false,
       settleScore: 2,
+      complaints: 1,
     })
   })
 })

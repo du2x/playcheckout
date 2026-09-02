@@ -523,6 +523,9 @@ export interface RoundRecap {
    *  buzzer verdict's inputs, public post-round. */
   readonly settleScore: number
   readonly settleTarget: number
+  /** Final trash-discovery complaint count (cycle 3.3, FR-31) — the budget
+   *  loss leg's verdict input, public post-round. */
+  readonly complaints: number
 }
 
 /** One room-state row of the spectator baseline. */
@@ -562,6 +565,9 @@ export interface RoundResumed {
   /** The current settle score (cycle 3.D, AD-039): the reconnecting client
    *  re-seeds its HUD counter — it never saw the settle stream it missed. */
   readonly settleScore: number
+  /** The current complaint count (cycle 3.3, FR-31): the reconnecting
+   *  client re-seeds its complaint HUD the same way. */
+  readonly complaints: number
 }
 
 /**
