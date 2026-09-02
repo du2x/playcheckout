@@ -18,6 +18,7 @@ import {
   moveStartIntentSchema,
   moveStopIntentSchema,
   settleTargetFor,
+  stairsEnterIntentSchema,
   suitcasePickupIntentSchema,
   suitcasePlaceIntentSchema,
   TUNING,
@@ -214,6 +215,21 @@ export class TurnoverRoom extends Room {
     this.onMessage('elevator:press', elevatorPressIntentSchema, (client, intent) => {
       if (!this.ensureLive(client.sessionId)) return
       this.movement.pressFloor(client.sessionId, intent.floor)
+    })
+    // Stairwell entry (cycle 3.E, AD-040): the sim guards every branch (mouth,
+    // direction, in-car, guest) and rejects silently — nothing on the wire. An
+    // entry is a visibility change (the enterer lost their floor), so the room
+    // answers with a personal snapshot (AD-017 exit-snapshot mechanism) that
+    // carries their own stairs row.
+    this.onMessage('stairs:enter', stairsEnterIntentSchema, (client, intent) => {
+      if (!this.ensureLive(client.sessionId)) return
+      if (this.movement.enterStairs(client.sessionId, intent.dir) === 'entered') {
+        this.router.toSelf(
+          'movement:snapshot',
+          client.sessionId,
+          this.movementSnapshotFor(client.sessionId),
+        )
+      }
     })
     // Accusation (cycle 2.8, FR-17): eligibility lives in the sim — staff-only,
     // live players, same floor within TUNING.ACCUSATION_RANGE_TILES. The room
@@ -532,6 +548,13 @@ export class TurnoverRoom extends Room {
       ...(testGuestTiming() === undefined ? {} : { guestTiming: testGuestTiming() }),
       ...(shiftTicks === undefined ? {} : { totalTicks: shiftTicks }),
     })
+    // AD-040 ambush authority (design: the AD-028 adapter inverted): the room
+    // pushes its role/liveness view INTO the movement layer at round start.
+    // The sim's own REND-02 liveness rule is the single home of "live staff".
+    this.movement.setAmbushAuthority({
+      isSaboteur: (id) => this.sim?.saboteurId === id,
+      isLiveStaff: (id) => this.sim?.isLiveStaff(id) ?? false,
+    })
   }
 
   /**
@@ -632,6 +655,11 @@ export class TurnoverRoom extends Room {
     // reveal already happened on the wire, so nothing is lost.
     this.sim = null
     this.fired.clear()
+    // AD-040: the ambush authority dies with the round (no ambush pre-round or
+    // at results), and every stairs occupant resolves to their destination so
+    // the results snapshots show honest positions (stun cleared, no breath).
+    this.movement.setAmbushAuthority(null)
+    this.movement.resolveStairsForResults()
     // Guests are round-scoped weather (cycle 3.1, GUEST-11): the sim is dead,
     // so their movers leave the phase-free movement layer — no guest state or
     // position streams survive into results/lobby.
@@ -704,6 +732,11 @@ export class TurnoverRoom extends Room {
       cars: this.movement.carFloors(),
       guestIds: this.movement.guestIds(),
     }
+  }
+
+  /** Test hook: one player's stairs state (cycle 3.E staging + asserts). */
+  __stairsStateOf(sessionId: string): unknown {
+    return this.movement.stairsStateOf(sessionId) ?? null
   }
 
   /**

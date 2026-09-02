@@ -168,7 +168,7 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8
 
 ---
 
-### T5: Server wiring
+### T5: Server wiring ✅
 
 **What**: Register the `stairs:enter` zod intent handler, wire the ambush authority adapter at round start (cleared at results), push personal `movement:snapshot` on stairs entry, call `resolveStairsForResults()` on the results transition (destination floor, stun cleared), and cover the routing of both new rows.
 **Where**: `apps/server/src/rooms/TurnoverRoom.ts` (+ `TurnoverRoom.test.ts`, `router.test.ts` if needed)

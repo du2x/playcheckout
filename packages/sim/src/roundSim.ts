@@ -277,17 +277,23 @@ export class RoundSim {
     return events
   }
 
+  /** Live staff = round players − fired − ghosted − the saboteur (REND-02).
+   *  Public for the room's AD-040 ambush-authority adapter — the same rule
+   *  `liveStaffCount` consumes, in one home. */
+  isLiveStaff(playerId: string): boolean {
+    return (
+      playerId !== this.justice.saboteurId &&
+      !this.justice.isFired(playerId) &&
+      !this.ghosted.has(playerId) &&
+      this.playerIds.includes(playerId)
+    )
+  }
+
   /** Live staff = round players − fired − ghosted − the saboteur (REND-02). */
   private liveStaffCount(): number {
     let count = 0
     for (const playerId of this.playerIds) {
-      if (
-        playerId !== this.justice.saboteurId &&
-        !this.justice.isFired(playerId) &&
-        !this.ghosted.has(playerId)
-      ) {
-        count++
-      }
+      if (this.isLiveStaff(playerId)) count++
     }
     return count
   }

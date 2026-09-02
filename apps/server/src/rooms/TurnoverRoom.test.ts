@@ -3066,3 +3066,200 @@ describe('server:restaurant_floor', () => {
     }
   })
 })
+
+// --- Cycle 3.E (AD-040): the stairs transport shell. server:stairs pins the
+// stairs:enter intent path (entry snapshot, silent rejection), the ambush
+// rows' private routing, the authority across phases, and the results
+// resolution (destination placement, stun cleared).
+describe('server:stairs', () => {
+  function sleep(ms: number) {
+    return new Promise((r) => setTimeout(r, ms))
+  }
+
+  /** Walk a player to the west stairwell mouth (x clamps at 0) and stop. */
+  async function walkToWestMouth(instance: TurnoverRoom, player: ClientRoom): Promise<void> {
+    const id = player.sessionId
+    player.send('move:start', { type: 'move:start', dir: 'left' })
+    await sleep(30) // the intent must land before the drive loop starts
+    await driveUntilMovement(instance, (s) => {
+      const me = (s.positions as { playerId: string; x: number }[]).find((p) => p.playerId === id)
+      return me !== undefined && me.x <= 0.9
+    })
+    player.send('move:stop', { type: 'move:stop' })
+    await sleep(30)
+  }
+
+  it('answers a mouth stairs:enter with a personal snapshot carrying the stairs row (STAIRS-05/08)', async () => {
+    const [host, a] = await roomWithFour()
+    const hostCollector = collectAll(host)
+    const aCollector = collectAll(a)
+    const instance = TurnoverRoom.instances.at(-1)
+    // Phase-free movement (AD-005/015): the stairwell works in the lobby too.
+    await walkToWestMouth(instance as TurnoverRoom, a)
+    a.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+    await sleep(30)
+    instance?.__driveTicks(1)
+    const snap = await aCollector.waitFor('movement:snapshot')
+    expect(snap.payload.stairs).toMatchObject({
+      from: 'lobby',
+      to: 'mezzanine',
+      phase: 'transit',
+    })
+    // The origin floor sees the departure only — no position, no direction.
+    const left = await hostCollector.waitFor('player:left-floor')
+    expect(left.payload).toEqual({ playerId: a.sessionId, floor: 'lobby' })
+    hostCollector.stop()
+    aCollector.stop()
+    host.leave()
+    a.leave()
+  })
+
+  it('rejects a mid-hall stairs:enter silently — nothing on the wire (STAIRS-10)', async () => {
+    const [host] = await roomWithFour()
+    let pushes = 0
+    const off = host.onMessage('movement:snapshot', () => {
+      pushes++
+    })
+    host.send('stairs:enter', { type: 'stairs:enter', dir: 'up' }) // center: no mouth
+    await sleep(30)
+    TurnoverRoom.instances.at(-1)?.__driveTicks(2)
+    await sleep(60)
+    expect(pushes).toBe(0)
+    off()
+    host.leave()
+  })
+
+  it('routes the ambush rows privately: victim, saboteur, and nobody else (STAIRS-12/14)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((r) => collectAll(r))
+      const instance = TurnoverRoom.instances.at(-1) as TurnoverRoom
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      instance.__driveTicks(1) // the deal flushes on the round's first tick
+      const roles = await Promise.all(collectors.map((co) => co.waitFor('role:dealt')))
+      const saboteurIdx = roles.findIndex((r) => r.payload.role === 'saboteur')
+      const victimIdx = roles.findIndex((r, i) => i !== saboteurIdx && r.payload.role === 'staff')
+      const bystanderIdx = roles.findIndex(
+        (r, i) => i !== saboteurIdx && i !== victimIdx && r.payload.role === 'staff',
+      )
+      expect(saboteurIdx).toBeGreaterThanOrEqual(0)
+      expect(victimIdx).toBeGreaterThanOrEqual(0)
+      const saboteur = clients[saboteurIdx] as ClientRoom
+      const victim = clients[victimIdx] as ClientRoom
+
+      // The victim takes the stairs up and frees at the mezzanine mouth; the
+      // saboteur walks west meanwhile (one shared room clock).
+      await walkToWestMouth(instance, victim)
+      victim.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+      await sleep(30)
+      for (let i = 0; i < 200 && instance.__stairsStateOf(victim.sessionId) !== null; i += 2) {
+        instance.__driveTicks(2)
+      }
+      expect(instance.__stairsStateOf(victim.sessionId)).toBeNull()
+      await walkToWestMouth(instance, saboteur)
+      // Opposite transits: the victim descends as the saboteur ascends.
+      victim.send('stairs:enter', { type: 'stairs:enter', dir: 'down' })
+      saboteur.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+      await sleep(30)
+      instance.__driveTicks(3)
+
+      const ambushed = await (collectors[victimIdx] as ReturnType<typeof collectAll>).waitFor(
+        'stairs:ambushed',
+      )
+      expect(ambushed.payload).toEqual({
+        playerId: victim.sessionId,
+        stunSeconds: TUNING.STAIRS_STUN_SECONDS,
+      })
+      const confirm = await (collectors[saboteurIdx] as ReturnType<typeof collectAll>).waitFor(
+        'stairs:ambush',
+      )
+      expect(confirm.payload).toEqual({ playerId: saboteur.sessionId, victimId: victim.sessionId })
+      // Both rows are 'self' — the bystander never sees either.
+      let leaked = false
+      try {
+        await (collectors[bystanderIdx] as ReturnType<typeof collectAll>).waitFor(
+          'stairs:ambushed',
+          300,
+        )
+        leaked = true
+      } catch {
+        /* silence */
+      }
+      try {
+        await (collectors[bystanderIdx] as ReturnType<typeof collectAll>).waitFor(
+          'stairs:ambush',
+          300,
+        )
+        leaked = true
+      } catch {
+        /* silence */
+      }
+      expect(leaked).toBe(false)
+      for (const co of collectors) co.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('resolves stairs occupants to their destination at the buzzer; the authority dies (MOVE-18)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '5')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((r) => collectAll(r))
+      const instance = TurnoverRoom.instances.at(-1) as TurnoverRoom
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+      instance.__driveTicks(1) // the deal flushes on the round's first tick
+      await Promise.all(collectors.map((co) => co.waitFor('role:dealt')))
+      // The walk takes ~52 of the 100-tick shift; the entry lands mid-round
+      // with ~40 transit ticks left at the buzzer.
+      await walkToWestMouth(instance, a)
+      a.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+      await sleep(30)
+      for (let i = 0; i < 100 && instance.__phase() === 'round'; i++) instance.__driveTicks(2)
+      expect(instance.__phase()).toBe('results')
+      const entrySnap = await (collectors[1] as ReturnType<typeof collectAll>).waitFor(
+        'movement:snapshot',
+      )
+      expect(entrySnap.payload.stairs).toMatchObject({ from: 'lobby', to: 'mezzanine' })
+      const resultsSnap = await (collectors[1] as ReturnType<typeof collectAll>).waitFor(
+        'movement:snapshot',
+      )
+      expect(resultsSnap.payload.stairs).toBeUndefined()
+      const own = (resultsSnap.payload.players as { playerId: string; floor: string }[]).find(
+        (p) => p.playerId === a.sessionId,
+      )
+      expect(own?.floor).toBe('mezzanine')
+      // The authority died with the round: an opposite pair post-results is
+      // a plain transit — no ambush ever fires.
+      await walkToWestMouth(instance, host)
+      a.send('stairs:enter', { type: 'stairs:enter', dir: 'down' })
+      host.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+      await sleep(30)
+      instance.__driveTicks(3)
+      let fired = false
+      try {
+        await (collectors[0] as ReturnType<typeof collectAll>).waitFor('stairs:ambushed', 300)
+        fired = true
+      } catch {
+        /* silence */
+      }
+      expect(fired).toBe(false)
+      for (const co of collectors) co.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
