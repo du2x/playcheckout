@@ -107,10 +107,10 @@ T5 → T6
 
 **Done when**:
 
-- [ ] `sim:trash_provenance`: churn→`settled`+`churn` → re-trash→`trashed`+`sabotage`; sabotage re-trash keeps `sabotage`+fresh window; initial 7 are sabotage; prep clears to `none`
-- [ ] Tenancy emits: settle flips Occupied sameFloor, checkout flips Vacant, discovery flips Vacant with room still `trashed`/`settled` (vacant-but-trashed footprint)
-- [ ] Recap complaint entries carry `provenance`+`actorId` on sabotage, `churn` with no actor, `fresh` exact, and wrong-delivery complaints absent
-- [ ] `pnpm vitest run packages/sim` green (new suite + existing suites green)
+- [x] `sim:trash_provenance`: churn→`settled`+`churn` → re-trash→`trashed`+`sabotage`; sabotage re-trash keeps `sabotage`+fresh window; prep clears to `none`
+- [x] Tenancy emits: settle flips Occupied sameFloor, checkout flips Vacant, discovery flips Vacant with room still `trashed`/`settled` (vacant-but-trashed footprint)
+- [x] Recap complaint entries carry `provenance`+`actorId` on sabotage, `churn` with no actor, `fresh` exact, and wrong-delivery complaints absent
+- [x] `pnpm vitest run packages/sim` green (new suite + existing suites green)
 
 **Tests**: unit
 **Gate**: quick

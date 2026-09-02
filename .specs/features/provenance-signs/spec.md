@@ -59,7 +59,7 @@ Every ambiguity is resolved or recorded here — nothing is left silently unclea
 3. WHEN a room is `prepped` (staff prep completes) THEN the sim SHALL clear its provenance to `none` — a clean room has no author. <!-- event-driven -->
 4. IF a room is `trashed` with provenance `sabotage` and the saboteur re-trashes it THEN the sim SHALL keep the room `trashed` with provenance `sabotage` and a fresh window (overwrites freshness deadline). <!-- unwanted-behavior -->
 5. IF a room is `settled` with provenance `churn` and the saboteur re-trashes it THEN the sim SHALL set the room to `trashed` with provenance `sabotage` — laundering churn into suspicious. <!-- unwanted-behavior -->
-6. The system SHALL initialize the 7 t=0 trashed rooms with provenance `sabotage` — never churn. <!-- ubiquitous -->
+6. WHERE the building is seeded with 7 t=0 trashed rooms THEN the system SHALL set their provenance to `sabotage` — never churn; until seeded, no initial provenance exists (all rooms start `fresh`+`none`). <!-- optional-feature -->
 7. IF a room is `fresh` (never prepped) THEN the sim SHALL treat its provenance as `none` — pristine rooms carry no author. <!-- unwanted-behavior -->
 8. WHEN a trash-discovery complaint fires (`guest:discovered`) THEN the sim SHALL record the complaint's provenance from the room's provenance at discovery tick (`sabotage` vs `churn`) alongside the freshness tier. <!-- event-driven -->
 

@@ -71,7 +71,7 @@ graph TD
 - **Dependencies**: `RoomState`, `TUNING`
 - **Reuses**: Existing `states` + `carded` + `settleAt` maps; same lifecycle hooks (`tick` completions, `churnTrash`, prep completion)
 - **Behavior**:
-  - Init: all 24 `fresh`+`none`; then seed the 7 t=0 `trashed`+`sabotage` deterministically (lowest floors/rooms ascending or seeded — choose lowest 7 — pinned by test)
+  - Init: all 24 `fresh`+`none` (the 7 t=0 trashed seed is deferred — until seeded, no initial provenance exists; the WHERE clause in PROV-06 covers the future seed as `sabotage`)
   - `startWork` un-prep completion → `trashed`+`sabotage`, overwriting any prior churn + resetting `settleAt`
   - `churnTrash` → `settled`+`churn`
   - prep completion → `prepped`+`none` (provenance cleared)

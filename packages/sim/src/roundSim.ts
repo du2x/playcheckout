@@ -1,4 +1,5 @@
 import {
+  type FloorId,
   type GuestFloorId,
   inAccuseRange,
   inDeskZone,
@@ -240,7 +241,26 @@ export class RoundSim {
           this.work.churnTrash(guestEvent.floor as GuestFloorId, guestEvent.room)
         }
         // FR-31: the desk report is the ONLY budget-counting complaint.
-        if (guestEvent.type === 'guest:discovered') this.complaintTotal++
+        if (guestEvent.type === 'guest:discovered') {
+          this.complaintTotal++
+          // FR-32/FR-22 (3.4): record complaint provenance at discovery tick — the room's author at that instant.
+          const prov = this.work.provenanceOf(
+            guestEvent.floor as GuestFloorId,
+            guestEvent.room,
+          )
+          const provenance = prov === 'churn' ? 'churn' : 'sabotage'
+          const actorId = provenance === 'sabotage' ? this.justice.saboteurId : undefined
+          this.journal.push({
+            kind: 'complaint',
+            tick: tickIndex,
+            floor: guestEvent.floor,
+            room: guestEvent.room,
+            guestId: guestEvent.guestId,
+            fresh: guestEvent.fresh,
+            provenance,
+            ...(actorId !== undefined ? { actorId } : {}),
+          } as RecapEntry)
+        }
         events.push(guestEvent)
       }
       // Carry-clock expiry (cycle 3.B, SUI-18): fire the current carrier
@@ -465,6 +485,16 @@ export class RoundSim {
   /** Resting suitcases for the movement snapshot (cycle 3.B, sameFloor rows). */
   restingSuitcases(): ReturnType<GuestSim['restingSuitcases']> {
     return this.guests?.restingSuitcases() ?? []
+  }
+
+  /** Tenancy rows for the viewer's floor snapshot (cycle 3.4, FR-33 sameFloor). */
+  tenanciesOn(floor: FloorId): ReturnType<GuestSim['tenanciesOn']> {
+    return this.guests?.tenanciesOn(floor) ?? []
+  }
+
+  /** All tenancies — the spectator baseline slice (cycle 3.4, FR-33). */
+  allTenancies(): ReturnType<GuestSim['allTenancies']> {
+    return this.guests?.allTenancies() ?? []
   }
 
   /** The deal's single saboteur — the room needs it for the abort path (FR-25). */

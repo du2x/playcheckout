@@ -1,4 +1,12 @@
-import type { FloorId, GuestFloorId, Role, RoomIndex, RoomState, SimEvent } from '@turnover/shared'
+import type {
+  FloorId,
+  GuestFloorId,
+  Role,
+  RoomIndex,
+  RoomState,
+  SimEvent,
+  TrashProvenance,
+} from '@turnover/shared'
 import { roomIndexAtMilli, TUNING } from '@turnover/shared'
 import { TICK_HZ } from './tick.js'
 
@@ -44,6 +52,8 @@ const roomKey = (floor: GuestFloorId | 'lobby', room: RoomIndex): string => `${f
 
 export class WorkChannels {
   private readonly states = new Map<string, RoomState>()
+  /** Parallel author dimension (cycle 3.4, FR-32): per-room provenance, only trashed/settled carry sabotage/churn */
+  private readonly provenances = new Map<string, TrashProvenance>()
   private readonly channels = new Map<string, Channel>()
   private readonly lastPositions = new Map<string, PositionSample>()
   /** Last segment key seen per player — `room:observed` fires on changes only. */
@@ -59,6 +69,7 @@ export class WorkChannels {
     for (let room = 1 as RoomIndex; room <= 8; room = (room + 1) as RoomIndex) {
       for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
         this.states.set(roomKey(floor, room), 'fresh')
+        this.provenances.set(roomKey(floor, room), 'none')
       }
     }
   }
@@ -66,6 +77,11 @@ export class WorkChannels {
   /** The current state of one room (guest floors only). */
   stateOf(floor: GuestFloorId, room: RoomIndex): RoomState {
     return this.states.get(roomKey(floor, room)) ?? 'fresh'
+  }
+
+  /** Author dimension (cycle 3.4, FR-32): provenance of the trash in one room. */
+  provenanceOf(floor: GuestFloorId, room: RoomIndex): TrashProvenance {
+    return this.provenances.get(roomKey(floor, room)) ?? 'none'
   }
 
   /**
@@ -79,7 +95,9 @@ export class WorkChannels {
    * Idempotent.
    */
   churnTrash(floor: GuestFloorId, room: RoomIndex): void {
-    this.states.set(roomKey(floor, room), 'settled')
+    const key = roomKey(floor, room)
+    this.states.set(key, 'settled')
+    this.provenances.set(key, 'churn')
   }
 
   /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */
@@ -237,10 +255,14 @@ export class WorkChannels {
             events.push({ type: 'room:carded', floor: channel.floor, room: channel.room })
             // EVID-09: a prepped room has no trash to settle — cancel.
             this.settleAt.delete(key)
+            // FR-32 (3.4): a clean room has no author.
+            this.provenances.set(key, 'none')
           } else {
             // EVID-06: the window starts at the sabotage completion tick;
             // re-trash overwrites (EVID-10).
             this.settleAt.set(key, this.elapsedTicks + FRESHNESS_TICKS)
+            // FR-32 (3.4): sabotage trash is sabotage provenance, overwriting churn.
+            this.provenances.set(key, 'sabotage')
             // EVID-12: the rustle fires on the same tick as the sabotage —
             // the Router's earshot policy narrows delivery to earshot (FR-13).
             events.push({ type: 'room:rustle', floor: channel.floor, room: channel.room })

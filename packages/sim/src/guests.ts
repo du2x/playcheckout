@@ -310,6 +310,8 @@ export class GuestSim {
         floor: assigned.floor,
         room: assigned.room,
       })
+      // FR-33 (3.4): checkout flips the sign to Vacant.
+      events.push({ type: 'room:tenancy', floor: assigned.floor, room: assigned.room, occupied: false })
     }
 
     // Movement drivers — one intent per guest per tick.
@@ -637,6 +639,8 @@ export class GuestSim {
     const dwellTicks = Math.max(1, Math.round(dwellSeconds * this.dwellScale * TICK_HZ))
     g.dwellEndsAt = tick + dwellTicks
     events.push({ type: 'guest:settled', guestId: g.id, floor, room })
+    // FR-33 (3.4): settle flips the door sign to Occupied — sameFloor hallway-visible.
+    events.push({ type: 'room:tenancy', floor, room, occupied: true })
   }
 
   /**
@@ -694,6 +698,8 @@ export class GuestSim {
     events: SimEvent[],
   ): void {
     events.push({ type: 'guest:angered', guestId: g.id, floor, room })
+    // FR-33 (3.4): discovery departure flips Vacant — the vacant-but-trashed footprint.
+    events.push({ type: 'room:tenancy', floor, room, occupied: false })
     this.reserved.delete(roomKey(floor, room))
     this.suitcases.delete(g.id)
     g.complaintReport = { floor, room, fresh }
@@ -851,6 +857,25 @@ export class GuestSim {
   /** Snapshot query for tests and the room's routing helpers. */
   tenantedRooms(): { floor: GuestFloorId; room: RoomIndex }[] {
     return this.allRoomKeys().filter((r) => this.tenanted.has(roomKey(r.floor, r.room)))
+  }
+
+  /** Tenancy rows for a single floor — the per-floor snapshot slice (FR-33 sameFloor). */
+  tenanciesOn(floor: FloorId): { floor: FloorId; room: RoomIndex; occupied: boolean }[] {
+    const rows: { floor: FloorId; room: RoomIndex; occupied: boolean }[] = []
+    for (const room of ROOM_INDEXES) {
+      const key = roomKey(floor as GuestFloorId, room as RoomIndex)
+      if (this.tenanted.has(key)) rows.push({ floor, room: room as RoomIndex, occupied: true })
+    }
+    return rows
+  }
+
+  /** All tenanted rows — the spectator baseline slice. */
+  allTenancies(): { floor: FloorId; room: RoomIndex; occupied: boolean }[] {
+    const rows: { floor: FloorId; room: RoomIndex; occupied: boolean }[] = []
+    for (const { floor, room } of this.allRoomKeys()) {
+      if (this.tenanted.has(roomKey(floor, room))) rows.push({ floor, room, occupied: true })
+    }
+    return rows
   }
 
   /** The per-round settle score (cycle 3.D, AD-039): committed settles on
