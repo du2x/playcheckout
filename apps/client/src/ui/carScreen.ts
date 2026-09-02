@@ -313,14 +313,15 @@ const STYLE = `
 .car-screen-hint { font-size: 10px; color: #556677; margin-top: 10px; letter-spacing: 1px; }
 `
 
-/** Mount once per HUD build; the stylesheet is injected idempotently. */
+/** Mount once per HUD build; the stylesheet is injected idempotently and kept in sync. */
 export function buildCarScreen(): HTMLElement {
-  if (document.getElementById(STYLE_ID) === null) {
-    const style = document.createElement('style')
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null
+  if (style === null) {
+    style = document.createElement('style')
     style.id = STYLE_ID
-    style.textContent = STYLE
     document.head.appendChild(style)
   }
+  style.textContent = STYLE
   return el('div', { id: 'elevator-car-screen', hidden: '' }, [
     el('div', { class: 'car-screen-inner' }, [
       el('div', { class: 'car-screen-header' }, [

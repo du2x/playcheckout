@@ -203,14 +203,15 @@ const STYLE = `
 }
 `
 
-/** Mount once per HUD build; the stylesheet is injected idempotently. */
+/** Mount once per HUD build; the stylesheet is injected idempotently and kept in sync. */
 export function buildStairScreen(): HTMLElement {
-  if (document.getElementById(STYLE_ID) === null) {
-    const style = document.createElement('style')
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null
+  if (style === null) {
+    style = document.createElement('style')
     style.id = STYLE_ID
-    style.textContent = STYLE
     document.head.appendChild(style)
   }
+  style.textContent = STYLE
   return el('div', { id: 'elevator-stair-screen', hidden: '' }, [
     el('div', { class: 'stair-screen-inner' }, [
       el('div', { class: 'stair-screen-header' }, [
