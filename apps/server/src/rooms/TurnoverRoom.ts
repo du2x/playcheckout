@@ -141,20 +141,28 @@ export class TurnoverRoom extends Room {
     sessionId: string,
     cardedRooms?: readonly RoomIndex[],
   ): MovementSnapshot {
-    const snap: MovementSnapshot =
+    let snap: MovementSnapshot =
       cardedRooms === undefined
         ? this.movement.snapshotFor(sessionId)
         : this.movement.snapshotFor(sessionId, cardedRooms)
     const sim = this.sim
     if (sim === null) return snap
-    const all = sim.restingSuitcases()
-    if (all.length === 0) return snap
-    const view = this.movement.viewOf(sessionId)
-    const spectator =
-      view.floor === null && view.roomKey === null && view.car === null && view.x === null
-    const visible = spectator ? all : all.filter((r) => r.floor === view.floor)
-    if (visible.length === 0) return snap
-    return { ...snap, suitcases: visible }
+    // Resting suitcases (cycle 3.B) — sameFloor-filtered
+    const allSuit = sim.restingSuitcases()
+    if (allSuit.length !== 0) {
+      const view = this.movement.viewOf(sessionId)
+      const spectator =
+        view.floor === null && view.roomKey === null && view.car === null && view.x === null
+      const visible = spectator ? allSuit : allSuit.filter((r) => r.floor === view.floor)
+      if (visible.length !== 0) snap = { ...snap, suitcases: visible }
+    }
+    // Tenancy signs (cycle 3.4, FR-33) — sameFloor-filtered like suitcases
+    const view2 = this.movement.viewOf(sessionId)
+    const spectator2 =
+      view2.floor === null && view2.roomKey === null && view2.car === null && view2.x === null
+    const tenancies = spectator2 ? sim.allTenancies() : sim.tenanciesOn(view2.floor as FloorId)
+    if (tenancies.length !== 0) snap = { ...snap, tenancies }
+    return snap
   }
 
   override onCreate() {
@@ -699,7 +707,7 @@ export class TurnoverRoom extends Room {
   /** The FR-20 spectator baseline (fired sessions only): the whole world. */
   private spectatorSnapshot(): SpectatorSnapshot {
     const sim = this.sim
-    return {
+    const base: SpectatorSnapshot = {
       players: this.movement.allPositions(),
       cars: this.movement.carFloors(),
       rooms: sim ? sim.roomStates() : [],
@@ -710,6 +718,11 @@ export class TurnoverRoom extends Room {
           }))
         : [],
     }
+    if (sim !== null) {
+      const ten = sim.allTenancies()
+      if (ten.length !== 0) return { ...base, tenancies: ten }
+    }
+    return base
   }
 
   /** Test hook: drive the sim deterministically without wall-clock waits. */

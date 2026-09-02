@@ -132,11 +132,11 @@ T5 → T6
 
 **Done when**:
 
-- [ ] `movement:snapshot` carries `tenancies` for the viewer's floor (present only when non-empty) — asserted by value
-- [ ] `spectator:snapshot` carries `tenancies` for all floors
-- [ ] `round:recap` carries `complaint` entries with `provenance`+`actorId` on sabotage each asserted by value; zero complaints → zero entries; wrong-delivery complaints absent
-- [ ] Registry policies unchanged (`room:tenancy` sameFloor, `movement:snapshot` self, `round:recap` all)
-- [ ] `pnpm vitest run apps/server` green
+- [x] `movement:snapshot` carries `tenancies` for the viewer's floor (present only when non-empty) — asserted by value
+- [x] `spectator:snapshot` carries `tenancies` for all floors
+- [x] `round:recap` carries `complaint` entries with `provenance`+`actorId` on sabotage each asserted by value; zero complaints → zero entries; wrong-delivery complaints absent
+- [x] Registry policies unchanged (`room:tenancy` sameFloor, `movement:snapshot` self, `round:recap` all)
+- [x] `pnpm vitest run apps/server` green
 
 **Tests**: integration
 **Gate**: quick
