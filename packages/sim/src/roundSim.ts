@@ -244,10 +244,7 @@ export class RoundSim {
         if (guestEvent.type === 'guest:discovered') {
           this.complaintTotal++
           // FR-32/FR-22 (3.4): record complaint provenance at discovery tick — the room's author at that instant.
-          const prov = this.work.provenanceOf(
-            guestEvent.floor as GuestFloorId,
-            guestEvent.room,
-          )
+          const prov = this.work.provenanceOf(guestEvent.floor as GuestFloorId, guestEvent.room)
           const provenance = prov === 'churn' ? 'churn' : 'sabotage'
           const actorId = provenance === 'sabotage' ? this.justice.saboteurId : undefined
           this.journal.push({

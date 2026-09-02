@@ -195,7 +195,9 @@ describe('sim:tenancy', () => {
     ;(guests as any).guests.set('guest:1', g)
     stub.joinGuest('guest:1', 'floor1', roomDoorXMilli(1) / 1000)
     const events = guests.tick(0)
-    const tenancy = events.find((e) => e.type === 'room:tenancy') as Extract<SimEvent, { type: 'room:tenancy' }> | undefined
+    const tenancy = events.find((e) => e.type === 'room:tenancy') as
+      | Extract<SimEvent, { type: 'room:tenancy' }>
+      | undefined
     expect(tenancy).toBeDefined()
     expect(tenancy!.occupied).toBe(true)
     expect(tenancy!.floor).toBe('floor1')
@@ -222,7 +224,9 @@ describe('sim:tenancy', () => {
     stub.joinGuest('guest:1', 'floor1', roomDoorXMilli(1) / 1000)
     const events = guests.tick(0)
     expect(events.some((e) => e.type === 'guest:checked_out')).toBe(true)
-    const tenancy = events.find((e) => e.type === 'room:tenancy') as Extract<SimEvent, { type: 'room:tenancy' }> | undefined
+    const tenancy = events.find((e) => e.type === 'room:tenancy') as
+      | Extract<SimEvent, { type: 'room:tenancy' }>
+      | undefined
     expect(tenancy).toBeDefined()
     expect(tenancy!.occupied).toBe(false)
   })
@@ -271,7 +275,9 @@ describe('sim:tenancy', () => {
     stub.joinGuest('guest:2', 'floor1', roomDoorXMilli(1) / 1000)
     const events = guests.tick(1)
     expect(events.some((e) => e.type === 'guest:angered')).toBe(true)
-    const tenancy = events.find((e) => e.type === 'room:tenancy') as Extract<SimEvent, { type: 'room:tenancy' }> | undefined
+    const tenancy = events.find((e) => e.type === 'room:tenancy') as
+      | Extract<SimEvent, { type: 'room:tenancy' }>
+      | undefined
     expect(tenancy).toBeDefined()
     expect(tenancy!.occupied).toBe(false)
     expect(wc.stateOf('floor1', 1)).toBe('trashed')
@@ -329,14 +335,19 @@ describe('sim:recap_provenance', () => {
     })
     const sab = sim.saboteurId
     const staff = [...IDS].find((id) => id !== sab)!
-    const startPos: Map<string, { floor: FloorId; x: number }> = new Map<string, { floor: FloorId; x: number }>([...IDS].map((id) => [id, { floor: 'lobby' as const, x: LOBBY }] as const))
+    const startPos: Map<string, { floor: FloorId; x: number }> = new Map<
+      string,
+      { floor: FloorId; x: number }
+    >([...IDS].map((id) => [id, { floor: 'lobby' as const, x: LOBBY }] as const))
     movement.tick()
     sim.tick(startPos)
     // Prep floor1:1 then sabotage
-    let posStaff: Map<string, { floor: FloorId; x: number }> = new Map([
+    const posStaff: Map<string, { floor: FloorId; x: number }> = new Map([
       [staff, { floor: 'floor1' as const, x: CENTER }],
       [sab, { floor: 'lobby' as const, x: LOBBY }],
-      ...[...IDS].filter((id) => id !== sab && id !== staff).map((id) => [id, { floor: 'lobby' as const, x: LOBBY }] as const),
+      ...[...IDS]
+        .filter((id) => id !== sab && id !== staff)
+        .map((id) => [id, { floor: 'lobby' as const, x: LOBBY }] as const),
     ])
     movement.tick()
     sim.tick(posStaff)
@@ -345,10 +356,12 @@ describe('sim:recap_provenance', () => {
       movement.tick()
       sim.tick(posStaff)
     }
-    let posSab: Map<string, { floor: FloorId; x: number }> = new Map([
+    const posSab: Map<string, { floor: FloorId; x: number }> = new Map([
       [sab, { floor: 'floor1' as const, x: CENTER }],
       [staff, { floor: 'lobby' as const, x: LOBBY }],
-      ...[...IDS].filter((id) => id !== sab && id !== staff).map((id) => [id, { floor: 'lobby' as const, x: LOBBY }] as const),
+      ...[...IDS]
+        .filter((id) => id !== sab && id !== staff)
+        .map((id) => [id, { floor: 'lobby' as const, x: LOBBY }] as const),
     ])
     movement.tick()
     sim.tick(posSab)
@@ -396,7 +409,10 @@ describe('sim:recap_provenance', () => {
     expect(discovered.length).toBe(2)
     // Check recap
     const recaps = sim.recapEntries()
-    const complaints = recaps.filter((e) => e.kind === 'complaint') as Extract<import('@turnover/shared').RecapEntry, { kind: 'complaint' }>[]
+    const complaints = recaps.filter((e) => e.kind === 'complaint') as Extract<
+      import('@turnover/shared').RecapEntry,
+      { kind: 'complaint' }
+    >[]
     expect(complaints.length).toBe(2)
     const sabC = complaints.find((c) => c.room === 1)!
     expect(sabC.provenance).toBe('sabotage')

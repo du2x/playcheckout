@@ -89,7 +89,10 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
 }
 
 function describe(entry: RecapEntry, nameOf: (id: string) => string): string {
-  const floorRoom = entry.kind === 'crime' || entry.kind === 'complaint' ? ` floor ${entry.floor} room ${entry.room}` : ''
+  const floorRoom =
+    entry.kind === 'crime' || entry.kind === 'complaint'
+      ? ` floor ${entry.floor} room ${entry.room}`
+      : ''
   const freshness =
     entry.kind === 'crime' || entry.kind === 'complaint'
       ? entry.fresh

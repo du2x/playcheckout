@@ -311,7 +311,12 @@ export class GuestSim {
         room: assigned.room,
       })
       // FR-33 (3.4): checkout flips the sign to Vacant.
-      events.push({ type: 'room:tenancy', floor: assigned.floor, room: assigned.room, occupied: false })
+      events.push({
+        type: 'room:tenancy',
+        floor: assigned.floor,
+        room: assigned.room,
+        occupied: false,
+      })
     }
 
     // Movement drivers — one intent per guest per tick.

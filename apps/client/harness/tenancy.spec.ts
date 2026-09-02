@@ -41,9 +41,13 @@ async function tenancyVisible(page: Page, key: string): Promise<boolean> {
 }
 
 test.describe('client:tenancy_sign', () => {
-  test('tenancy flips Occupied/Vacant sameFloor-gated and recap carries provenance', async ({ browser }) => {
+  test('tenancy flips Occupied/Vacant sameFloor-gated and recap carries provenance', async ({
+    browser,
+  }) => {
     test.setTimeout(60000)
-    const pages = await Promise.all([0, 1, 2, 3].map(async () => await (await browser.newContext()).newPage()))
+    const pages = await Promise.all(
+      [0, 1, 2, 3].map(async () => await (await browser.newContext()).newPage()),
+    )
     try {
       await fourPlayerRound(pages)
       const host = pages[0]!
@@ -65,7 +69,9 @@ test.describe('client:tenancy_sign', () => {
       // Settle → Occupied on floor1:1 (sameFloor-visible; server would gate delivery, we gate via visibility)
       for (const p of pages) {
         await p.evaluate(() => {
-          const w = window as unknown as { __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null } }
+          const w = window as unknown as {
+            __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
+          }
           const scene = w.__TURNOVER__.scene('Round')
           scene?.applyAction({ type: 'room-tenancy', floor: 'floor1', room: 1, occupied: true })
         })
@@ -82,7 +88,9 @@ test.describe('client:tenancy_sign', () => {
       // Checkout → Vacant
       for (const p of pages) {
         await p.evaluate(() => {
-          const w = window as unknown as { __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null } }
+          const w = window as unknown as {
+            __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
+          }
           const scene = w.__TURNOVER__.scene('Round')
           scene?.applyAction({ type: 'room-tenancy', floor: 'floor1', room: 1, occupied: false })
         })
@@ -93,7 +101,9 @@ test.describe('client:tenancy_sign', () => {
       // Snapshot seeding: movement:snapshot tenancies for viewer's floor
       for (const p of pages) {
         await p.evaluate(() => {
-          const w = window as unknown as { __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null } }
+          const w = window as unknown as {
+            __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
+          }
           const scene = w.__TURNOVER__.scene('Round')
           scene?.applyAction({
             type: 'movement-snapshot',
@@ -119,7 +129,9 @@ test.describe('client:tenancy_sign', () => {
       })
       for (const p of pages) {
         await p.evaluate(() => {
-          const w = window as unknown as { __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null } }
+          const w = window as unknown as {
+            __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
+          }
           const scene = w.__TURNOVER__.scene('Round')
           scene?.applyAction({
             type: 'spectator-snapshot',

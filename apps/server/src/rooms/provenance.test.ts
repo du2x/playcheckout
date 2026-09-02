@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { MovementSim, RoundSim } from '@turnover/sim'
 import type { FloorId } from '@turnover/shared'
+import { MovementSim, RoundSim } from '@turnover/sim'
+import { describe, expect, it } from 'vitest'
 
 class Port {
   constructor(private readonly sim: MovementSim) {}
@@ -41,7 +41,12 @@ describe('server:recap_provenance', () => {
       seed: 1,
       playerIds: ['p1', 'p2', 'p3', 'p4'],
       movement: new Port(movement),
-      guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001, carryClockTicks: 1000000 },
+      guestTiming: {
+        cadenceTicks: 20,
+        impatienceTicks: 100000,
+        dwellScale: 0.001,
+        carryClockTicks: 1000000,
+      },
     })
     // Directly churn and tenancy via sim guests hack — settle two guests on different floors
     const guests: any = (sim as any).guests
@@ -77,7 +82,7 @@ describe('server:recap_provenance', () => {
     // Prep floor1:2 then sabotage to get sabotage provenance on 1
     const LOBBY = 15_000
     const CENTER = 2750
-    let here = new Map([
+    const here = new Map([
       ['p1', { floor: 'floor1' as FloorId, x: CENTER }],
       ['p2', { floor: 'lobby' as FloorId, x: LOBBY }],
       ['p3', { floor: 'lobby' as FloorId, x: LOBBY }],
@@ -92,7 +97,7 @@ describe('server:recap_provenance', () => {
       movement.tick()
       sim.tick(here)
     }
-    let posSab = new Map([
+    const posSab = new Map([
       [sab, { floor: 'floor1' as FloorId, x: CENTER }],
       [staff, { floor: 'lobby' as FloorId, x: LOBBY }],
       ...(['p1', 'p2', 'p3', 'p4'] as const)
