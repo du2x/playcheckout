@@ -81,4 +81,8 @@ describe('settleTargetFor (prd §7 v1.5, AD-039)', () => {
     expect(settleTargetFor(7)).toBe(9)
     expect(settleTargetFor(100)).toBe(9)
   })
+
+  it('matches prd §7 v1.5 complaint budget (FR-31, instant loss)', () => {
+    expect(TUNING.COMPLAINT_BUDGET).toBe(8)
+  })
 })

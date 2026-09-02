@@ -739,6 +739,12 @@ export class WorldScene extends Phaser.Scene {
         // their own: they are mid-transit, anchored by their snapshot.
         this.showAmbushConfirm(action.victimId)
         break
+      case 'guest-angered':
+      case 'guest-discovered':
+        // Cycle 3.3 (FR-29b): the anger cue + desk-report line land with the
+        // complaint client slice (T4) — the reducer routes them here as scene
+        // display state; no render exists yet.
+        break
       default: {
         // Exhaustiveness: SceneAction covers every 'scene'-routed member of
         // ACTION_ROUTES; an unhandled one must fail the build, not slip.

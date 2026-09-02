@@ -6,10 +6,12 @@ import type {
   ElevatorPressed,
   ElevatorRiders,
   FloorId,
+  GuestAngered,
   GuestArrived,
   GuestAssigned,
   GuestCheckedOut,
   GuestComplained,
+  GuestDiscovered,
   GuestImpatient,
   GuestLeft,
   GuestMoved,
@@ -133,8 +135,15 @@ export interface Payloads {
   'suitcase:placed': SuitcasePlaced
   /** server → all players. Pickup lifecycle fact (fresh carry leg). */
   'suitcase:picked_up': SuitcasePickedUp
-  /** server → all players. Wrong-delivery door complaint (FR-29(a)). */
+  /** server → all players. Wrong-delivery door complaint (FR-29(a)) — counts
+   *  toward nothing since v1.5 (AD-039). */
   'guest:complained': GuestComplained
+  /** server → same-floor viewers. The FR-29(b) anger cue at the room —
+   *  room-number level, no detail, no actor (cycle 3.3). */
+  'guest:angered': GuestAngered
+  /** server → all players. The FR-29(b) desk report — the ONLY budget-counting
+   *  complaint (FR-31, cycle 3.3). */
+  'guest:discovered': GuestDiscovered
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -365,6 +374,26 @@ export const PROTOCOL_REGISTRY = {
     fromSim: ((event) => ({
       payload: { guestId: event.guestId, floor: event.floor, room: event.room },
     })) as SimProjection<'guest:complained'>,
+  },
+  'guest:angered': {
+    payload: {} as GuestAngered,
+    recipients: 'sameFloor',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, floor: event.floor, room: event.room },
+      visibility: { floor: event.floor },
+    })) as SimProjection<'guest:angered'>,
+  },
+  'guest:discovered': {
+    payload: {} as GuestDiscovered,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: {
+        guestId: event.guestId,
+        floor: event.floor,
+        room: event.room,
+        fresh: event.fresh,
+      },
+    })) as SimProjection<'guest:discovered'>,
   },
   'elevator:called': {
     payload: {} as ElevatorCalled,

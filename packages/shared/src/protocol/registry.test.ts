@@ -146,6 +146,8 @@ describe('protocol registry', () => {
     'suitcase:placed': 'sameFloor',
     'suitcase:picked_up': 'all',
     'guest:complained': 'all',
+    'guest:angered': 'sameFloor',
+    'guest:discovered': 'all',
     'elevator:called': 'all',
     'elevator:moved': 'all',
     'elevator:doors': 'all',
@@ -357,6 +359,37 @@ describe('protocol registry', () => {
     expect(projected.visibility).toEqual({ floor: 'lobby' })
     expect(PROTOCOL_REGISTRY['guest:moved'].recipients).toBe('sameFloor')
     expect(Object.keys(projected.payload).sort()).toEqual(['floor', 'guestId', 'x'])
+  })
+
+  it('projects guest:angered sameFloor at the room — room-number level, no detail, no actor (COMP-02)', () => {
+    const projected = PROTOCOL_REGISTRY['guest:angered'].fromSim({
+      type: 'guest:angered',
+      guestId: 'guest:2',
+      floor: 'floor1',
+      room: 5,
+    })
+    expect(projected.payload).toEqual({ guestId: 'guest:2', floor: 'floor1', room: 5 })
+    expect(projected.visibility).toEqual({ floor: 'floor1' })
+    expect(PROTOCOL_REGISTRY['guest:angered'].recipients).toBe('sameFloor')
+    expect(Object.keys(projected.payload).sort()).toEqual(['floor', 'guestId', 'room'])
+  })
+
+  it('projects guest:discovered building-wide with the freshness tier — the only budget row (COMP-04, FR-31)', () => {
+    const fresh = PROTOCOL_REGISTRY['guest:discovered'].fromSim({
+      type: 'guest:discovered',
+      guestId: 'guest:2',
+      floor: 'floor1',
+      room: 5,
+      fresh: true,
+    })
+    expect(fresh.payload).toEqual({
+      guestId: 'guest:2',
+      floor: 'floor1',
+      room: 5,
+      fresh: true,
+    })
+    expect(PROTOCOL_REGISTRY['guest:discovered'].recipients).toBe('all')
+    expect(Object.keys(fresh.payload).sort()).toEqual(['floor', 'fresh', 'guestId', 'room'])
   })
 
   it('projects work events to the actor only — no kind, no role in any payload (FR-9)', () => {

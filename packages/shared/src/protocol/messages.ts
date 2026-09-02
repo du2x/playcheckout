@@ -230,12 +230,41 @@ export interface SuitcasePickedUp {
  * server → all players (cycle 3.B). The wrong-delivery door complaint
  * (FR-29(a) trigger): the guest arrived at a room that was not their
  * assignment. Names the room + guest, never the assignment; counts toward
- * the FR-31 budget from cycle 3.3. No personal penalty attaches.
+ * NOTHING since v1.5 (AD-039) — the line informs, it no longer damages; the
+ * budget-counting trigger is `guest:discovered` (cycle 3.3). No personal
+ * penalty attaches.
  */
 export interface GuestComplained {
   readonly guestId: string
   readonly floor: FloorId
   readonly room: RoomIndex
+}
+
+/**
+ * server → same-floor viewers ONLY (cycle 3.3). The FR-29(b) stage-1 anger
+ * cue at the room: the guest discovered trash inside their assigned room and
+ * storms out. Room-number level, no interior detail, no actor — the evidence
+ * beat is the cue plus the desk report that follows, never a name.
+ */
+export interface GuestAngered {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+}
+
+/**
+ * server → all players (cycle 3.3). The FR-29(b) stage-2 desk report, the
+ * ONLY budget-counting complaint (FR-31): the angered guest reached the desk
+ * and delivered their fuzzy-timestamp testimony. `fresh` is the freshness
+ * tier the guest observed inside — fresh-tier trash or a witnessed un-prep →
+ * true ("maybe a minute ago"), aged/churn trash → false ("a while ago"). The
+ * guest leaves the hotel with this message; no retry. Names no actor.
+ */
+export interface GuestDiscovered {
+  readonly guestId: string
+  readonly floor: FloorId
+  readonly room: RoomIndex
+  readonly fresh: boolean
 }
 
 /** server → all players. A player disconnected; remove their rectangle. */

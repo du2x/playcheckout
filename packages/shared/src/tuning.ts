@@ -87,6 +87,11 @@ export const TUNING = {
    *  coverage target as the §6.6 buzzer leg. Provisional pending the 3.5
    *  exit-bot balance gate; read it through settleTargetFor, never raw. */
   SETTLE_TARGET: { 4: 5, 5: 7, 6: 9 } as Record<LobbySize, number>,
+  /** Complaint budget (prd §7 v1.5 scope, FR-31): the Nth TRASH-DISCOVERY
+   *  complaint (guest:discovered, cycle 3.3) is an instant staff loss.
+   *  Wrong-delivery door complaints count toward nothing since v1.5 (AD-039).
+   *  Harder to reach under the shrunken scope — re-examined at the 3.5 gate. */
+  COMPLAINT_BUDGET: 8,
 } as const
 
 /** The §6.6 buzzer win threshold for a lobby size (prd §7 v1.5, AD-039).

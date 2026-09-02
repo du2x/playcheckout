@@ -36,6 +36,10 @@ export const MAPPERS: {
   'suitcase:placed': (p) => [{ type: 'suitcase-placed', ...p }],
   'suitcase:picked_up': (p) => [{ type: 'suitcase-picked-up', ...p }],
   'guest:complained': (p) => [{ type: 'guest-complained', ...p }],
+  // Complaint budget (cycle 3.3): the anger cue and the desk report are
+  // scene-kind actions — the cue is sameFloor, the report building-wide.
+  'guest:angered': (p) => [{ type: 'guest-angered', ...p }],
+  'guest:discovered': (p) => [{ type: 'guest-discovered', ...p }],
   'elevator:called': (p) => [{ type: 'elevator-called', ...p }],
   'elevator:moved': (p) => [{ type: 'elevator-moved', ...p }],
   'elevator:doors': (p) => [{ type: 'elevator-doors', ...p }],

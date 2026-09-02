@@ -88,6 +88,8 @@ export type ViewAction =
   | { type: 'suitcase-placed'; guestId: string; floor: FloorId; room: RoomIndex }
   | { type: 'suitcase-picked-up'; guestId: string; carrierId: string }
   | { type: 'guest-complained'; guestId: string; floor: FloorId; room: RoomIndex }
+  | { type: 'guest-angered'; guestId: string; floor: FloorId; room: RoomIndex }
+  | { type: 'guest-discovered'; guestId: string; floor: FloorId; room: RoomIndex; fresh: boolean }
   | { type: 'elevator-called'; floor: FloorId; car: CarId }
   | { type: 'elevator-moved'; car: CarId; floor: FloorId }
   | { type: 'elevator-doors'; car: CarId; floor: FloorId; open: boolean }
@@ -227,6 +229,8 @@ export const ACTION_ROUTES = {
   'suitcase-placed': 'scene',
   'suitcase-picked-up': 'scene',
   'guest-complained': 'scene',
+  'guest-angered': 'scene',
+  'guest-discovered': 'scene',
   'elevator-called': 'scene',
   'elevator-moved': 'scene',
   'elevator-doors': 'scene',
@@ -381,6 +385,8 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'suitcase-placed':
     case 'suitcase-picked-up':
     case 'guest-complained':
+    case 'guest-angered':
+    case 'guest-discovered':
     case 'elevator-called':
     case 'elevator-moved':
     case 'elevator-doors':

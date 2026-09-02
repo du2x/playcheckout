@@ -133,6 +133,30 @@ export type SimEvent =
       readonly room: RoomIndex
     }
 
+  // --- Complaint budget (cycle 3.3, FR-29(b)/FR-31): the trash-discovery
+  // loss loop, shrunk by v1.5 (AD-039) to trash-discovery complaints only.
+  // guest:angered is the stage-1 in-world anger cue at the room — room-number
+  // level, no interior detail, no actor (FR-29(b)); sameFloor, the guest
+  // presence rule (GUEST-12). guest:discovered is the stage-2 desk report —
+  // the guest's own testimony after walking to the desk; `fresh` is the
+  // freshness tier they observed inside (witnessed un-prep or fresh-tier
+  // trash → true, aged/churn → false), and the ONLY budget-counting trigger
+  // (FR-31). guest:complained (above) keeps its FR-29(a) wrong-delivery
+  // meaning — it fires its building-wide line and counts toward nothing.
+  | {
+      readonly type: 'guest:angered'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+    }
+  | {
+      readonly type: 'guest:discovered'
+      readonly guestId: string
+      readonly floor: FloorId
+      readonly room: RoomIndex
+      readonly fresh: boolean
+    }
+
 /**
  * Why a player was fired — server-internal only, never projected to the wire.
  * `wrong-accusation` covers both wrong cases (innocent target, saboteur in
@@ -148,6 +172,7 @@ export type FireReason = 'walkin' | 'wrong-accusation' | 'correct-accusation' | 
 export type RoundEndReason =
   | 'saboteur-fired'
   | 'staff-reduced'
+  | 'budget-exhausted'
   | 'settle-target-met'
   | 'settle-target-failed'
 
