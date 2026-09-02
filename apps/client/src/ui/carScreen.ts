@@ -5,14 +5,15 @@ import { el } from './dom'
 
 /**
  * In-car screen (AD-013 presentation surface): a fullscreen overlay shown only
- * while the local player rides a car, with the car's current floor and the
- * floor buttons — lit while the floor is queued or being served. It renders
- * from the same RiderSession the chip consumes (one state home,
+ * while the local player rides a car — a deco car station with the current
+ * floor readout (direction arrow while moving), the floor-button panel as a
+ * vertical ladder (lit while queued, haloed on the current floor), and the
+ * rider chips (rider-exclusive knowledge the session already holds). It
+ * renders from the same RiderSession the chip consumes (one state home,
  * riderSession.ts); the current-floor readout is driven by the world scene
  * from the public per-car position (same data as the hallway panel). Purely
  * client-side presentation over existing payloads — no new message types,
- * nothing hidden is named (the queue is rider-exclusive knowledge the session
- * already holds).
+ * nothing hidden is named.
  */
 
 /** Car-panel order: top floor first, lobby last — like a real car station.
@@ -34,8 +35,9 @@ const FLOOR_LABELS: Record<string, string> = {
 }
 
 /** Building floor order, ground up — the sweep path for transit readouts.
- *  Mirrors the sim's FLOOR_IDS order (mezzanine directly above the lobby). */
-const FLOOR_ORDER: readonly FloorId[] = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3']
+ *  Mirrors the sim's FLOOR_IDS order (mezzanine directly above the lobby).
+ *  Exported for sibling stair screen direction math (same building). */
+export const FLOOR_ORDER: readonly FloorId[] = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3']
 
 /** The short glyph for a floor id (`L` for the lobby). */
 export function floorLabel(floor: FloorId): string {
@@ -65,7 +67,9 @@ const STYLE = `
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(8, 13, 20, 0.96);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, rgba(10, 16, 24, 0.9) 0%, rgba(4, 7, 11, 0.985) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -74,45 +78,188 @@ const STYLE = `
 #elevator-car-screen[hidden] { display: none; }
 .car-screen-inner {
   pointer-events: auto;
-  background: #16202c;
-  border: 2px solid #556677;
-  border-radius: 12px;
-  padding: 26px 40px;
+  min-width: 320px;
+  background: linear-gradient(180deg, #1b2530 0%, #131b24 60%, #0f161e 100%);
+  border: 1px solid #7a6a42;
+  border-radius: 14px;
+  outline: 1px solid #2a3542;
+  outline-offset: -6px;
+  padding: 22px 30px 18px;
   color: #dfe8f2;
-  font-family: monospace;
+  font-family: ui-monospace, monospace;
   text-align: center;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.76),
+    0 0 0 1px rgba(0, 0, 0, 0.62) inset,
+    0 1px 0 rgba(230, 197, 106, 0.12) inset;
+  animation: car-screen-in 220ms ease-out;
 }
-.car-screen-title { font-size: 13px; letter-spacing: 3px; color: #8899aa; }
-.car-screen-floor {
-  font-size: 72px;
-  line-height: 1;
+@keyframes car-screen-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.car-screen-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #2a3542;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+.car-screen-title {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: #8899aa;
+  text-transform: uppercase;
+}
+.car-screen-car {
+  font-size: 11px;
+  letter-spacing: 2px;
   color: #e6c56a;
-  margin: 12px 0 4px;
+  border: 1px solid #55492c;
+  border-radius: 4px;
+  padding: 2px 8px;
+  background: rgba(230, 197, 106, 0.07);
 }
-.car-screen-floor-label { font-size: 12px; color: #667788; letter-spacing: 2px; }
-.car-screen-state { font-size: 13px; color: #8ad07a; margin-top: 6px; min-height: 15px; }
-.car-buttons { display: grid; grid-template-columns: repeat(2, 56px); gap: 12px; justify-content: center; margin-top: 18px; }
+.car-screen-body {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 22px;
+}
+.car-screen-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  padding: 18px 20px 12px;
+  border-radius: 8px;
+  border: 1px solid #060a0e;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(230, 197, 106, 0.09) 0%, transparent 70%),
+    linear-gradient(180deg, #0a0f14, #070b0f);
+  box-shadow:
+    0 0 22px rgba(230, 197, 106, 0.08) inset,
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.car-screen-arrow {
+  height: 18px;
+  font-size: 15px;
+  line-height: 18px;
+  color: #e6c56a;
+  text-shadow: 0 0 8px rgba(230, 197, 106, 0.82);
+}
+.car-screen-arrow.up, .car-screen-arrow.down { animation: car-arrow-blink 1s steps(2) infinite; }
+.car-screen-arrow[data-dir='none'] { visibility: hidden; }
+@keyframes car-arrow-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.car-screen-floor {
+  font-size: 76px;
+  line-height: 1;
+  font-weight: bold;
+  color: #ffd98a;
+  text-shadow: 0 0 18px rgba(230, 197, 106, 0.55), 0 0 4px rgba(255, 217, 138, 0.9);
+  margin: 8px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.car-screen-floor-label { font-size: 11px; color: #66788a; letter-spacing: 4px; text-transform: uppercase; }
+.car-screen-state {
+  font-size: 13px;
+  color: #8ad07a;
+  margin-top: 10px;
+  min-height: 16px;
+  letter-spacing: 1px;
+}
+.car-screen-state.busy { color: #e6c56a; }
+.car-screen-state.busy::after {
+  content: '';
+  display: inline-block;
+  width: 3ch;
+  text-align: left;
+  animation: car-dots 1.2s steps(4) infinite;
+}
+@keyframes car-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  100% { content: '...'; }
+}
+.car-buttons { display: grid; grid-template-rows: repeat(5, 44px); gap: 9px; align-content: center; }
 .car-button {
-  width: 56px;
-  height: 56px;
+  width: 44px;
   border-radius: 50%;
-  border: 2px solid #556677;
-  background: #1d2a38;
-  color: #dfe8f2;
-  font-family: monospace;
-  font-size: 22px;
+  border: 1px solid #3d4a58;
+  background: radial-gradient(circle at 35% 30%, #2a3948, #1a2530 70%);
+  color: #9fb0c0;
+  font-family: ui-monospace, monospace;
+  font-size: 17px;
   cursor: pointer;
   touch-action: manipulation;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  transition: box-shadow 120ms ease, color 120ms ease;
 }
+.car-button:hover { color: #dfe8f2; }
 .car-button.lit {
-  background: #c8a24a;
+  background: radial-gradient(circle at 35% 30%, #ffd98a, #c8a24a 76%);
   border-color: #e6c56a;
-  color: #111;
-  box-shadow: 0 0 10px #c8a24a;
+  color: #14100a;
+  animation: car-lit-pulse 1.4s ease-in-out infinite;
 }
-.car-screen-occupants { font-size: 12px; color: #aabbcc; margin-top: 16px; min-height: 14px; }
-.car-screen-hint { font-size: 11px; color: #667788; margin-top: 8px; }
+@keyframes car-lit-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(230, 197, 106, 0.65), 0 2px 4px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: 0 0 22px rgba(230, 197, 106, 0.95), 0 2px 4px rgba(0, 0, 0, 0.5); }
+}
+.car-button.here {
+  box-shadow:
+    0 0 0 3px rgba(230, 197, 106, 0.35),
+    0 0 14px rgba(230, 197, 106, 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+  color: #ffd98a;
+  border-color: #e6c56a;
+}
+.car-screen-aboard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #2a3542;
+  min-height: 26px;
+}
+.car-screen-aboard-label { font-size: 10px; letter-spacing: 3px; color: #5a6b7c; }
+.car-screen-occupants { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.car-occupant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #c7d3de;
+  background: #1d2a38;
+  border: 1px solid #3d4a58;
+  border-radius: 999px;
+  padding: 3px 10px 3px 4px;
+}
+.car-occupant.you { border-color: #e6c56a; color: #ffd98a; }
+.car-occupant-ava {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: #14100a;
+  background: #8fa3b5;
+}
+.car-occupant.you .car-occupant-ava { background: #e6c56a; }
+.car-screen-hint { font-size: 10px; color: #556677; margin-top: 10px; letter-spacing: 1px; }
 `
 
 /** Mount once per HUD build; the stylesheet is injected idempotently. */
@@ -125,21 +272,39 @@ export function buildCarScreen(): HTMLElement {
   }
   return el('div', { id: 'elevator-car-screen', hidden: '' }, [
     el('div', { class: 'car-screen-inner' }, [
-      el('div', { class: 'car-screen-title' }, ['elevator']),
-      el('div', { class: 'car-screen-floor' }, ['']),
-      el('div', { class: 'car-screen-floor-label' }, ['floor']),
-      el('div', { class: 'car-screen-state' }, []),
-      el(
-        'div',
-        { class: 'car-buttons' },
-        CAR_BUTTONS.map(({ floor, label }) =>
-          el('button', { class: 'car-button', 'data-floor': floor }, [label]),
+      el('div', { class: 'car-screen-header' }, [
+        el('div', { class: 'car-screen-title' }, ['elevator']),
+        el('div', { class: 'car-screen-car' }, ['']),
+      ]),
+      el('div', { class: 'car-screen-body' }, [
+        el('div', { class: 'car-screen-display' }, [
+          el('div', { class: 'car-screen-arrow', 'data-dir': 'none' }, ['▲']),
+          el('div', { class: 'car-screen-floor' }, ['']),
+          el('div', { class: 'car-screen-floor-label' }, ['floor']),
+          el('div', { class: 'car-screen-state' }, []),
+        ]),
+        el(
+          'div',
+          { class: 'car-buttons' },
+          CAR_BUTTONS.map(({ floor, label }) =>
+            el('button', { class: 'car-button', 'data-floor': floor }, [label]),
+          ),
         ),
-      ),
-      el('div', { class: 'car-screen-occupants' }, []),
-      el('div', { class: 'car-screen-hint' }, ['keys: 1 · 2 · 3 · 0']),
+      ]),
+      el('div', { class: 'car-screen-aboard' }, [
+        el('span', { class: 'car-screen-aboard-label' }, ['aboard']),
+        el('span', { class: 'car-screen-occupants' }, []),
+      ]),
+      el('div', { class: 'car-screen-hint' }, ['keys: 1 · 2 · 3 · M · 0']),
     ]),
   ])
+}
+
+/** The last floor the world scene fed the readout — the `here` halo + arrow. */
+let displayedFloor: string | null = null
+
+function floorFromLabel(label: string): FloorId | null {
+  return FLOOR_ORDER.find((floor) => floorLabel(floor) === label) ?? null
 }
 
 /**
@@ -148,11 +313,13 @@ export function buildCarScreen(): HTMLElement {
  * call on every rider-session change and after every view re-render. `press`
  * forwards button taps to the same channel the keymap uses; pointerdown (not
  * click) keeps the button from taking focus and stealing the game's Space key.
+ * `ownName` highlights the local player's chip (optional, lobby-snapshot name).
  */
 export function syncCarScreen(
   riding: RiderUpdate,
   occupantNames: readonly string[],
   press: (floor: FloorId) => void,
+  ownName: string | null = null,
 ): void {
   const screen = document.getElementById('elevator-car-screen')
   if (screen === null) return
@@ -161,8 +328,19 @@ export function syncCarScreen(
     return
   }
   screen.removeAttribute('hidden')
-  const occupants = screen.querySelector('.car-screen-occupants')
-  if (occupants !== null) occupants.textContent = occupantNames.join(', ')
+  const car = screen.querySelector('.car-screen-car')
+  if (car !== null) car.textContent = `car ${riding.car}`
+  const aboard = screen.querySelector('.car-screen-occupants')
+  if (aboard !== null) {
+    aboard.replaceChildren(
+      ...occupantNames.map((name) =>
+        el('span', { class: `car-occupant${name === ownName ? ' you' : ''}` }, [
+          el('span', { class: 'car-occupant-ava' }, [name.slice(0, 1).toUpperCase()]),
+          name,
+        ]),
+      ),
+    )
+  }
   for (const button of screen.querySelectorAll<HTMLElement>('.car-button')) {
     const floor = button.dataset.floor as FloorId | undefined
     button.classList.toggle('lit', floor !== undefined && riding.queue.includes(floor))
@@ -174,28 +352,57 @@ export function syncCarScreen(
       })
     }
   }
+  syncHereHalo()
+}
+
+/** The `here` halo on the panel's current-floor button (self-healing). */
+function syncHereHalo(): void {
+  const screen = document.getElementById('elevator-car-screen')
+  if (screen === null) return
+  for (const button of screen.querySelectorAll<HTMLElement>('.car-button')) {
+    button.classList.toggle('here', button.dataset.floor === displayedFloor)
+  }
 }
 
 /**
  * Current-floor readout (world-scene driven every frame, self-healing like the
  * hallway panel): the own car's public position — swept through transition
- * floors while the car rides. `null` clears the readout.
+ * floors while the car rides. `null` clears the readout and the `here` halo.
  */
 export function setCarScreenFloor(floor: string | null): void {
+  displayedFloor = floor
   const screen = document.getElementById('elevator-car-screen')
   if (screen === null) return
   const readout = screen.querySelector('.car-screen-floor')
   if (readout !== null) readout.textContent = floor === null ? '' : floorLabel(floor as FloorId)
+  syncHereHalo()
 }
 
 /**
  * Elevator state line (world-scene driven every frame): "doors open", "doors
  * closing", or "moving to N" — derived client-side from the same animation
- * clock that drives the door visuals, never a new wire message. `null` clears.
+ * clock that drives the door visuals, never a new wire message. While moving,
+ * the direction arrow lights from the swept readout vs the stated destination.
+ * `null` clears.
  */
 export function setCarScreenState(state: string | null): void {
   const screen = document.getElementById('elevator-car-screen')
   if (screen === null) return
   const line = screen.querySelector('.car-screen-state')
   if (line !== null) line.textContent = state ?? ''
+  const busy = state !== null && state !== 'doors open' && state !== 'doors closed'
+  if (line !== null) line.classList.toggle('busy', busy)
+  const arrow = screen.querySelector<HTMLElement>('.car-screen-arrow')
+  if (arrow === null) return
+  let dir: 'up' | 'down' | 'none' = 'none'
+  if (busy && state.startsWith('moving to ') && displayedFloor !== null) {
+    const target = floorFromLabel(state.slice('moving to '.length).trim())
+    const here = FLOOR_ORDER.indexOf(displayedFloor as FloorId)
+    const there = target === null ? -1 : FLOOR_ORDER.indexOf(target)
+    if (there >= 0 && here >= 0 && there !== here) dir = there > here ? 'up' : 'down'
+  }
+  arrow.dataset.dir = dir
+  arrow.classList.toggle('up', dir === 'up')
+  arrow.classList.toggle('down', dir === 'down')
+  arrow.textContent = dir === 'down' ? '▼' : '▲'
 }

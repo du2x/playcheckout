@@ -311,6 +311,7 @@ export class App {
       riding,
       riding.occupants.map((id) => names.get(id) ?? id),
       (floor) => this.connection?.sendElevatorPress(floor),
+      this.state.snapshot?.ownName ?? null,
     )
   }
 
