@@ -220,6 +220,8 @@ export class WorldScene extends Phaser.Scene {
   >()
   private tapPhase = 0
   private cardMarkers = new Map<string, HTMLElement>()
+  private tenancies = new Map<string, boolean>()
+  private tenancyMarkers = new Map<string, HTMLElement>()
   private cueNodes = new Map<number, HTMLElement>()
   private audio: AudioContext | null = null
   /** Production door Images per room segment per guest floor (ART-06) —
@@ -286,6 +288,9 @@ export class WorldScene extends Phaser.Scene {
     this.stairsAnchor = null
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
+    this.tenancies.clear()
+    for (const el of this.tenancyMarkers.values()) el.remove()
+    this.tenancyMarkers.clear()
     this.cueNodes.clear()
     this.doorImages.clear()
     this.riderSession = data.riderSession
@@ -293,6 +298,7 @@ export class WorldScene extends Phaser.Scene {
     this.buildGuestLayer()
     this.buildDeskLayer()
     this.buildDoorImages()
+    this.syncTenancyMarkers()
 
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
     // contract). One lane live; one per floor for the spectator overview.
@@ -756,6 +762,11 @@ export class WorldScene extends Phaser.Scene {
     }
     this.evidence = cards
     this.syncCardMarkers()
+    // FR-33 (3.4): tenancy signs for every floor (spectator sees every floor)
+    for (const t of snapshot.tenancies ?? []) {
+      this.tenancies.set(`${t.floor}:${t.room}`, t.occupied)
+    }
+    this.syncTenancyMarkers()
     this.updatePanel()
   }
 
@@ -1032,10 +1043,12 @@ export class WorldScene extends Phaser.Scene {
         // their own: they are mid-transit, anchored by their snapshot.
         this.showAmbushConfirm(action.victimId)
         break
-      case 'room-tenancy':
-        // FR-33 (cycle 3.4): tenancy flip-sign per guest door — tenancy not
-        // presence. Minimal T1 plumbing; substantive overlay lands in T4.
+      case 'room-tenancy': {
+        // FR-33 (cycle 3.4): tenancy flip-sign per guest door — tenancy not presence.
+        this.tenancies.set(`${action.floor}:${action.room}`, action.occupied)
+        this.syncTenancyMarkers()
         break
+      }
       case 'guest-angered': {
         // FR-29(b) stage 1: in-world anger cue at the room — room-number
         // level, no detail — the guest storms out. SameFloor delivery is the
@@ -1139,6 +1152,11 @@ export class WorldScene extends Phaser.Scene {
     for (const sc of snapshot.suitcases ?? []) {
       this.suitcases.set(sc.guestId, { carrierId: null, rest: { floor: sc.floor, room: sc.room } })
     }
+    // FR-33 (3.4): tenancy signs for the viewer's floor
+    for (const t of snapshot.tenancies ?? []) {
+      this.tenancies.set(`${t.floor}:${t.room}`, t.occupied)
+    }
+    this.syncTenancyMarkers()
     // 3.C (AD-017 class): guests appear in slots by NPC teleport, so an
     // arriving player's snapshot is the ONLY delivery for a teleport that
     // happened while they rode a car (riders get no floor stream). Snapshot
@@ -1733,6 +1751,39 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** Tenancy flip-sign per guest door (FR-33, cycle 3.4): Occupied/Vacant, hallway-visible sameFloor. */
+  private syncTenancyMarkers(): void {
+    const layer = this.evidenceLayer
+    if (layer === null) return
+    // Ensure every guest-floor room has a marker (vacant by default); updates change text.
+    for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
+      for (let room = 1; room <= 8; room++) {
+        const key = `${floor}:${room}`
+        let marker = this.tenancyMarkers.get(key)
+        if (marker === undefined) {
+          marker = document.createElement('div')
+          marker.dataset.tenancyKey = key
+          marker.dataset.floor = floor
+          marker.dataset.room = String(room)
+          marker.style.position = 'absolute'
+          marker.style.left = `${this.roomCenterPx(room as RoomIndex) - 28}px`
+          marker.style.width = '56px'
+          marker.style.padding = '1px 0'
+          marker.style.textAlign = 'center'
+          marker.style.fontSize = '10px'
+          marker.style.borderRadius = '2px'
+          marker.style.border = '1px solid #777'
+          layer.appendChild(marker)
+          this.tenancyMarkers.set(key, marker)
+        }
+        const occupied = this.tenancies.get(key) ?? false
+        marker.textContent = occupied ? 'Occupied' : 'Vacant'
+        marker.style.background = occupied ? '#3a6b4a' : '#4a4a4a'
+        marker.style.color = '#f0f0f0'
+      }
+    }
+  }
+
   /** Expire cue DOM nodes and prune the session (called every frame). */
   private syncCues(): void {
     const now = Date.now()
@@ -1766,8 +1817,14 @@ export class WorldScene extends Phaser.Scene {
   resetEvidence(): void {
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
+    // Tenancy signs are round-scoped like cards — guests die with the sim (GUEST-11)
+    this.tenancies.clear()
+    for (const el of this.tenancyMarkers.values()) el.remove()
+    this.tenancyMarkers.clear()
     this.cueNodes.clear()
     if (this.evidenceLayer !== null) this.evidenceLayer.replaceChildren()
+    // Recreate the vacant sign set so every door shows Vacant on the fresh deal
+    this.syncTenancyMarkers()
   }
 
   // --- Settle-score HUD (cycle 3.D, AD-039): the counter lives in the scene
@@ -2035,6 +2092,13 @@ export class WorldScene extends Phaser.Scene {
     for (const [key, marker] of this.cardMarkers) {
       const floor = key.split(':')[0] ?? ''
       marker.style.top = `${this.laneY(floor) - 130}px`
+      marker.style.visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
+    }
+    // FR-33 (3.4): tenancy signs follow the same floor-lane visibility rule
+    this.syncTenancyMarkers()
+    for (const [key, marker] of this.tenancyMarkers) {
+      const floor = key.split(':')[0] ?? ''
+      marker.style.top = `${this.laneY(floor) - 148}px`
       marker.style.visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
     }
     for (const [cueId, node] of this.cueNodes) {

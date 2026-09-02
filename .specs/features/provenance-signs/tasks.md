@@ -158,11 +158,11 @@ T5 → T6
 
 **Done when**:
 
-- [ ] Snapshot tenancies seed the viewer's floor lane signs; `room:tenancy` updates the correct door's sign
-- [ ] Spectator snapshot seeds all 24 doors
-- [ ] Sign shows no provenance/freshness — tenancy only (pure render test)
-- [ ] `round:recap` complaint entries render one line per complaint with actor named on sabotage
-- [ ] `pnpm vitest run apps/client/src` green; `pnpm typecheck` green
+- [x] Snapshot tenancies seed the viewer's floor lane signs; `room:tenancy` updates the correct door's sign
+- [x] Spectator snapshot seeds all 24 doors
+- [x] Sign shows no provenance/freshness — tenancy only (pure render test)
+- [x] `round:recap` complaint entries render one line per complaint with actor named on sabotage
+- [x] `pnpm vitest run apps/client/src` green; `pnpm typecheck` green
 
 **Tests**: unit
 **Gate**: quick
