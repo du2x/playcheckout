@@ -61,15 +61,14 @@ const STYLE_ID = 'elevator-stair-screen-styles'
 
 const STYLE = `
 #elevator-stair-screen {
-  position: fixed;
-  top: 420px;
-  right: 16px;
-  width: 380px;
-  z-index: 5;
-  display: flex;
-  justify-content: flex-end;
-  pointer-events: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 16px auto;
+  z-index: 1;
   background: transparent;
+  pointer-events: none;
 }
 #elevator-stair-screen[hidden] { display: none; }
 .stair-screen-inner {
