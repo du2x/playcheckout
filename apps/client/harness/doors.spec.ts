@@ -70,13 +70,13 @@ test.describe('client:doors_pre_round', () => {
     expect((await visibleDoorRooms(page)).length).toBe(0)
     expect(await doorImageCount(page)).toBe(24)
 
-    // Pre-round ride west (no host start — the world is phase-free): walk to
-    // the landing, board the parked car with the call press (AD-025), then
-    // exit onto floor1 — the own floor stream flips the view and the frames
-    // show.
-    await page.keyboard.down('ArrowLeft')
+    // Pre-round ride east (no host start — the world is phase-free): walk to
+    // the east landing (AD-040: the car boards at the east end), board the
+    // parked car with the call press (AD-025), then exit onto floor1 — the
+    // own floor stream flips the view and the frames show.
+    await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(3000)
-    await page.keyboard.up('ArrowLeft')
+    await page.keyboard.up('ArrowRight')
     await page.keyboard.press('ArrowUp')
     await page.waitForFunction(
       () =>
@@ -94,14 +94,14 @@ test.describe('client:doors_pre_round', () => {
     // Step out of the car: hold the exit direction past the 0.5 s opening
     // swing (AD-026) — the chip hides once the exit applied and the exit
     // snapshot moves the view to floor1.
-    await page.keyboard.down('ArrowRight')
+    await page.keyboard.down('ArrowLeft')
     await page.waitForFunction(
       () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
       undefined,
       { timeout: 8000 },
     )
     await page.waitForTimeout(300)
-    await page.keyboard.up('ArrowRight')
+    await page.keyboard.up('ArrowLeft')
     await page.waitForFunction(
       () => {
         const t = (

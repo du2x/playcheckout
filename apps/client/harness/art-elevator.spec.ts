@@ -56,24 +56,25 @@ test.describe('client:art_elevator', () => {
     await createRoom(host, 'ada')
     await host.waitForTimeout(200)
 
-    // Both cars parked at the lobby render the closed slab (boot = parked
-    // with the doors SHUT, AD-026/027 — they open for the first call).
+    // The single car parked at the lobby renders the closed slab (boot =
+    // parked with the doors SHUT, AD-026/027 — it opens for the first call).
     const parked = await readCarSprites(host)
-    expect(parked).toHaveLength(2)
+    expect(parked).toHaveLength(1)
     expect(parked.every((c) => c.visible && c.frame === 1)).toBe(true)
 
-    // Walk to the west landing and board the parked car with the call press
-    // (AD-025): the shut doors swing open (AD-026) and the board lands when
-    // they finish. Then press floor1 in-car — the minimum dwell (AD-027)
-    // elapses, the attend check closes the doors, and the car departs.
-    await host.keyboard.down('ArrowLeft')
+    // Walk to the east landing (AD-040: the car boards at the east end) and
+    // board the parked car with the call press (AD-025): the shut doors swing
+    // open (AD-026) and the board lands when they finish. Then press floor1
+    // in-car — the minimum dwell (AD-027) elapses, the attend check closes
+    // the doors, and the car departs.
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp')
     await host.waitForSelector('#elevator-riders:not([hidden])', { timeout: 8000 })
     await host.keyboard.press('1')
-    // The west car (x ≈ 0) closes: the closed slab frame before any
-    // departure (the east car is parked shut too — target the west one).
+    // The boarding car (the east landing, AD-040) closes: the closed slab
+    // frame before any departure.
     await host.waitForFunction(
       () => {
         const t = (
@@ -99,7 +100,7 @@ test.describe('client:art_elevator', () => {
           (c) =>
             c.type === 'Sprite' &&
             c.texture?.key === 'elevator-car' &&
-            (c as unknown as { x: number }).x < 100 &&
+            (c as unknown as { x: number }).x > 860 &&
             Number(c.frame.name) === 1,
         )
       },
@@ -107,7 +108,7 @@ test.describe('client:art_elevator', () => {
       { timeout: 15_000 },
     )
 
-    // Transit hides the departing west car (ELAN-04): at most the parked far
+    // Transit hides the departing car (ELAN-04): at most the parked far
     // car remains visible while car1 rides to floor1.
     await host.waitForFunction(
       () => {
@@ -133,7 +134,7 @@ test.describe('client:art_elevator', () => {
           (c) =>
             c.type === 'Sprite' &&
             c.texture?.key === 'elevator-car' &&
-            (c as unknown as { x: number }).x < 100 &&
+            (c as unknown as { x: number }).x > 860 &&
             c.visible,
         )
       },
@@ -153,7 +154,7 @@ test.describe('client:art_elevator', () => {
       undefined,
       { timeout: 10_000 },
     )
-    await host.keyboard.down('ArrowRight')
+    await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(
       () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
       undefined,

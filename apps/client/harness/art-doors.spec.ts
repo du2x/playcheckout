@@ -95,13 +95,12 @@ test.describe('client:art_doors', () => {
     expect(summary.visible).toBe(0)
 
     // --- Interior half (ART-07..09, ART-14) ---
-    // Ride to floor1 (walk west, board via the call press (AD-025), press
-    // floor1, exit) — the exit must happen INSIDE the 1 s open-door dwell
-    // (arrival ≈ 2.3 s after the press, doors close ≈ 1 s later): a closed
-    // car cannot be exited.
-    await host.keyboard.down('ArrowLeft')
+    // Ride to floor1 (walk east — the car boards at the east landing, AD-040
+    // — board via the call press (AD-025), press floor1, exit) — the exit
+    // must happen INSIDE the open-door dwell: a closed car cannot be exited.
+    await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
       () =>
@@ -119,12 +118,13 @@ test.describe('client:art_doors', () => {
       undefined,
       { timeout: 10_000 },
     )
-    await host.keyboard.down('ArrowRight')
+    await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(400)
-    await host.keyboard.up('ArrowRight')
-    // Walk right off the landing into the first room segment and keep
-    // walking until the own-room interior renders (the FR-10 inside read).
-    await host.keyboard.down('ArrowRight')
+    await host.keyboard.up('ArrowLeft')
+    // Walk left off the landing into the first reached room segment (room 8
+    // from the east approach, AD-040) — the own-room interior renders (the
+    // FR-10 inside read).
+    await host.keyboard.down('ArrowLeft')
     await host
       .waitForFunction(
         () => {
@@ -213,15 +213,15 @@ test.describe('client:art_doors', () => {
     expect(roomLabel).toMatch(/^room \d+: /)
 
     // ART-09: stepping back out (past the room segments) removes the
-    // interior again.
-    await host.keyboard.up('ArrowRight')
-    await host.keyboard.down('ArrowLeft')
+    // interior again — east, back to the landing zone (x > 28).
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForFunction(
       () => document.querySelector('#room-state')?.hasAttribute('hidden') === true,
       undefined,
       { timeout: 10_000 },
     )
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     const outside = await host.evaluate(interiorsRead)
     expect(outside.visible).toBe(0)
     for (const page of pages.slice(1)) await page.context().close()
@@ -244,9 +244,9 @@ test.describe('client:art_doors — cue doorway', () => {
     // AD-025 call-press; the watcher auto-boards on the open-door ticks
     // (AD-014) — the shared-ride flow movement.spec proves.
     for (const page of [host, watcher]) {
-      await page.keyboard.down('ArrowLeft')
+      await page.keyboard.down('ArrowRight')
       await page.waitForTimeout(3000)
-      await page.keyboard.up('ArrowLeft')
+      await page.keyboard.up('ArrowRight')
     }
     // Each rider makes her own landing call-press (AD-025 boarding intent);
     // the duplicate call is harmless — both board (cap 2).
@@ -274,16 +274,17 @@ test.describe('client:art_doors — cue doorway', () => {
     for (const page of [host, watcher]) {
       // Hold PAST the 0.5 s opening swing (AD-026): the exit is a held
       // intent — a short tap would be cancelled by the keyup mid-swing.
-      await page.keyboard.down('ArrowRight')
+      await page.keyboard.down('ArrowLeft')
       await page.waitForTimeout(700)
-      await page.keyboard.up('ArrowRight')
+      await page.keyboard.up('ArrowLeft')
       await page.waitForTimeout(400)
     }
-    // The watcher re-enters the hallway (x < 1) so the recorder samples the
-    // doorway from OUTSIDE every room segment (ART-09's no-leak vantage).
-    await watcher.keyboard.down('ArrowLeft')
+    // The watcher walks back east to the landing zone (x > 28) so the
+    // recorder samples the doorway from OUTSIDE every room segment
+    // (ART-09's no-leak vantage).
+    await watcher.keyboard.down('ArrowRight')
     await watcher.waitForTimeout(600)
-    await watcher.keyboard.up('ArrowLeft')
+    await watcher.keyboard.up('ArrowRight')
     await watcher.waitForTimeout(300)
 
     // The watcher parks in the hallway and samples every 50 ms: door
@@ -306,7 +307,7 @@ test.describe('client:art_doors — cue doorway', () => {
           }
         ).__TURNOVER__
         const list = t.scene('Round')?.children.list ?? []
-        const door = list.find((c) => c.type === 'Image' && c.name === 'door:floor1:1')
+        const door = list.find((c) => c.type === 'Image' && c.name === 'door:floor1:8')
         const rec = (
           window as unknown as {
             __doorRecorder?: { open: number; interiors: number; closedAfter: boolean }
@@ -324,15 +325,14 @@ test.describe('client:art_doors — cue doorway', () => {
       void id
     })
 
-    // The host walks into room 1 and back out while the watcher records.
+    // The host walks into room 8 and back out while the watcher records.
     // An out-and-back first: under load the exit walk can drift the host
-    // inside room 1 before the recorder arms, and the entered cue only
+    // inside room 8 before the recorder arms, and the entered cue only
     // fires on a room ENTRY — re-firing it guarantees a live window.
-    await host.keyboard.down('ArrowLeft')
-    await host.waitForTimeout(400)
-    await host.keyboard.up('ArrowLeft')
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(400)
+    await host.keyboard.up('ArrowRight')
+    await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(
       () => {
         const label = document.querySelector('#room-state')
@@ -342,14 +342,14 @@ test.describe('client:art_doors — cue doorway', () => {
       { timeout: 10_000 },
     )
     await host.waitForTimeout(500)
-    await host.keyboard.up('ArrowRight')
-    await host.keyboard.down('ArrowLeft')
+    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.down('ArrowRight')
     await host.waitForFunction(
       () => document.querySelector('#room-state')?.hasAttribute('hidden') === true,
       undefined,
       { timeout: 10_000 },
     )
-    await host.keyboard.up('ArrowLeft')
+    await host.keyboard.up('ArrowRight')
     await host.waitForTimeout(900) // let the 700 ms cue window close
 
     const rec = await watcher.evaluate(
