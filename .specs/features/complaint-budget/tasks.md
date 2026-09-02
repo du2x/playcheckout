@@ -260,7 +260,7 @@ __TURNOVER__ event scan, role-card read)
 
 ---
 
-### T6: Domain docs + state closure
+### T6: Domain docs + state closure — DONE
 
 **What**: Add the CONTEXT.md entries (**Complaint budget**, **Trash discovery**);
 record AD-041 in `.specs/STATE.md` (fresh-rooms-settle reading, flee counts, suitcase

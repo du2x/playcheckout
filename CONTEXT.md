@@ -109,3 +109,21 @@ The ambush's effect on a staff member: 20 s immobile mid-transit, then the
 interrupted transit resumes to the intended floor. A stun pauses, it never
 drops a carried suitcase or clears a carry clock (a pause, not a foul).
 _Avoid_: knockout, kill, capture
+
+**Complaint budget**:
+The building-wide counter of trash-discovery complaints (FR-31, cycle 3.3) —
+trash-discovery desk reports only, wrong-delivery door complaints count
+toward nothing since v1.5 (AD-039). Eight is instant staff loss, wired into
+the §6.6 win checks; the HUD pulses red when nearing the budget.
+_Avoid_: fine, penalty points, lives
+
+**Trash discovery**:
+The two-stage evidence beat when a guest walks into their assigned room and
+finds trash (FR-29b, cycle 3.3): stage 1 is the in-world anger cue at the
+room — sameFloor, room-number level, no detail, no actor; stage 2 is the
+desk report at the hotel desk — building-wide, with the fuzzy timestamp the
+guest observed inside (fresh-tier trash or a witnessed un-prep → "maybe a
+minute ago", aged churn → "a while ago now"). One complaint then the guest
+leaves the hotel, no retry. A guest who enters mid-un-prep flees along the
+same path (FR-30) and the complaint counts.
+_Avoid_: complaint creation, trash found, discovered

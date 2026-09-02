@@ -1226,23 +1226,69 @@
 - **Date**: 2026-09-01
 - **Status**: active
 
+### AD-041
+- **Decision**: Cycle 3.3 `complaint-budget` (FR-29b/FR-30/FR-31, FR-14, §6.6,
+  §7) — the trash-discovery loss loop, shrunk by v1.5 (AD-039) to
+  trash-discovery complaints only. Seven implementation choices: (1) pristine
+  `fresh` rooms settle silently — complaints track trash only
+  (`trashed`/`settled`), flagged for the 3.5 gate (the alternative re-widens
+  the budget deliberately shrunk in 3.D); (2) a guest who enters mid-un-prep
+  flees and the complaint counts (FR-30: "follows the FR-29 complaint path");
+  (3) the complaining guest's resting suitcase is absorbed (leaves play
+  silently — the dropCarry desk-absorb precedent); (4) the desk report carries
+  the observed freshness tier as its fuzzy-timestamp datum
+  (`fresh: true` → "maybe a minute ago", `false` → "a while ago now");
+  (5) the anger cue is sameFloor at the room (GUEST-12 guest-visibility);
+  (6) two new wire rows `guest:angered` (sameFloor, `visibility: {floor}`)
+  and `guest:discovered` (all, `fresh`) — `guest:complained` keeps its
+  FR-29(a) wrong-delivery meaning and counts toward nothing since AD-039;
+  (7) the 8th complaint and the buzzer on the same tick resolve to the
+  budget (win-check order: budget before buzzer; same-flush guarantee).
+  `COMPLAINT_BUDGET: 8` (§7 row, first implementation) and
+  `RoundEndReason` `budget-exhausted` (§6.6 "Complaint budget exhausted")
+  land in shared; `SUI-16`'s silent-settle pin is amended to its scheduled
+  supersession (the discovery loop). The complaint count rides
+  `round:recap`/`round:resumed` (the 3.D settleScore precedent); no prd bump
+  — like 3.1/3.2, the v1.6 contract existed since v1.5.
+- **Reason**: The evidence + loss loop was the cycle's core; the seven
+  choices close the spec's explicit assumptions table so no requirement
+  leaves silently unclear. The budget means "caught sabotaging" (trash
+  discovery), not "logistics happened" — the building-wide line stays while
+  its punitive coupling dies (AD-039 refined: silent mis-placement would
+  remove the evidence beat, so the line informs, it no longer damages).
+- **Trade-off**: The budget is harder to reach under the shrunken scope —
+  churn now bleeds it without crime (the 3.5 gate re-examines reachability);
+  the `fresh`-rooms-settle reading is conservative (the 3.5 gate may widen
+  it); the anger cue's 2.5 s TTL is a harness-poll compromise.
+- **Scope**: `packages/shared` (tuning, `RoundEndReason`, sim events
+  `guest:angered`/`guest:discovered`, registry rows + messages + tests,
+  exhaustive-typing plumbing), `packages/sim` (RoomIntelPort, arrival
+  resolution, angered walk + desk report, budget count + `budget-exhausted`
+  win check, `complaints.test.ts` + the `SUI-16` amendment), `apps/server`
+  (recap/resume `complaints` + room tests), `apps/client` (state/mappers,
+  `complaintHud` presenter, WorldScene mount + anger cue + walkie lines +
+  results reason, app wiring, harness `client:complaint_cues`), `CONTEXT.md`,
+  no prd/roadmap change.
+- **Date**: 2026-09-02
+- **Status**: active
+
 ## Handoff
-- **Feature**: `stairs` (cycle 3.E, AD-040) — COMPLETE. T1 `e327e03` shared
-  rows · T2 `62bef10` one-car collapse · T3 `7611a71` stairs channel ·
-  T4 `e594e8e` ambush · T5 `bc78ff3` server wiring · T6 `1b68a8b` client
-  slice · T7 `9b74d5b` prd v1.6 + §8 recompute + roadmap/CONTEXT/docs ·
-  `5ef4ac6` harness east-landing re-staging · T8 validation addendum.
-- **Phase / Task**: Validate → done. Verifier: `.specs/features/stairs/
-  validation.md` PASS (T2–T6 full re-derivation, sensor 5/5 mutants killed)
-  + T7/T8 delta addendum. `validate_state.py stairs` exit 0.
-- **Gates**: typecheck ✓ · lint ✓ · test:sim 475 ✓ · test:client 38/39 at
-  `--workers=2` (the only failure is the documented `client:lobby_join`
-  room-full bleed class, green isolated).
-- **Next step**: cycle 3.3 `complaint-budget` (scope: trash-discovery
-  complaints only per 3.D) — its dials now tune against the one-car economy
-  and the ambush kill check. Non-blockers from the verifier: suitcase-during-
-  stun and stunned-victim pass-through edges are safe by construction
-  (dedicated scenarios optional); harness guest-traffic contention is the
-  §8-documented relief-valve (stairs).
+- **Feature**: `complaint-budget` (cycle 3.3, AD-041) — COMPLETE. T1 `6c4f5d5`
+  shared rows + minimal client plumbing · T2 `1628f32` sim loop + budget ·
+  T3 `b3bebb0` server recap/resume · T4 `fc13ef1` client HUD + cues ·
+  T5 `19ac5e8` harness `client:complaint_cues` (synthetic sameFloor dispatch,
+  5.4 s) · T6 docs (CONTEXT + AD-041).
+- **Phase / Task**: Validate → done. Verifier: `.specs/features/complaint-budget/
+  validation.md` PASS (T2–T4 full re-derivation, sensor mutants killed) +
+  T5 harness at `--workers=1` twice. `validate_state.py complaint-budget`
+  exit 0.
+- **Gates**: typecheck ✓ · lint ✓ · test:sim 494 ✓ · test:client 39/40 at
+  `--workers=2` (38/39 previously; the extra failure is the known flaky
+  `client:accuse_ui` hold-E menu, green isolated — `client:complaint_cues`
+  green twice).
+- **Next step**: cycle 3.4 `provenance-signs` (FR-32 authorship + tenancy
+  signs + recap complaint provenance; FR-11/FR-22 amendments). The 3.5 gate
+  re-examines the `fresh`-rooms-settle reading and the shrunken budget's
+  reachability under the one-car + ambush economy.
 - **Blockers**: none.
 - **Branch**: master
