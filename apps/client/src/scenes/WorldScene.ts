@@ -38,6 +38,7 @@ import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
 import { type StairAnchor, stairPhaseReadout } from '../ui/stairScreen'
 import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
+import { JUICE, shouldShake } from './juice'
 
 /** Guest archetype + palette derivation (Phase 4.1, VPOL-06): pure seed →
  *  {archetype, palette}. Palette tints are civil Deco tones — never the staff
@@ -148,6 +149,9 @@ interface PlayerDisplay {
   facing: 'left' | 'right'
   /** Cosmetic seed (Phase 4.1, VPOL-01) — variantIndex(seed%8) drives the overlay. */
   seed?: number
+  /** Juice state (VPOL-13): whether the last frame counted as moving — the
+   *  settle pop fires on the moving→idle transition only. */
+  wasMoving?: boolean
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -253,7 +257,8 @@ export class WorldScene extends Phaser.Scene {
     string,
     { carrierId: string | null; rest: { floor: FloorId; room: RoomIndex } | null }
   >()
-  private tapPhase = 0
+  /** Foot-tap proxies (Phase 4.1, VPOL-14) live in syncGuests; the phase
+   *  counter is gone — the Tween clock owns the bounce. */
   private cardMarkers = new Map<string, HTMLElement>()
   private tenancies = new Map<string, boolean>()
   private tenancyMarkers = new Map<string, HTMLElement>()
@@ -1020,6 +1025,8 @@ export class WorldScene extends Phaser.Scene {
         // fired event itself is the removal signal (no player:left exists for
         // a firing; the session stays connected as a spectator, 2.9 scope).
         this.removePlayerDisplay(action.playerId)
+        if (shouldShake('player-fired'))
+          this.cameras.main.shake(JUICE.shake.durationMs, JUICE.shake.intensity)
         // Cycle 3.B: the desk absorbed their suitcase (no dedicated event —
         // the firing IS the signal).
         for (const [id, sc] of this.suitcases) {
@@ -1080,7 +1087,11 @@ export class WorldScene extends Phaser.Scene {
         // Cycle 3.E (AD-040): the private ambush lands ONLY on the victim —
         // capture the live transit remainder (the resume clock), override
         // the own stairs clock with the stun phase, and raise the toast with
-        // a local stun countdown (STAIRS-19).
+        // a local stun countdown (STAIRS-19). VPOL-16: the medium-tier
+        // camera punch marks the beat.
+        if (shouldShake('stairs-ambushed')) {
+          this.cameras.main.shake(JUICE.shake.durationMs, JUICE.shake.intensity)
+        }
         if (this.stairsAnchor !== null) {
           this.stunResumeMs = stairPhaseReadout(this.stairsAnchor, Date.now())?.remainingMs ?? 0
           this.stairsAnchor = {
@@ -1107,7 +1118,9 @@ export class WorldScene extends Phaser.Scene {
       case 'guest-angered': {
         // FR-29(b) stage 1: in-world anger cue at the room — room-number
         // level, no detail — the guest storms out. SameFloor delivery is the
-        // transport gate; the client just renders the short-lived cue here.
+        // transport gate. VPOL-15: the cue pops (Back.Out scale 0 → peak →
+        // rest) and throws a short Graphics dust puff — transient juice, not
+        // a static glyph.
         const x = (roomDoorXMilli(action.room) / 1000) * TILE_PX
         const y = this.laneY(action.floor) - 40
         const cue = this.add.text(x, y, '!', {
@@ -1119,8 +1132,28 @@ export class WorldScene extends Phaser.Scene {
         })
         cue.setOrigin(0.5, 0.5)
         cue.setDepth(100)
+        cue.setScale(0)
         cue.setVisible(this.spectator || action.floor === this.viewFloor)
-        this.angerCues.push({ view: cue, until: Date.now() + 2500, floor: action.floor })
+        this.tweens.add({
+          targets: cue,
+          scale: { from: 0, to: JUICE.anger.scalePeak },
+          duration: JUICE.anger.durationMs,
+          ease: 'Back.Out',
+          yoyo: false,
+        })
+        this.tweens.add({
+          targets: cue,
+          scale: 1,
+          delay: JUICE.anger.durationMs,
+          duration: 90,
+          ease: 'Sine.easeOut',
+        })
+        this.angerDust(x, y, this.spectator || action.floor === this.viewFloor)
+        this.angerCues.push({
+          view: cue,
+          until: Date.now() + JUICE.anger.ttlMs,
+          floor: action.floor,
+        })
         this.beep(320)
         break
       }
@@ -1204,6 +1237,28 @@ export class WorldScene extends Phaser.Scene {
     sprite.setOrigin(0.5, 1)
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy())
     sprite.play('fx-rustle')
+  }
+
+  /**
+   * VPOL-15 anger dust: `dustCount` tiny Graphics puffs that scatter outward
+   * and fade — pure decoration, destroyed on tween complete.
+   */
+  private angerDust(x: number, y: number, visible: boolean): void {
+    for (let i = 0; i < JUICE.anger.dustCount; i++) {
+      const dust = this.add.circle(x, y, 3, 0xa4b06a, 0.55)
+      dust.setDepth(99)
+      dust.setVisible(visible)
+      const dir = i % 2 === 0 ? 1 : -1
+      this.tweens.add({
+        targets: dust,
+        x: x + dir * (5 + i * 3),
+        y: y - 4 - i * 2,
+        alpha: 0,
+        duration: JUICE.anger.dustDurationMs,
+        ease: 'Sine.easeOut',
+        onComplete: () => dust.destroy(),
+      })
+    }
   }
 
   /** Track roster growth/shrink from lobby snapshots (players join over time). */
@@ -1640,9 +1695,11 @@ export class WorldScene extends Phaser.Scene {
   /** Guest marker sync (called every frame): one archetype Sprite per guest
    *  on the viewed floor (Phase 4.1, VPOL-06) — texture + palette from the
    *  decorrelated guest seed; dining guests shift toward amber (VPOL-08);
-   *  bouncing while its free impatience cue is active (GUEST-12/13). */
+   *  foot-tap yoyo while its free impatience cue is active (GUEST-13/VPOL-14). */
+  private tapProxies = new Map<string, { offset: number }>()
+
   private syncGuests(delta: number): void {
-    this.tapPhase += delta / 1000
+    void delta
     for (const [id, g] of this.guests) {
       let view = this.guestViews.get(id)
       const laneY = this.laneY(g.floor)
@@ -1658,10 +1715,27 @@ export class WorldScene extends Phaser.Scene {
       const visible = this.spectator || g.floor === this.viewFloor
       view.setVisible(visible)
       view.x = g.x * TILE_PX
-      const tap = this.impatientGuests.has(id)
-        ? Math.abs(Math.sin(this.tapPhase * Math.PI * 2)) * 8
-        : 0
-      view.y = laneY - tap
+      // VPOL-14: the impatience cue is a Tween-driven yoyo bounce around the
+      // lane line (a proxy offset survives floor teleports; the frame sync
+      // only reads it).
+      const impatient = this.impatientGuests.has(id)
+      let proxy = this.tapProxies.get(id)
+      if (impatient && proxy === undefined) {
+        proxy = { offset: 0 }
+        this.tapProxies.set(id, proxy)
+        this.tweens.add({
+          targets: proxy,
+          offset: { from: 0, to: -JUICE.footTap.distancePx },
+          duration: JUICE.footTap.durationMs,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+        })
+      } else if (!impatient && proxy !== undefined) {
+        this.tweens.killTweensOf(proxy)
+        this.tapProxies.delete(id)
+      }
+      view.y = laneY - (proxy?.offset ?? 0)
       const seed = this.guestSeeds.get(id) ?? 0
       const { palette } = guestVariantOf(seed)
       const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
@@ -1669,6 +1743,11 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const [id, view] of this.guestViews) {
       if (!this.guests.has(id)) {
+        const proxy = this.tapProxies.get(id)
+        if (proxy !== undefined) {
+          this.tweens.killTweensOf(proxy)
+          this.tapProxies.delete(id)
+        }
         view.destroy()
         this.guestViews.delete(id)
       }
@@ -2231,6 +2310,20 @@ export class WorldScene extends Phaser.Scene {
         display.sprite.anims.stop()
         display.sprite.setFrame(0)
       }
+      // VPOL-13: the settle pop fires exactly on the moving→idle transition —
+      // a small spring back to rest scale (never during the stride).
+      const wasMoving = display.wasMoving ?? false
+      if (wasMoving && !moving && !display.sprite.anims.isPlaying) {
+        const targets =
+          display.variant !== null ? [display.sprite, display.variant] : [display.sprite]
+        this.tweens.add({
+          targets,
+          scale: { from: JUICE.settle.scaleFrom, to: 1 },
+          duration: JUICE.settle.durationMs,
+          ease: JUICE.settle.ease,
+        })
+      }
+      display.wasMoving = moving
     }
     // The presenter drives every car's y (base lane + arrival slide) in tick.
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId, this.riderSession)
