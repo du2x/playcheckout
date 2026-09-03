@@ -1,4 +1,4 @@
-import type { FloorId, GuestFloorId, RoomIndex, SimEvent } from '@turnover/shared'
+import type { FloorId, SimEvent } from '@turnover/shared'
 import { roomDoorXMilli } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { GuestSim, type MovementPort, type RoomIntelPort } from './guests.js'
@@ -199,9 +199,9 @@ describe('sim:tenancy', () => {
       | Extract<SimEvent, { type: 'room:tenancy' }>
       | undefined
     expect(tenancy).toBeDefined()
-    expect(tenancy!.occupied).toBe(true)
-    expect(tenancy!.floor).toBe('floor1')
-    expect(tenancy!.room).toBe(1)
+    expect(tenancy?.occupied).toBe(true)
+    expect(tenancy?.floor).toBe('floor1')
+    expect(tenancy?.room).toBe(1)
     expect(events.some((e) => e.type === 'guest:settled')).toBe(true)
   })
 
@@ -228,7 +228,7 @@ describe('sim:tenancy', () => {
       | Extract<SimEvent, { type: 'room:tenancy' }>
       | undefined
     expect(tenancy).toBeDefined()
-    expect(tenancy!.occupied).toBe(false)
+    expect(tenancy?.occupied).toBe(false)
   })
 
   it('discovery emits vacant and keeps room trashed provenance (PROV-11)', () => {
@@ -279,7 +279,7 @@ describe('sim:tenancy', () => {
       | Extract<SimEvent, { type: 'room:tenancy' }>
       | undefined
     expect(tenancy).toBeDefined()
-    expect(tenancy!.occupied).toBe(false)
+    expect(tenancy?.occupied).toBe(false)
     expect(wc.stateOf('floor1', 1)).toBe('trashed')
     expect(wc.provenanceOf('floor1', 1)).toBe('sabotage')
   })

@@ -50,7 +50,7 @@ describe('server:recap_provenance', () => {
     })
     // Directly churn and tenancy via sim guests hack — settle two guests on different floors
     const guests: any = (sim as any).guests
-    const port: Port = guests.movement
+    const _port: Port = guests.movement
     // Create two tenanted rooms directly
     guests.tenanted.set('floor1:1', 'guest:1')
     guests.tenanted.set('floor2:3', 'guest:2')

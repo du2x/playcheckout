@@ -36,7 +36,7 @@ import type { SceneAction } from '../state'
 import { setCarScreenDoors, setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
 import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
-import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
+import { type StairAnchor, stairPhaseReadout } from '../ui/stairScreen'
 import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
 
 /**
@@ -619,7 +619,7 @@ export class WorldScene extends Phaser.Scene {
       return
     }
     this.stairCanvas.setVisible(true)
-    const dir = anchor.to === anchor.from ? 'up' : anchor.to > anchor.from ? 'up' : 'down'
+    const _dir = anchor.to === anchor.from ? 'up' : anchor.to > anchor.from ? 'up' : 'down'
     // Use building order for correct up/down
     const dir2 = (() => {
       const order = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as const

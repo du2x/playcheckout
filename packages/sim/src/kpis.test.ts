@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { TelemetrySink } from './telemetry.js'
 import { computeKpis } from './kpis.js'
+import { TelemetrySink } from './telemetry.js'
 
 describe('kpi:compute', () => {
   it('aggregates hand-counted 20 synthetic files: sab rate, accusation, catches, crime time, decoy, guest KPIs, abort exclusion, malformed', () => {
@@ -27,37 +27,138 @@ describe('kpi:compute', () => {
         sink.recordRoomTransition('floor1', 1, 'p2', 'trashed', 'sabotage', opts.crimeAtTick)
         tick = Math.max(tick, opts.crimeAtTick)
       }
-      for (const a of opts.accusations) sink.recordAccusation('p1', 'p2', a.wasTargetSaboteur, true, (tick += 10))
-      for (let i = 0; i < opts.catches; i++) sink.recordWalkIn(`p${i + 3}`, 'p2', (tick += 10))
+      for (const a of opts.accusations) {
+        tick += 10
+        sink.recordAccusation('p1', 'p2', a.wasTargetSaboteur, true, tick)
+      }
+      for (let i = 0; i < opts.catches; i++) {
+        tick += 10
+        sink.recordWalkIn(`p${i + 3}`, 'p2', tick)
+      }
       for (const c of opts.calls) {
         sink.recordElevatorCall('floor1', c.car, 'p1', c.tick)
         if (c.hasRideWithin60) sink.recordElevatorRide(c.car, 'floor2', c.tick + 30)
       }
-      for (let i = 0; i < opts.settles; i++) sink.recordGuestSettled(`guest:${i + 1}`, 'floor1', 1, (tick += 5))
+      for (let i = 0; i < opts.settles; i++) {
+        tick += 5
+        sink.recordGuestSettled(`guest:${i + 1}`, 'floor1', 1, tick)
+      }
       for (let i = 0; i < opts.discovered.length; i++) {
         const d = opts.discovered[i]!
-        sink.recordGuestDiscovered(`guest:d${i}`, 'floor1', 1, true, d.provenance, d.provenance === 'sabotage' ? 'p2' : undefined, (tick += 7))
+        tick += 7
+        sink.recordGuestDiscovered(
+          `guest:d${i}`,
+          'floor1',
+          1,
+          true,
+          d.provenance,
+          d.provenance === 'sabotage' ? 'p2' : undefined,
+          tick,
+        )
       }
-      for (let i = 0; i < opts.carry; i++) sink.recordCarryClockExpiry(`p${i + 1}`, (tick += 3))
+      for (let i = 0; i < opts.carry; i++) {
+        tick += 3
+        sink.recordCarryClockExpiry(`p${i + 1}`, tick)
+      }
       // also add a guest-complained line that must NOT count toward discovered
-      sink.recordGuestComplained('guest:bad', 'floor1', 2, (tick += 2))
-      const lines = sink.toJSONL()
+      tick += 2
+      sink.recordGuestComplained('guest:bad', 'floor1', 2, tick)
+      const _lines = sink.toJSONL()
       // winner
-      const winnerSink = new TelemetrySink('p2', 1)
+      const _winnerSink = new TelemetrySink('p2', 1)
       // we already have lines; append round-ended via sink
-      sink.recordRoundEnded(opts.winner, opts.winner === 'staff' ? 'settle-target-met' : opts.winner === 'saboteur' ? 'settle-target-failed' : 'saboteur-disconnected', opts.winner === 'aborted' ? null : 'p2', tick + 10)
+      sink.recordRoundEnded(
+        opts.winner,
+        opts.winner === 'staff'
+          ? 'settle-target-met'
+          : opts.winner === 'saboteur'
+            ? 'settle-target-failed'
+            : 'saboteur-disconnected',
+        opts.winner === 'aborted' ? null : 'p2',
+        tick + 10,
+      )
       const out = sink.toJSONL()
       if (opts.malformed) out.push('not-json')
       if (opts.malformed) out.push(JSON.stringify({ kind: 'unknown-kind', tick: 999, time: 999 }))
       return out
     }
 
-    files.push(makeFile({ winner: 'staff', accusations: [{ wasTargetSaboteur: true }, { wasTargetSaboteur: false }], catches: 1, crimeAtTick: 10, calls: [{ tick: 100, car: 1, hasRideWithin60: true }, { tick: 200, car: 1, hasRideWithin60: false }], settles: 9, discovered: [{ provenance: 'sabotage' }, { provenance: 'churn' }], carry: 1 }))
-    files.push(makeFile({ winner: 'saboteur', accusations: [{ wasTargetSaboteur: false }], catches: 0, crimeAtTick: 20, calls: [{ tick: 50, car: 2, hasRideWithin60: true }], settles: 5, discovered: [{ provenance: 'churn' }], carry: 0 }))
-    files.push(makeFile({ winner: 'staff', accusations: [], catches: 2, crimeAtTick: undefined, calls: [], settles: 10, discovered: [], carry: 2 }))
-    files.push(makeFile({ winner: 'saboteur', accusations: [{ wasTargetSaboteur: true }], catches: 1, crimeAtTick: 30, calls: [{ tick: 80, car: 1, hasRideWithin60: false }], settles: 6, discovered: [{ provenance: 'sabotage' }], carry: 0 }))
-    files.push(makeFile({ winner: 'staff', accusations: [{ wasTargetSaboteur: true }], catches: 0, crimeAtTick: 15, calls: [], settles: 8, discovered: [{ provenance: 'sabotage' }, { provenance: 'sabotage' }], carry: 1, malformed: true }))
-    files.push(makeFile({ winner: 'aborted', accusations: [{ wasTargetSaboteur: true }], catches: 5, crimeAtTick: 5, calls: [], settles: 100, discovered: [{ provenance: 'sabotage' }], carry: 10 }))
+    files.push(
+      makeFile({
+        winner: 'staff',
+        accusations: [{ wasTargetSaboteur: true }, { wasTargetSaboteur: false }],
+        catches: 1,
+        crimeAtTick: 10,
+        calls: [
+          { tick: 100, car: 1, hasRideWithin60: true },
+          { tick: 200, car: 1, hasRideWithin60: false },
+        ],
+        settles: 9,
+        discovered: [{ provenance: 'sabotage' }, { provenance: 'churn' }],
+        carry: 1,
+      }),
+    )
+    files.push(
+      makeFile({
+        winner: 'saboteur',
+        accusations: [{ wasTargetSaboteur: false }],
+        catches: 0,
+        crimeAtTick: 20,
+        calls: [{ tick: 50, car: 2, hasRideWithin60: true }],
+        settles: 5,
+        discovered: [{ provenance: 'churn' }],
+        carry: 0,
+      }),
+    )
+    files.push(
+      makeFile({
+        winner: 'staff',
+        accusations: [],
+        catches: 2,
+        crimeAtTick: undefined,
+        calls: [],
+        settles: 10,
+        discovered: [],
+        carry: 2,
+      }),
+    )
+    files.push(
+      makeFile({
+        winner: 'saboteur',
+        accusations: [{ wasTargetSaboteur: true }],
+        catches: 1,
+        crimeAtTick: 30,
+        calls: [{ tick: 80, car: 1, hasRideWithin60: false }],
+        settles: 6,
+        discovered: [{ provenance: 'sabotage' }],
+        carry: 0,
+      }),
+    )
+    files.push(
+      makeFile({
+        winner: 'staff',
+        accusations: [{ wasTargetSaboteur: true }],
+        catches: 0,
+        crimeAtTick: 15,
+        calls: [],
+        settles: 8,
+        discovered: [{ provenance: 'sabotage' }, { provenance: 'sabotage' }],
+        carry: 1,
+        malformed: true,
+      }),
+    )
+    files.push(
+      makeFile({
+        winner: 'aborted',
+        accusations: [{ wasTargetSaboteur: true }],
+        catches: 5,
+        crimeAtTick: 5,
+        calls: [],
+        settles: 100,
+        discovered: [{ provenance: 'sabotage' }],
+        carry: 10,
+      }),
+    )
 
     const kpis = computeKpis(files)
 
@@ -139,7 +240,12 @@ describe('kpi:compute', () => {
     sink.recordRoomTransition('floor1', 1, 'p1', 'prepped', 'none', 10)
     sink.recordRoundEnded('staff', 'settle-target-met', 'p2', 20)
     const good = sink.toJSONL()
-    const withBad = [...good.slice(0, 1), 'not-json', JSON.stringify({ kind: 'unknown', tick: 999, time: 0 }), ...good.slice(1)]
+    const withBad = [
+      ...good.slice(0, 1),
+      'not-json',
+      JSON.stringify({ kind: 'unknown', tick: 999, time: 0 }),
+      ...good.slice(1),
+    ]
     const kpis = computeKpis([withBad])
     expect(kpis.malformedLines).toBe(2)
     expect(kpis.rounds).toBe(1)

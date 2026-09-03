@@ -1,4 +1,6 @@
 import { randomInt } from 'node:crypto'
+import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
+import * as path from 'node:path'
 import type {
   CarId,
   FloorId,
@@ -24,7 +26,14 @@ import {
   TUNING,
   workStartIntentSchema,
 } from '@turnover/shared'
-import { type GuestTiming, type MovementPort, MovementSim, RoundSim, TICK_HZ } from '@turnover/sim'
+import {
+  type GuestTiming,
+  type MovementPort,
+  MovementSim,
+  RoundSim,
+  TelemetrySink,
+  TICK_HZ,
+} from '@turnover/sim'
 import { type Client, CloseCode, Room } from 'colyseus'
 import { Router } from './router'
 
@@ -129,6 +138,11 @@ export class TurnoverRoom extends Room {
   private lastRiders = new Map<CarId, string[]>()
   /** Last known floor per car — the `from` half of a ride leg. */
   private carFloor = new Map<CarId, FloorId>()
+  // --- Telemetry (cycle 3.6, FR-23/24): server-authoritative JSONL per round.
+  private telemetrySink: TelemetrySink | null = null
+  private telemetryStream: import('node:fs').WriteStream | null = null
+  private telemetryPath: string | null = null
+  private telemetryRoundIdx = 0
 
   /**
    * Personal movement snapshot enriched with the resting suitcases of the
@@ -319,6 +333,17 @@ export class TurnoverRoom extends Room {
 
   override onDispose() {
     activeCodes.delete(this.roomId)
+    this.closeTelemetry()
+  }
+
+  /** Test hook: last telemetry file path (null outside a finished round). */
+  __telemetryPath(): string | null {
+    return this.telemetryPath
+  }
+
+  /** Test hook: whether the telemetry stream is closed after round:ended. */
+  __telemetryClosed(): boolean {
+    return this.telemetryStream === null
   }
 
   override onJoin(client: Client, options: { name?: unknown }) {
@@ -466,6 +491,15 @@ export class TurnoverRoom extends Room {
     if (sim.saboteurId === sessionId) {
       // REND-20: the saboteur is gone for good — the round aborts. No traitor
       // reveal on an aborted round; the result is excluded from KPIs (FR-25).
+      if (this.telemetrySink !== null) {
+        this.telemetrySink.recordRoundEnded(
+          'aborted',
+          'saboteur-disconnected',
+          null,
+          this.roundTick,
+        )
+        this.flushTelemetry()
+      }
       this.movement.leave(sessionId)
       this.router.toAll('round:ended', {
         winner: 'aborted',
@@ -548,8 +582,9 @@ export class TurnoverRoom extends Room {
       .map((p) => p.sessionId)
     // Seed never leaves the server: it appears in no event and no payload.
     const shiftTicks = testShiftTicks()
+    const seed = randomInt(2 ** 31)
     this.sim = new RoundSim({
-      seed: randomInt(2 ** 31),
+      seed,
       playerIds,
       // Guest-traffic economy (cycle 3.1, AD-028): the sim drives NPC guests
       // through the room's movement layer via the NPC-only port.
@@ -557,6 +592,7 @@ export class TurnoverRoom extends Room {
       ...(testGuestTiming() === undefined ? {} : { guestTiming: testGuestTiming() }),
       ...(shiftTicks === undefined ? {} : { totalTicks: shiftTicks }),
     })
+    this.openTelemetry(seed, this.sim.saboteurId)
     // AD-040 ambush authority (design: the AD-028 adapter inverted): the room
     // pushes its role/liveness view INTO the movement layer at round start.
     // The sim's own REND-02 liveness rule is the single home of "live staff".
@@ -589,6 +625,44 @@ export class TurnoverRoom extends Room {
     }
   }
 
+  private openTelemetry(seed: number, saboteurId: string): void {
+    try {
+      const dir = path.join(process.cwd(), 'data', 'telemetry')
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      const file = path.join(dir, `${this.roomId}-${this.telemetryRoundIdx++}.jsonl`)
+      this.telemetryPath = file
+      this.telemetrySink = new TelemetrySink(saboteurId, seed)
+      this.telemetryStream = createWriteStream(file, { flags: 'a' })
+      this.telemetryStream.on('error', (err) =>
+        console.error('[telemetry] write failed', file, err),
+      )
+    } catch (err) {
+      console.error('[telemetry] open failed', err)
+    }
+  }
+
+  private flushTelemetry(): void {
+    if (this.telemetrySink === null || this.telemetryStream === null) return
+    const lines = this.telemetrySink.drain()
+    for (const line of lines) {
+      try {
+        this.telemetryStream.write(`${JSON.stringify(line)}\n`)
+      } catch (err) {
+        console.error('[telemetry] write failed', err)
+      }
+    }
+  }
+
+  private closeTelemetry(): void {
+    if (this.telemetryStream !== null) {
+      try {
+        this.telemetryStream.end()
+      } catch {}
+      this.telemetryStream = null
+    }
+    this.telemetrySink = null
+  }
+
   /** One fixed 0.05 s step; the production interval and the test hook share this path. */
   private advance() {
     // Movement runs in BOTH phases (AD-005); the round sim only in round.
@@ -602,13 +676,25 @@ export class TurnoverRoom extends Room {
     for (const event of this.movement.tick()) {
       this.router.route(event)
       this.journalMovement(event)
+      if (this.telemetrySink !== null) {
+        if (event.type === 'elevator:called')
+          this.telemetrySink.recordElevatorCall(event.floor, event.car, undefined, this.roundTick)
+        else if (event.type === 'elevator:moved')
+          this.telemetrySink.recordElevatorRide(event.car, event.floor, this.roundTick)
+        else if (event.type === 'elevator:doors')
+          this.telemetrySink.recordElevatorDoors(event.car, event.floor, event.open, this.roundTick)
+      }
     }
     for (const sessionId of ridersBefore) {
       if (!this.players.has(sessionId)) continue
       if (this.movement.viewOf(sessionId).car === null) this.sendExitSnapshot(sessionId)
     }
     const sim = this.sim
-    if (sim === null || this.phase !== 'round') return
+    if (sim === null || this.phase !== 'round') {
+      // No round — still flush any movement telemetry that was just recorded.
+      if (this.telemetrySink !== null) this.flushTelemetry()
+      return
+    }
     // AD-005 seam: the work channels consume the movement layer's positions
     // (integer millitiles) — inside-segment validation, walk-out cancels,
     // and room observation all derive from them.
@@ -622,6 +708,103 @@ export class TurnoverRoom extends Room {
     let roundEnded = false
     for (const event of sim.tick(positions)) {
       this.router.route(event)
+      if (this.telemetrySink !== null) {
+        if (event.type === 'room:prepped' || event.type === 'room:trashed') {
+          const prov = event.type === 'room:trashed' ? ('sabotage' as const) : ('none' as const)
+          const state = event.type === 'room:prepped' ? ('prepped' as const) : ('trashed' as const)
+          this.telemetrySink.recordRoomTransition(
+            event.floor as any,
+            event.room as any,
+            undefined,
+            state,
+            prov,
+            this.roundTick,
+          )
+        } else if (event.type === 'guest:arrived')
+          this.telemetrySink.recordGuestArrived(event.guestId, this.roundTick)
+        else if (event.type === 'guest:assigned')
+          this.telemetrySink.recordGuestAssigned(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'guest:self_assigned')
+          this.telemetrySink.recordGuestSelfAssigned(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'suitcase:carried')
+          this.telemetrySink.recordSuitcaseCarried(event.guestId, event.carrierId, this.roundTick)
+        else if (event.type === 'suitcase:placed')
+          this.telemetrySink.recordSuitcasePlaced(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'suitcase:picked_up')
+          this.telemetrySink.recordSuitcasePickedUp(event.guestId, event.carrierId, this.roundTick)
+        else if (event.type === 'guest:settled')
+          this.telemetrySink.recordGuestSettled(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'guest:checked_out')
+          this.telemetrySink.recordGuestCheckedOut(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'guest:left')
+          this.telemetrySink.recordGuestLeft(event.guestId, this.roundTick)
+        else if (event.type === 'guest:angered')
+          this.telemetrySink.recordGuestAngered(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'guest:discovered') {
+          const prov = event.fresh ? ('sabotage' as const) : ('churn' as const)
+          this.telemetrySink.recordGuestDiscovered(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            event.fresh,
+            prov,
+            prov === 'sabotage' ? sim.saboteurId : undefined,
+            this.roundTick,
+          )
+        } else if (event.type === 'guest:complained')
+          this.telemetrySink.recordGuestComplained(
+            event.guestId,
+            event.floor as any,
+            event.room as any,
+            this.roundTick,
+          )
+        else if (event.type === 'room:tenancy')
+          this.telemetrySink.recordTenancy(
+            event.floor as any,
+            event.room as any,
+            event.occupied,
+            this.roundTick,
+          )
+        else if (event.type === 'player:fired' && event.reason === 'carry-clock')
+          this.telemetrySink.recordCarryClockExpiry(event.playerId, this.roundTick)
+        else if (event.type === 'round:ended')
+          this.telemetrySink.recordRoundEnded(
+            event.winner as any,
+            event.reason as any,
+            event.saboteurId as any,
+            this.roundTick,
+          )
+      }
       // Justice teardown (JUST-04/06/11): a fired session loses their movement
       // slot (no further position streams) — their sim-side channels were
       // already cancelled by the sim. No player:left: the fired event itself
@@ -633,6 +816,15 @@ export class TurnoverRoom extends Room {
         this.router.toSelf('spectator:snapshot', event.playerId, this.spectatorSnapshot())
       }
       if (event.type === 'round:ended') roundEnded = true
+    }
+    if (this.telemetrySink !== null) {
+      let preppedCount = 0
+      try {
+        const rs = sim.roomStates()
+        for (const r of rs) if (r.state === 'prepped') preppedCount++
+      } catch {}
+      this.telemetrySink.sampleCoverage(this.roundTick, preppedCount)
+      this.flushTelemetry()
     }
     this.roundTick++
     if (roundEnded) this.finishRound()
@@ -660,6 +852,8 @@ export class TurnoverRoom extends Room {
       settleTarget: settleTargetFor(lobbySize),
       complaints: sim?.complaintCount ?? 0,
     })
+    this.flushTelemetry()
+    this.closeTelemetry()
     this.phase = 'results'
     // Roles were the sim's alone — dropping it wipes the deal (AD-002); the
     // reveal already happened on the wire, so nothing is lost.

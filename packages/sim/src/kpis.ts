@@ -102,7 +102,9 @@ export function computeKpis(files: readonly (readonly string[])[]): Kpis {
     }
 
     // first crime time: earliest room-transition trashed sabotage
-    const firstCrime = parsed.find((l) => l.kind === 'room-transition' && l.state === 'trashed' && l.provenance === 'sabotage')
+    const firstCrime = parsed.find(
+      (l) => l.kind === 'room-transition' && l.state === 'trashed' && l.provenance === 'sabotage',
+    )
     if (firstCrime) firstCrimeSeconds.push(firstCrime.time / 1000)
 
     // decoy calls: call not followed by elevator-ride of same car within 60 ticks
@@ -110,7 +112,9 @@ export function computeKpis(files: readonly (readonly string[])[]): Kpis {
     const rides = parsed.filter((l) => l.kind === 'elevator-ride')
     totalCalls += calls.length
     for (const call of calls) {
-      const hasRide = rides.some((r) => r.car === call.car && r.tick >= call.tick && r.tick <= call.tick + 60)
+      const hasRide = rides.some(
+        (r) => r.car === call.car && r.tick >= call.tick && r.tick <= call.tick + 60,
+      )
       if (!hasRide) totalDecoyCalls++
     }
   }
@@ -118,7 +122,10 @@ export function computeKpis(files: readonly (readonly string[])[]): Kpis {
   const saboteurWinRate = rounds === 0 ? 0 : sabWins / rounds
   const correctAccusationRate = totalAccusations === 0 ? 0 : correctAccusations / totalAccusations
   const catchesPerHour = rounds === 0 ? 0 : (totalCatches * 12) / rounds
-  const meanTimeToFirstCrimeSeconds = firstCrimeSeconds.length === 0 ? null : firstCrimeSeconds.reduce((a, b) => a + b, 0) / firstCrimeSeconds.length
+  const meanTimeToFirstCrimeSeconds =
+    firstCrimeSeconds.length === 0
+      ? null
+      : firstCrimeSeconds.reduce((a, b) => a + b, 0) / firstCrimeSeconds.length
   const decoyCallRate = totalCalls === 0 ? 0 : totalDecoyCalls / totalCalls
   const meanSettleScore = rounds === 0 ? 0 : totalSettle / rounds
   const meanComplaintsPerRound = rounds === 0 ? 0 : totalComplaints / rounds

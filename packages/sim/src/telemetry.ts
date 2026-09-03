@@ -1,11 +1,4 @@
-import type {
-  FloorId,
-  GuestFloorId,
-  Kpis,
-  RoomIndex,
-  RoomState,
-  TelemetryLine,
-} from '@turnover/shared'
+import type { FloorId, GuestFloorId, RoomIndex, RoomState, TelemetryLine } from '@turnover/shared'
 
 const TICK_MS = 50
 const COVERAGE_PERIOD_TICKS = 20 // 1s at 20 Hz
@@ -13,11 +6,10 @@ const COVERAGE_PERIOD_TICKS = 20 // 1s at 20 Hz
 export class TelemetrySink {
   private readonly lines: TelemetryLine[] = []
   private ended = false
-  private endedTick: number | null = null
 
   constructor(
-    private readonly saboteurId: string | null,
-    private readonly seed: number,
+    readonly _saboteurId: string | null,
+    readonly _seed: number,
   ) {}
 
   private push(line: TelemetryLine): void {
@@ -282,14 +274,10 @@ export class TelemetrySink {
       saboteurId,
     })
     this.ended = true
-    this.endedTick = tick
   }
 
-  markEnded(tick: number): void {
-    if (!this.ended) {
-      this.ended = true
-      this.endedTick = tick
-    }
+  markEnded(_tick: number): void {
+    if (!this.ended) this.ended = true
   }
 
   getLines(): readonly TelemetryLine[] {

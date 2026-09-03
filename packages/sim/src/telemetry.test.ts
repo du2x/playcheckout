@@ -55,7 +55,7 @@ describe('sim:telemetry', () => {
       room: 'floor1:2',
       provenance: 'churn',
     })
-    expect(rooms[2]!.actor).toBeUndefined()
+    expect(rooms[2]?.actor).toBeUndefined()
 
     // elevator lines
     expect(lines.find((l) => l.kind === 'elevator-call')!).toMatchObject({
@@ -96,7 +96,7 @@ describe('sim:telemetry', () => {
     // coverage cadence: samples at 0,20,40,60,80,100 => 6 samples for t 0..100
     const cov = lines.filter((l) => l.kind === 'coverage-sample')
     expect(cov.map((l) => l.tick)).toEqual([0, 20, 40, 60, 80, 100])
-    expect(cov[0]!.coverage).toBe(0)
+    expect(cov[0]?.coverage).toBe(0)
     // time = tick*50 already verified above
     for (const c of cov) expect(c.time).toBe(c.tick * 50)
   })
@@ -156,10 +156,10 @@ describe('sim:telemetry', () => {
     sink.sampleCoverage(20, 12)
     sink.sampleCoverage(40, 24)
     const cov = sink.getLines().filter((l) => l.kind === 'coverage-sample')
-    expect(cov[1]!.coverage).toBe(12 / 24)
-    expect(cov[2]!.coverage).toBe(1)
-    expect(cov[0]!.time).toBe(0)
-    expect(cov[1]!.time).toBe(1000)
+    expect(cov[1]?.coverage).toBe(12 / 24)
+    expect(cov[2]?.coverage).toBe(1)
+    expect(cov[0]?.time).toBe(0)
+    expect(cov[1]?.time).toBe(1000)
   })
 })
 
@@ -187,17 +187,54 @@ describe('sim:telemetry_guests', () => {
     sink.recordCarryClockExpiry('p1', 95)
 
     const lines = sink.getLines()
-    expect(lines.find((l) => l.kind === 'guest-arrived')!).toMatchObject({ guestId: 'guest:1', tick: 10 })
-    expect(lines.find((l) => l.kind === 'guest-assigned')!).toMatchObject({ guestId: 'guest:1', floor: 'floor1', roomIdx: 3 })
-    expect(lines.find((l) => l.kind === 'guest-self-assigned')!).toMatchObject({ guestId: 'guest:2', floor: 'floor2', roomIdx: 5 })
-    expect(lines.find((l) => l.kind === 'suitcase-carried')!).toMatchObject({ guestId: 'guest:1', carrierId: 'p1' })
-    expect(lines.find((l) => l.kind === 'suitcase-placed')!).toMatchObject({ guestId: 'guest:1', floor: 'floor1', roomIdx: 3 })
-    expect(lines.find((l) => l.kind === 'suitcase-picked-up')!).toMatchObject({ guestId: 'guest:1', carrierId: 'p3' })
-    expect(lines.find((l) => l.kind === 'guest-settled')!).toMatchObject({ guestId: 'guest:1', floor: 'floor1', roomIdx: 3 })
-    expect(lines.find((l) => l.kind === 'guest-checked-out')!).toMatchObject({ guestId: 'guest:1', floor: 'floor1', roomIdx: 3 })
+    expect(lines.find((l) => l.kind === 'guest-arrived')!).toMatchObject({
+      guestId: 'guest:1',
+      tick: 10,
+    })
+    expect(lines.find((l) => l.kind === 'guest-assigned')!).toMatchObject({
+      guestId: 'guest:1',
+      floor: 'floor1',
+      roomIdx: 3,
+    })
+    expect(lines.find((l) => l.kind === 'guest-self-assigned')!).toMatchObject({
+      guestId: 'guest:2',
+      floor: 'floor2',
+      roomIdx: 5,
+    })
+    expect(lines.find((l) => l.kind === 'suitcase-carried')!).toMatchObject({
+      guestId: 'guest:1',
+      carrierId: 'p1',
+    })
+    expect(lines.find((l) => l.kind === 'suitcase-placed')!).toMatchObject({
+      guestId: 'guest:1',
+      floor: 'floor1',
+      roomIdx: 3,
+    })
+    expect(lines.find((l) => l.kind === 'suitcase-picked-up')!).toMatchObject({
+      guestId: 'guest:1',
+      carrierId: 'p3',
+    })
+    expect(lines.find((l) => l.kind === 'guest-settled')!).toMatchObject({
+      guestId: 'guest:1',
+      floor: 'floor1',
+      roomIdx: 3,
+    })
+    expect(lines.find((l) => l.kind === 'guest-checked-out')!).toMatchObject({
+      guestId: 'guest:1',
+      floor: 'floor1',
+      roomIdx: 3,
+    })
     expect(lines.find((l) => l.kind === 'guest-left')!).toMatchObject({ guestId: 'guest:1' })
-    expect(lines.find((l) => l.kind === 'guest-angered')!).toMatchObject({ guestId: 'guest:3', floor: 'floor1', roomIdx: 2 })
-    expect(lines.find((l) => l.kind === 'tenancy')!).toMatchObject({ floor: 'floor1', roomIdx: 3, occupied: true })
+    expect(lines.find((l) => l.kind === 'guest-angered')!).toMatchObject({
+      guestId: 'guest:3',
+      floor: 'floor1',
+      roomIdx: 2,
+    })
+    expect(lines.find((l) => l.kind === 'tenancy')!).toMatchObject({
+      floor: 'floor1',
+      roomIdx: 3,
+      occupied: true,
+    })
 
     const discovered = lines.filter((l) => l.kind === 'guest-discovered')
     expect(discovered).toHaveLength(2)
@@ -208,7 +245,10 @@ describe('sim:telemetry_guests', () => {
     expect(ch.actorId).toBeUndefined()
 
     // carry-clock attributes the carrier
-    expect(lines.find((l) => l.kind === 'carry-clock-expiry')!).toMatchObject({ actor: 'p1', tick: 95 })
+    expect(lines.find((l) => l.kind === 'carry-clock-expiry')!).toMatchObject({
+      actor: 'p1',
+      tick: 95,
+    })
 
     // complained never increments discovered count: one complained line exists but discovered stays 2
     expect(lines.filter((l) => l.kind === 'guest-complained')).toHaveLength(1)
@@ -238,7 +278,13 @@ describe('sim:telemetry_guests', () => {
     sink.sampleCoverage(0, 1)
     sink.recordAccusation('p1', 'p2', false, false, 20)
     const lines = sink.getLines()
-    const guestLines = lines.filter((l) => l.kind.startsWith('guest') || l.kind.startsWith('suitcase') || l.kind === 'tenancy' || l.kind === 'carry-clock-expiry')
+    const guestLines = lines.filter(
+      (l) =>
+        l.kind.startsWith('guest') ||
+        l.kind.startsWith('suitcase') ||
+        l.kind === 'tenancy' ||
+        l.kind === 'carry-clock-expiry',
+    )
     expect(guestLines).toHaveLength(0)
   })
 })

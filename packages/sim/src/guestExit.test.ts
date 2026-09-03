@@ -229,7 +229,7 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
         }
       }
       if (e.type === 'suitcase:placed') {
-        for (const [sid, st] of bots) {
+        for (const [_sid, st] of bots) {
           if (st.guestId === e.guestId) {
             st.carrying = false
             st.guestId = null
@@ -568,7 +568,7 @@ function runWithMisplace(seed: number): MisplaceResult {
         }
       }
       if (e.type === 'suitcase:placed') {
-        for (const [sid, st] of bots) {
+        for (const [_sid, st] of bots) {
           if (st.guestId === e.guestId) {
             st.carrying = false
             st.guestId = null
@@ -631,7 +631,7 @@ describe('sim:guest_exit_b', () => {
     // We run the dedicated ambush-only probe from complaints.test.ts (STAIRS-21) ported here as a one-seed check:
     const movement = new MovementSim()
     const ids = ['p1', 'p2', 'p3', 'p4'] as const
-    const simCalm = new RoundSim({
+    const _simCalm = new RoundSim({
       seed: 7,
       playerIds: [...ids],
       movement: new PortAdapter(movement),
