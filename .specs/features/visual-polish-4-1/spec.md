@@ -140,31 +140,31 @@ This cycle closes `3.A` properly, with Phaser 4 as the medium: layered staff var
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| VPOL-01 | P1: Staff variants | Implementing | In progress (T1 done, T2 done) |
-| VPOL-02 | P1: Staff variants | Design | Pending |
-| VPOL-03 | P1: Staff variants | Design | Pending |
-| VPOL-04 | P1: Staff variants | Implementing | In progress (T1 done) |
-| VPOL-05 | P1: Staff variants | Design | Pending |
-| VPOL-06 | P1: Guests archetypes | Implementing | In progress (T2 done) |
-| VPOL-07 | P1: Guests archetypes | Design | Pending |
-| VPOL-08 | P1: Guests archetypes | Design | Pending |
-| VPOL-09 | P1: Guests archetypes | Design | Pending |
-| VPOL-10 | P1: Corridor Deco Noir | Design | Pending |
-| VPOL-11 | P1: Corridor Deco Noir | Design | Pending |
-| VPOL-12 | P1: Corridor Deco Noir | Design | Pending |
-| VPOL-13 | P2: Motion eased | Design | Pending |
-| VPOL-14 | P2: Motion eased | Design | Pending |
-| VPOL-15 | P2: Motion eased | Design | Pending |
-| VPOL-16 | P3: Camera shake | Design | Pending |
-| VPOL-17 | P3: Camera shake | Design | Pending |
+| VPOL-01 | P1: Staff variants | Execute | Done |
+| VPOL-02 | P1: Staff variants | Execute | Done |
+| VPOL-03 | P1: Staff variants | Execute | Done |
+| VPOL-04 | P1: Staff variants | Execute | Done |
+| VPOL-05 | P1: Staff variants | Execute | Done |
+| VPOL-06 | P1: Guests archetypes | Execute | Done |
+| VPOL-07 | P1: Guests archetypes | Execute | Done |
+| VPOL-08 | P1: Guests archetypes | Execute | Done |
+| VPOL-09 | P1: Guests archetypes | Execute | Done |
+| VPOL-10 | P1: Corridor Deco Noir | Execute | Done |
+| VPOL-11 | P1: Corridor Deco Noir | Execute | Done |
+| VPOL-12 | P1: Corridor Deco Noir | Execute | Done |
+| VPOL-13 | P2: Motion eased | Execute | Done |
+| VPOL-14 | P2: Motion eased | Execute | Done |
+| VPOL-15 | P2: Motion eased | Execute | Done |
+| VPOL-16 | P3: Camera shake | Execute | Done |
+| VPOL-17 | P3: Camera shake | Execute | Done |
 
-**Coverage:** 17 total, 0 mapped to tasks, 17 unmapped
+**Coverage:** 17 total, 17 mapped to tasks (T1..T7), 0 unmapped
 
 ---
 
 ## Success Criteria
 
-- [ ] `pnpm typecheck` + `pnpm lint` + `pnpm test:sim` green (new `sim:variant_decorrelation` + guest seed sim cases).
-- [ ] `pnpm test:client` `client:char_variants` PASS — variant `⊥` role, `body+variant` Sprites, `flipX` parity, no staff palette on guests, work frames identical, reconnect stable.
+- [x] `pnpm typecheck` + `pnpm lint` + `pnpm test:sim` green (new `sim:variant_decorrelation` + guest seed sim cases).
+- [x] `pnpm test:client` `client:char_variants` PASS — variant `⊥` role, `body+variant` Sprites, `flipX` parity, no staff palette on guests, work frames identical, reconnect stable.
 - [ ] `client:corridor_depth` PASS — corridor `Graphics`+`TileSprite` at native `960×576`, `pixelArt` locks hold, grayscale separation holds.
 - [ ] Gate-4 5-min round: a human sees `8` distinguishable bellhops, `4` guest archetypes, and the hotel reads as Deco Noir — no role tell.

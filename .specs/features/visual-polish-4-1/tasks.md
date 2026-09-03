@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Design**: `.specs/features/visual-polish-4-1/design.md`
 **Spec**: `.specs/features/visual-polish-4-1/spec.md`
-**Status**: In Progress
+**Status**: Done (pending Verifier)
 
 ---
 
@@ -87,7 +87,7 @@ T6 → T7
 
 ## Task Breakdown
 
-### T1: CosmeticSeed pure module (decorrelated Rng fork + variantIndex)
+### T1: CosmeticSeed pure module (decorrelated Rng fork + variantIndex) ✅ DONE (4b95b3c)
 
 **What**: Pure `cosmetic.ts` with `COSMETIC_FORK = 0x9e3779b9`, `variantIndex(seed, buckets)`, `assignPlayerSeeds(seed, playerIds)` and `assignGuestSeed(cosmeticRng)` — the dedicated stream that never touches the guest timing `Rng`.
 **Where**: `packages/sim/src/cosmetic.ts` + `packages/sim/src/cosmetic.test.ts`
@@ -112,7 +112,7 @@ T6 → T7
 
 ---
 
-### T2: Protocol cosmetic payloads + registry rows ✅ DONE (commit pending)
+### T2: Protocol cosmetic payloads + registry rows ✅ DONE (2a6556c)
 
 **What**: New payloads `CosmeticPlayer {playerId, seed}` + `CosmeticGuest {guestId, seed}` (or widen `RoleDealt`/`GuestArrived` with `seed` — implement as new rows `cosmetic:player` + `cosmetic:guest` to keep `'all'` vs `'self'` orthogonal per Design) and `PROTOCOL_REGISTRY` `'all'` entries with `SimProjection` typed projections.
 **Where**: `packages/shared/src/protocol/messages.ts`, `packages/shared/src/protocol/simEvents.ts`, `packages/shared/src/protocol/registry.ts`, `packages/shared/src/protocol/registry.test.ts`
@@ -136,7 +136,7 @@ T6 → T7
 
 ---
 
-### T3: Server emit + snapshot + reconnect wiring
+### T3: Server emit + snapshot + reconnect wiring ✅ DONE (bb9a074)
 
 **What**: `RoundSim` wires `CosmeticSeeds` at `deal` (`roundSim.ts:114`) and at each `guest:arrived` (`guests.ts:640` dwell analog); `TurnoverRoom` routes `'all'` cosmetic events generically and appends seed maps to `movement:snapshot` and `spectator:snapshot`, re-sends on `FR-25` `allowReconnection` `round:resumed`.
 **Where**: `packages/sim/src/roundSim.ts`, `packages/sim/src/guests.ts`, `packages/sim/src/roundSim.test.ts`, `apps/server/src/rooms/TurnoverRoom.ts`, `apps/server/src/rooms/router.test.ts` or `TurnoverRoom.test.ts`
@@ -161,7 +161,7 @@ T6 → T7
 
 ---
 
-### T4: Author 34×64 Deco Noir sheets + manifest
+### T4: Author 34×64 Deco Noir sheets + manifest ✅ DONE (2c33b25)
 
 **What**: Deterministic Pillow sheets `staff-body 34×64 6f+idle`, `staff-variant 8 variants` (head/accent overlay `34×64` or `34×20`), `guest-{suite,tourist,clerk,elder} 34×64`, plus `Graphics` chevron not a sheet; update `docs/art/asset-manifest.json` + `docs/art/alternative/asset-manifest.json` statuses to `approved` with `asset_report` QA.
 **Where**: `scripts/art/generate-staff-variants.py` (new) or extend `generate-staff-walk.py`, `apps/client/public/art/chars/staff-body-34x64-6f.png`, `apps/client/public/art/chars/staff-variant-*.png`, `apps/client/public/art/chars/guest-*.png`, `docs/art/asset-manifest.json`
@@ -185,7 +185,7 @@ T6 → T7
 
 ---
 
-### T5: Staff variant renderer (two-Sprite + walk/facing)
+### T5: Staff variant renderer (two-Sprite + walk/facing) ✅ DONE (4576e6e)
 
 **What**: `WorldScene.ts:112` `PlayerDisplay` → `{body: Sprite, variant: Sprite, label}`; `BootScene` preloads `staff-body`+`staff-variant`; `addPlayerDisplay(id,name,seed)` composites `bottom-center` `GROUND_Y 430`, same `flipX`, walk `6f @12fps`, idle `frame 0`; `State` mapper derives `variantIndex(seed%8)` pure and decorrelated; `room:observed` path unchanged (FR-9 work frames identical).
 **Where**: `apps/client/src/scenes/BootScene.ts`, `apps/client/src/scenes/WorldScene.ts`, `apps/client/src/state.ts`, `apps/client/src/net/mappers.ts`, `apps/client/harness/char-variants.spec.ts`
@@ -210,7 +210,7 @@ T6 → T7
 
 ---
 
-### T6: Guest archetype + corridor Deco rendering
+### T6: Guest archetype + corridor Deco rendering ✅ DONE
 
 **What**: Replace `guests Map<Arc>` `WorldScene.ts:206` with `Map<Sprite>` `guest-*` `34×64` `setTint` `GUEST_PALETTES`, dining tint `mezzanine` vs `lobby`; `corridorBand` + `wallFill` upgrade to `Graphics` chevron `16px` + sconce pool `Graphics ellipse alpha 0.15` `WorldScene.ts:311` `721`; preserve `FR-10` door interior & `FR-20` lanes (no per-lane band).
 **Where**: `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/guest-sprites.spec.ts`, `apps/client/harness/corridor-depth.spec.ts`
@@ -235,7 +235,7 @@ T6 → T7
 
 ---
 
-### T7: Juice — foot-tap, anger pop, walk settle, camera shake
+### T7: Juice — foot-tap, anger pop, walk settle, camera shake ✅ DONE
 
 **What**: Pure `apps/client/src/scenes/juice.ts` presenter (durations/eases testable) + `WorldScene` `Tween` wiring: `VPOL-13` walk settle `Cubic.easeOut 180ms`, `VPOL-14` foot-tap `Sine.easeInOut 400ms yoyo`, `VPOL-15` anger `Back.Out 220ms TTL 1800` + dust `Graphics 4× 300ms`, `VPOL-16` `Cameras.main.shake(140,0.008)` decaying `trauma^2` only for `player:fired`/`stairs:ambushed`.
 **Where**: `apps/client/src/scenes/juice.ts`, `apps/client/src/scenes/juice.test.ts`, `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/juice.spec.ts`, `apps/client/harness/camera-juice.spec.ts`
