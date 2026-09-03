@@ -8,3 +8,4 @@ playwright-report/.playwright-mcp/
 .playwright-mcp/
 __pycache__/
 data/telemetry/
+data/telemetry-test-tmp/

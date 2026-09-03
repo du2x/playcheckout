@@ -1,4 +1,0 @@
-{"kind":"room-transition","tick":10,"time":500,"room":"floor1:1","floor":"floor1","roomIdx":1,"state":"prepped","provenance":"none","actor":"p1"}
-{"kind":"coverage-sample","tick":0,"time":0,"coverage":0}
-{"kind":"coverage-sample","tick":20,"time":1000,"coverage":0.041666666666666664}
-{"kind":"round-ended","tick":100,"time":5000,"winner":"staff","reason":"settle-target-met","saboteurId":"p2"}
