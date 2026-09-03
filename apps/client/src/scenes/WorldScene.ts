@@ -39,6 +39,26 @@ import { ScoreHud } from '../ui/scoreHud'
 import { type StairAnchor, stairPhaseReadout } from '../ui/stairScreen'
 import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
 
+/** Guest archetype + palette derivation (Phase 4.1, VPOL-06): pure seed →
+ *  {archetype, palette}. Palette tints are civil Deco tones — never the staff
+ *  ivory `0xf2ead8`/`0xf6f1e6` or brass `0xc9a13b`/`0xb3873a` (VPOL-07). */
+const GUEST_ARCHETYPES = ['guest-suite', 'guest-tourist', 'guest-clerk', 'guest-elder'] as const
+const GUEST_PALETTES = [0x5a9aaa, 0xb06a7a, 0x8aa06a, 0x9a7a9a] as const
+function guestVariantOf(seed: number): { archetype: number; palette: number } {
+  return { archetype: ((seed >>> 0) % 4) >>> 0, palette: (((seed >>> 0) >> 2) % 4) >>> 0 }
+}
+/** Per-channel tint blend toward the dining amber (VPOL-08). */
+function blendTint(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 0xff
+  const ag = (a >> 8) & 0xff
+  const ab = a & 0xff
+  const br = (b >> 16) & 0xff
+  const bg = (b >> 8) & 0xff
+  const bb = b & 0xff
+  const mix = (x: number, y: number) => Math.round(x + (y - x) * t)
+  return (mix(ar, br) << 16) | (mix(ag, bg) << 8) | mix(ab, bb)
+}
+
 /**
  * The persistent world (cycle 2.4, AD-005): mounts when the player first joins
  * and survives lobby→round→lobby — positions never reset. Rendering contract
@@ -54,9 +74,7 @@ import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './
 const TILE_PX = 32 // hall width in px per tile (960 / 30, integer grid — AD-030)
 const GROUND_Y = 430
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
-/** Guest marker fills (3.C dining cue): ice-blue in the lobby/queue, amber
- *  while dining on the mezzanine. */
-const GUEST_FILL = 0xbfe3ff
+/** Dining tint target (VPOL-08): the lobby→mezzanine dining cue. */
 const DINING_FILL = 0xffd27a
 /** Staff variant buckets (Phase 4.1, VPOL-02): the client mirror of
  *  packages/sim cosmetic.ts — pure seed → head-frame index. Pinned equal to
@@ -217,9 +235,10 @@ export class WorldScene extends Phaser.Scene {
   /** The transit remainder captured at the ambush — the resume clock after
    *  the local stun expiry (the interior publishes no resume event). */
   private stunResumeMs = 0
-  /** Guest NPC markers (cycle 3.1): one Arc per guest — deliberately NOT a
-   *  player Sprite (GUEST-12). Created lazily, pruned on guest:left. */
-  private guestViews = new Map<string, Phaser.GameObjects.Arc>()
+  /** Guest NPC markers (Phase 4.1): one archetype Sprite per guest —
+   *  texture + palette derive from the decorrelated guest seed (VPOL-06/07);
+   *  created lazily, pruned on guest:left. */
+  private guestViews = new Map<string, Phaser.GameObjects.Sprite>()
   /** The desk-bell DOM line (GUEST-13) — visible while an impatient guest
    *  queues on the viewed floor. */
   private deskBell: HTMLElement | null = null
@@ -243,6 +262,9 @@ export class WorldScene extends Phaser.Scene {
   /** Production door Images per room segment per guest floor (ART-06) —
    *  phase-free; the name `door:<floor>:<room>` drives harness filtering. */
   private doorImages = new Map<string, Phaser.GameObjects.Image>()
+  /** Corridor Deco ornament (Phase 4.1, VPOL-10): frieze + sconce pools,
+   *  drawn once in create(); hidden in the spectator overview. */
+  private corridorDeco: Phaser.GameObjects.Graphics[] = []
   /** The own observed room's interior (ART-08): one slot — a live viewer can
    *  stand in at most one segment, so structurally ≤1 interior exists (ART-14). */
   private interiorImage: Phaser.GameObjects.Image | null = null
@@ -316,6 +338,7 @@ export class WorldScene extends Phaser.Scene {
     this.buildGuestLayer()
     this.buildDeskLayer()
     this.buildDoorImages()
+    this.buildCorridorDeco()
     this.syncTenancyMarkers()
 
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
@@ -723,6 +746,7 @@ export class WorldScene extends Phaser.Scene {
   private applyViewMode(): void {
     this.drawHallLines()
     this.corridorBand?.setVisible(!this.spectator)
+    for (const deco of this.corridorDeco) deco.setVisible(!this.spectator)
     this.syncDoors()
     if (this.spectator) this.seedFromSpectatorSnapshot()
   }
@@ -1613,16 +1637,22 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** Guest marker sync (called every frame): one Arc per guest on the viewed
-   *  floor, bouncing while its free impatience cue is active (GUEST-12/13).
-   *  Dining guests (3.C: on the mezzanine) render amber — the dining cue. */
+  /** Guest marker sync (called every frame): one archetype Sprite per guest
+   *  on the viewed floor (Phase 4.1, VPOL-06) — texture + palette from the
+   *  decorrelated guest seed; dining guests shift toward amber (VPOL-08);
+   *  bouncing while its free impatience cue is active (GUEST-12/13). */
   private syncGuests(delta: number): void {
     this.tapPhase += delta / 1000
     for (const [id, g] of this.guests) {
       let view = this.guestViews.get(id)
       const laneY = this.laneY(g.floor)
       if (view === undefined) {
-        view = this.add.circle(g.x * TILE_PX, laneY - 10, 9, 0xbfe3ff)
+        const seed = this.guestSeeds.get(id) ?? 0
+        const { archetype } = guestVariantOf(seed)
+        const texture = GUEST_ARCHETYPES[archetype] ?? 'guest-clerk'
+        if (!this.textures.exists(texture)) continue
+        view = this.add.sprite(g.x * TILE_PX, laneY, texture)
+        view.setOrigin(0.5, 1)
         this.guestViews.set(id, view)
       }
       const visible = this.spectator || g.floor === this.viewFloor
@@ -1631,8 +1661,11 @@ export class WorldScene extends Phaser.Scene {
       const tap = this.impatientGuests.has(id)
         ? Math.abs(Math.sin(this.tapPhase * Math.PI * 2)) * 8
         : 0
-      view.y = laneY - 10 - tap
-      view.setFillStyle(g.floor === 'mezzanine' ? DINING_FILL : GUEST_FILL)
+      view.y = laneY - tap
+      const seed = this.guestSeeds.get(id) ?? 0
+      const { palette } = guestVariantOf(seed)
+      const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
+      view.setTint(g.floor === 'mezzanine' ? blendTint(base, DINING_FILL, 0.45) : base)
     }
     for (const [id, view] of this.guestViews) {
       if (!this.guests.has(id)) {
@@ -1696,6 +1729,41 @@ export class WorldScene extends Phaser.Scene {
         this.doorImages.set(`${floor}:${room}`, image)
       }
     }
+  }
+
+  /**
+   * Corridor Deco ornament (Phase 4.1, VPOL-10/11): a dim-brass chevron
+   * frieze along the wall top and a warm baked light pool above every door
+   * lintel — the Deco Noir door rhythm (brief: ornament is geometric, pools
+   * are the hallway's light). Drawn ONCE per scene mount (never in update —
+   * no per-frame Graphics churn); live view only, spectator lanes keep the
+   * plain backdrop (AD-020 lane rule).
+   */
+  private buildCorridorDeco(): void {
+    if (this.spectator) return
+    const frieze = this.add.graphics()
+    frieze.setName('deco-frieze')
+    frieze.setDepth(-3)
+    frieze.lineStyle(1, 0x8a6a2f, 0.7)
+    const top = 48
+    const pitch = 16
+    for (let x = 0; x < 960; x += pitch) {
+      frieze.lineBetween(x, top + 14, x + pitch / 2, top + 2)
+      frieze.lineBetween(x + pitch / 2, top + 2, x + pitch, top + 14)
+    }
+    const pools = this.add.graphics()
+    pools.setName('deco-pools')
+    pools.setDepth(-1)
+    if (!this.textures.exists('door-closed')) return
+    for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
+      const cx = this.roomCenterPx(room as RoomIndex)
+      const lintelY = GROUND_Y - 100
+      pools.fillStyle(0xf4d9a0, 0.1)
+      pools.fillEllipse(cx, lintelY, 48, 14)
+      pools.fillStyle(0xe8b464, 0.1)
+      pools.fillEllipse(cx, lintelY, 28, 9)
+    }
+    this.corridorDeco.push(frieze, pools)
   }
 
   /** ART-08 texture mapping: protocol states → interior art. The protocol's

@@ -55,23 +55,29 @@ async function ownX(page: Page): Promise<number | null> {
   })
 }
 
-async function sceneArcs(
-  page: Page,
-): Promise<{ fillColor: number; visible: boolean; y: number }[]> {
+async function sceneGuests(page: Page): Promise<{ tint: number; visible: boolean; y: number }[]> {
   return page.evaluate(() => {
     const t = (
       window as unknown as {
         __TURNOVER__: {
           scene: (name: string) => {
-            children: { list: { type: string; fillColor: number; visible: boolean; y: number }[] }
+            children: {
+              list: {
+                type: string
+                tint: { color: number }
+                visible: boolean
+                y: number
+                texture: { key: string }
+              }[]
+            }
           } | null
         }
       }
     ).__TURNOVER__
     const list = t.scene('Round')?.children?.list ?? []
     return list
-      .filter((c) => c.type === 'Arc')
-      .map((c) => ({ fillColor: c.fillColor, visible: c.visible, y: c.y }))
+      .filter((c) => c.type === 'Sprite' && (c.texture?.key ?? '').startsWith('guest-'))
+      .map((c) => ({ tint: c.tint?.color ?? 0xffffff, visible: c.visible, y: c.y }))
   })
 }
 
@@ -213,9 +219,9 @@ test.describe('client:restaurant', () => {
       })
       expect(visibleDoors).toBe(0)
 
-      // REST-16: the checked-in guest dines on the mezzanine — the amber
-      // dining cue (a visible Arc on the mezzanine lane). Poll until the
-      // guest lands in its dining slot.
+      // REST-16 + VPOL-08: the checked-in guest dines on the mezzanine — the
+      // dining cue (a visible guest sprite on the mezzanine lane whose tint
+      // is blended toward amber: never exactly a base palette rotation).
       await rider.waitForFunction(
         () => {
           const t = (
@@ -223,22 +229,32 @@ test.describe('client:restaurant', () => {
               __TURNOVER__: {
                 scene: (name: string) => {
                   children: {
-                    list: { type: string; fillColor: number; visible: boolean }[]
-                  } | null
-                }
+                    list: {
+                      type: string
+                      tint: { color: number }
+                      visible: boolean
+                      texture: { key: string }
+                    }[]
+                  }
+                } | null
               }
             }
           ).__TURNOVER__
-          const DINING_FILL = 0xffd27a
+          const BASES = [0x5a9aaa, 0xb06a7a, 0x8aa06a, 0x9a7a9a]
           return (t.scene('Round')?.children?.list ?? []).some(
-            (c) => c.type === 'Arc' && c.visible && c.fillColor === DINING_FILL,
+            (c) =>
+              c.type === 'Sprite' &&
+              (c.texture?.key ?? '').startsWith('guest-') &&
+              c.visible &&
+              !BASES.includes(c.tint?.color ?? 0),
           )
         },
         undefined,
         { timeout: 20000 },
       )
-      const arcs = await sceneArcs(rider)
-      expect(arcs.some((a) => a.visible && a.fillColor === 0xffd27a)).toBe(true)
+      const guests = await sceneGuests(rider)
+      const BASES = [0x5a9aaa, 0xb06a7a, 0x8aa06a, 0x9a7a9a]
+      expect(guests.some((g) => g.visible && !BASES.includes(g.tint))).toBe(true)
     } finally {
       for (const page of pages) await page.close()
     }

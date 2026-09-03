@@ -1,10 +1,11 @@
 import { expect, type Page, test } from '@playwright/test'
 
-// Spec GUEST-12/13 (gate scenario client:guest_flow): gray-box guest markers —
-// one Arc per guest, distinct from the staff-walk player Sprites — the desk
-// queue on the lobby lane, the free impatience cue (bouncing marker + desk
-// bell line), own-floor-only guest visibility (AD-009 sameFloor policy), and
-// NO complaint counter (that UI is cycle 3.3's).
+// Spec GUEST-12/13 (gate scenario client:guest_flow) + Phase 4.1 VPOL-06/07:
+// one guest-* archetype Sprite per guest (tinted from the decorrelated guest
+// seed — never a player texture, never staff ivory/brass), the desk queue on
+// the lobby lane, the free impatience cue (bouncing marker + desk bell line),
+// own-floor-only guest visibility (AD-009 sameFloor policy), and NO complaint
+// counter (that UI is cycle 3.3's).
 // Guest timing rides the AD-028 test seam (scale 0.1 in playwright.config).
 
 async function join(page: Page, code: string, name: string): Promise<void> {
@@ -47,17 +48,23 @@ async function readGuestMarkers(page: Page): Promise<GuestMarker[]> {
         __TURNOVER__: {
           scene: (name: string) => {
             children: {
-              list: { type: string; x: number; y: number; visible: boolean }[]
-            } | null
-          }
+              list: {
+                type: string
+                x: number
+                y: number
+                visible: boolean
+                texture?: { key: string }
+              }[]
+            }
+          } | null
         }
       }
     ).__TURNOVER__
     const scene = t.scene('Round')
     const list = scene?.children?.list ?? []
     return list
-      .filter((c) => c.type === 'Arc')
-      .map((c) => ({ type: c.type, x: c.x, y: c.y, visible: c.visible }))
+      .filter((c) => c.type === 'Sprite' && (c.texture?.key ?? '').startsWith('guest-'))
+      .map((c) => ({ type: c.texture?.key ?? '', x: c.x, y: c.y, visible: c.visible }))
   })
 }
 
@@ -73,20 +80,25 @@ test.describe('client:guest_flow', () => {
       await fourPlayerRound(pages)
       const own = pages[0] as Page
 
-      // GUEST-12: a distinct guest marker appears on the lobby lane — an Arc,
-      // never a player Sprite, and at least one is visible at the desk.
+      // GUEST-12 + VPOL-06: a distinct guest marker appears on the lobby lane
+      // — a `guest-*` archetype Sprite, never a player texture or a generic
+      // shape, and at least one is visible at the desk.
       await own.waitForFunction(
         () => {
           const t = (
             window as unknown as {
               __TURNOVER__: {
                 scene: (name: string) => {
-                  children: { list: { type: string; visible: boolean }[] }
+                  children: {
+                    list: { type: string; visible: boolean; texture?: { key: string } }[]
+                  }
                 } | null
               }
             }
           ).__TURNOVER__
-          return (t.scene('Round')?.children.list ?? []).some((c) => c.type === 'Arc' && c.visible)
+          return (t.scene('Round')?.children.list ?? []).some(
+            (c) => c.type === 'Sprite' && (c.texture?.key ?? '').startsWith('guest-') && c.visible,
+          )
         },
         { timeout: 25000 },
       )
