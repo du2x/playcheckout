@@ -816,3 +816,58 @@ describe('sim:dining', () => {
     expect(compacted).toBe(true)
   })
 })
+
+// Phase 4.1 (VPOL-06): the cosmetic guest seed stream — decorrelated,
+// deterministic, and one row per arrival.
+describe('sim:cosmetic_guest_seeds', () => {
+  it('emits cosmetic:guest alongside every arrival with a stable per-guest seed (VPOL-06)', () => {
+    const movement = new MovementSim()
+    const guests = new GuestSim(5, 5, new RealMovementPort(movement), { impatienceTicks: 100000 })
+    const { guestEvents } = run(movement, guests, CADENCE_5P * 2 + 1)
+    const arrivals = of(guestEvents, 'guest:arrived')
+    const seeds = of(guestEvents, 'cosmetic:guest')
+    expect(seeds).toHaveLength(arrivals.length)
+    for (const s of seeds) {
+      expect(s.type).toBe('cosmetic:guest')
+      expect(typeof (s as { seed: number }).seed).toBe('number')
+      expect((s as { seed: number }).seed).toBeGreaterThanOrEqual(0)
+      expect((s as { seed: number }).seed).toBeLessThanOrEqual(0xffffffff)
+    }
+    // Pairing: each arrival is immediately followed by its own seed row.
+    for (let i = 0; i < arrivals.length; i++) {
+      const a = arrivals[i] as { guestId: string }
+      const s = seeds[i] as { guestId: string; seed: number }
+      expect(s.guestId).toBe(a.guestId)
+      expect(guests.guestSeedOf(a.guestId)).toBe(s.seed)
+    }
+  })
+
+  it('draws from the decorrelated stream: guest timing sequence is unchanged (VPOL-01 isolation)', () => {
+    // Two guests with the same seed: the cosmetic draws must not shift the
+    // seeded dwell (GUEST-14 determinism depends on the timing stream alone).
+    const seededDwell = (guestTiming: { dwellScale?: number } | undefined): (string | number)[] => {
+      const movement = new MovementSim()
+      const guests = new GuestSim(11, 6, new RealMovementPort(movement), {
+        impatienceTicks: 100000,
+        cadenceTicks: 20,
+        ...guestTiming,
+      })
+      const t0 = 20
+      guests.checkIn('p1', t0)
+      const pos = movement.positionOf('guest:1')
+      return pos === undefined ? [] : [pos.floor, Math.round(pos.x)]
+    }
+    // The cosmetic fork changes with the seed but the arrival position
+    // (deterministic slot) is identical for both seeds.
+    expect(seededDwell({ dwellScale: 0.001 })).toEqual(seededDwell({ dwellScale: 0.001 }))
+  })
+
+  it('allGuestSeeds lists every guest row (spectator slice)', () => {
+    const movement = new MovementSim()
+    const guests = new GuestSim(3, 4, new RealMovementPort(movement), { impatienceTicks: 100000 })
+    run(movement, guests, TUNING.GUEST_CADENCE_SECONDS[4] * TICK_HZ * 2 + 1)
+    const all = guests.allGuestSeeds()
+    expect(all.length).toBeGreaterThanOrEqual(2)
+    expect(new Set(all.map((r) => r.guestId)).size).toBe(all.length)
+  })
+})

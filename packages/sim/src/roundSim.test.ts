@@ -7,6 +7,7 @@ import {
   TUNING,
 } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
+import { assignPlayerSeeds } from './cosmetic.js'
 import { RoundSim, TICK_HZ } from './index.js'
 import { MovementSim } from './movement.js'
 import { FRESHNESS_TICKS, PREP_TICKS, UNPREP_TICKS } from './work.js'
@@ -663,5 +664,49 @@ describe('sim:carry_clock (round integration)', () => {
     // Aftermath: the guest re-queued with the assignment void — p2 at the
     // desk checks them in again (fresh assignment re-seeded).
     expect(sim.deskInteract('p2')).toBe('accepted')
+  })
+})
+
+// Phase 4.1 (VPOL-01): player cosmetic seeds — assigned at the deal from the
+// decorrelated stream, announced in the first tick's flush.
+describe('sim:cosmetic_player_seeds', () => {
+  function firstFlush(seed: number, ids: string[]) {
+    const sim = new RoundSim({ seed, playerIds: ids })
+    return { sim, events: sim.tick() }
+  }
+
+  it('emits one cosmetic:player per player in the deal flush (VPOL-01)', () => {
+    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6']
+    const { sim, events } = firstFlush(7, ids)
+    const seeds = events.filter((e) => e.type === 'cosmetic:player')
+    expect(seeds).toHaveLength(ids.length)
+    const byId = new Map(
+      seeds.map((e) => [
+        e.type === 'cosmetic:player' ? e.playerId : '',
+        e.type === 'cosmetic:player' ? e.seed : -1,
+      ]),
+    )
+    for (const id of ids) {
+      const seed = byId.get(id)
+      expect(typeof seed).toBe('number')
+      expect(sim.allPlayerSeeds().find((r) => r.playerId === id)?.seed).toBe(seed)
+    }
+  })
+
+  it('seed values match the pure assignPlayerSeeds mapping (VPOL-04)', () => {
+    const ids = ['a', 'b', 'c', 'd']
+    const { events } = firstFlush(99, ids)
+    const expected = assignPlayerSeeds(99, ids)
+    for (const e of events) {
+      if (e.type !== 'cosmetic:player') continue
+      expect(e.seed).toBe(expected.get(e.playerId))
+    }
+  })
+
+  it('emitted exactly once — subsequent ticks emit nothing cosmetic', () => {
+    const sim = new RoundSim({ seed: 1, playerIds: ['p1', 'p2', 'p3', 'p4'] })
+    sim.tick()
+    const later = sim.tick()
+    expect(later.some((e) => e.type === 'cosmetic:player')).toBe(false)
   })
 })

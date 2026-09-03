@@ -3,6 +3,7 @@ import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import * as path from 'node:path'
 import type {
   CarId,
+  CosmeticSeeds,
   FloorId,
   GuestFloorId,
   MovementEvent,
@@ -177,7 +178,19 @@ export class TurnoverRoom extends Room {
       view2.floor === null && view2.roomKey === null && view2.car === null && view2.x === null
     const tenancies = spectator2 ? sim.allTenancies() : sim.tenanciesOn(view2.floor as FloorId)
     if (tenancies.length !== 0) snap = { ...snap, tenancies }
-    return snap
+    // Cosmetic seeds (Phase 4.1, VPOL-05): every player's seed is public
+    // identity; guest seeds ride the sameFloor guest rows this snapshot
+    // already carries. Spectators (fired overview) receive every guest seed.
+    const seedRows: CosmeticSeeds = (() => {
+      const players = sim.allPlayerSeeds()
+      const guestRows = spectator2
+        ? sim.allGuestSeeds()
+        : (snap.guests ?? [])
+            .map((g) => ({ guestId: g.guestId, seed: sim.guestSeedOf(g.guestId) }))
+            .filter((r): r is { guestId: string; seed: number } => r.seed !== undefined)
+      return guestRows.length !== 0 ? { players, guests: guestRows } : { players }
+    })()
+    return { ...snap, cosmeticSeeds: seedRows }
   }
 
   override onCreate() {
@@ -915,7 +928,12 @@ export class TurnoverRoom extends Room {
     }
     if (sim !== null) {
       const ten = sim.allTenancies()
-      if (ten.length !== 0) return { ...base, tenancies: ten }
+      // Cosmetic seeds (Phase 4.1, VPOL-05): the spectator baseline carries
+      // every player and guest seed (full-building overview, FR-20).
+      const cosmeticSeeds = { players: sim.allPlayerSeeds(), guests: sim.allGuestSeeds() }
+      return ten.length !== 0
+        ? { ...base, tenancies: ten, cosmeticSeeds }
+        : { ...base, cosmeticSeeds }
     }
     return base
   }

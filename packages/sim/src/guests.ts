@@ -15,6 +15,7 @@ import {
   roomDoorXMilli,
   TUNING,
 } from '@turnover/shared'
+import { COSMETIC_FORK } from './cosmetic.js'
 import { Rng } from './rng.js'
 import { TICK_HZ } from './tick.js'
 
@@ -180,6 +181,11 @@ export class GuestSim {
    *  the MOVE-10 announce pattern: tick() is the only event emitter. */
   private pending: SimEvent[] = []
   private readonly rng: Rng
+  /** Cosmetic identity stream (Phase 4.1, VPOL-06) — a dedicated Rng fork so
+   *  seed draws NEVER shift the guest timing stream (`this.rng`). */
+  private readonly cosmeticRng: Rng
+  /** Cosmetic seed per guest, assigned at spawn (VPOL-06) — public identity. */
+  private readonly guestSeeds = new Map<string, number>()
   private readonly cadenceTicks: number
   private readonly impatienceTicks: number
   private readonly dwellScale: number
@@ -200,6 +206,7 @@ export class GuestSim {
     private readonly roomIntel?: RoomIntelPort,
   ) {
     this.rng = new Rng(seed)
+    this.cosmeticRng = new Rng((seed ^ COSMETIC_FORK) >>> 0)
     this.cadenceTicks = timing?.cadenceTicks ?? TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
     this.impatienceTicks = timing?.impatienceTicks ?? IMPATIENCE_TICKS
     this.dwellScale = timing?.dwellScale ?? 1
@@ -349,7 +356,22 @@ export class GuestSim {
     this.guests.set(id, guest)
     this.queue.push(id)
     this.movement.joinGuest(id, 'lobby', slotX(this.queue.length - 1))
+    // Cosmetic seed (Phase 4.1, VPOL-06): drawn from the decorrelated stream
+    // and announced building-wide as its own registry row.
+    const cosmeticSeed = this.cosmeticRng.int(0xffffffff)
+    this.guestSeeds.set(id, cosmeticSeed)
     events.push({ type: 'guest:arrived', guestId: id })
+    events.push({ type: 'cosmetic:guest', guestId: id, seed: cosmeticSeed })
+  }
+
+  /** One guest's cosmetic seed (Phase 4.1) — undefined for unknown ids. */
+  guestSeedOf(guestId: string): number | undefined {
+    return this.guestSeeds.get(guestId)
+  }
+
+  /** Every guest cosmetic seed (Phase 4.1) — the spectator baseline slice. */
+  allGuestSeeds(): { guestId: string; seed: number }[] {
+    return [...this.guestSeeds.entries()].map(([guestId, seed]) => ({ guestId, seed }))
   }
 
   /** Shift the remaining queue forward into their deterministic slots. */

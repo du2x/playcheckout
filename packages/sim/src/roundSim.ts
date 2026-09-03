@@ -13,6 +13,7 @@ import {
   settleTargetFor,
   TUNING,
 } from '@turnover/shared'
+import { assignPlayerSeeds } from './cosmetic.js'
 import { dealRoles } from './deal.js'
 import type { SimEvent } from './events.js'
 import { GuestSim, type GuestTiming, type MovementPort } from './guests.js'
@@ -76,6 +77,9 @@ export class RoundSim {
 
   readonly playerIds: readonly string[]
   private readonly deal: Map<string, Role>
+  /** Cosmetic identity seeds (Phase 4.1, VPOL-01) — decorrelated from the
+   *  role-deal stream; public, announced at the deal tick. */
+  private readonly cosmeticSeeds: Map<string, number>
   private readonly work: WorkChannels
   private readonly justice: Justice
   /** The guest-traffic economy (cycle 3.1) — null when no movement port is
@@ -112,6 +116,7 @@ export class RoundSim {
     }
     this.playerIds = [...config.playerIds]
     this.deal = dealRoles(config.seed, this.playerIds)
+    this.cosmeticSeeds = assignPlayerSeeds(config.seed, this.playerIds)
     this.work = new WorkChannels(this.deal)
     this.justice = new Justice(this.deal)
     this.guests =
@@ -177,6 +182,11 @@ export class RoundSim {
       events.push({ type: 'round:started', playerIds: this.playerIds })
       for (const [playerId, role] of this.deal) {
         events.push({ type: 'role:dealt', playerId, role })
+      }
+      // Cosmetic seeds (Phase 4.1, VPOL-01): public, one row per player,
+      // immediately after the private role cards in the same flush.
+      for (const [playerId, seed] of this.cosmeticSeeds) {
+        events.push({ type: 'cosmetic:player', playerId, seed })
       }
     }
     // Fired AND ghosted players are out of live play: one stale position may
@@ -492,6 +502,21 @@ export class RoundSim {
   /** All tenancies — the spectator baseline slice (cycle 3.4, FR-33). */
   allTenancies(): ReturnType<GuestSim['allTenancies']> {
     return this.guests?.allTenancies() ?? []
+  }
+
+  /** Every player's cosmetic seed (Phase 4.1, VPOL-05 snapshot slice). */
+  allPlayerSeeds(): { playerId: string; seed: number }[] {
+    return [...this.cosmeticSeeds.entries()].map(([playerId, seed]) => ({ playerId, seed }))
+  }
+
+  /** Every guest's cosmetic seed (Phase 4.1, VPOL-05 snapshot slice). */
+  allGuestSeeds(): ReturnType<GuestSim['allGuestSeeds']> {
+    return this.guests?.allGuestSeeds() ?? []
+  }
+
+  /** One guest's cosmetic seed (Phase 4.1) — undefined for unknown ids. */
+  guestSeedOf(guestId: string): number | undefined {
+    return this.guests?.guestSeedOf(guestId)
   }
 
   /** The deal's single saboteur — the room needs it for the abort path (FR-25). */

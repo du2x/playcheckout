@@ -385,6 +385,12 @@ export interface MovementSnapshot {
    */
   readonly tenancies?: readonly RoomTenancy[]
   /**
+   * Cosmetic seed rows (Phase 4.1, VPOL-05) — all round players plus the
+   * sameFloor guests of this snapshot; spectators receive every floor's
+   * guests. Present ONLY when non-empty.
+   */
+  readonly cosmeticSeeds?: CosmeticSeeds
+  /**
    * The recipient's own stairs state (cycle 3.E, AD-040) — present ONLY while
    * the recipient is in the stairwell. Everyone else's stairs transit is
    * invisible (the interior is a black box).
@@ -602,6 +608,11 @@ export interface SpectatorSnapshot {
   readonly cardedRooms: readonly SpectatorCarded[]
   /** Tenancy signs per room (FR-33, cycle 3.4) — full-building baseline, present only when non-empty. */
   readonly tenancies?: readonly SpectatorTenancy[]
+  /**
+   * Cosmetic seed rows (Phase 4.1, VPOL-05) — every round player plus every
+   * guest seed, all floors. Present only when non-empty.
+   */
+  readonly cosmeticSeeds?: CosmeticSeeds
 }
 
 /**
@@ -638,6 +649,18 @@ export interface CosmeticPlayer {
 export interface CosmeticGuest {
   readonly guestId: string
   readonly seed: number
+}
+
+/**
+ * Cosmetic seed rows riding a snapshot (Phase 4.1, VPOL-05): late joiners and
+ * reconnected clients re-derive identical variants without replaying the seed
+ * stream. Player rows are public identity (all round players); guest rows are
+ * the sameFloor-filtered guests of the snapshot's floor — spectators receive
+ * every floor's rows. Present only when non-empty.
+ */
+export interface CosmeticSeeds {
+  readonly players: readonly CosmeticPlayer[]
+  readonly guests?: readonly CosmeticGuest[]
 }
 
 /**

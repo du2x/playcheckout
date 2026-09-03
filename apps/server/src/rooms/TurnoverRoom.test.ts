@@ -3312,3 +3312,98 @@ describe('server:stairs', () => {
     }
   })
 })
+
+// Phase 4.1 (VPOL-01/05): cosmetic seeds flow over the wire — dealt events to
+// everyone, snapshot rows for late joiners and reconnects.
+describe('server:cosmetic_seeds', () => {
+  async function sleep(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  async function startRound(clients: ClientRoom[]) {
+    const instance = TurnoverRoom.instances.at(-1)
+    if (instance === undefined) throw new Error('no room instance')
+    const collectors = clients.map((room) => collectAll(room))
+    clients[0]?.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
+    instance.__driveTicks(1)
+    return { instance, collectors }
+  }
+
+  it('broadcasts one cosmetic:player per player at the deal and carries snapshot rows (VPOL-01/05)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const clients = [host, a, b, c]
+    const { instance, collectors } = await startRound(clients)
+    const hostCollector = collectors[0]
+    const aCollector = collectors[1]
+    if (hostCollector === undefined || aCollector === undefined) throw new Error('no collector')
+
+    const dealt = await hostCollector.waitFor('cosmetic:player')
+    expect(typeof dealt.payload.seed).toBe('number')
+    // 'all' policy: every connection received the same row set (waitFor
+    // consumed one each; the remaining three are still buffered per client).
+    await aCollector.waitFor('cosmetic:player')
+    const seenByHost = hostCollector.types().filter((t) => t === 'cosmetic:player')
+    const seenByA = aCollector.types().filter((t) => t === 'cosmetic:player')
+    expect(seenByHost.length).toBe(3)
+    expect(seenByA.length).toBe(3)
+    // The dealt payload shape is exactly {playerId, seed} — never a role.
+    expect(Object.keys(dealt.payload).sort()).toEqual(['playerId', 'seed'])
+    for (const co of collectors) co.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+  })
+
+  it(
+    'a reconnected player receives the same seed as before the drop (VPOL-05)',
+    { timeout: 60000 },
+    async () => {
+      vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+      try {
+        const [host, a, b, c] = await roomWithFour()
+        const clients = [host, a, b, c]
+        const { instance } = await startRound(clients)
+        const collectors = clients.map((room) => collectAll(room))
+        const bCollector = collectors[2]
+        if (bCollector === undefined) throw new Error('no collector')
+        // Collect all four dealt rows and keep b's own (waitFor pops in wire
+        // order, so match on playerId rather than position).
+        const rows: { playerId: string; seed: number }[] = []
+        for (let i = 0; i < 4; i++) {
+          const row = (await bCollector.waitFor('cosmetic:player')).payload as {
+            playerId: string
+            seed: number
+          }
+          rows.push(row)
+        }
+        const bSeed = rows.find((r) => r.playerId === b.sessionId)?.seed
+
+        // Drop and reconnect within the window (the REND-17/18 restore path):
+        // the restore snapshot carries cosmeticSeeds with the exact same rows.
+        b.reconnection.enabled = false
+        b.connection.close()
+        await sleep(200)
+        const restored = (await newClient().reconnect(b.reconnectionToken)) as ClientRoom
+        const rCollector = collectAll(restored)
+        const rSnap = await rCollector.waitFor('movement:snapshot')
+        const rSeeds = rSnap.payload.cosmeticSeeds as
+          | { players: { playerId: string; seed: number }[] }
+          | undefined
+        expect(rSeeds).toBeDefined()
+        const own = rSeeds?.players.find((r) => r.playerId === b.sessionId)
+        expect(own?.seed).toBe(bSeed)
+        rCollector.stop()
+        for (const co of collectors) co.stop()
+        void instance
+        host.leave()
+        a.leave()
+        b.leave()
+        c.leave()
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    },
+  )
+})
