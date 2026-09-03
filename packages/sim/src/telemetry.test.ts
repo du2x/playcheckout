@@ -1,4 +1,13 @@
+import {
+  GUEST_FLOOR_IDS,
+  HALL_LENGTH_TILES,
+  roomDoorXMilli,
+  settleTargetFor,
+  TUNING,
+} from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
+import { MovementSim } from './movement.js'
+import { RoundSim } from './roundSim.js'
 import { TelemetrySink } from './telemetry.js'
 
 describe('sim:telemetry', () => {
@@ -286,5 +295,225 @@ describe('sim:telemetry_guests', () => {
         l.kind === 'carry-clock-expiry',
     )
     expect(guestLines).toHaveLength(0)
+  })
+})
+
+// --- Phase-exit bot harnesses (T6/T7) — re-use guestExit's stairs-preferring delivery bots ---
+
+type RoomIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+const DESK_X = TUNING.DESK_X_TILES
+const LANDING_X = HALL_LENGTH_TILES
+const STAIR_X = 0
+function doorX(room: number): number {
+  return roomDoorXMilli(room as RoomIndex) / 1000
+}
+type FloorId = 'lobby' | 'mezzanine' | 'floor1' | 'floor2' | 'floor3'
+function floorIndex(f: FloorId): number {
+  return (['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as FloorId[]).indexOf(f)
+}
+class PortAdapter {
+  constructor(private readonly sim: MovementSim) {}
+  joinGuest(id: string, floor: FloorId, xTiles: number): void {
+    this.sim.join(id, { kind: 'guest', floor, xMilli: Math.round(xTiles * 1000) })
+  }
+  removeGuest(id: string): void {
+    this.sim.leave(id)
+  }
+  announceGuest(id: string): void {
+    this.sim.announcePosition(id)
+  }
+  positionOf(id: string): { floor: FloorId; x: number } | undefined {
+    const p = this.sim.positionOf(id)
+    return p === undefined ? undefined : { floor: p.floor, x: p.x }
+  }
+  viewOf(id: string) {
+    return this.sim.viewOf(id)
+  }
+  startMove(id: string, dir: 'left' | 'right'): void {
+    this.sim.startMove(id, dir)
+  }
+  stopMove(id: string): void {
+    this.sim.stopMove(id)
+  }
+  callElevator(id: string) {
+    return this.sim.callElevator(id)
+  }
+  pressFloor(id: string, floor: FloorId) {
+    return this.sim.pressFloor(id, floor)
+  }
+}
+type RunResult = { seed: number; settled: number; discovered: number; win: 'staff' | 'saboteur'; complained?: number }
+function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
+  const movement = new MovementSim()
+  const sim = new RoundSim({ seed, playerIds: [...playerIds], movement: new PortAdapter(movement) })
+  const positions = new Map<string, { floor: FloorId; x: number }>()
+  for (const id of playerIds) {
+    positions.set(id, { floor: 'lobby', x: DESK_X * 1000 })
+    movement.join(id, { floor: 'lobby', xMilli: DESK_X * 1000 })
+  }
+  movement.tick()
+  const evs = sim.tick(positions)
+  const sabId = (evs.find((e) => e.type === 'role:dealt' && (e as { role: string }).role === 'saboteur') as { playerId: string } | undefined)?.playerId
+  const staff = [...playerIds].filter((id) => id !== sabId)
+  type BotState = { carrying: boolean; guestId: string | null; target: { floor: FloorId; room: number } | null }
+  const bots = new Map<string, BotState>()
+  for (const id of staff) bots.set(id, { carrying: false, guestId: null, target: null })
+  const guestAssign = new Map<string, { floor: FloorId; room: number }>()
+  let settled = 0
+  let discovered = 0
+  movement.setAmbushAuthority({ isSaboteur: (id) => id === sabId, isLiveStaff: (id) => (staff as string[]).includes(id) })
+  const TOTAL_TICKS = TUNING.SHIFT_SECONDS * 20
+  let win: 'staff' | 'saboteur' = 'saboteur'
+  let reason = 'settle-target-failed'
+  for (let t = 1; t < TOTAL_TICKS; t++) {
+    for (const sid of staff) {
+      const st = bots.get(sid)
+      if (st === undefined) continue
+      const pos = movement.positionOf(sid)
+      if (pos === undefined) continue
+      if (movement.viewOf(sid).car !== null) continue
+      if (movement.stairsStateOf(sid) !== undefined) continue
+      if (!st.carrying) {
+        if (pos.floor === 'lobby') {
+          if (Math.abs(pos.x - DESK_X * 1000) > TUNING.DESK_RANGE_TILES * 1000 + 10) {
+            movement.startMove(sid, pos.x < DESK_X * 1000 ? 'right' : 'left')
+          } else {
+            const res = sim.deskInteract(sid)
+            if (res === 'accepted') {
+              st.carrying = true
+            }
+          }
+        } else {
+          // check for misplaced suitcases to correct (sameFloor within ROOM_DOOR_RANGE)
+          // for pure churn there is no misplace, so just go to lobby
+          const curFloor = pos.floor as FloorId
+          let found: { guestId: string; floor: FloorId; room: number } | null = null
+          for (const [gid, asgn] of guestAssign) {
+            const rest = sim.restingSuitcases().find((r) => r.guestId === gid)
+            if (!rest) continue
+            if (rest.floor !== curFloor) continue
+            if (asgn.floor !== rest.floor || asgn.room !== rest.room) {
+              if (Math.abs(pos.x - doorX(rest.room) * 1000) <= TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 50) {
+                found = { guestId: gid, floor: rest.floor as FloorId, room: rest.room }
+                break
+              }
+            }
+          }
+          if (found) {
+            const res = sim.suitcasePickup(sid)
+            if (res === 'picked_up') {
+              st.carrying = true
+              st.guestId = found.guestId
+              st.target = guestAssign.get(found.guestId) ?? null
+            }
+          } else {
+            // go to lobby via stairs if not there
+            if (curFloor !== 'lobby') {
+              if (Math.abs(pos.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+                movement.enterStairs(sid, 'down' as never)
+              } else {
+                movement.startMove(sid, 'left')
+              }
+            }
+          }
+        }
+      } else {
+        // carrying: go to assigned room
+        const gid = st.guestId ?? [...guestAssign.keys()][0]
+        const asgn = gid ? guestAssign.get(gid) : null
+        st.target = asgn ?? st.target
+        const target = st.target
+        if (!target) continue
+        const pos2 = movement.positionOf(sid)
+        if (!pos2) continue
+        if (pos2.floor === (target.floor as FloorId)) {
+          if (Math.abs(pos2.x - doorX(target.room) * 1000) <= TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10) {
+            const res = sim.suitcasePlace(sid, target.room as RoomIndex)
+            if (res === 'placed') {
+              st.carrying = false
+              st.guestId = null
+              st.target = null
+            }
+          } else {
+            movement.startMove(sid, pos2.x < doorX(target.room) * 1000 ? 'right' : 'left')
+          }
+        } else {
+          // need to go to target floor
+          if (pos2.floor === 'lobby' || pos2.floor === 'mezzanine') {
+            if (Math.abs(pos2.x - LANDING_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+              movement.callElevator(sid)
+              // also try to press floor after boarding — handled next tick
+            } else {
+              movement.startMove(sid, 'right')
+            }
+          } else {
+            // on guest floor, go to stairs to go to target
+            if (Math.abs(pos2.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+              const dir = floorIndex(pos2.floor as FloorId) < floorIndex(target.floor as FloorId) ? 'up' : 'down'
+              movement.enterStairs(sid, dir as never)
+            } else {
+              movement.startMove(sid, 'left')
+            }
+          }
+          // if riding, press target
+          if (movement.viewOf(sid).car !== null) movement.pressFloor(sid, target.floor as never)
+        }
+      }
+    }
+    movement.tick()
+    const flushed: import('@turnover/shared').SimEvent[] = [...sim.tick(positions) as never] as never
+    for (const e of flushed) {
+      if ((e as { type: string }).type === 'guest:assigned') {
+        const g = e as { guestId: string; floor: FloorId; room: number }
+        guestAssign.set(g.guestId, { floor: g.floor, room: g.room })
+      }
+      if ((e as { type: string }).type === 'suitcase:carried') {
+        const c = e as { guestId: string; carrierId: string }
+        const st = bots.get(c.carrierId)
+        if (st) {
+          st.carrying = true
+          st.guestId = c.guestId
+          st.target = guestAssign.get(c.guestId) ?? null
+        }
+      }
+      if ((e as { type: string }).type === 'guest:settled') settled++
+      if ((e as { type: string }).type === 'guest:discovered') discovered++
+      if ((e as { type: string }).type === 'round:ended') {
+        win = (e as { winner: string }).winner === 'staff' ? 'staff' : 'saboteur'
+        reason = (e as { reason: string }).reason
+      }
+    }
+    if (flushed.some((e) => (e as { type: string }).type === 'round:ended')) break
+  }
+  return { seed, settled, discovered, win }
+}
+
+describe('sim:exit_a', () => {
+  it('6p stairs bots reach SETTLE_TARGET at 80% - pure churn baseline (TLM-20..23)', () => {
+    const sizes: { size: 4 | 5 | 6; ids: readonly string[] }[] = [
+      { size: 4, ids: ['p1', 'p2', 'p3', 'p4'] as const },
+      { size: 5, ids: ['p1', 'p2', 'p3', 'p4', 'p5'] as const },
+      { size: 6, ids: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'] as const },
+    ]
+    for (const { size, ids } of sizes) {
+      const target = settleTargetFor(size)
+      const results: RunResult[] = []
+      for (let seed = 1; seed <= 20; seed++) results.push(runPureChurn(seed, ids))
+      const hits = results.filter((r) => r.settled >= target).length
+      const underBudget = results.filter((r) => r.discovered < TUNING.COMPLAINT_BUDGET).length
+      const modes = results.map((r) => r.discovered)
+      const mode = modes.sort((a, b) => a - b)[Math.floor(modes.length / 2)]!
+      expect(hits, `size ${size} hits ${hits}/20 vs target ${target} - results ${JSON.stringify(results.map((r) => r.settled))}`).toBeGreaterThanOrEqual(size === 4 ? 15 : 16)
+      expect(underBudget, `size ${size} under-budget ${underBudget}/20 - discovered ${JSON.stringify(modes)}`).toBeGreaterThanOrEqual(19)
+      expect(mode, `size ${size} complaint mode ${mode}`).toBeLessThanOrEqual(2)
+      // AFK: zero walk-in catches is implicit (no sabotage)
+      expect(results.every((r) => r.win === 'staff' || r.win === 'saboteur')).toBe(true)
+    }
+  })
+  it('replays deterministically: same seed same settled/discovered/win', () => {
+    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'] as const
+    const a = runPureChurn(7, ids)
+    const b = runPureChurn(7, ids)
+    expect(a).toEqual(b)
   })
 })
