@@ -6,9 +6,8 @@
  * it isn't logged (protocol rule), except for the synthetic 1/s coverage-sample.
  */
 
-import type { FloorId, RoomIndex } from './messages.js'
-import type { CarId } from './messages.js'
 import type { RoomState } from '../roomState.js'
+import type { CarId, FloorId, RoomIndex } from './messages.js'
 
 /** Nothing here is ever sent to a client — file-internal telemetry sink only. */
 export type TelemetryEventKind =
@@ -76,6 +75,8 @@ export interface TelemetryEvent {
   readonly actorId?: string
   /** Room-transition: resulting state. */
   readonly state?: RoomState
+  /** tenancy only: Occupied vs Vacant flip-sign. */
+  readonly occupied?: boolean
   /** round-ended only: machine-readable close marker. */
   readonly winner?: 'staff' | 'saboteur' | 'aborted'
   readonly reason?: string
