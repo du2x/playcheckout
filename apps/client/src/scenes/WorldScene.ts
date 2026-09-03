@@ -1215,13 +1215,21 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Phase 4.1 seam (VPOL-06, T6): apply the stored guest seed to a live guest
-   * view — derives archetype + palette tint. T2 stores the seed only.
+   * Phase 4.1 (VPOL-06): apply the stored guest seed to a live guest view —
+   * re-derives texture + palette tint. The seed may arrive before the view
+   * exists (then syncGuests consumes it at creation) or after (this path
+   * re-textures in place).
    */
   private applyGuestVariant(guestId: string): void {
+    const view = this.guestViews.get(guestId)
     const seed = this.guestSeeds.get(guestId)
-    if (seed === undefined) return
-    void seed
+    if (view === undefined || seed === undefined) return
+    const { archetype, palette } = guestVariantOf(seed)
+    const texture = GUEST_ARCHETYPES[archetype] ?? 'guest-clerk'
+    if (this.textures.exists(texture)) view.setTexture(texture)
+    const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
+    const g = this.guests.get(guestId)
+    view.setTint(g?.floor === 'mezzanine' ? blendTint(base, DINING_FILL, 0.45) : base)
   }
 
   /**

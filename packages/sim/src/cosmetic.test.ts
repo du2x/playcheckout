@@ -7,7 +7,7 @@ import {
   STAFF_VARIANT_BUCKETS,
   variantIndex,
 } from './cosmetic.js'
-import { dealRoles } from './deal.js'
+import { dealRoles, mulberry32 } from './deal.js'
 import { Rng } from './rng.js'
 
 describe('sim:variant_decorrelation (VPOL-01, VPOL-04)', () => {
@@ -97,6 +97,31 @@ describe('sim:variant_decorrelation (VPOL-01, VPOL-04)', () => {
     expect(assignGuestSeed(rng2)).toBe(g2)
     expect(variantIndex(g1, GUEST_VARIANT_BUCKETS)).toBeGreaterThanOrEqual(0)
     expect(variantIndex(g1, GUEST_VARIANT_BUCKETS)).toBeLessThan(16)
+  })
+
+  // G1 (M2 sensor): the decorrelation fork is pinned BEHAVIORALLY — the
+  // expected stream is reconstructed here through the raw mulberry32 PRNG,
+  // independent of cosmetic.ts. Any change to the fork expression (or a
+  // regression to the shared deal stream) shifts every draw and fails.
+  it('assignPlayerSeeds draws from the xor-forked stream, not the deal stream (VPOL-01 decorrelation)', () => {
+    const seed = 424242
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+    const got = assignPlayerSeeds(seed, ids)
+    // Independent reconstruction A: mulberry32 over the FORKED seed, sorted ids.
+    const forked = mulberry32((seed ^ COSMETIC_FORK) >>> 0)
+    for (const id of ids) {
+      const expected = Math.floor(forked() * 0x100000000)
+      expect(got.get(id)).toBe(expected)
+    }
+    // Independent reconstruction B: the UNFORKED stream (the role-deal
+    // stream's shape) must differ — proving the fork actually decorrelates.
+    const unforked = mulberry32(seed >>> 0)
+    let differs = false
+    for (const id of ids) {
+      const dealStreamValue = Math.floor(unforked() * 0x100000000)
+      if (got.get(id) !== dealStreamValue) differs = true
+    }
+    expect(differs).toBe(true)
   })
 
   it('no Math.random in the sim cosmetic core', () => {

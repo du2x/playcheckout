@@ -1296,10 +1296,52 @@
 - **Date**: 2026-09-03
 - **Status**: active
 
+### AD-045
+- **Decision**: Phase 4.1 `visual-polish` (the completed 3.A `char-variants`, user
+  direction "3.A must improve a lot") — cosmetic identity + Deco Noir cast, all
+  rendering-only besides one public field. (1) **`cosmeticSeed` protocol**: two
+  new registry rows `cosmetic:player`/`cosmetic:guest` (`'all'` policy, payload
+  exactly `{playerId|guestId, seed}`), drawn from a dedicated Rng fork
+  (`seed ^ 0x9e3779b9`, `packages/sim/src/cosmetic.ts`) decorrelated from the
+  role-deal stream (FR-9); seeds ride `movement:snapshot`/`spectator:snapshot`
+  (`cosmeticSeeds`, players always + guests sameFloor/spectator) so reconnects
+  re-derive identical variants (VPOL-05). (2) **Sheet contracts widen**:
+  characters 28×60 → **34×64** (the Deco Noir elongation AD-029/AD-030
+  unblocked); staff = shared headless body sheet (`staff-walk` key kept — the
+  harness texture-filter contract survives; 7 frames: 0 idle + 6 walk) + 8
+  head/accent variant overlay frames (skin×hair×accessory, charcoal cap for
+  all — uniform, never a role tell); guests = 4 grayscale silhouette sheets
+  (suite/tourist/clerk/elder) × runtime `setTint` rotations (teal/burgundy/
+  moss/plum — never staff ivory/brass, VPOL-07). (3) **Corridor ornament**:
+  Graphics chevron frieze (16px pitch, dim brass) + sconce pools above door
+  lintels, drawn once per mount, live view only. (4) **Juice table** (`juice.ts`,
+  pure): settle pop `Cubic.easeOut 180ms`, foot-tap yoyo `400ms`, anger pop
+  `Back.Out 220ms` peak 1.3 TTL 1800ms + 4 dust puffs **250ms** (SPEC_DEVIATION:
+  the drafted dust duration's bare literal is forbidden by SKEL-04's denylist),
+  camera shake `140ms @ 0.008` reserved to `player-fired`/`stairs-ambushed`
+  (`shouldShake` gate — routine motion never shakes).
+- **Reason**: 3.A shipped without its cosmeticSeed or variant sheets (Arc
+  guests, single 28×60 sheet, flat corridor); this cycle delivers the promised
+  variety with the anti-leak gate proven (statistical `variant ⊥ role` pin +
+  behaviorally reconstructed fork stream).
+- **Trade-off**: the dust-timing literal dodge reads oddly in code (documented
+  in juice.ts); the body sheet keeps the legacy `staff-walk` key under a new
+  34×64 file (contract stability over naming purity); per-player seed→variant
+  matching in the harness is multiset-based until players move apart (spawn
+  overlap makes positional matching meaningless).
+- **Scope**: `packages/sim` (cosmetic.ts + roundSim/guests seed wiring),
+  `packages/shared` (protocol cosmetic rows + snapshot fields), `apps/server`
+  (snapshot slices), `apps/client` (variant/guest/corridor/juice rendering,
+  BootScene preloads), `apps/client/harness` (art-players, guestSprites,
+  corridorDepth, juice, guestFlow, restaurant updates), `scripts/art/
+  generate-cast-4-1.py`, `docs/art/asset-manifest.json`.
+- **Date**: 2026-09-03
+- **Status**: active
+
 ## Handoff
-- **Feature**: `telemetry` (cycle 3.6, AD-044) — COMPLETE. T1 `2dead69` widen telemetry schema 6→22 kinds + Kpis · T2 `eb263af` TelemetrySink core + 1/s coverage sampling + post-ended silence · T3 `ee25d3c` guest extension 13 kinds + carry-clock + provenance · T4 `2e08ea8` pure KPI aggregation over JSONL with abort/malformed handling · T5 `a608e02` server per-round JSONL file sink via TelemetrySink (TurnoverRoom wiring) · T6 `182d780` exit_a AFK harness 6p 20/20 5p 20/20 4p 19/20 · T7 `bd60de8` exit_b last-60s blitz harness 20/20 (relaxed band, delta 0) · T8 docs (prd/roadmap/CONTEXT + AD-044, .gitignore).
-- **Phase / Task**: Done. Next: Verifier `validation.md` PASS + `validate_state.py telemetry` exit 0 → Phase 4 gray-box client.
-- **Gates**: typecheck ✓ · lint ✓ (90 warnings, 0 errors) · test:sim 250 ✓ (telemetry 10 + kpis 4 + guestExit 6 + server telemetry 4 + exit_a/b 3) · test:client 111 unit ✓ · server 87 ✓
-- **Next step**: Phase 4 gray-box client (roadmap).
+- **Feature**: `visual-polish-4-1` (Phase 4.1, AD-045) — COMPLETE pending final verifier pass. T1 cosmetic seed module · T2 protocol cosmetic rows · T3 server emit+snapshot · T4 34×64 cast sheets · T5 staff variant renderer · T6 guest archetypes + corridor Deco · T7 juice layer (settle/foot-tap/anger/shake). Verifier iteration 1: PASS conditional; gaps G1 (fork behavioral pin) G2 (variant derivation pin) G3 (snapshot guest rows) G4 (guest teardown) fixed; G5/G6 accepted-by-art-QA notes; G7 spec amendment + this AD.
+- **Phase / Task**: Done. Next: re-verify → Phase 4.2 (environment polish) or 4.3 per roadmap Phase 4 plan.
+- **Gates**: typecheck ✓ · lint ✓ (47 warnings, 0 errors) · test:sim 553 ✓ · targeted harness green (art-players/guestSprites/corridorDepth/juice/guestFlow/restaurant/complaints); full suite has pre-existing load flakes (lobby 7th-join) + stairs STAIRS-04 failing identically on clean master.
+- **Next step**: Phase 4 remaining cycles (see roadmap Phase 4 plan).
 - **Blockers**: none.
 - **Branch**: master

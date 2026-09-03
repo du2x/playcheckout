@@ -118,6 +118,79 @@ test.describe('client:guest_sprites', () => {
           expect(g.tint & 0xffffff).not.toBe(livery)
         }
       }
+      // VPOL-09: guest:left destroys the view. Synthetic injection (the
+      // complaints.spec precedent): a fake guest with a seed mapping to the
+      // `elder` archetype (seed % 4 === 3) arrives — one more elder sprite —
+      // then leaves — the count returns to baseline (destroyed, not hidden).
+      const elderCount = () =>
+        own.evaluate(() => {
+          const t = (
+            window as unknown as {
+              __TURNOVER__: {
+                scene: (name: string) => {
+                  children: { list: { type: string; texture: { key: string } }[] }
+                } | null
+              }
+            }
+          ).__TURNOVER__
+          return (t.scene('Round')?.children.list ?? []).filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'guest-elder',
+          ).length
+        })
+      const baseElders = await elderCount()
+      await own.evaluate(() => {
+        const w = window as unknown as {
+          __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
+        }
+        const scene = w.__TURNOVER__.scene('Round')
+        scene?.applyAction({ type: 'guest-arrived', guestId: 'guest:vx' })
+        scene?.applyAction({ type: 'cosmetic-guest', guestId: 'guest:vx', seed: 3 })
+      })
+      await own.waitForFunction(
+        (base) => {
+          const t = (
+            window as unknown as {
+              __TURNOVER__: {
+                scene: (name: string) => {
+                  children: { list: { type: string; texture: { key: string } }[] }
+                } | null
+              }
+            }
+          ).__TURNOVER__
+          const now = (t.scene('Round')?.children.list ?? []).filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'guest-elder',
+          ).length
+          return now === (base as number) + 1
+        },
+        baseElders,
+        { timeout: 5000 },
+      )
+      await own.evaluate(() => {
+        const w = window as unknown as {
+          __TURNOVER__: { scene: (name: string) => { applyAction: (a: unknown) => void } | null }
+        }
+        const scene = w.__TURNOVER__.scene('Round')
+        scene?.applyAction({ type: 'guest-left', guestId: 'guest:vx' })
+      })
+      await own.waitForFunction(
+        (base) => {
+          const t = (
+            window as unknown as {
+              __TURNOVER__: {
+                scene: (name: string) => {
+                  children: { list: { type: string; texture: { key: string } }[] }
+                } | null
+              }
+            }
+          ).__TURNOVER__
+          const now = (t.scene('Round')?.children.list ?? []).filter(
+            (c) => c.type === 'Sprite' && c.texture?.key === 'guest-elder',
+          ).length
+          return now === (base as number)
+        },
+        baseElders,
+        { timeout: 5000 },
+      )
       for (const page of pages) await page.close()
     } finally {
       for (const page of pages) await page.close().catch(() => {})

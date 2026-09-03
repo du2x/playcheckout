@@ -251,7 +251,7 @@ T6 → T7
 **Done when**:
 
 - [ ] `juice.test.ts` pins durations/eases `Back.Out 220ms`, `Sine yoyo 400ms`, `shake 140ms 0.008` (unit)
-- [ ] `client:juice_small` PASS — walk settles to `frame 0` via `Cubic.easeOut`, impatience `yoyo` exists and clears on `guest:settled`/`left`, anger `Back.Out` scale, no `Text '!'` fallback
+- [ ] `client:juice_small` PASS — walk settles to `frame 0` via `Cubic.easeOut`, impatience `yoyo` exists and clears on `guest:settled`/`left`, anger `Back.Out` scale pop + dust (the `!` glyph stays as the visual, tweened — never a static fallback)
 - [ ] `client:camera_juice` PASS — `shake` on `player:fired`/`stairs:ambushed`, `notCalled` on routine `player:moved`/`elevator:moved`, `input.enabled` during shake (`VPOL-17`)
 - [ ] Gate check passes: `pnpm test:sim && pnpm test:client`
 

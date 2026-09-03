@@ -196,6 +196,60 @@ test.describe('client:art_players', () => {
       expect(head?.flipX).toBe(body.flipX)
     }
 
+    // VPOL-04 derivation pin (G2/M4): each head frame equals its player's
+    // cosmeticSeed % 8 — read the seed from the scene's public seed map
+    // (the hook exposes the scene object; nothing new leaks — seeds are
+    // public 'all' payloads).
+    const derivation = await own.evaluate(() => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => {
+              children: {
+                list: {
+                  type: string
+                  x: number
+                  frame: { name: string }
+                  texture: { key: string }
+                }[]
+              }
+              playerSeeds?: Map<string, number>
+              players?: Map<string, { x: number }>
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const scene = t.scene('Round') as unknown as {
+        children?: {
+          list: {
+            type: string
+            x: number
+            frame: { name: string }
+            texture: { key: string }
+          }[]
+        }
+        playerSeeds?: Map<string, number>
+        players?: Map<string, { x: number }>
+      } | null
+      if (scene === null || scene === undefined) return { frames: [], seeds: [] }
+      const headsInScene =
+        scene.children?.list.filter(
+          (c) => c.type === 'Sprite' && c.texture?.key === 'staff-variant',
+        ) ?? []
+      const frames = headsInScene.map((h) => Number(h.frame.name)).sort((a, b) => a - b)
+      const seeds = [...(scene.playerSeeds?.values() ?? [])]
+        .map((s) => (s >>> 0) % 8)
+        .sort((a, b) => a - b)
+      return { frames, seeds }
+    })
+    expect(derivation.frames).toHaveLength(4)
+    expect(derivation.seeds).toHaveLength(4)
+    // The rendered frame multiset equals the seed-derived multiset — every
+    // head frame is its player's seed % 8. Order-blind: all four players
+    // share the spawn x until they move, so per-player matching by position
+    // is meaningless; a wrong derivation shifts the multiset and fails.
+    expect(derivation.frames).toEqual(derivation.seeds)
+
     // VPOL-02 facing parity: flip the own body left, head mirrors.
     await own.keyboard.down('ArrowLeft')
     await own.waitForTimeout(250)

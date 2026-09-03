@@ -3333,7 +3333,7 @@ describe('server:cosmetic_seeds', () => {
   it('broadcasts one cosmetic:player per player at the deal and carries snapshot rows (VPOL-01/05)', async () => {
     const [host, a, b, c] = await roomWithFour()
     const clients = [host, a, b, c]
-    const { instance, collectors } = await startRound(clients)
+    const { collectors } = await startRound(clients)
     const hostCollector = collectors[0]
     const aCollector = collectors[1]
     if (hostCollector === undefined || aCollector === undefined) throw new Error('no collector')
@@ -3357,10 +3357,11 @@ describe('server:cosmetic_seeds', () => {
   })
 
   it(
-    'a reconnected player receives the same seed as before the drop (VPOL-05)',
+    'a reconnected player receives the same seed as before the drop, guests included (VPOL-05, G3)',
     { timeout: 60000 },
     async () => {
       vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+      vi.stubEnv('TURNOVER_TEST_GUEST_SCALE', '0.1')
       try {
         const [host, a, b, c] = await roomWithFour()
         const clients = [host, a, b, c]
@@ -3380,6 +3381,24 @@ describe('server:cosmetic_seeds', () => {
         }
         const bSeed = rows.find((r) => r.playerId === b.sessionId)?.seed
 
+        // Drive the guest economy until at least one guest cosmetic row is on
+        // the wire — the reconnect snapshot must then carry guest seed rows
+        // too (G3/M3: a snapshot without guest rows would strand late joiners
+        // on seed 0 for every pre-arrival guest).
+        await vi.waitFor(
+          () => {
+            instance.__driveTicks(30)
+            expect(bCollector.types().filter((t) => t === 'cosmetic:guest').length).toBeGreaterThan(
+              0,
+            )
+          },
+          { timeout: 20000, interval: 200 },
+        )
+        const guestWire = (await bCollector.waitFor('cosmetic:guest')).payload as {
+          guestId: string
+          seed: number
+        }
+
         // Drop and reconnect within the window (the REND-17/18 restore path):
         // the restore snapshot carries cosmeticSeeds with the exact same rows.
         b.reconnection.enabled = false
@@ -3389,11 +3408,17 @@ describe('server:cosmetic_seeds', () => {
         const rCollector = collectAll(restored)
         const rSnap = await rCollector.waitFor('movement:snapshot')
         const rSeeds = rSnap.payload.cosmeticSeeds as
-          | { players: { playerId: string; seed: number }[] }
+          | {
+              players: { playerId: string; seed: number }[]
+              guests?: { guestId: string; seed: number }[]
+            }
           | undefined
         expect(rSeeds).toBeDefined()
         const own = rSeeds?.players.find((r) => r.playerId === b.sessionId)
         expect(own?.seed).toBe(bSeed)
+        // G3: the guest seed rows ride the snapshot with the wire seeds.
+        const guestRow = rSeeds?.guests?.find((g) => g.guestId === guestWire.guestId)
+        expect(guestRow?.seed).toBe(guestWire.seed)
         rCollector.stop()
         for (const co of collectors) co.stop()
         void instance
