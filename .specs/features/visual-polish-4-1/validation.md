@@ -7,9 +7,11 @@
 
 ---
 
-## Verdict
+## Validation
 
-**PASS (conditional)** — all four gates green, every AC's runtime outcome verified implemented, no behavior defect found. Unqualified once the 4 ranked coverage gaps below get tests (all are missing-assertion findings, none is a shipped-code bug).
+**Result**: PASS (iteration 2, unqualified)
+
+**PASS** (iteration 2, unqualified — see the Iteration 2 section at EOF; iteration 1 was PASS (conditional)) — all four gates green, every AC's runtime outcome verified implemented, no behavior defect found. Unqualified once the 4 ranked coverage gaps below get tests (all are missing-assertion findings, none is a shipped-code bug).
 
 ---
 
@@ -117,3 +119,24 @@ Rig: `git worktree add /tmp/opencode/vp41-sensor HEAD` + `pnpm install --frozen-
 **Overall**: ✅ PASS (conditional) — gates 1-3 green (typecheck ✓, biome 0 errors, 552/552 vitest, 9/9 targeted harness incl. `corridor_depth`), protocol audit clean, all 17 AC outcomes verified implemented; sensor 1/4 with three coverage survivors (G1-G3) and one uncovered AC (G4/VPOL-09). No behavior defects found in the shipped code; the pre-verification sim-side decorrelation gate genuinely pins both ⊥-role directions (VPOL-04), and the reconnect seed persistence (VPOL-05) is server-proven.
 
 **Recommended order**: G1 (anti-leak invariant) → G4 (uncovered AC) → G2/G3 → G5-G7. After G1-G4 land with re-verification, this verdict upgrades to unqualified PASS.
+
+---
+
+# Iteration 2 — Re-verification (fix loop, 2026-09-03)
+
+**Verdict: PASS (unqualified).**
+
+Fix diff audited: `db690e5`. Sensors re-run in scratch worktree (removed; real tree clean).
+
+| Gap | Verdict | Sensor retry |
+|---|---|---|
+| G1 fork behavioral pin | FIXED-VERIFIED (`cosmetic.test.ts:105-124` raw-mulberry32 reconstruction + unforked-differs assertion) | M2 KILLED — fork → plain seed fails exactly the new test |
+| G2 variant derivation pin | FIXED-VERIFIED (`art-players.spec.ts:199-251` frame-multiset == seed%8-multiset via scene hook) | M4 KILLED — `setFrame(0)` always fails the multiset assertion |
+| G3 snapshot guest rows | FIXED-VERIFIED (`TurnoverRoom.test.ts:3384-3421` drives guest economy, asserts restore snapshot `cosmeticSeeds.guests` matches wire row) | M3 KILLED — players-only snapshot fails on `guestRow.seed` |
+| G4 guest teardown | FIXED-VERIFIED (`guestSprites.spec.ts:121-190` synthetic elder +1 → baseline; pins the now-real `applyGuestVariant` seam) | Extra control KILLED — teardown loop disabled ⇒ timeout |
+| G5/G6 | DOCUMENTED (minimal) — handoff line; non-blocking nit | n/a |
+| G7 | DOCUMENTED-VERIFIED — spec/tasks/STATE(AD-045)/code four-way coherence (dust 250ms, alpha 0.55) | n/a |
+
+Regression smoke (re-run): typecheck ✓ · lint exit 0 (46 warnings, 0 errors) · test:sim **553/553** · targeted harness **6/6** (art-players 2, guestSprites 1, corridorDepth 1, juice 2).
+
+Sensor score: **4/4 killed** (up from 1/4 in iteration 1). Clean PASS — nothing recorded to lessons.
