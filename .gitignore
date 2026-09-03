@@ -7,3 +7,4 @@ playwright-report/.playwright-mcp/
 
 .playwright-mcp/
 __pycache__/
+data/telemetry/

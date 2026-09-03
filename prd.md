@@ -297,7 +297,7 @@ stable across specs and skills.
 | Prep / un-prep | 5s / 3s | un-prep → 2s if saboteur weak |
 | Re-trash | Unlimited | — |
 | Coverage target | 80% | — (telemetry/KPI only since v1.5 — no longer a win check) |
-| Settle target (v1.5, AD-039; calibrated 3.5, AD-043) | 5 (4p) / 7 (5p) / 9 (6p) settled guests at buzzer | locked after the 3.5 exit-bot gate — pure-churn 6p 20/20 hits, 5p 20/20, 4p 19/20; mis-place vs intercepting staff 17/20 staff wins (bot 20–90% band, human sab expected 35–65%) |
+| Settle target (v1.5, AD-039; calibrated 3.5, AD-043; re-proven 3.6, AD-044) | 5 (4p) / 7 (5p) / 9 (6p) settled guests at buzzer | locked after the 3.5 exit-bot gate — pure-churn 6p 20/20 hits, 5p 20/20, 4p 19/20; mis-place vs intercepting staff 17/20 staff wins (bot 20–90% band, human sab expected 35–65%); re-proven 3.6 `sim:exit_a` 20/20 `sim:exit_b` 20/20 (relaxed band, delta 0) |
 | Attrition loss | Staff down to 1 | scale by lobby size later |
 | Freshness window | 75s | — |
 | Rustle range | ~3 tiles | — |

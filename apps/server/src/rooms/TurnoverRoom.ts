@@ -138,7 +138,7 @@ export class TurnoverRoom extends Room {
   private lastRiders = new Map<CarId, string[]>()
   /** Last known floor per car — the `from` half of a ride leg. */
   private carFloor = new Map<CarId, FloorId>()
-  // --- Telemetry (cycle 3.6, FR-23/24): server-authoritative JSONL per round.
+  // --- Telemetry (cycle, FR-23/24): server-authoritative JSONL per round.
   private telemetrySink: TelemetrySink | null = null
   private telemetryStream: import('node:fs').WriteStream | null = null
   private telemetryPath: string | null = null

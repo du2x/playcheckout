@@ -152,12 +152,13 @@ suitcase outcomes), seeded via the viewer's own `movement:snapshot`
 _Avoid_: occupancy indicator, door occupancy, tenancy tag
 
 **Settle target**:
-The §6.6 buzzer win dial (v1.5, AD-039; calibrated 3.5, AD-043): 5 (4p) / 7
-(5p) / 9 (6p) settled guests at the 5:00 buzzer. Staff win iff
-`settledCount ≥ SETTLE_TARGET` (the `settle-target-met`/`failed` reasons);
-the 8-complaint budget is the other instant-loss leg. Provisional until the
-3.5 exit-bot gate — now locked at 5/7/9 after the pure-churn 20/20 (6p) and
-mis-place 17/20 (bot 20–90% band) proofs. Read only via `settleTargetFor`.
+The §6.6 buzzer win dial (v1.5, AD-039; calibrated 3.5, AD-043; re-proven 3.6,
+AD-044): 5 (4p) / 7 (5p) / 9 (6p) settled guests at the 5:00 buzzer. Staff win
+iff `settledCount ≥ SETTLE_TARGET` (the `settle-target-met`/`failed` reasons);
+the 8-complaint budget is the other instant-loss leg. Locked at 5/7/9 after the
+pure-churn 20/20 (6p) and mis-place 17/20 (bot 20–90% band) proofs, re-proven
+3.6 `sim:exit_a` 20/20 and `sim:exit_b` 20/20 (relaxed band) under the full
+economy. Read only via `settleTargetFor`.
 _Avoid_: coverage target (it is telemetry/KPI since v1.5), settle threshold
 
 **Guest exit (balance gate)**:
@@ -170,3 +171,22 @@ complaint budget's reachability (discovered <8 in pure churn, <8 even under
 mis-place, ambush 0 complaints) and the stairs relief headroom (single car
 8–12 s per trip, 1.5× at 6p).
 _Avoid_: exit criteria (the v1.2 `sim:exit_a`/`exit_b` live in 3.6 as re-proof), bot AI
+
+**Telemetry**:
+Server-authoritative JSONL per round, line-delimited, internal only — never
+on the wire (FR-23, cycle 3.6). One JSON object per line: room transitions
+(actor+time), elevator calls/rides/doors, walk-in catches, accusations
+(`wasTargetSaboteur`/`crimeOccurred`), guest lifecycle
+(arrived/assigned/self-assigned/suitcase-carried/placed/picked-up/settled/
+checked-out/left/angered/discovered/complained + tenancy + carry-clock-expiry),
+plus synthetic 1/s `coverage-sample` (`prepped/24`). Closed with a
+`round-ended` marker (`staff`/`saboteur`/`aborted`) so the `aborted` file is
+machine-readable and excludable from KPIs. KPIs (FR-24) are pure aggregation
+over non-aborted files: the 5 v1.2 fields (`saboteurWinRate`,
+`correctAccusationRate`, `catchesPerHour`, `meanTimeToFirstCrimeSeconds`,
+`decoyCallRate`) plus the 4 guest bleed-vs-throughput fields (`meanSettleScore`,
+`meanComplaintsPerRound`, `carryClockFiresPerRound`, `provenanceSplit`,
+`settlesPerMinute`); malformed/unknown-kind lines are skipped and counted.
+File `data/telemetry/<code>-<idx>.jsonl` is `mkdir -p`'d per round and
+git-ignored; `data/telemetry-test-tmp/` is the test seam.
+_Avoid_: analytics beacon, client telemetry, wire telemetry
