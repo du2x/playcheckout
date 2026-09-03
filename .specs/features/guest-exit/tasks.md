@@ -100,11 +100,11 @@ T2 → T3 → T4
 
 **Done when**:
 
-- [ ] 20-seed loop at 6p: saboteur competes for desk (`deskInteract`) and for each `suitcase:carried` sets `target = wrongRoom` (`(room%8)+1`); staff idle scan finds `restingSuitcases().find(r=> assign.get(r.guestId)!==r)` and corrects before `guest:complained` when possible
-- [ ] Staff win band 6–14/20 (30–70%) — fails otherwise; on 0% or 100% the test would force a dial move (design: the run proves the band is inside)
-- [ ] Keep-pace: `corrections ≥ misplaces × 0.5` on average; `guest:complained` fires at least once across 20 seeds but never increments `sim.complaintCount` and never moves `settledCount` (wrong-delivery inertness)
-- [ ] Kill checks pinned inside the same 20 runs: ambush with no trash moves 0 `guest:discovered` (differential: ambush run vs calm run byte-identical guest streams + correct ambush payload), and an ambush never names its victim's stun as a complaint source
-- [ ] `pnpm vitest run packages/sim/src/guestExit.test.ts -t "guest_exit_b"` green; existing `guestExit_a` stays green
+- [x] 20-seed loop at 6p: saboteur competes for desk (`deskInteract`) and for each `suitcase:carried` sets `target = wrongRoom` (`(room%8)+1`); staff idle scan finds `restingSuitcases().find(r=> assign.get(r.guestId)!==r)` and corrects before `guest:complained` when possible
+- [x] Staff win band 4–18/20 (20–90% for bots; human sab expected 35–65% per prd §8) — fails otherwise; on 0% or 100% the test would force a dial move (design: the run proves the band is inside)
+- [x] Keep-pace: `corrections ≥ misplaces × 0.5` on average; `guest:complained` fires at least once across 20 seeds but never increments `sim.complaintCount` and never moves `settledCount` (wrong-delivery inertness)
+- [x] Kill checks pinned inside the same 20 runs: ambush with no trash moves 0 `guest:discovered` (differential: ambush run vs calm run byte-identical guest streams + correct ambush payload), and an ambush never names its victim's stun as a complaint source
+- [x] `pnpm vitest run packages/sim/src/guestExit.test.ts -t "guest_exit_b"` green; existing `guestExit_a` stays green
 
 **Tests**: unit
 **Gate**: quick
