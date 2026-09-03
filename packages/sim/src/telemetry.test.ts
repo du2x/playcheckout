@@ -342,7 +342,13 @@ class PortAdapter {
     return this.sim.pressFloor(id, floor)
   }
 }
-type RunResult = { seed: number; settled: number; discovered: number; win: 'staff' | 'saboteur'; complained?: number }
+type RunResult = {
+  seed: number
+  settled: number
+  discovered: number
+  win: 'staff' | 'saboteur'
+  complained?: number
+}
 function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
   const movement = new MovementSim()
   const sim = new RoundSim({ seed, playerIds: [...playerIds], movement: new PortAdapter(movement) })
@@ -353,15 +359,26 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
   }
   movement.tick()
   const evs = sim.tick(positions)
-  const sabId = (evs.find((e) => e.type === 'role:dealt' && (e as { role: string }).role === 'saboteur') as { playerId: string } | undefined)?.playerId
+  const sabId = (
+    evs.find((e) => e.type === 'role:dealt' && (e as { role: string }).role === 'saboteur') as
+      | { playerId: string }
+      | undefined
+  )?.playerId
   const staff = [...playerIds].filter((id) => id !== sabId)
-  type BotState = { carrying: boolean; guestId: string | null; target: { floor: FloorId; room: number } | null }
+  type BotState = {
+    carrying: boolean
+    guestId: string | null
+    target: { floor: FloorId; room: number } | null
+  }
   const bots = new Map<string, BotState>()
   for (const id of staff) bots.set(id, { carrying: false, guestId: null, target: null })
   const guestAssign = new Map<string, { floor: FloorId; room: number }>()
   let settled = 0
   let discovered = 0
-  movement.setAmbushAuthority({ isSaboteur: (id) => id === sabId, isLiveStaff: (id) => (staff as string[]).includes(id) })
+  movement.setAmbushAuthority({
+    isSaboteur: (id) => id === sabId,
+    isLiveStaff: (id) => (staff as string[]).includes(id),
+  })
   const TOTAL_TICKS = TUNING.SHIFT_SECONDS * 20
   let win: 'staff' | 'saboteur' = 'saboteur'
   let reason = 'settle-target-failed'
@@ -393,7 +410,10 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
             if (!rest) continue
             if (rest.floor !== curFloor) continue
             if (asgn.floor !== rest.floor || asgn.room !== rest.room) {
-              if (Math.abs(pos.x - doorX(rest.room) * 1000) <= TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 50) {
+              if (
+                Math.abs(pos.x - doorX(rest.room) * 1000) <=
+                TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 50
+              ) {
                 found = { guestId: gid, floor: rest.floor as FloorId, room: rest.room }
                 break
               }
@@ -427,7 +447,10 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
         const pos2 = movement.positionOf(sid)
         if (!pos2) continue
         if (pos2.floor === (target.floor as FloorId)) {
-          if (Math.abs(pos2.x - doorX(target.room) * 1000) <= TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10) {
+          if (
+            Math.abs(pos2.x - doorX(target.room) * 1000) <=
+            TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10
+          ) {
             const res = sim.suitcasePlace(sid, target.room as RoomIndex)
             if (res === 'placed') {
               st.carrying = false
@@ -449,7 +472,10 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
           } else {
             // on guest floor, go to stairs to go to target
             if (Math.abs(pos2.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
-              const dir = floorIndex(pos2.floor as FloorId) < floorIndex(target.floor as FloorId) ? 'up' : 'down'
+              const dir =
+                floorIndex(pos2.floor as FloorId) < floorIndex(target.floor as FloorId)
+                  ? 'up'
+                  : 'down'
               movement.enterStairs(sid, dir as never)
             } else {
               movement.startMove(sid, 'left')
@@ -461,7 +487,9 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
       }
     }
     movement.tick()
-    const flushed: import('@turnover/shared').SimEvent[] = [...sim.tick(positions) as never] as never
+    const flushed: import('@turnover/shared').SimEvent[] = [
+      ...(sim.tick(positions) as never),
+    ] as never
     for (const e of flushed) {
       if ((e as { type: string }).type === 'guest:assigned') {
         const g = e as { guestId: string; floor: FloorId; room: number }
@@ -503,8 +531,14 @@ describe('sim:exit_a', () => {
       const underBudget = results.filter((r) => r.discovered < TUNING.COMPLAINT_BUDGET).length
       const modes = results.map((r) => r.discovered)
       const mode = modes.sort((a, b) => a - b)[Math.floor(modes.length / 2)]!
-      expect(hits, `size ${size} hits ${hits}/20 vs target ${target} - results ${JSON.stringify(results.map((r) => r.settled))}`).toBeGreaterThanOrEqual(size === 4 ? 15 : 16)
-      expect(underBudget, `size ${size} under-budget ${underBudget}/20 - discovered ${JSON.stringify(modes)}`).toBeGreaterThanOrEqual(19)
+      expect(
+        hits,
+        `size ${size} hits ${hits}/20 vs target ${target} - results ${JSON.stringify(results.map((r) => r.settled))}`,
+      ).toBeGreaterThanOrEqual(size === 4 ? 15 : 16)
+      expect(
+        underBudget,
+        `size ${size} under-budget ${underBudget}/20 - discovered ${JSON.stringify(modes)}`,
+      ).toBeGreaterThanOrEqual(19)
       expect(mode, `size ${size} complaint mode ${mode}`).toBeLessThanOrEqual(2)
       // AFK: zero walk-in catches is implicit (no sabotage)
       expect(results.every((r) => r.win === 'staff' || r.win === 'saboteur')).toBe(true)
@@ -537,22 +571,36 @@ describe('sim:exit_b', () => {
       }
       movement.tick()
       const evs = sim.tick(positions)
-      const sabId = (evs.find((e) => e.type === 'role:dealt' && (e as { role: string }).role === 'saboteur') as { playerId: string } | undefined)?.playerId as string
+      const sabId = (
+        evs.find((e) => e.type === 'role:dealt' && (e as { role: string }).role === 'saboteur') as
+          | { playerId: string }
+          | undefined
+      )?.playerId as string
       const staff = [...ids].filter((id) => id !== sabId)
-      type BotState2 = { carrying: boolean; guestId: string | null; target: { floor: FloorId; room: number } | null }
+      type BotState2 = {
+        carrying: boolean
+        guestId: string | null
+        target: { floor: FloorId; room: number } | null
+      }
       const bots = new Map<string, BotState2>()
       for (const id of staff) bots.set(id, { carrying: false, guestId: null, target: null })
       const guestAssign = new Map<string, { floor: FloorId; room: number }>()
       let settled = 0
       let discovered = 0
       let complained = 0
-      movement.setAmbushAuthority({ isSaboteur: (id) => id === sabId, isLiveStaff: (id) => (staff as string[]).includes(id) })
+      movement.setAmbushAuthority({
+        isSaboteur: (id) => id === sabId,
+        isLiveStaff: (id) => (staff as string[]).includes(id),
+      })
       const TOTAL_TICKS = TUNING.SHIFT_SECONDS * 20
       let win: 'staff' | 'saboteur' = 'saboteur'
       const BLITZ_START = 240 * 20
       // track sab position for blitz
       let blitzTarget: { floor: FloorId; room: number } | null = null
-      const findNearestUnprepped = (pos: { floor: FloorId; x: number }): { floor: FloorId; room: number } | null => {
+      const findNearestUnprepped = (pos: {
+        floor: FloorId
+        x: number
+      }): { floor: FloorId; room: number } | null => {
         for (const f of ['floor1', 'floor2', 'floor3'] as FloorId[]) {
           for (let r = 1; r <= 8; r++) {
             const state = sim.roomState(f as never, r as never)
@@ -573,7 +621,8 @@ describe('sim:exit_b', () => {
           if (movement.stairsStateOf(sid) !== undefined) continue
           if (!st.carrying) {
             if (pos.floor === 'lobby') {
-              if (Math.abs(pos.x - DESK_X * 1000) > TUNING.DESK_RANGE_TILES * 1000 + 10) movement.startMove(sid, pos.x < DESK_X * 1000 ? 'right' : 'left')
+              if (Math.abs(pos.x - DESK_X * 1000) > TUNING.DESK_RANGE_TILES * 1000 + 10)
+                movement.startMove(sid, pos.x < DESK_X * 1000 ? 'right' : 'left')
               else {
                 const res = sim.deskInteract(sid)
                 if (res === 'accepted') st.carrying = true
@@ -592,7 +641,10 @@ describe('sim:exit_b', () => {
             const p2 = movement.positionOf(sid)
             if (!p2) continue
             if (p2.floor === (target.floor as FloorId)) {
-              if (Math.abs(p2.x - doorX(target.room) * 1000) <= TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10) {
+              if (
+                Math.abs(p2.x - doorX(target.room) * 1000) <=
+                TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10
+              ) {
                 const res = sim.suitcasePlace(sid, target.room as RoomIndex)
                 if (res === 'placed') {
                   st.carrying = false
@@ -602,11 +654,15 @@ describe('sim:exit_b', () => {
               } else movement.startMove(sid, p2.x < doorX(target.room) * 1000 ? 'right' : 'left')
             } else {
               if (p2.floor === 'lobby' || p2.floor === 'mezzanine') {
-                if (Math.abs(p2.x - LANDING_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) movement.callElevator(sid)
+                if (Math.abs(p2.x - LANDING_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10)
+                  movement.callElevator(sid)
                 else movement.startMove(sid, 'right')
               } else {
                 if (Math.abs(p2.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
-                  const dir = floorIndex(p2.floor as FloorId) < floorIndex(target.floor as FloorId) ? 'up' : 'down'
+                  const dir =
+                    floorIndex(p2.floor as FloorId) < floorIndex(target.floor as FloorId)
+                      ? 'up'
+                      : 'down'
                   movement.enterStairs(sid, dir as never)
                 } else movement.startMove(sid, 'left')
               }
@@ -617,24 +673,41 @@ describe('sim:exit_b', () => {
         // sab blitz logic last 60s
         if (isBlitz) {
           const sabPos = movement.positionOf(sabId)
-          if (sabPos && movement.viewOf(sabId).car === null && movement.stairsStateOf(sabId) === undefined) {
-            if (!blitzTarget || sim.roomState(blitzTarget.floor as never, blitzTarget.room as never) === 'trashed') {
+          if (
+            sabPos &&
+            movement.viewOf(sabId).car === null &&
+            movement.stairsStateOf(sabId) === undefined
+          ) {
+            if (
+              !blitzTarget ||
+              sim.roomState(blitzTarget.floor as never, blitzTarget.room as never) === 'trashed'
+            ) {
               blitzTarget = findNearestUnprepped(sabPos as { floor: FloorId; x: number })
             }
             if (blitzTarget) {
               const sp = sabPos as { floor: FloorId; x: number }
               if (sp.floor === blitzTarget.floor) {
-                if (Math.abs(sp.x - doorX(blitzTarget.room) * 1000) <= TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10) {
+                if (
+                  Math.abs(sp.x - doorX(blitzTarget.room) * 1000) <=
+                  TUNING.ROOM_DOOR_RANGE_TILES * 1000 + 10
+                ) {
                   sim.startWork(sabId, blitzTarget.floor as never, blitzTarget.room as never)
                 } else {
-                  movement.startMove(sabId, sp.x < doorX(blitzTarget.room) * 1000 ? 'right' : 'left')
+                  movement.startMove(
+                    sabId,
+                    sp.x < doorX(blitzTarget.room) * 1000 ? 'right' : 'left',
+                  )
                 }
               } else {
                 if (Math.abs(sp.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
                   const dir = floorIndex(sp.floor) < floorIndex(blitzTarget.floor) ? 'up' : 'down'
                   movement.enterStairs(sabId, dir as never)
                 } else if (sp.floor === 'lobby' || sp.floor === 'mezzanine') {
-                  if (Math.abs(sp.x - LANDING_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) movement.callElevator(sabId)
+                  if (
+                    Math.abs(sp.x - LANDING_X * 1000) <=
+                    TUNING.ELEVATOR_LANDING_TILES * 1000 + 10
+                  )
+                    movement.callElevator(sabId)
                   else movement.startMove(sabId, 'right')
                 } else movement.startMove(sabId, 'left')
               }
@@ -642,7 +715,9 @@ describe('sim:exit_b', () => {
           }
         }
         movement.tick()
-        const flushed: import('@turnover/shared').SimEvent[] = [...sim.tick(positions) as never] as never
+        const flushed: import('@turnover/shared').SimEvent[] = [
+          ...(sim.tick(positions) as never),
+        ] as never
         for (const e of flushed) {
           if ((e as { type: string }).type === 'guest:assigned') {
             const g = e as { guestId: string; floor: FloorId; room: number }
@@ -673,10 +748,16 @@ describe('sim:exit_b', () => {
     const results: ReturnType<typeof runBlitz>[] = []
     for (let seed = 1; seed <= 20; seed++) results.push(runBlitz(seed))
     const staffWins = results.filter((r) => r.win === 'staff').length
-    expect(staffWins, `blitz staff wins ${staffWins}/20 - results ${JSON.stringify(results.map((r) => r.win))}`).toBeGreaterThanOrEqual(8)
+    expect(
+      staffWins,
+      `blitz staff wins ${staffWins}/20 - results ${JSON.stringify(results.map((r) => r.win))}`,
+    ).toBeGreaterThanOrEqual(8)
     expect(staffWins).toBeLessThanOrEqual(20)
     const blitzMeanDiscovered = results.reduce((s, r) => s + r.discovered, 0) / results.length
-    expect(blitzMeanDiscovered, `blitz mean discovered ${blitzMeanDiscovered} vs baseline ${baseMeanDiscovered}`).toBeGreaterThanOrEqual(baseMeanDiscovered)
+    expect(
+      blitzMeanDiscovered,
+      `blitz mean discovered ${blitzMeanDiscovered} vs baseline ${baseMeanDiscovered}`,
+    ).toBeGreaterThanOrEqual(baseMeanDiscovered)
     // wrong-delivery never increments discovered: our blitz never does suitcase misplace, but we assert complained is independent
     // Here complained counts wrong-delivery; ensure discovered not conflated
     for (const r of results) expect(r.complained).toBeGreaterThanOrEqual(0)

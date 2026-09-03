@@ -1,6 +1,29 @@
-import type { FloorId } from '@turnover/shared'
+import type { FloorId, GuestFloorId, RoomIndex } from '@turnover/shared'
 import { MovementSim, RoundSim } from '@turnover/sim'
 import { describe, expect, it } from 'vitest'
+
+/** Structural test access to GuestSim internals (private by design) — typed
+ *  instead of `any` so the lint gate stays clean. */
+interface GuestRow {
+  id: string
+  phase: string
+  assigned: { floor: GuestFloorId; room: RoomIndex } | null
+  target: { floor: GuestFloorId; room: RoomIndex } | null
+  impatientAt: number
+  impatienceRemaining: number | null
+  diningDwellTicks: number | null
+  dwellEndsAt: number | null
+  complaintReport: { floor: GuestFloorId; room: RoomIndex; fresh: boolean } | null
+}
+interface GuestSimInternals {
+  guests: Map<string, GuestRow>
+  tenanted: Map<string, string>
+  movement: Pick<Port, 'joinGuest'>
+}
+interface WorkInternals {
+  churnTrash(floor: GuestFloorId, room: RoomIndex): void
+  provenanceOf(floor: GuestFloorId, room: RoomIndex): string
+}
 
 class Port {
   constructor(private readonly sim: MovementSim) {}
@@ -49,8 +72,7 @@ describe('server:recap_provenance', () => {
       },
     })
     // Directly churn and tenancy via sim guests hack — settle two guests on different floors
-    const guests: any = (sim as any).guests
-    const _port: Port = guests.movement
+    const guests = (sim as unknown as { guests: { tenanted: Map<string, string> } }).guests
     // Create two tenanted rooms directly
     guests.tenanted.set('floor1:1', 'guest:1')
     guests.tenanted.set('floor2:3', 'guest:2')
@@ -77,7 +99,7 @@ describe('server:recap_provenance', () => {
     })
     const sab = sim.saboteurId
     // Force a sabotage trash via direct work manipulation
-    const work: any = (sim as any).work
+    const work = (sim as unknown as { work: WorkInternals }).work
     work.churnTrash('floor1', 2)
     // Prep floor1:2 then sabotage to get sabotage provenance on 1
     const LOBBY = 15_000
@@ -92,7 +114,7 @@ describe('server:recap_provenance', () => {
     const staff = (['p1', 'p2', 'p3', 'p4'] as const).find((id) => id !== sab)!
     movement.tick()
     sim.tick(here)
-    sim.startWork(staff as any, 'floor1', 1)
+    sim.startWork(staff, 'floor1', 1)
     for (let i = 0; i < 100; i++) {
       movement.tick()
       sim.tick(here)
@@ -106,7 +128,7 @@ describe('server:recap_provenance', () => {
     ])
     movement.tick()
     sim.tick(posSab)
-    sim.startWork(sab as any, 'floor1', 1)
+    sim.startWork(sab, 'floor1', 1)
     for (let i = 0; i < 60; i++) {
       movement.tick()
       sim.tick(posSab)
@@ -114,9 +136,8 @@ describe('server:recap_provenance', () => {
     expect(work.provenanceOf('floor1', 1)).toBe('sabotage')
     expect(work.provenanceOf('floor1', 2)).toBe('churn')
     // Inject two discovered guests at lobby desk to trigger recap
-    const guests2: any = (sim as any).guests
-    const mv: any = guests2.movement
-    const gS: any = {
+    const guests2 = (sim as unknown as { guests: GuestSimInternals }).guests
+    const gS: GuestRow = {
       id: 'guest:99',
       phase: 'toExit',
       assigned: { floor: 'floor1', room: 1 },
@@ -127,7 +148,7 @@ describe('server:recap_provenance', () => {
       dwellEndsAt: null,
       complaintReport: { floor: 'floor1', room: 1, fresh: true },
     }
-    const gC: any = {
+    const gC: GuestRow = {
       id: 'guest:100',
       phase: 'toExit',
       assigned: { floor: 'floor1', room: 2 },
@@ -140,18 +161,20 @@ describe('server:recap_provenance', () => {
     }
     guests2.guests.set('guest:99', gS)
     guests2.guests.set('guest:100', gC)
-    mv.joinGuest('guest:99', 'lobby', 15)
-    mv.joinGuest('guest:100', 'lobby', 15.2)
+    guests2.movement.joinGuest('guest:99', 'lobby', 15)
+    guests2.movement.joinGuest('guest:100', 'lobby', 15.2)
     movement.tick()
     const flushed = sim.tick(here)
     expect(flushed.filter((e) => e.type === 'guest:discovered').length).toBe(2)
     const recaps = sim.recapEntries()
-    const complaints = recaps.filter((e) => e.kind === 'complaint') as any[]
+    const complaints = recaps.filter(
+      (e): e is Extract<typeof e, { kind: 'complaint' }> => e.kind === 'complaint',
+    )
     expect(complaints.length).toBe(2)
-    const sabC = complaints.find((c: any) => c.room === 1)!
+    const sabC = complaints.find((c) => c.room === 1)!
     expect(sabC.provenance).toBe('sabotage')
     expect(sabC.actorId).toBe(sab)
-    const churnC = complaints.find((c: any) => c.room === 2)!
+    const churnC = complaints.find((c) => c.room === 2)!
     expect(churnC.provenance).toBe('churn')
     expect(churnC.actorId).toBeUndefined()
   })

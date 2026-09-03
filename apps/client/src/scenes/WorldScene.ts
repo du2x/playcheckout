@@ -119,6 +119,8 @@ interface PlayerDisplay {
   left: boolean
   /** Profile facing: the sheet faces right; left renders flipX (ART-02). */
   facing: 'left' | 'right'
+  /** Cosmetic seed (Phase 4.1, VPOL-01) — variantIndex(seed%8) drives T5's overlay. */
+  seed?: number
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -136,6 +138,11 @@ export class WorldScene extends Phaser.Scene {
   private players = new Map<string, PlayerDisplay>()
   /** Guest NPC positions (cycle 3.1 plumbing) — rendered by the guest slice. */
   private guests = new Map<string, { floor: FloorId; x: number }>()
+  /** Cosmetic seeds (Phase 4.1, VPOL-01): the public decorrelated player
+   *  seeds; the variant renderer derives staff-body + staff-variant from it. */
+  private playerSeeds = new Map<string, number>()
+  /** Cosmetic seeds (Phase 4.1, VPOL-06): guest seeds — archetype + palette. */
+  private guestSeeds = new Map<string, number>()
   /** Guests whose free impatience cue is active (foot-tap + bell, GUEST-13). */
   private impatientGuests = new Set<string>()
   // --- Front desk (cycle 3.B): the E-zone hint; the two-step send menu is
@@ -1082,6 +1089,18 @@ export class WorldScene extends Phaser.Scene {
         this.beep(220)
         break
       }
+      case 'cosmetic-player':
+        // Phase 4.1 (VPOL-01): the public decorrelated seed lands here; the
+        // variant renderer (T5) derives staff-body + staff-variant from it.
+        this.playerSeeds.set(action.playerId, action.seed)
+        this.applyPlayerVariant(action.playerId)
+        break
+      case 'cosmetic-guest':
+        // Phase 4.1 (VPOL-06): the guest seed precedes/rides the guest stream;
+        // the archetype renderer (T6) derives texture + tint from it.
+        this.guestSeeds.set(action.guestId, action.seed)
+        this.applyGuestVariant(action.guestId)
+        break
       default: {
         // Exhaustiveness: SceneAction covers every 'scene'-routed member of
         // ACTION_ROUTES; an unhandled one must fail the build, not slip.
@@ -1098,6 +1117,28 @@ export class WorldScene extends Phaser.Scene {
     display.sprite.destroy()
     display.label.destroy()
     this.players.delete(playerId)
+  }
+
+  /**
+   * Phase 4.1 seam (VPOL-02, T5): apply the stored cosmetic seed to a live
+   * player display — derives `variantIndex(seed % 8)` and drives the
+   * staff-variant overlay. T2 stores the seed only; T5 wires the overlay.
+   */
+  private applyPlayerVariant(playerId: string): void {
+    const display = this.players.get(playerId)
+    const seed = this.playerSeeds.get(playerId)
+    if (display === undefined || seed === undefined) return
+    display.seed = seed
+  }
+
+  /**
+   * Phase 4.1 seam (VPOL-06, T6): apply the stored guest seed to a live guest
+   * view — derives archetype + palette tint. T2 stores the seed only.
+   */
+  private applyGuestVariant(guestId: string): void {
+    const seed = this.guestSeeds.get(guestId)
+    if (seed === undefined) return
+    void seed
   }
 
   /**

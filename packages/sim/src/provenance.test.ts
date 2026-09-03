@@ -1,4 +1,4 @@
-import type { FloorId, SimEvent } from '@turnover/shared'
+import type { FloorId, GuestFloorId, RecapEntry, RoomIndex, SimEvent } from '@turnover/shared'
 import { roomDoorXMilli } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import { GuestSim, type MovementPort, type RoomIntelPort } from './guests.js'
@@ -6,10 +6,34 @@ import { MovementSim } from './movement.js'
 import { RoundSim } from './roundSim.js'
 import { PREP_TICKS, UNPREP_TICKS, WorkChannels } from './work.js'
 
+/** Structural test access to GuestSim internals (private by design) — typed
+ *  instead of `any` so the lint gate stays clean. */
+interface GuestRow {
+  id: string
+  phase: string
+  assigned: { floor: GuestFloorId; room: RoomIndex } | null
+  target: { floor: GuestFloorId; room: RoomIndex } | null
+  impatientAt: number
+  impatienceRemaining: number | null
+  diningDwellTicks: number | null
+  dwellEndsAt: number | null
+  complaintReport: { floor: GuestFloorId; room: RoomIndex; fresh: boolean } | null
+}
+interface GuestSimInternals {
+  guests: Map<string, GuestRow>
+  tenanted: Map<string, string>
+  movement: MovementPort
+}
+
 const IDS = ['p1', 'p2', 'p3', 'p4'] as const
 const CENTER = 2750
 const LOBBY = 15_000
 const R1 = 1 as const
+
+/** Typed escape hatch for GuestSim privates in tests. */
+function internalsOf(guests: GuestSim): GuestSimInternals {
+  return guests as unknown as GuestSimInternals
+}
 
 class StubPort implements MovementPort {
   private pos = new Map<string, { floor: FloorId; x: number }>()
@@ -181,7 +205,7 @@ describe('sim:tenancy', () => {
     }
     const guests = new GuestSim(1, 4, stub, undefined, intel)
     // Inject a guest in toRoom at floor1:1, position at door
-    const g: any = {
+    const g: GuestRow = {
       id: 'guest:1',
       phase: 'toRoom',
       assigned: { floor: 'floor1', room: 1 },
@@ -192,7 +216,7 @@ describe('sim:tenancy', () => {
       dwellEndsAt: null,
       complaintReport: null,
     }
-    ;(guests as any).guests.set('guest:1', g)
+    internalsOf(guests).guests.set('guest:1', g)
     stub.joinGuest('guest:1', 'floor1', roomDoorXMilli(1) / 1000)
     const events = guests.tick(0)
     const tenancy = events.find((e) => e.type === 'room:tenancy') as
@@ -208,7 +232,7 @@ describe('sim:tenancy', () => {
   it('checkout emits occupied false (PROV-10)', () => {
     const stub = new StubPort()
     const guests = new GuestSim(1, 4, stub)
-    const g: any = {
+    const g: GuestRow = {
       id: 'guest:1',
       phase: 'settling',
       assigned: { floor: 'floor1', room: 1 },
@@ -219,8 +243,8 @@ describe('sim:tenancy', () => {
       dwellEndsAt: 0,
       complaintReport: null,
     }
-    ;(guests as any).guests.set('guest:1', g)
-    ;(guests as any).tenanted.set('floor1:1', 'guest:1')
+    internalsOf(guests).guests.set('guest:1', g)
+    internalsOf(guests).tenanted.set('floor1:1', 'guest:1')
     stub.joinGuest('guest:1', 'floor1', roomDoorXMilli(1) / 1000)
     const events = guests.tick(0)
     expect(events.some((e) => e.type === 'guest:checked_out')).toBe(true)
@@ -260,7 +284,7 @@ describe('sim:tenancy', () => {
       unprepActiveIn: () => false,
     }
     const guests = new GuestSim(2, 4, stub, undefined, intel)
-    const g: any = {
+    const g: GuestRow = {
       id: 'guest:2',
       phase: 'toRoom',
       assigned: { floor: 'floor1', room: 1 },
@@ -271,7 +295,7 @@ describe('sim:tenancy', () => {
       dwellEndsAt: null,
       complaintReport: null,
     }
-    ;(guests as any).guests.set('guest:2', g)
+    internalsOf(guests).guests.set('guest:2', g)
     stub.joinGuest('guest:2', 'floor1', roomDoorXMilli(1) / 1000)
     const events = guests.tick(1)
     expect(events.some((e) => e.type === 'guest:angered')).toBe(true)
@@ -351,7 +375,7 @@ describe('sim:recap_provenance', () => {
     ])
     movement.tick()
     sim.tick(posStaff)
-    sim.startWork(staff as any, 'floor1', 1)
+    sim.startWork(staff, 'floor1', 1)
     for (let i = 0; i < PREP_TICKS + 1; i++) {
       movement.tick()
       sim.tick(posStaff)
@@ -365,19 +389,19 @@ describe('sim:recap_provenance', () => {
     ])
     movement.tick()
     sim.tick(posSab)
-    sim.startWork(sab as any, 'floor1', 1)
+    sim.startWork(sab, 'floor1', 1)
     for (let i = 0; i < UNPREP_TICKS + 1; i++) {
       movement.tick()
       sim.tick(posSab)
     }
     // Now create a churn room via direct churnTrash on floor1:2
-    ;(sim as any).work.churnTrash('floor1', 2)
+    ;(sim as unknown as { work: WorkChannels }).work.churnTrash('floor1', 2)
 
     // Create two discovered guests already walking home (toExit at lobby desk)
-    const guests: GuestSim = (sim as any).guests
-    const mv: MovementPort = (guests as any).movement
+    const guests = (sim as unknown as { guests: GuestSim }).guests
+    const mv = internalsOf(guests).movement
     // Guest for sabotage: fresh true
-    const gS: any = {
+    const gS: GuestRow = {
       id: 'guest:99',
       phase: 'toExit',
       assigned: { floor: 'floor1', room: 1 },
@@ -388,7 +412,7 @@ describe('sim:recap_provenance', () => {
       dwellEndsAt: null,
       complaintReport: { floor: 'floor1', room: 1, fresh: true },
     }
-    const gC: any = {
+    const gC: GuestRow = {
       id: 'guest:100',
       phase: 'toExit',
       assigned: { floor: 'floor1', room: 2 },
@@ -399,8 +423,8 @@ describe('sim:recap_provenance', () => {
       dwellEndsAt: null,
       complaintReport: { floor: 'floor1', room: 2, fresh: false },
     }
-    ;(guests as any).guests.set('guest:99', gS)
-    ;(guests as any).guests.set('guest:100', gC)
+    internalsOf(guests).guests.set('guest:99', gS)
+    internalsOf(guests).guests.set('guest:100', gC)
     mv.joinGuest('guest:99', 'lobby', 15)
     mv.joinGuest('guest:100', 'lobby', 15.2)
     movement.tick()
@@ -409,10 +433,9 @@ describe('sim:recap_provenance', () => {
     expect(discovered.length).toBe(2)
     // Check recap
     const recaps = sim.recapEntries()
-    const complaints = recaps.filter((e) => e.kind === 'complaint') as Extract<
-      import('@turnover/shared').RecapEntry,
-      { kind: 'complaint' }
-    >[]
+    const complaints = recaps.filter(
+      (e): e is Extract<RecapEntry, { kind: 'complaint' }> => e.kind === 'complaint',
+    )
     expect(complaints.length).toBe(2)
     const sabC = complaints.find((c) => c.room === 1)!
     expect(sabC.provenance).toBe('sabotage')

@@ -1,5 +1,7 @@
 import type {
   CarId,
+  CosmeticGuest,
+  CosmeticPlayer,
   ElevatorCalled,
   ElevatorDoors,
   ElevatorMoved,
@@ -147,6 +149,10 @@ export interface Payloads {
   'guest:discovered': GuestDiscovered
   /** server → same-floor viewers. Tenancy flip-sign per guest door (FR-33, cycle 3.4). */
   'room:tenancy': RoomTenancy
+  /** server → all players (Phase 4.1, VPOL-01). Decorrelated cosmetic seed for one player. */
+  'cosmetic:player': CosmeticPlayer
+  /** server → all players (Phase 4.1, VPOL-06). Decorrelated cosmetic seed for one guest. */
+  'cosmetic:guest': CosmeticGuest
   /** server → all players. A call was registered (incl. decoy flashes, FR-5). */
   'elevator:called': ElevatorCalled
   /** server → all players. A car's floor changed. */
@@ -405,6 +411,20 @@ export const PROTOCOL_REGISTRY = {
       payload: { floor: event.floor, room: event.room, occupied: event.occupied },
       visibility: { floor: event.floor },
     })) as SimProjection<'room:tenancy'>,
+  },
+  'cosmetic:player': {
+    payload: {} as CosmeticPlayer,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { playerId: event.playerId, seed: event.seed },
+    })) as SimProjection<'cosmetic:player'>,
+  },
+  'cosmetic:guest': {
+    payload: {} as CosmeticGuest,
+    recipients: 'all',
+    fromSim: ((event) => ({
+      payload: { guestId: event.guestId, seed: event.seed },
+    })) as SimProjection<'cosmetic:guest'>,
   },
   'elevator:called': {
     payload: {} as ElevatorCalled,

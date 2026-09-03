@@ -15,7 +15,8 @@ export const GUEST_VARIANT_BUCKETS = 16
  * Never reads `isSaboteur`; the spec's `variant ⊥ role` gate pins this.
  */
 export function variantIndex(seed: number, buckets: number): number {
-  if (!Number.isInteger(buckets) || buckets < 1) throw new Error(`buckets must be positive int, got ${buckets}`)
+  if (!Number.isInteger(buckets) || buckets < 1)
+    throw new Error(`buckets must be positive int, got ${buckets}`)
   return ((seed >>> 0) % buckets) >>> 0
 }
 

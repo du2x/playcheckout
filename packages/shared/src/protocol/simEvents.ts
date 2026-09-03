@@ -165,6 +165,11 @@ export type SimEvent =
       readonly room: RoomIndex
       readonly occupied: boolean
     }
+  // --- Cosmetic seeds (Phase 4.1, VPOL-01/06): public identity variety,
+  // decorrelated from role (VPOL-04). Both are `'all'` — guest seeds are
+  // public weather, player seeds are public identity.
+  | { readonly type: 'cosmetic:player'; readonly playerId: string; readonly seed: number }
+  | { readonly type: 'cosmetic:guest'; readonly guestId: string; readonly seed: number }
 
 /**
  * Why a player was fired — server-internal only, never projected to the wire.

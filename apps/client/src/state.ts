@@ -134,6 +134,9 @@ export type ViewAction =
   | { type: 'room-rustle'; floor: FloorId; room: RoomIndex }
   | { type: 'room-entered'; playerId: string; floor: FloorId; room: RoomIndex }
   | { type: 'room-tenancy'; floor: FloorId; room: RoomIndex; occupied: boolean }
+  // Phase 4.1 cosmetic seeds — public identity, scene-kind render state (VPOL-01/06).
+  | { type: 'cosmetic-player'; playerId: string; seed: number }
+  | { type: 'cosmetic-guest'; guestId: string; seed: number }
   // Justice (cycle 2.8): firing is public but name-only (FR-18) — the scene
   // removes the rectangle; the accusation session renders the toast (T5).
   | { type: 'player-fired'; playerId: string }
@@ -257,6 +260,8 @@ export const ACTION_ROUTES = {
   'room-rustle': 'scene',
   'room-entered': 'scene',
   'room-tenancy': 'scene',
+  'cosmetic-player': 'scene',
+  'cosmetic-guest': 'scene',
   'player-fired': 'scene',
   'round-ended': 'view',
   'round-recap': 'view',
@@ -419,6 +424,8 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'room-rustle':
     case 'room-entered':
     case 'room-tenancy':
+    case 'cosmetic-player':
+    case 'cosmetic-guest':
     case 'player-fired':
     case 'spectator-snapshot':
       return state

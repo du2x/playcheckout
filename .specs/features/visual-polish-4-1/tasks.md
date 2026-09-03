@@ -112,7 +112,7 @@ T6 → T7
 
 ---
 
-### T2: Protocol cosmetic payloads + registry rows
+### T2: Protocol cosmetic payloads + registry rows ✅ DONE (commit pending)
 
 **What**: New payloads `CosmeticPlayer {playerId, seed}` + `CosmeticGuest {guestId, seed}` (or widen `RoleDealt`/`GuestArrived` with `seed` — implement as new rows `cosmetic:player` + `cosmetic:guest` to keep `'all'` vs `'self'` orthogonal per Design) and `PROTOCOL_REGISTRY` `'all'` entries with `SimProjection` typed projections.
 **Where**: `packages/shared/src/protocol/messages.ts`, `packages/shared/src/protocol/simEvents.ts`, `packages/shared/src/protocol/registry.ts`, `packages/shared/src/protocol/registry.test.ts`

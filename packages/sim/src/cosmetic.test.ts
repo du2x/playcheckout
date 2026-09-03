@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import {
+  assignGuestSeed,
+  assignPlayerSeeds,
+  COSMETIC_FORK,
+  GUEST_VARIANT_BUCKETS,
+  STAFF_VARIANT_BUCKETS,
+  variantIndex,
+} from './cosmetic.js'
 import { dealRoles } from './deal.js'
-import { COSMETIC_FORK, assignGuestSeed, assignPlayerSeeds, GUEST_VARIANT_BUCKETS, STAFF_VARIANT_BUCKETS, variantIndex } from './cosmetic.js'
 import { Rng } from './rng.js'
 
 describe('sim:variant_decorrelation (VPOL-01, VPOL-04)', () => {
@@ -49,7 +56,9 @@ describe('sim:variant_decorrelation (VPOL-01, VPOL-04)', () => {
       }
       const staffVariants = byRole.get('staff')!
       const sab = (() => {
-        for (const id of ids) if (deal.get(id) === 'saboteur') return variantIndex(seeds.get(id)!, STAFF_VARIANT_BUCKETS)
+        for (const id of ids)
+          if (deal.get(id) === 'saboteur')
+            return variantIndex(seeds.get(id)!, STAFF_VARIANT_BUCKETS)
         return -1
       })()
       // different roles sharing same variant

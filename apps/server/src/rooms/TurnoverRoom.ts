@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import type {
   CarId,
   FloorId,
+  GuestFloorId,
   MovementEvent,
   RecapEntry,
   RoomIndex,
@@ -713,8 +714,8 @@ export class TurnoverRoom extends Room {
           const prov = event.type === 'room:trashed' ? ('sabotage' as const) : ('none' as const)
           const state = event.type === 'room:prepped' ? ('prepped' as const) : ('trashed' as const)
           this.telemetrySink.recordRoomTransition(
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             undefined,
             state,
             prov,
@@ -725,15 +726,15 @@ export class TurnoverRoom extends Room {
         else if (event.type === 'guest:assigned')
           this.telemetrySink.recordGuestAssigned(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'guest:self_assigned')
           this.telemetrySink.recordGuestSelfAssigned(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'suitcase:carried')
@@ -741,8 +742,8 @@ export class TurnoverRoom extends Room {
         else if (event.type === 'suitcase:placed')
           this.telemetrySink.recordSuitcasePlaced(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'suitcase:picked_up')
@@ -750,15 +751,15 @@ export class TurnoverRoom extends Room {
         else if (event.type === 'guest:settled')
           this.telemetrySink.recordGuestSettled(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'guest:checked_out')
           this.telemetrySink.recordGuestCheckedOut(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'guest:left')
@@ -766,16 +767,16 @@ export class TurnoverRoom extends Room {
         else if (event.type === 'guest:angered')
           this.telemetrySink.recordGuestAngered(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'guest:discovered') {
           const prov = event.fresh ? ('sabotage' as const) : ('churn' as const)
           this.telemetrySink.recordGuestDiscovered(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             event.fresh,
             prov,
             prov === 'sabotage' ? sim.saboteurId : undefined,
@@ -784,14 +785,14 @@ export class TurnoverRoom extends Room {
         } else if (event.type === 'guest:complained')
           this.telemetrySink.recordGuestComplained(
             event.guestId,
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             this.roundTick,
           )
         else if (event.type === 'room:tenancy')
           this.telemetrySink.recordTenancy(
-            event.floor as any,
-            event.room as any,
+            event.floor as GuestFloorId,
+            event.room as RoomIndex,
             event.occupied,
             this.roundTick,
           )
@@ -799,9 +800,9 @@ export class TurnoverRoom extends Room {
           this.telemetrySink.recordCarryClockExpiry(event.playerId, this.roundTick)
         else if (event.type === 'round:ended')
           this.telemetrySink.recordRoundEnded(
-            event.winner as any,
-            event.reason as any,
-            event.saboteurId as any,
+            event.winner as 'staff' | 'saboteur',
+            event.reason,
+            event.saboteurId,
             this.roundTick,
           )
       }

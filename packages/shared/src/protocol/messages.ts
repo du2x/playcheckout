@@ -622,6 +622,25 @@ export interface RoundResumed {
 }
 
 /**
+ * server → all players (Phase 4.1, VPOL-01). Cosmetic identity seed for one
+ * player — public, decorrelated from role (FR-9 anti-leak), `'all'` policy.
+ * The client derives `variantIndex(seed % 8)`.
+ */
+export interface CosmeticPlayer {
+  readonly playerId: string
+  readonly seed: number
+}
+
+/**
+ * server → all players (Phase 4.1, VPOL-06). Cosmetic identity seed for one
+ * guest NPC — public weather like the guest itself.
+ */
+export interface CosmeticGuest {
+  readonly guestId: string
+  readonly seed: number
+}
+
+/**
  * client → server intent: host starts the round (FR-2). Validated by zod in the
  * room's `validate()` handler; the server rejects, it never trusts. Intents are
  * not part of the protocol registry.

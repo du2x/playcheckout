@@ -64,6 +64,9 @@ export const MAPPERS: {
   'room:rustle': (p) => [{ type: 'room-rustle', ...p }],
   'room:entered': (p) => [{ type: 'room-entered', ...p }],
   'room:tenancy': (p) => [{ type: 'room-tenancy', ...p }],
+  // Phase 4.1 cosmetic seeds — public identity, scene-kind render state.
+  'cosmetic:player': (p) => [{ type: 'cosmetic-player', ...p }],
+  'cosmetic:guest': (p) => [{ type: 'cosmetic-guest', ...p }],
   // Justice (cycle 2.8): name-only firing — {playerId} is the whole payload.
   'player:fired': ({ playerId }) => [{ type: 'player-fired', playerId }],
   // Round end (cycle 2.9): verdict + recap drive the results view; the

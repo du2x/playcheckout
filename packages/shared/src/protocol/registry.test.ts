@@ -149,6 +149,8 @@ describe('protocol registry', () => {
     'guest:angered': 'sameFloor',
     'guest:discovered': 'all',
     'room:tenancy': 'sameFloor',
+    'cosmetic:player': 'all',
+    'cosmetic:guest': 'all',
     'elevator:called': 'all',
     'elevator:moved': 'all',
     'elevator:doors': 'all',
@@ -402,6 +404,25 @@ describe('protocol registry', () => {
     expect(Object.keys(occ.payload).sort()).toEqual(['floor', 'occupied', 'room'])
     const vac = row.fromSim({ type: 'room:tenancy', floor: 'floor2', room: 5, occupied: false })
     expect(vac.payload).toEqual({ floor: 'floor2', room: 5, occupied: false })
+  })
+
+  // Phase 4.1 (VPOL-01/06): cosmetic seeds are public identity — 'all' policy,
+  // payload exactly {playerId|guestId, seed}, never a role field.
+  it('projects cosmetic seeds building-wide with id+seed only — never a role (VPOL-01, VPOL-04)', () => {
+    const playerRow = PROTOCOL_REGISTRY['cosmetic:player']
+    expect(playerRow.recipients).toBe('all')
+    const player = playerRow.fromSim({ type: 'cosmetic:player', playerId: 'p1', seed: 12345 })
+    expect(player.payload).toEqual({ playerId: 'p1', seed: 12345 })
+    expect(Object.keys(player.payload).sort()).toEqual(['playerId', 'seed'])
+    expect(player.self).toBeUndefined()
+    expect(Object.keys(player.payload)).not.toContain('role')
+
+    const guestRow = PROTOCOL_REGISTRY['cosmetic:guest']
+    expect(guestRow.recipients).toBe('all')
+    const guest = guestRow.fromSim({ type: 'cosmetic:guest', guestId: 'guest:1', seed: 67890 })
+    expect(guest.payload).toEqual({ guestId: 'guest:1', seed: 67890 })
+    expect(Object.keys(guest.payload).sort()).toEqual(['guestId', 'seed'])
+    expect(guest.self).toBeUndefined()
   })
 
   it('projects work events to the actor only — no kind, no role in any payload (FR-9)', () => {

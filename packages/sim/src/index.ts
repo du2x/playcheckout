@@ -3,6 +3,14 @@
  * No I/O, no Colyseus, no randomness without a seed.
  */
 
+export {
+  assignGuestSeed,
+  assignPlayerSeeds,
+  COSMETIC_FORK,
+  GUEST_VARIANT_BUCKETS,
+  STAFF_VARIANT_BUCKETS,
+  variantIndex,
+} from './cosmetic.js'
 export { dealRoles, mulberry32 } from './deal.js'
 export type { MovementEvent, SimEvent } from './events.js'
 export { GuestSim, type GuestTiming, type MovementPort } from './guests.js'
@@ -18,7 +26,6 @@ export {
 } from './movement.js'
 export { Rng } from './rng.js'
 export { RoundSim, type RoundSimConfig } from './roundSim.js'
-export { COSMETIC_FORK, GUEST_VARIANT_BUCKETS, STAFF_VARIANT_BUCKETS, assignGuestSeed, assignPlayerSeeds, variantIndex } from './cosmetic.js'
 export { TelemetrySink } from './telemetry.js'
 export { TICK_HZ } from './tick.js'
 export {

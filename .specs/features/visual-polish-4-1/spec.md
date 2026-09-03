@@ -140,12 +140,12 @@ This cycle closes `3.A` properly, with Phaser 4 as the medium: layered staff var
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| VPOL-01 | P1: Staff variants | Implementing | Pending |
+| VPOL-01 | P1: Staff variants | Implementing | In progress (T1 done, T2 done) |
 | VPOL-02 | P1: Staff variants | Design | Pending |
 | VPOL-03 | P1: Staff variants | Design | Pending |
-| VPOL-04 | P1: Staff variants | Implementing | Pending |
+| VPOL-04 | P1: Staff variants | Implementing | In progress (T1 done) |
 | VPOL-05 | P1: Staff variants | Design | Pending |
-| VPOL-06 | P1: Guests archetypes | Design | Pending |
+| VPOL-06 | P1: Guests archetypes | Implementing | In progress (T2 done) |
 | VPOL-07 | P1: Guests archetypes | Design | Pending |
 | VPOL-08 | P1: Guests archetypes | Design | Pending |
 | VPOL-09 | P1: Guests archetypes | Design | Pending |
