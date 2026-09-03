@@ -18,6 +18,7 @@ export {
 } from './movement.js'
 export { Rng } from './rng.js'
 export { RoundSim, type RoundSimConfig } from './roundSim.js'
+export { COSMETIC_FORK, GUEST_VARIANT_BUCKETS, STAFF_VARIANT_BUCKETS, assignGuestSeed, assignPlayerSeeds, variantIndex } from './cosmetic.js'
 export { TelemetrySink } from './telemetry.js'
 export { TICK_HZ } from './tick.js'
 export {
