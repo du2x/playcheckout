@@ -58,6 +58,13 @@ const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
  *  while dining on the mezzanine. */
 const GUEST_FILL = 0xbfe3ff
 const DINING_FILL = 0xffd27a
+/** Staff variant buckets (Phase 4.1, VPOL-02): the client mirror of
+ *  packages/sim cosmetic.ts — pure seed → head-frame index. Pinned equal to
+ *  the sim's variantIndex by the sim suite; a drift here is a defect. */
+const STAFF_VARIANT_BUCKETS = 8
+function variantIndexOf(seed: number): number {
+  return ((seed >>> 0) % STAFF_VARIANT_BUCKETS) >>> 0
+}
 
 /**
  * Spectator lanes (cycle 2.9, FR-20): the full-building overview stacks all
@@ -111,6 +118,8 @@ export interface WorldStartData {
 
 interface PlayerDisplay {
   sprite: Phaser.GameObjects.Sprite
+  /** The head/accent overlay (Phase 4.1, VPOL-02) — pixel-locked to `sprite`. */
+  variant: Phaser.GameObjects.Sprite | null
   label: Phaser.GameObjects.Text
   x: number
   floor: string
@@ -119,7 +128,7 @@ interface PlayerDisplay {
   left: boolean
   /** Profile facing: the sheet faces right; left renders flipX (ART-02). */
   facing: 'left' | 'right'
-  /** Cosmetic seed (Phase 4.1, VPOL-01) — variantIndex(seed%8) drives T5's overlay. */
+  /** Cosmetic seed (Phase 4.1, VPOL-01) — variantIndex(seed%8) drives the overlay. */
   seed?: number
 }
 
@@ -287,6 +296,8 @@ export class WorldScene extends Phaser.Scene {
     this.sendSuitcasePickup = data.sendSuitcasePickup
     this.openAccuseMenu = data.openAccuseMenu
     this.players.clear()
+    this.playerSeeds.clear()
+    this.guestSeeds.clear()
     this.cars.clear()
     this.ownMoving = null
     this.viewFloor = 'lobby'
@@ -322,9 +333,12 @@ export class WorldScene extends Phaser.Scene {
       this.corridorBand.setVisible(!this.spectator)
     }
     if (this.textures.exists('staff-walk') && !this.anims.exists('staff-walk')) {
+      // 34x64 body sheet (Phase 4.1): frame 0 = idle, the rest = the walk
+      // cycle (derived from the sheet — no art constant duplicated here).
+      const last = this.textures.get('staff-walk').frameTotal - 1
       this.anims.create({
         key: 'staff-walk',
-        frames: this.anims.generateFrameNumbers('staff-walk', { start: 0, end: 7 }),
+        frames: this.anims.generateFrameNumbers('staff-walk', { start: 1, end: last }),
         frameRate: 12,
         repeat: -1,
       })
@@ -773,6 +787,15 @@ export class WorldScene extends Phaser.Scene {
     for (const t of snapshot.tenancies ?? []) {
       this.tenancies.set(`${t.floor}:${t.room}`, t.occupied)
     }
+    // Cosmetic seeds (Phase 4.1, VPOL-05): the full-world baseline carries
+    // every player and guest seed — variants render per FR-20 lane.
+    for (const row of snapshot.cosmeticSeeds?.players ?? []) {
+      this.playerSeeds.set(row.playerId, row.seed)
+      this.applyPlayerVariant(row.playerId)
+    }
+    for (const row of snapshot.cosmeticSeeds?.guests ?? []) {
+      this.guestSeeds.set(row.guestId, row.seed)
+    }
     this.syncTenancyMarkers()
     this.updatePanel()
   }
@@ -880,6 +903,7 @@ export class WorldScene extends Phaser.Scene {
         const display = this.players.get(action.playerId)
         if (display !== undefined) {
           display.sprite.destroy()
+          display.variant?.destroy()
           display.label.destroy()
           this.players.delete(action.playerId)
         }
@@ -1115,20 +1139,22 @@ export class WorldScene extends Phaser.Scene {
     const display = this.players.get(playerId)
     if (display === undefined) return
     display.sprite.destroy()
+    display.variant?.destroy()
     display.label.destroy()
     this.players.delete(playerId)
   }
 
   /**
-   * Phase 4.1 seam (VPOL-02, T5): apply the stored cosmetic seed to a live
-   * player display — derives `variantIndex(seed % 8)` and drives the
-   * staff-variant overlay. T2 stores the seed only; T5 wires the overlay.
+   * Phase 4.1 (VPOL-02): apply the stored cosmetic seed to a live player
+   * display — `variantIndex(seed % 8)` selects the head/accent overlay frame.
+   * The mapping is pure seed → frame; role is unreachable here (VPOL-04).
    */
   private applyPlayerVariant(playerId: string): void {
     const display = this.players.get(playerId)
     const seed = this.playerSeeds.get(playerId)
     if (display === undefined || seed === undefined) return
     display.seed = seed
+    if (display.variant !== null) display.variant.setFrame(variantIndexOf(seed))
   }
 
   /**
@@ -1162,6 +1188,7 @@ export class WorldScene extends Phaser.Scene {
     for (const [id, display] of this.players) {
       if (known.has(id)) continue
       display.sprite.destroy()
+      display.variant?.destroy()
       display.label.destroy()
       this.players.delete(id)
     }
@@ -1220,6 +1247,16 @@ export class WorldScene extends Phaser.Scene {
             remainingMs: ownStairs.remainingSeconds * 1000,
             anchoredAtMs: Date.now(),
           }
+    // Cosmetic seeds (Phase 4.1, VPOL-05): snapshot rows re-derive identical
+    // variants for late joiners and reconnects — same pure mapping as the
+    // dealt events.
+    for (const row of snapshot.cosmeticSeeds?.players ?? []) {
+      this.playerSeeds.set(row.playerId, row.seed)
+      this.applyPlayerVariant(row.playerId)
+    }
+    for (const row of snapshot.cosmeticSeeds?.guests ?? []) {
+      this.guestSeeds.set(row.guestId, row.seed)
+    }
     this.updatePanel()
   }
 
@@ -1227,21 +1264,30 @@ export class WorldScene extends Phaser.Scene {
     const x = 15
     // ART-01: one staff-walk Sprite per player, bottom-center anchored on the
     // lane ground line — identical texture/anim for every role (FR-9). The
-    // label stays a Text (harness label assertions unchanged).
+    // variant overlay (Phase 4.1, VPOL-02) rides the same anchor; the label
+    // stays a Text (harness label assertions unchanged).
     const sprite = this.add.sprite(x * TILE_PX, GROUND_Y, 'staff-walk')
     sprite.setOrigin(0.5, 1)
+    const variant = this.textures.exists('staff-variant')
+      ? this.add.sprite(x * TILE_PX, GROUND_Y, 'staff-variant')
+      : null
+    variant?.setOrigin(0.5, 1)
+    const seed = this.playerSeeds.get(id)
+    if (variant !== null && seed !== undefined) variant.setFrame(variantIndexOf(seed))
     const label = this.add.text(x * TILE_PX, GROUND_Y + 48, name.slice(0, 12), {
       color: '#ffffff',
     })
     label.setOrigin(0.5, 0.5)
     this.players.set(id, {
       sprite,
+      variant,
       label,
       x,
       floor: 'lobby',
       targetX: null,
       left: false,
       facing: 'right',
+      ...(seed !== undefined ? { seed } : {}),
     })
   }
 
@@ -2087,21 +2133,30 @@ export class WorldScene extends Phaser.Scene {
         !(id === this.ownId && this.stairsAnchor !== null) &&
         (this.spectator || display.floor === this.viewFloor)
       display.sprite.setVisible(visible)
+      display.variant?.setVisible(visible)
       display.label.setVisible(visible)
-      display.sprite.x = display.x * TILE_PX
-      display.label.x = display.x * TILE_PX
+      const px = display.x * TILE_PX
+      display.sprite.x = px
+      display.variant?.setPosition(px, laneY)
+      display.label.x = px
       display.sprite.y = laneY
       display.label.y = laneY + 48
       // ART-02/03: facing + walk cycle. The own player's facing follows the
       // local prediction; remote players keep their last moved facing. The
       // walk plays while the display is live (predicted own movement or an
       // unsettled lerp target) and settles back to frame 0 when stopped —
-      // identical presentation for every role (FR-9).
+      // identical presentation for every role (FR-9). The variant overlay
+      // mirrors facing pixel-for-pixel (VPOL-02 flipX parity).
       if (id === this.ownId && this.ownMoving !== null) display.facing = this.ownMoving
       const moving =
         (id === this.ownId && this.ownMoving !== null) ||
         (display.targetX !== null && Math.abs(display.targetX - display.x) > 0.01)
-      display.sprite.flipX = display.facing === 'left'
+      const flip = display.facing === 'left'
+      display.sprite.flipX = flip
+      if (display.variant !== null) {
+        display.variant.flipX = flip
+        display.variant.setVisible(visible)
+      }
       if (moving) {
         if (!display.sprite.anims.isPlaying) display.sprite.play('staff-walk')
       } else if (display.sprite.anims.isPlaying) {

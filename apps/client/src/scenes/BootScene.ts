@@ -14,10 +14,21 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.spritesheet('staff-walk', 'art/chars/staff-walk-8f.png', {
-      frameWidth: 28,
-      frameHeight: 60,
+    // Phase 4.1 cast: the 34x64 body keeps the historical 'staff-walk' key
+    // (the harness texture-filter contract); the variant overlay is new.
+    this.load.spritesheet('staff-walk', 'art/chars/staff-body-34x64-7f.png', {
+      frameWidth: 34,
+      frameHeight: 64,
     })
+    this.load.spritesheet('staff-variant', 'art/chars/staff-variant-8f.png', {
+      frameWidth: 34,
+      frameHeight: 64,
+    })
+    // Guest archetype silhouettes (Phase 4.1, T6) — grayscale tint carriers.
+    this.load.image('guest-suite', 'art/chars/guest-suite.png')
+    this.load.image('guest-tourist', 'art/chars/guest-tourist.png')
+    this.load.image('guest-clerk', 'art/chars/guest-clerk.png')
+    this.load.image('guest-elder', 'art/chars/guest-elder.png')
     this.load.spritesheet('fx-rustle', 'art/props/fx-rustle-4f.png', {
       frameWidth: 32,
       frameHeight: 32,
