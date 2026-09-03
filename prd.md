@@ -297,7 +297,7 @@ stable across specs and skills.
 | Prep / un-prep | 5s / 3s | un-prep → 2s if saboteur weak |
 | Re-trash | Unlimited | — |
 | Coverage target | 80% | — (telemetry/KPI only since v1.5 — no longer a win check) |
-| Settle target (v1.5, AD-039) | 5 (4p) / 7 (5p) / 9 (6p) settled guests at buzzer | provisional — locks only after the 3.5 exit-bot gate proves settle throughput under interception-shaped sabotage |
+| Settle target (v1.5, AD-039; calibrated 3.5, AD-043) | 5 (4p) / 7 (5p) / 9 (6p) settled guests at buzzer | locked after the 3.5 exit-bot gate — pure-churn 6p 20/20 hits, 5p 20/20, 4p 19/20; mis-place vs intercepting staff 17/20 staff wins (bot 20–90% band, human sab expected 35–65%) |
 | Attrition loss | Staff down to 1 | scale by lobby size later |
 | Freshness window | 75s | — |
 | Rustle range | ~3 tiles | — |
@@ -319,7 +319,7 @@ stable across specs and skills.
 All v1.3 rows (AD-022) are provisional pending first playtests; changes are recorded
 decisions, never incidental edits. **v1.4 rows (AD-032) are additionally gated: the
 carry clock, earshot range, and the free-misplacement economy lock only after the 3.5
-balance gate proves interception can keep pace with the saboteur at the 6p cadence.**
+balance gate proves interception can keep pace with the saboteur at the 6p cadence — proven 3.5 (AD-043), now locked.** **v1.5 SETTLE_TARGET locks only after the 3.5 gate — proven 3.5 (AD-043), now locked at 5/7/9.**
 
 ## 8. Success Metrics & Kill Criteria
 
@@ -348,7 +348,7 @@ SETTLE_TARGET (and re-checks the shrunken complaint budget's reachability) inste
   stages + 2s/stride ride (lobby→floor1 = 2 strides = 4s; floor3 = 8s) ≈ **8–12s per trip**
   under continuous demand. Against the v1.3 cadence (30/24/18s per arrival at 4/5/6p) the
   single car holds ≈ 1.5× headroom at the 6p worst case — **the cadence dials hold**; the
-  v1.4 dwell economy and the 3.5 gate re-prove it under live traffic.
+  v1.4 dwell economy and the 3.5 gate re-prove it under live traffic (AD-043: pure-churn bots 20/20 at 6p, 20/20 at 5p, 19/20 at 4p).
 - **Staff–guest car contention is the new pressure**: staff rides now queue behind guests.
   The stairs are the relief valve — a staff stairs hop (3s + 2s breath = 5s/floor, no wait)
   is competitive with the elevator for single-floor trips whenever the car is busy, and
@@ -356,7 +356,7 @@ SETTLE_TARGET (and re-checks the shrunken complaint budget's reachability) inste
 - **Ambush economy**: a 20s stun ≈ one guest arrival slot (18s at 6p) — a stunned floor's
   triage gap costs ≈ one cadence slot. **Kill check (pinned in the spec): an ambush never
   creates a complaint — it only enables one the saboteur already set up.** The ambush is
-  also the saboteur's signature trace: stun times/places are testimony without identity.
+  also the saboteur's signature trace: stun times/places are testimony without identity. **3.5 gate: ambush never creates a complaint (differential 0 guest:discovered), and wrong-delivery lines never move the budget or the score (AD-043).**
 
 ## 9. Risks & Mitigations
 

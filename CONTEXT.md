@@ -150,3 +150,23 @@ timestamped. Hallway-visible sameFloor-public (the at-a-distance verifier for
 suitcase outcomes), seeded via the viewer's own `movement:snapshot`
 `tenancies` and the `spectator:snapshot` full baseline for fired players.
 _Avoid_: occupancy indicator, door occupancy, tenancy tag
+
+**Settle target**:
+The §6.6 buzzer win dial (v1.5, AD-039; calibrated 3.5, AD-043): 5 (4p) / 7
+(5p) / 9 (6p) settled guests at the 5:00 buzzer. Staff win iff
+`settledCount ≥ SETTLE_TARGET` (the `settle-target-met`/`failed` reasons);
+the 8-complaint budget is the other instant-loss leg. Provisional until the
+3.5 exit-bot gate — now locked at 5/7/9 after the pure-churn 20/20 (6p) and
+mis-place 17/20 (bot 20–90% band) proofs. Read only via `settleTargetFor`.
+_Avoid_: coverage target (it is telemetry/KPI since v1.5), settle threshold
+
+**Guest exit (balance gate)**:
+The 3.5 headless bot proof that §7 holds under the one-car + stairs economy
+(AD-043): `sim:guest_exit_a` (staff vs pure churn at 6p/5p/4p) and
+`sim:guest_exit_b` (mis-placement saboteur `room+1` on the next guest floor
++ sameFloor correction / building-wide sab steal vs intercepting staff at 6p)
+— the v1.4/v1.5 §7 gate before §7 locks. Also re-checks the shrunken
+complaint budget's reachability (discovered <8 in pure churn, <8 even under
+mis-place, ambush 0 complaints) and the stairs relief headroom (single car
+8–12 s per trip, 1.5× at 6p).
+_Avoid_: exit criteria (the v1.2 `sim:exit_a`/`exit_b` live in 3.6 as re-proof), bot AI

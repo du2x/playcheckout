@@ -154,10 +154,10 @@ T2 → T3 → T4
 
 **Done when**:
 
-- [ ] `.specs/STATE.md` carries AD-NNN with the 7 implementation choices (bot model, sab wrong-room rule, interception predicate, success bands, seed count, determinism, clamping), the measured numbers (`exit_a` 6p/5p/4p hit rates, `exit_b` 6p win band + avg corrections/misplaces, complaint mode), the dial decision (keep 5/7/9 — or move with re-proof note), and the handoff (`Next step: cycle 3.6 telemetry`)
-- [ ] `prd.md` §7 `Settle target` row reflects the calibrated triple; §8 retains the v1.6 `1.5× headroom` verdict and, if the budget proved unreachable, a `COMPLAINT_BUDGET` note via a new AD reference
-- [ ] `roadmap.md` Phase 3 exit notes the 3.5 verdict (kept/proven vs moved) and the §7 lock
-- [ ] Full ladder green: `pnpm typecheck && pnpm lint && pnpm test:sim`
+- [x] `.specs/STATE.md` carries AD-043 with the 7 implementation choices (bot model, sab wrong-room rule, interception predicate, success bands, seed count, determinism, clamping), the measured numbers (`exit_a` 6p 20/20, 5p 20/20, 4p 19/20; `exit_b` 6p 17/20 staff wins, avg misplaces 2.7 & avg corrections 8.1, discovered <8 in 20/20, mode ≤2, ambushFired), the dial decision (keep 5/7/9), and the handoff (`Next step: cycle 3.6 telemetry`)
+- [x] `prd.md` §7 `Settle target` row reflects the calibrated triple (5/7/9) with AD-043 locked note; §8 retains the v1.6 `1.5× headroom` verdict and the calibration line
+- [x] `roadmap.md` Phase 3 exit notes the 3.5 verdict (proven/locked at 5/7/9)
+- [x] `CONTEXT.md` carries **Settle target** + **Guest exit (balance gate)** entries; full ladder green: `pnpm typecheck && pnpm lint && pnpm test:sim`
 
 **Tests**: none
 **Gate**: build

@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { GUEST_FLOOR_IDS, HALL_LENGTH_TILES, roomDoorXMilli, TUNING, settleTargetFor } from '@turnover/shared'
 import type { FloorId, GuestFloorId } from '@turnover/shared'
+import {
+  GUEST_FLOOR_IDS,
+  HALL_LENGTH_TILES,
+  roomDoorXMilli,
+  settleTargetFor,
+  TUNING,
+} from '@turnover/shared'
+import { describe, expect, it } from 'vitest'
 import { MovementSim } from './movement.js'
 import { RoundSim } from './roundSim.js'
 
@@ -73,11 +79,18 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
   }
   // Tick 0: start the round (deal + first movement tick for guests)
   movement.tick()
-  let evs = sim.tick(positions)
-  const sabId = (evs.find((e) => e.type === 'role:dealt' && e.role === 'saboteur') as Extract<import('@turnover/shared').SimEvent, { type: 'role:dealt' }> | undefined)
-    ?.playerId
+  const evs = sim.tick(positions)
+  const sabId = (
+    evs.find((e) => e.type === 'role:dealt' && e.role === 'saboteur') as
+      | Extract<import('@turnover/shared').SimEvent, { type: 'role:dealt' }>
+      | undefined
+  )?.playerId
   const staff = [...playerIds].filter((id) => id !== sabId)
-  type BotState = { carrying: boolean; guestId: string | null; target: { floor: FloorId; room: number } | null }
+  type BotState = {
+    carrying: boolean
+    guestId: string | null
+    target: { floor: FloorId; room: number } | null
+  }
   const bots = new Map<string, BotState>()
   for (const id of staff) bots.set(id, { carrying: false, guestId: null, target: null })
   const guestAssign = new Map<string, { floor: FloorId; room: number }>()
@@ -175,7 +188,8 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
     movement.tick()
     for (const id of playerIds) {
       const p = movement.positionOf(id)
-      if (p !== undefined) positions.set(id, { floor: p.floor as FloorId, x: Math.round(p.x * 1000) })
+      if (p !== undefined)
+        positions.set(id, { floor: p.floor as FloorId, x: Math.round(p.x * 1000) })
       else positions.delete(id)
     }
     // Sim intents (desk / suitcase) — intent-time, flush on next tick
@@ -183,7 +197,11 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
       const st = bots.get(sid)
       if (st === undefined || st.carrying) continue
       const p = positions.get(sid)
-      if (p !== undefined && p.floor === 'lobby' && Math.abs(p.x / 1000 - DESK_X) <= TUNING.DESK_RANGE_TILES + 0.01) {
+      if (
+        p !== undefined &&
+        p.floor === 'lobby' &&
+        Math.abs(p.x / 1000 - DESK_X) <= TUNING.DESK_RANGE_TILES + 0.01
+      ) {
         sim.deskInteract(sid)
       }
     }
@@ -191,7 +209,11 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
       const st = bots.get(sid)
       if (st === undefined || !st.carrying || st.target === null) continue
       const p = movement.positionOf(sid)
-      if (p !== undefined && p.floor === st.target.floor && Math.abs(p.x - doorX(st.target.room)) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05) {
+      if (
+        p !== undefined &&
+        p.floor === st.target.floor &&
+        Math.abs(p.x - doorX(st.target.room)) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05
+      ) {
         sim.suitcasePlace(sid, st.target.room as RoomIndex)
       }
     }
@@ -287,13 +309,22 @@ function runWithMisplace(seed: number): MisplaceResult {
     movement.join(id, { floor: 'lobby', xMilli: DESK_X * 1000 })
   }
   movement.tick()
-  let evs = sim.tick(positions)
-  const sabId = (evs.find((e) => e.type === 'role:dealt' && e.role === 'saboteur') as Extract<import('@turnover/shared').SimEvent, { type: 'role:dealt' }> | undefined)
-    ?.playerId as string
+  const evs = sim.tick(positions)
+  const sabId = (
+    evs.find((e) => e.type === 'role:dealt' && e.role === 'saboteur') as
+      | Extract<import('@turnover/shared').SimEvent, { type: 'role:dealt' }>
+      | undefined
+  )?.playerId as string
   const staff = [...playerIds].filter((id) => id !== sabId)
-  type BotState = { carrying: boolean; guestId: string | null; target: { floor: FloorId; room: number } | null; isSab: boolean }
+  type BotState = {
+    carrying: boolean
+    guestId: string | null
+    target: { floor: FloorId; room: number } | null
+    isSab: boolean
+  }
   const bots = new Map<string, BotState>()
-  for (const id of playerIds) bots.set(id, { carrying: false, guestId: null, target: null, isSab: id === sabId })
+  for (const id of playerIds)
+    bots.set(id, { carrying: false, guestId: null, target: null, isSab: id === sabId })
   const guestAssign = new Map<string, { floor: FloorId; room: number }>()
   let settled = 0
   let discovered = 0
@@ -350,7 +381,8 @@ function runWithMisplace(seed: number): MisplaceResult {
                 const dir = tgt > cur ? 'up' : 'down'
                 const res = movement.enterStairs(sid, dir as 'up' | 'down')
                 if (res === 'ignored') {
-                  if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) movement.callElevator(sid)
+                  if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01)
+                    movement.callElevator(sid)
                   else movement.startMove(sid, 'right')
                 }
               } else {
@@ -358,7 +390,8 @@ function runWithMisplace(seed: number): MisplaceResult {
               }
             } else {
               const dx = doorX(victim.room)
-              if (Math.abs(pos.x - dx) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05) movement.stopMove(sid)
+              if (Math.abs(pos.x - dx) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05)
+                movement.stopMove(sid)
               else movement.startMove(sid, pos.x < dx ? 'right' : 'left')
             }
             continue
@@ -377,7 +410,8 @@ function runWithMisplace(seed: number): MisplaceResult {
             const dir = tgt > cur ? 'up' : 'down'
             const res = movement.enterStairs(sid, dir as 'up' | 'down')
             if (res === 'ignored') {
-              if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) movement.callElevator(sid)
+              if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01)
+                movement.callElevator(sid)
               else movement.startMove(sid, 'right')
             }
           } else {
@@ -393,7 +427,8 @@ function runWithMisplace(seed: number): MisplaceResult {
             const dir = tgt > cur ? 'up' : 'down'
             const res = movement.enterStairs(sid, dir as 'up' | 'down')
             if (res === 'ignored') {
-              if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) movement.callElevator(sid)
+              if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01)
+                movement.callElevator(sid)
               else movement.startMove(sid, 'right')
             }
           } else {
@@ -426,14 +461,19 @@ function runWithMisplace(seed: number): MisplaceResult {
     if (movementEvents.some((e) => e.type === 'stairs:ambushed')) ambushFired = true
     for (const id of playerIds) {
       const p = movement.positionOf(id)
-      if (p !== undefined) positions.set(id, { floor: p.floor as FloorId, x: Math.round(p.x * 1000) })
+      if (p !== undefined)
+        positions.set(id, { floor: p.floor as FloorId, x: Math.round(p.x * 1000) })
       else positions.delete(id)
     }
     for (const sid of playerIds) {
       const st = bots.get(sid)
       if (st === undefined || st.carrying) continue
       const p = positions.get(sid)
-      if (p !== undefined && p.floor === 'lobby' && Math.abs(p.x / 1000 - DESK_X) <= TUNING.DESK_RANGE_TILES + 0.01) {
+      if (
+        p !== undefined &&
+        p.floor === 'lobby' &&
+        Math.abs(p.x / 1000 - DESK_X) <= TUNING.DESK_RANGE_TILES + 0.01
+      ) {
         sim.deskInteract(sid)
       }
     }
@@ -483,7 +523,11 @@ function runWithMisplace(seed: number): MisplaceResult {
       const st = bots.get(sid)
       if (st === undefined || !st.carrying || st.target === null) continue
       const p = movement.positionOf(sid)
-      if (p !== undefined && p.floor === st.target.floor && Math.abs(p.x - doorX(st.target.room)) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05) {
+      if (
+        p !== undefined &&
+        p.floor === st.target.floor &&
+        Math.abs(p.x - doorX(st.target.room)) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05
+      ) {
         const res = sim.suitcasePlace(sid, st.target.room as RoomIndex)
         if (res === 'placed' && st.isSab) misplaces++
       }
@@ -564,9 +608,14 @@ describe('sim:guest_exit_b', () => {
     ).toBeGreaterThanOrEqual(4)
     expect(staffWins).toBeLessThanOrEqual(18)
     // Keep-pace: corrections are not collapsing (the 0.5× rule is an average, not per-seed)
-    expect(avgCorr, `avg corrections ${avgCorr} vs avg misplaces ${avgMis}`).toBeGreaterThanOrEqual(avgMis * 0.5)
+    expect(avgCorr, `avg corrections ${avgCorr} vs avg misplaces ${avgMis}`).toBeGreaterThanOrEqual(
+      avgMis * 0.5,
+    )
     // Wrong-delivery door lines fired at least once across the 20 seeds (the economy is exercised)
-    expect(complainedRuns, `no guest:complained across 20 seeds — results ${JSON.stringify(results)}`).toBeGreaterThan(0)
+    expect(
+      complainedRuns,
+      `no guest:complained across 20 seeds — results ${JSON.stringify(results)}`,
+    ).toBeGreaterThan(0)
     // Wrong-delivery never counts toward the complaint budget or the score — every discovered is trash-discovery only
     for (const r of results) {
       expect(r.discovered, `seed ${r.seed} discovered`).toBeLessThan(TUNING.COMPLAINT_BUDGET)
@@ -582,7 +631,11 @@ describe('sim:guest_exit_b', () => {
     // We run the dedicated ambush-only probe from complaints.test.ts (STAIRS-21) ported here as a one-seed check:
     const movement = new MovementSim()
     const ids = ['p1', 'p2', 'p3', 'p4'] as const
-    const simCalm = new RoundSim({ seed: 7, playerIds: [...ids], movement: new PortAdapter(movement) })
+    const simCalm = new RoundSim({
+      seed: 7,
+      playerIds: [...ids],
+      movement: new PortAdapter(movement),
+    })
     // Calm run: no stairs authority → no ambush can fire, same timing otherwise
     // The Misplace harness above already proves ambushFired at least once while discovered stays low;
     // this test pins the payload shape: an ambush never names a complaint.
