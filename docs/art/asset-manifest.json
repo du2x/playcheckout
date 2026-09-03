@@ -4,6 +4,93 @@
   "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned.",
   "assets": [
     {
+      "id": "staff-body",
+      "role": "Phase 4.1 headless staff body (7 frames: 0 idle + 1..6 walk); head zone transparent — the variant overlay supplies head/cap/hair. Identical for every player (FR-9)",
+      "path": "apps/client/public/art/chars/staff-body-34x64-7f.png",
+      "status": "approved",
+      "technical": {
+        "dimensions": "238x64 (7 frames of 34x64)",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 7,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette", "silhouette", "proportions", "facing", "light-direction"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-03",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "34x64 Deco Noir elongation unlocked by AD-030; headless split so the variant overlay stays pixel-locked (no head bob). QA asset_report PASS (9 colors, full alpha); guest denylist PASS (no ivory/brass authored on guest sheets). Native-scale corridor mock /tmp/opencode/cast-4-1-corridor-mock.png."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (asset_report + corridor mock 2026-09-03); in-engine review lands with client:char_variants"
+      }
+    },
+    {
+      "id": "staff-variant",
+      "role": "Phase 4.1 head/accent overlay, 8 variants = skin(2) x hair(2) x accessory(2: brass cap band vs round glasses); charcoal cap identical for all (uniform, FR-9)",
+      "path": "apps/client/public/art/chars/staff-variant-8f.png",
+      "status": "approved",
+      "technical": {
+        "dimensions": "272x64 (8 frames of 34x64)",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 8,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette", "proportions", "facing", "light-direction"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-03",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "variant = cosmeticSeed % 8 (decorrelated Rng fork, VPOL-01/04); QA asset_report PASS (11 colors, full alpha)."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (asset_report + corridor mock 2026-09-03); in-engine review lands with client:char_variants"
+      }
+    },
+    {
+      "id": "guest-silhouettes",
+      "role": "Phase 4.1 guest archetype silhouettes (suite/tourist/clerk/elder), 34x64 grayscale tint carriers — the client setTint()s teal/burgundy/moss/plum rotations so no guest carries authored ivory/brass (VPOL-07)",
+      "path": "apps/client/public/art/chars/guest-suite.png",
+      "status": "approved",
+      "technical": {
+        "dimensions": "34x64 each (4 files)",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["silhouette", "proportions", "facing"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-03",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "grayscale base (6 colors) x runtime tint = 16 identity combos inside the sheet budget; denylist PASS on all four files; guest seed % 16 drives archetype+palette (VPOL-06)."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (asset_report + corridor mock 2026-09-03); in-engine review lands with client:guest_sprites"
+      }
+    },
+    {
       "id": "staff-walk",
       "role": "player character walk cycle, all players identical uniform (no saboteur tell)",
       "path": "apps/client/public/art/chars/staff-walk-8f.png",
