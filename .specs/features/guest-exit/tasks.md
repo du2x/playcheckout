@@ -128,14 +128,14 @@ T2 → T3 → T4
 
 **Done when**:
 
-- [ ] `TUNING.SETTLE_TARGET` reads 5/7/9 (or the re-proven calibrated triple) and `tuning.test.ts` asserts `expect(settleTargetFor(4)).toBe(5)` etc. plus the clamp outliers
-- [ ] No other §7 dial changed (grep `TUNING.` diff is exactly the `SETTLE_TARGET` line if any)
-- [ ] `pnpm vitest run packages/shared` green; `pnpm typecheck` green
+- [x] `TUNING.SETTLE_TARGET` reads 5/7/9 (or the re-proven calibrated triple) and `tuning.test.ts` asserts `expect(settleTargetFor(4)).toBe(5)` etc. plus the clamp outliers
+- [x] No other §7 dial changed (grep `TUNING.` diff is exactly the `SETTLE_TARGET` line if any)
+- [x] `pnpm vitest run packages/shared` green; `pnpm typecheck` green
 
 **Tests**: unit
 **Gate**: quick
 
-**Commit**: `feat(shared): calibrate SETTLE_TARGET (3.5)` or `chore(shared): keep SETTLE_TARGET after 3.5 gate (probe proves 5/7/9)`
+**Commit**: `chore(shared): keep SETTLE_TARGET after 3.5 gate (probe proves 5/7/9)`
 
 ---
 
