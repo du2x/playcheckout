@@ -236,6 +236,9 @@ export class WorldScene extends Phaser.Scene {
    *  destination floor view (AD-040 amendment — the floor renders beneath). */
   private breathChip: Phaser.GameObjects.Container | null = null
   private breathChipClock: Phaser.GameObjects.Text | null = null
+  /** The own breath-puff sprite (breath-sprites, BR-01): at most one — owned
+   *  by the own readout, destroyed when the breath ends. Own-viewer only. */
+  private breathSprite: Phaser.GameObjects.Sprite | null = null
   private ownMoving: 'left' | 'right' | null = null
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
@@ -352,6 +355,7 @@ export class WorldScene extends Phaser.Scene {
     this.work = null
     this.interior = null
     this.stairsAnchor = null
+    this.breathSprite = null
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
     this.tenancies.clear()
@@ -416,6 +420,16 @@ export class WorldScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers('fx-rustle', { start: 0, end: 3 }),
         frameRate: 12,
         hideOnComplete: true,
+      })
+    }
+    if (this.textures.exists('fx-breath') && !this.anims.exists('breath')) {
+      // 8fps ≈ 4 loops per 2 s breath (cosmetic anim rates stay off §7
+      // values per the tuning-literal denylist, literals.test.ts).
+      this.anims.create({
+        key: 'breath',
+        frames: this.anims.generateFrameNumbers('fx-breath', { start: 0, end: 3 }),
+        frameRate: 8,
+        repeat: -1,
       })
     }
 
@@ -736,6 +750,36 @@ export class WorldScene extends Phaser.Scene {
     this.breathChip = chip
   }
 
+  /**
+   * Own breath-puff sprite (breath-sprites, BR-01/03): one looping
+   * `fx-breath` sprite above the own body while the own readout is in
+   * `breath`, destroyed otherwise. Own-viewer only — other players' breath
+   * phase is not on the wire (messages.ts:398), so nothing here reads it.
+   */
+  private syncBreathSprite(breathing: boolean): void {
+    const own = this.players.get(this.ownId)
+    const canShow =
+      breathing &&
+      !this.spectator &&
+      own !== undefined &&
+      this.textures.exists('fx-breath') &&
+      this.anims.exists('breath')
+    if (!canShow) {
+      this.breathSprite?.destroy()
+      this.breathSprite = null
+      return
+    }
+    if (this.breathSprite === null) {
+      this.breathSprite = this.add.sprite(own.x, 0, 'fx-breath')
+      this.breathSprite.setOrigin(0.5, 1)
+      this.breathSprite.setDepth(1)
+      this.breathSprite.setName('fx-breath-own')
+      this.breathSprite.play('breath')
+    }
+    this.breathSprite.setPosition(own.x, this.laneY(own.floor) - 68)
+    this.breathSprite.setVisible(!this.spectator && own.floor === this.viewFloor)
+  }
+
   private syncStairCanvas(): void {
     const anchor = this.stairsAnchor
     const readout = anchor === null ? null : stairPhaseReadout(anchor, Date.now())
@@ -749,6 +793,7 @@ export class WorldScene extends Phaser.Scene {
         this.breathChipClock.setText(`${Math.ceil(breathRemaining / 1000)}s`)
       }
     }
+    this.syncBreathSprite(breathRemaining !== null)
     if (this.stairCanvas === null) return
     if (anchor === null || readout === null || breathRemaining !== null) {
       this.stairCanvas.setVisible(false)

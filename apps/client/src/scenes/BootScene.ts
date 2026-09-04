@@ -33,6 +33,10 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     })
+    this.load.spritesheet('fx-breath', 'art/props/fx-breath-4f.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    })
     this.load.image('door-closed', 'art/doors/door-closed.png')
     this.load.image('door-open', 'art/doors/door-open.png')
     this.load.image('door-card', 'art/doors/door-card.png')

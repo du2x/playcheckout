@@ -466,6 +466,35 @@
         "technical_checks_passed": true,
         "approved_by": ""
       }
+    },
+    {
+      "id": "fx-breath",
+      "role": "Breath-puff loop for the own stairs breath (2s): pale cool-white puffs rising and dissipating over the breather's head. Own-viewer only (others' breath phase is not on the wire); chip countdown untouched",
+      "path": "apps/client/public/art/props/fx-breath-4f.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "32x32",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 4,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-fx-breath.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-04",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "alternating two-puff pant loop (cool white #e8f0f2 family, flat discs, no gradients); distinct from rustle ivory/brass and anger chartreuse. QA asset_report PASS (4 colors incl. transparent, full alpha). Preview /tmp/opencode/fx-breath-preview.png."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": ""
+      }
     }
   ]
 }

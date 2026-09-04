@@ -1456,6 +1456,11 @@
   STATE-documented pre-existing flake; COMP-13 sim timeout likewise load
   contention (passes solo). Hidden-info re-check: sconceXs reads layout only
   (WorldScene.ts sconceXs), spectator lanes plain, no state in new textures.
+- **Feature**: `breath-sprites` (own pant-puff cue + future floor-visible
+  intent recorded in spec) — DONE. `fx-breath-4f` sheet (Pillow, QA PASS),
+  `breath` 8fps loop (6 forbidden by the tuning-literal denylist — caught by
+  the gate, fixed), chip untouched, `client:breath_sprite` 3× green,
+  test:sim 555/555, typecheck/biome clean. No sim/protocol/server touched.
 - **Next step**: Verifier PASS (validation.md, validate_state.py exit 0) →
   Gate-4 human 5-minute round (mock
   /tmp/opencode/wall-sconce-corridor-mock.png is the Gate-4 input).
