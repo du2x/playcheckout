@@ -95,7 +95,7 @@ AD-046 + elevator-door precondition files exist.
 
 ---
 
-### T2: Author wall-field + sconce sheets with QA + native mock
+### T2: Author wall-field + sconce sheets with QA + native mock ✅ DONE
 
 **What**: New `scripts/art/generate-wall-sconce.py` (Pillow, deterministic,
 palette-locked to brief §80 swatches only) authoring both sheets + a

@@ -34,7 +34,8 @@ yet) · `corridorDepth.spec.ts` asserts the `Graphics` names (must be amended).
 `TILE_PX` 32 · `GROUND_Y` 430 · doors 72×96 (top y=334) · room width 104 px,
 centers px = 116, 220, 324, 428, 532, 636, 740 (room 1…7) · east landing door
 80 px spanning 880–960 (center 920, top y=334 — same mount as room doors) ·
-west mouth zone tiles [0, 1], sconce x=16 · room-7 art ends 776 → 104 px
+west mouth zone tiles [0, 1], sconce x=24 (inside the zone with the 48 px
+pool fully on-canvas — zone center x=16 would clip the pool at the edge) · room-7 art ends 776 → 104 px
 clear to the elevator · sconce sprite 48×52 at origin (0, 5, 1): prop pixels
 x12..36 / y0..40, pool ellipse center (24, 44) rx24 ry8 (48×16)
 

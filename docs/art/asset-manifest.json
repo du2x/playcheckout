@@ -94,7 +94,7 @@
       "id": "wall-field",
       "role": "Phase 4.2 corridor wall tile: frieze band (upper ~45px, #42636e + 16px-pitch dim-brass chevron) over slate-teal field; tiles horizontally with period 32, rendered as a 960x302 TileSprite at y48..350 replacing the wallFill Graphics fill",
       "path": "apps/client/public/art/rooms/wall-field.png",
-      "status": "planned",
+      "status": "in-review",
       "technical": {
         "dimensions": "32x302",
         "alpha": false,
@@ -107,15 +107,15 @@
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model)",
         "creator": "art workstream",
-        "created_at": "",
+        "created_at": "2026-09-04",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": ""
+        "prompt_or_source_record": "32px tile (frieze pitch 16 divides 32, chevron wraps by x%32); flat field below the brass closing rule. QA asset_report PASS (3 colors, opaque). Native-scale corridor mock /tmp/opencode/wall-sconce-corridor-mock.png."
       },
       "verification": {
-        "native_scale_reviewed": false,
+        "native_scale_reviewed": true,
         "in_engine_reviewed": false,
-        "technical_checks_passed": false,
+        "technical_checks_passed": true,
         "approved_by": ""
       }
     },
@@ -471,7 +471,7 @@
       "id": "sconce",
       "role": "Phase 4.2 sconce prop (24x40 brass arm + candle core) with baked 48x16 pool ellipse below it; one sprite per door beat, positioned from layout geometry (room centers + landings), replacing the deco-pools Graphics ellipses. Flat pixels only, no blend modes (glow arrives in 4.3)",
       "path": "apps/client/public/art/props/sconce.png",
-      "status": "planned",
+      "status": "in-review",
       "technical": {
         "dimensions": "48x52",
         "alpha": true,
@@ -484,15 +484,15 @@
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model)",
         "creator": "art workstream",
-        "created_at": "",
+        "created_at": "2026-09-04",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": ""
+        "prompt_or_source_record": "prop x12..35/y0..39 over pool ellipse center (24,44) rx23/ry7 halo + rx14/ry4 core. QA asset_report PASS (6 colors, full alpha). West mouth at x=24 keeps the pool on-canvas. Mock /tmp/opencode/wall-sconce-corridor-mock.png."
       },
       "verification": {
-        "native_scale_reviewed": false,
+        "native_scale_reviewed": true,
         "in_engine_reviewed": false,
-        "technical_checks_passed": false,
+        "technical_checks_passed": true,
         "approved_by": ""
       }
     }
