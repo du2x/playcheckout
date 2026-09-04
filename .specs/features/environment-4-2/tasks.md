@@ -170,7 +170,7 @@ changes) and record the new loaded-texture count in the manifest notes.
 
 ---
 
-### T5: Harness — amend corridor_depth, add art_environment
+### T5: Harness — amend corridor_depth, add art_environment ✅ DONE
 
 **What**: Amend `corridorDepth.spec.ts` (frieze/pool `Graphics` asserts →
 `wall-field` TileSprite + `sconce:` count asserts; keep

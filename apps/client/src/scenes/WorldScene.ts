@@ -78,8 +78,9 @@ const GROUND_Y = 430
 /** Front-facing landing door width (Phase 4.2: shared by the car mount and
  *  the east sconce beat so the two never drift apart). */
 const ELEVATOR_DOOR_PX = 80
-/** Sconce pool half-width (Phase 4.2, ENV-05): the west-mouth x derives from
- *  the mouth zone minus this, keeping the 48px pool fully on-canvas. */
+/** Sconce pool half-width (Phase 4.2, ENV-05): the west-mouth beat sits one
+ *  pool-half off the canvas edge (clamped into the mouth zone) so the 48px
+ *  pool renders fully on-canvas. */
 const SCONCE_POOL_HALF = 24
 /** Sconce mount y: door-lintel top (GROUND_Y − 96) + 2px sill overlap. */
 const SCONCE_MOUNT_Y = GROUND_Y - 94
@@ -1906,7 +1907,9 @@ export class WorldScene extends Phaser.Scene {
    */
   private sconceXs(floor: string): number[] {
     const east = this.carPx(1) - ELEVATOR_DOOR_PX / 2
-    const west = TUNING.STAIRWELL_MOUTH_TILES * TILE_PX - SCONCE_POOL_HALF
+    // West beat: pool-clear of the canvas edge, clamped into the stairwell
+    // mouth zone (design D-3: the 48px pool stays fully on-canvas).
+    const west = Math.min(SCONCE_POOL_HALF, TUNING.STAIRWELL_MOUTH_TILES * TILE_PX)
     if (floor === 'floor1' || floor === 'floor2' || floor === 'floor3') {
       const xs: number[] = []
       for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
