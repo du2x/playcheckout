@@ -14,12 +14,13 @@ import {
   roomSegmentStartMilli,
 } from './layout'
 
-// Expected values copied from roadmap step 0 / prd FR-3 — locked planning docs.
+// Expected values copied from roadmap step 0 / prd FR-3 — locked planning docs
+// (7 rooms per floor: AD-046).
 describe('layout', () => {
-  it('matches the locked building shape: 3 guest floors x 8 rooms', () => {
+  it('matches the locked building shape: 3 guest floors x 7 rooms', () => {
     expect(FLOORS).toBe(3)
-    expect(ROOMS_PER_FLOOR).toBe(8)
-    expect(ROOM_COUNT).toBe(24)
+    expect(ROOMS_PER_FLOOR).toBe(7)
+    expect(ROOM_COUNT).toBe(21)
   })
 
   it('has the grand lobby, the mezzanine restaurant, and three guest floors (3.C)', () => {
@@ -31,18 +32,19 @@ describe('layout', () => {
     expect(ROOM_DEPTH_TILES).toBe(3.25)
   })
 
-  it('tiles the hall exactly: 8 segments of 3.25 fill [2, 28] (AD-010, re-derived AD-036)', () => {
-    expect(ROOM_HALL_START_TILES + ROOMS_PER_FLOOR * ROOM_DEPTH_TILES).toBe(HALL_LENGTH_TILES - 2)
+  it('tiles the hall contiguously: 7 segments of 3.25 from tile 2 (AD-010, re-derived AD-036/AD-046)', () => {
+    expect(ROOM_HALL_START_TILES).toBe(2)
     expect(roomSegmentStartMilli(1)).toBe(2000)
-    expect(roomSegmentEndMilli(8)).toBe(28000)
+    expect(roomSegmentEndMilli(ROOMS_PER_FLOOR as 7)).toBe(24_750)
     for (let i = 2; i <= ROOMS_PER_FLOOR; i++) {
       expect(roomSegmentStartMilli(i as 2)).toBe(roomSegmentEndMilli((i - 1) as 1))
     }
   })
 
-  it('leaves a 2-tile landing clearance at each end (AD-036: front-facing elevator door)', () => {
+  it('leaves landing clearance at each end (AD-036 elevator door; AD-046 east gap)', () => {
     expect(ROOM_HALL_START_TILES).toBeGreaterThanOrEqual(2)
-    expect(roomSegmentEndMilli(8)).toBeLessThanOrEqual((HALL_LENGTH_TILES - 2) * 1000)
+    // East gap: rooms end at 24.75 tiles; the 80 px elevator door spans 27.5–30.
+    expect(roomSegmentEndMilli(ROOMS_PER_FLOOR as 7)).toBeLessThanOrEqual(27_500)
   })
 
   it('resolves segment membership half-open, last room inclusive (AD-010)', () => {
@@ -51,9 +53,9 @@ describe('layout', () => {
     expect(roomIndexAtMilli(5249)).toBe(1)
     expect(roomIndexAtMilli(5250)).toBe(2)
     expect(roomIndexAtMilli(15_000)).toBe(5)
-    expect(roomIndexAtMilli(27_999)).toBe(8)
-    expect(roomIndexAtMilli(28_000)).toBe(8)
-    expect(roomIndexAtMilli(28_001)).toBe(0)
+    expect(roomIndexAtMilli(24_749)).toBe(7)
+    expect(roomIndexAtMilli(24_750)).toBe(7)
+    expect(roomIndexAtMilli(24_751)).toBe(0)
   })
 })
 
@@ -62,8 +64,8 @@ describe('room doorway geometry (cycle 3.1)', () => {
   it('places every door at its segment center', () => {
     // Room 1 spans [2000, 5250) milli → center 3625.
     expect(roomDoorXMilli(1)).toBe(3625)
-    // Room 8 spans [24750, 28000) milli → center 26375.
-    expect(roomDoorXMilli(8)).toBe(26375)
+    // Room 7 spans [21500, 24750) milli → center 23125.
+    expect(roomDoorXMilli(7)).toBe(23_125)
   })
 
   it('door x resolves back through the room-at predicate', () => {

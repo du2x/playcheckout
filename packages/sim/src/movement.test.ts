@@ -645,7 +645,7 @@ describe('sim:elevator', () => {
     // can arrive: the call stays a decoy flash naming car 1 (AD-019's
     // both-parked case, degenerate for the single car).
     sim.startMove('p1', 'left') // walk off through the open doors...
-    for (let i = 0; i < 7; i++) sim.tick() // ...and walk mid-hall (2.1 tiles)
+    for (let i = 0; i < 9; i++) sim.tick() // ...and walk mid-hall (2.7 tiles — past AD-046's 2.5-tile door hit box)
     sim.stopMove('p1')
     expect(sim.viewOf('p1').car).toBeNull()
     sim.tick() // consume the walk-off riders update
@@ -1627,9 +1627,45 @@ describe('sim:stairs_transit', () => {
     const other = sim.snapshotFor('p2')
     expect('stairs' in other).toBe(false)
     expect(other.players.some((r) => r.playerId === 'p1')).toBe(false)
-    // Breath phase keeps the row (the recipient is still in the stairwell).
+    // Breath phase keeps the row (the visit is not over) — but the breath
+    // itself is ON the destination floor (AD-040 amendment): the snapshot
+    // falls back to the floor shape with the row riding along.
     for (let i = 0; i < 59; i++) sim.tick()
     expect(sim.snapshotFor('p1').stairs?.phase).toBe('breath')
+  })
+
+  it('the breath stands ON the destination floor: every floor seam sees the breather (AD-040 amendment)', () => {
+    const sim = new MovementSim()
+    joinAtMouth(sim, 'p1')
+    joinAtMouth(sim, 'lobbyWatcher') // stays on the origin floor
+    sim.enterStairs('p1', 'up')
+    sim.tick() // entry flush
+    for (let i = 1; i < 60; i++) sim.tick() // transit ticks 2..60 — arrival
+    expect(sim.stairsStateOf('p1')?.phase).toBe('breath')
+    // Same-floor standing occupants' snapshots name the breather; the origin
+    // floor's do not.
+    expect(sim.snapshotForFloor('mezzanine').players).toContainEqual({
+      playerId: 'p1',
+      floor: 'mezzanine',
+      x: 0,
+    })
+    expect(sim.snapshotForFloor('lobby').players.some((r) => r.playerId === 'p1')).toBe(false)
+    // The spectator baseline (fired overview) includes the breather.
+    expect(sim.allPositions()).toContainEqual({ playerId: 'p1', floor: 'mezzanine', x: 0 })
+    // The breather has the ordinary standing view of the destination floor —
+    // sameFloor routing reaches them again (they can see and be seen).
+    expect(sim.viewOf('p1')).toMatchObject({ floor: 'mezzanine', x: 0 })
+    // Their own snapshot is the floor shape (self included) + the stairs row.
+    const own = sim.snapshotFor('p1')
+    expect(own.players).toContainEqual({ playerId: 'p1', floor: 'mezzanine', x: 0 })
+    expect(own.stairs).toMatchObject({ from: 'lobby', to: 'mezzanine', phase: 'breath' })
+    // Another occupant's personal snapshot of the same floor names the breather.
+    joinAtMouth(sim, 'p2', 'mezzanine')
+    expect(sim.snapshotFor('p2').players).toContainEqual({
+      playerId: 'p1',
+      floor: 'mezzanine',
+      x: 0,
+    })
   })
 
   it('ignores direction keys mid-transit and a second entry while inside (STAIRS-09)', () => {

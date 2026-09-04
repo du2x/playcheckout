@@ -697,7 +697,7 @@ describe('sim:checkout_churn', () => {
 
   it('counts a churned room as un-prepped for coverage (preppedCount)', () => {
     const sim = simWith([['ada', 'staff']])
-    sim.churnTrash('floor1', 8)
+    sim.churnTrash('floor1', 7)
     // Prepped baseline is 0; the churned room must not count as prepped.
     expect(sim.preppedCount).toBe(0)
   })

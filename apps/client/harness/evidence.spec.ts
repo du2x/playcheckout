@@ -116,9 +116,9 @@ test.describe('client:evidence_cues', () => {
     }
     // Each hold starts at the arrival moved = the opening swing (AD-026):
     // the pending exit eats the first 0.5 s, so the staff's 1.5 s hold walks
-    // 1 s — parking inside room 8 ([26.5, 30)). The saboteur exits later (the
-    // doors are already open — the exit applies on the keydown), so a 1.2 s
-    // hold lands them ~1 tile apart (room 8).
+    // 1 s — parking inside room 7 ([21.5, 24.75), AD-046). The saboteur exits
+    // later (the doors are already open — the exit applies on the keydown),
+    // so a 1.2 s hold lands them ~1 tile apart (room 7).
     await staff.keyboard.down('ArrowLeft')
     await staff.waitForTimeout(1500)
     await staff.keyboard.up('ArrowLeft')
@@ -131,7 +131,7 @@ test.describe('client:evidence_cues', () => {
       .then(() => true)
       .catch(() => false)
 
-    // Saboteur walks left from the east landing into room 8 beside the
+    // Saboteur walks left from the east landing into room 7 beside the
     // staff — the entry fires the door-open cue the watcher catches.
     await saboteur.keyboard.down('ArrowLeft')
     await saboteur.waitForTimeout(1200)

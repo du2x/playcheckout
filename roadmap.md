@@ -132,6 +132,12 @@ Cycle rules (inherited from Phase 2):
 
 ## Phase 4 — Gray-box client
 
+> **Re-scoped (AD-045, 2026-09-03)**: Phase 4.1 shipped the Deco Noir cast and juice
+> layer — the gray-box-only letter below predates that. The visual plan for the rest
+> of Phase 4 (cycles 4.2–4.7, open decisions D1–D3) lives in
+> [docs/art/art-roadmap.md](docs/art/art-roadmap.md); the bullets below record the
+> original Phase 4 baseline scope.
+
 - Rectangles + floor labels; no art, no audio polish (non-goal).
 - DOM overlay for lobby / HUD / firing toasts / results / recap; Phaser 4 renders only
   the game world.

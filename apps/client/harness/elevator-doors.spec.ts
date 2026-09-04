@@ -1,7 +1,8 @@
 import { expect, type Page, test } from '@playwright/test'
 
 // Spec ELAN-01..04 (P1) + P2 AC1 (gate scenario client:elevator_doors): the
-// new door-open/close and hide-during-transit visuals layered on the
+// new door-open/close visuals (closed slab stands in on floors the car is
+// not on) layered on the
 // existing press-model elevator machine (`elevator-riders` cycle, AD-013/
 // AD-014) — single client, no round start needed (fast entry point, mirrors
 // elevatorLobby.spec.ts). P2 AC2's arrival tween/fade math is unit-tested
@@ -33,9 +34,9 @@ async function readCars(page: Page): Promise<CarRead> {
     return {
       // ART contract (cycle 2.10): the player is a staff-walk Sprite.
       rectCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk').length,
-      // ART contract (cycle 2.10): cars are elevator-car Sprites.
+      // ART contract (cycle 2.10, AD-036): cars are elevator-door Sprites.
       visibleCarCount: list.filter(
-        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
+        (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-door' && c.visible,
       ).length,
     }
   })
@@ -110,7 +111,7 @@ test.describe('client:elevator_doors', () => {
         if (scene === null) return false
         return (
           scene.children.list.filter(
-            (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car' && c.visible,
+            (c) => c.type === 'Sprite' && c.texture?.key === 'elevator-door' && c.visible,
           ).length === 1
         )
       },

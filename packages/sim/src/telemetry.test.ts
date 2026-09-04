@@ -1,3 +1,4 @@
+import type { FloorId, RoomIndex } from '@turnover/shared'
 import {
   GUEST_FLOOR_IDS,
   HALL_LENGTH_TILES,
@@ -300,14 +301,12 @@ describe('sim:telemetry_guests', () => {
 
 // --- Phase-exit bot harnesses (T6/T7) — re-use guestExit's stairs-preferring delivery bots ---
 
-type RoomIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 const DESK_X = TUNING.DESK_X_TILES
 const LANDING_X = HALL_LENGTH_TILES
 const STAIR_X = 0
 function doorX(room: number): number {
   return roomDoorXMilli(room as RoomIndex) / 1000
 }
-type FloorId = 'lobby' | 'mezzanine' | 'floor1' | 'floor2' | 'floor3'
 function floorIndex(f: FloorId): number {
   return (['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as FloorId[]).indexOf(f)
 }
@@ -429,7 +428,7 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
           } else {
             // go to lobby via stairs if not there
             if (curFloor !== 'lobby') {
-              if (Math.abs(pos.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+              if (Math.abs(pos.x - STAIR_X * 1000) <= TUNING.STAIRWELL_MOUTH_TILES * 1000 + 10) {
                 movement.enterStairs(sid, 'down' as never)
               } else {
                 movement.startMove(sid, 'left')
@@ -471,7 +470,7 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
             }
           } else {
             // on guest floor, go to stairs to go to target
-            if (Math.abs(pos2.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+            if (Math.abs(pos2.x - STAIR_X * 1000) <= TUNING.STAIRWELL_MOUTH_TILES * 1000 + 10) {
               const dir =
                 floorIndex(pos2.floor as FloorId) < floorIndex(target.floor as FloorId)
                   ? 'up'
@@ -628,7 +627,7 @@ describe('sim:exit_b', () => {
                 if (res === 'accepted') st.carrying = true
               }
             } else {
-              if (Math.abs(pos.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+              if (Math.abs(pos.x - STAIR_X * 1000) <= TUNING.STAIRWELL_MOUTH_TILES * 1000 + 10) {
                 movement.enterStairs(sid, 'down' as never)
               } else movement.startMove(sid, 'left')
             }
@@ -658,7 +657,7 @@ describe('sim:exit_b', () => {
                   movement.callElevator(sid)
                 else movement.startMove(sid, 'right')
               } else {
-                if (Math.abs(p2.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+                if (Math.abs(p2.x - STAIR_X * 1000) <= TUNING.STAIRWELL_MOUTH_TILES * 1000 + 10) {
                   const dir =
                     floorIndex(p2.floor as FloorId) < floorIndex(target.floor as FloorId)
                       ? 'up'
@@ -699,7 +698,7 @@ describe('sim:exit_b', () => {
                   )
                 }
               } else {
-                if (Math.abs(sp.x - STAIR_X * 1000) <= TUNING.ELEVATOR_LANDING_TILES * 1000 + 10) {
+                if (Math.abs(sp.x - STAIR_X * 1000) <= TUNING.STAIRWELL_MOUTH_TILES * 1000 + 10) {
                   const dir = floorIndex(sp.floor) < floorIndex(blitzTarget.floor) ? 'up' : 'down'
                   movement.enterStairs(sabId, dir as never)
                 } else if (sp.floor === 'lobby' || sp.floor === 'mezzanine') {

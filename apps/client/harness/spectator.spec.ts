@@ -147,7 +147,7 @@ test.describe('client:spectator_view', () => {
     } | null
     if (snapshot === null) throw new Error('no spectator:snapshot')
     expect(snapshot.players).toHaveLength(3) // the fired player excluded
-    expect(snapshot.rooms).toHaveLength(24) // every room's state
+    expect(snapshot.rooms).toHaveLength(21) // every room's state (AD-046)
 
     // The fired page's SCENE switched to the all-floor overview: one rectangle
     // per live player (scene-children contract), the fired player's own stays
@@ -225,7 +225,7 @@ test.describe('client:spectator_view', () => {
       const list = t.scene('Round')?.children.list ?? []
       return list.filter((c) => c.type === 'Image' && c.name.startsWith('interior:')).length
     })
-    expect(firedInteriors).toBe(24)
+    expect(firedInteriors).toBe(21)
     const liveInteriors = await live.evaluate(() => {
       const t = (
         window as unknown as {

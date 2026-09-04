@@ -207,7 +207,7 @@ function fakeCarView(): CarViewLike & {
 }
 
 describe('ElevatorPresenter — Phaser-facing wiring', () => {
-  it('hides a car once its floor no longer matches the view floor (ELAN-04)', () => {
+  it('renders the closed slab on floors the car is not on (ELAN-04, ART-15)', () => {
     const car1 = fakeCarView()
     const car2 = fakeCarView()
     const cars = new Map([
@@ -220,7 +220,9 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
     expect(car1.visible).toBe(true)
 
     presenter.tick(0, 'floor1')
-    expect(car1.visible).toBe(false)
+    expect(car1.visible).toBe(true)
+    expect(car1.frames.at(-1)).toBe(1)
+    expect(car1.alpha).toBe(1)
   })
 
   it('renders the doors-open cage frame while open and the closed slab once closed (ELAN-01/02, ART-15)', () => {
@@ -240,7 +242,7 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
     expect(car1.frames.at(-1)).toBe(1)
   })
 
-  it('does not render a car parked on a floor the viewer is not on (ELAN-04)', () => {
+  it('renders a car parked on a floor the viewer is not on as the closed slab (ELAN-04)', () => {
     const car1 = fakeCarView()
     const cars = new Map([[1 as const, { view: car1 }]])
     const presenter = new ElevatorPresenter(cars, () => 460)
@@ -249,7 +251,8 @@ describe('ElevatorPresenter — Phaser-facing wiring', () => {
     presenter.onMoved(1, 'floor2')
     presenter.onDoors(1, 'floor2', true)
     presenter.tick(cfg.doorAnimMs, 'floor1')
-    expect(car1.visible).toBe(false)
+    expect(car1.visible).toBe(true)
+    expect(car1.frames.at(-1)).toBe(1)
   })
 
   it('constructing and calling every public method does not throw', () => {

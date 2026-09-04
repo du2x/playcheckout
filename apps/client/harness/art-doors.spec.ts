@@ -86,7 +86,7 @@ test.describe('client:art_doors', () => {
       textures: [],
       lobbyDoors: 0,
     }
-    expect(summary.total).toBe(24) // 8 rooms × 3 guest floors
+    expect(summary.total).toBe(21) // 7 rooms × 3 guest floors (AD-046)
     expect(summary.lobbyDoors).toBe(0) // AD-010: the grand lobby has no rooms
     expect(summary.textures).toEqual(['door-closed']) // ART-10: no state tint family
 
@@ -121,8 +121,8 @@ test.describe('client:art_doors', () => {
     await host.keyboard.down('ArrowLeft')
     await host.waitForTimeout(400)
     await host.keyboard.up('ArrowLeft')
-    // Walk left off the landing into the first reached room segment (room 8
-    // from the east approach, AD-040) — the own-room interior renders (the
+    // Walk left off the landing into the first reached room segment (room 7
+    // from the east approach, AD-040/AD-046) — the own-room interior renders (the
     // FR-10 inside read).
     await host.keyboard.down('ArrowLeft')
     await host
@@ -307,7 +307,7 @@ test.describe('client:art_doors — cue doorway', () => {
           }
         ).__TURNOVER__
         const list = t.scene('Round')?.children.list ?? []
-        const door = list.find((c) => c.type === 'Image' && c.name === 'door:floor1:8')
+        const door = list.find((c) => c.type === 'Image' && c.name === 'door:floor1:7')
         const rec = (
           window as unknown as {
             __doorRecorder?: { open: number; interiors: number; closedAfter: boolean }
@@ -325,9 +325,9 @@ test.describe('client:art_doors — cue doorway', () => {
       void id
     })
 
-    // The host walks into room 8 and back out while the watcher records.
+    // The host walks into room 7 and back out while the watcher records.
     // An out-and-back first: under load the exit walk can drift the host
-    // inside room 8 before the recorder arms, and the entered cue only
+    // inside room 7 before the recorder arms, and the entered cue only
     // fires on a room ENTRY — re-firing it guarantees a live window.
     await host.keyboard.down('ArrowRight')
     await host.waitForTimeout(400)

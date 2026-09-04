@@ -6,7 +6,7 @@ import { TICK_HZ } from './index'
 // consumes @turnover/shared via the workspace dependency, values from prd §7.
 describe('sim placeholder', () => {
   it('resolves the shared workspace package', () => {
-    expect(ROOM_COUNT).toBe(24)
+    expect(ROOM_COUNT).toBe(21) // 7 rooms/floor (AD-046)
     expect(TUNING.SHIFT_SECONDS).toBe(300)
   })
 

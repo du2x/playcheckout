@@ -68,7 +68,8 @@ async function readScene(page: Page): Promise<SceneRead> {
         .map((c) => ({ text: String(c.text), x: c.x, visible: c.visible })),
       // ART contract (cycle 2.10): players are staff-walk Sprites.
       rectCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk').length,
-      carCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car').length,
+      carCount: list.filter((c) => c.type === 'Sprite' && c.texture?.key === 'elevator-door')
+        .length,
     }
   })
 }

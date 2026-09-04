@@ -62,13 +62,13 @@ test.describe('client:doors_pre_round', () => {
     const page = await browser.newContext().then((c) => c.newPage())
     await createRoom(page, 'ada')
 
-    // Lobby view: all 24 door Images exist (8 rooms × 3 guest floors, cycle
+    // Lobby view: all 21 door Images exist (7 rooms × 3 guest floors, cycle
     // 2.9's per-floor lanes) but none is visible (the grand lobby floor has
     // no rooms, and the live view shows the own floor only).
     await page.waitForSelector('#round-hud', { timeout: 5000 }).catch(() => {})
     await page.waitForTimeout(300)
     expect((await visibleDoorRooms(page)).length).toBe(0)
-    expect(await doorImageCount(page)).toBe(24)
+    expect(await doorImageCount(page)).toBe(21)
 
     // Pre-round ride east (no host start — the world is phase-free): walk to
     // the east landing (AD-040: the car boards at the east end), board the
@@ -118,12 +118,12 @@ test.describe('client:doors_pre_round', () => {
         const floor1Doors = scene.children.list.filter(
           (c) => c.type === 'Image' && c.name.startsWith('door:floor1:'),
         )
-        return floor1Doors.length === 8 && floor1Doors.every((c) => c.visible)
+        return floor1Doors.length === 7 && floor1Doors.every((c) => c.visible)
       },
       undefined,
       { timeout: 10_000 },
     )
-    expect(await visibleDoorRooms(page)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
+    expect(await visibleDoorRooms(page)).toEqual(['1', '2', '3', '4', '5', '6', '7'])
     await page.context().close()
   })
 })

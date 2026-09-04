@@ -690,6 +690,16 @@ export class TurnoverRoom extends Room {
     for (const event of this.movement.tick()) {
       this.router.route(event)
       this.journalMovement(event)
+      // Stairs arrival (AD-040): the transit→breath flip is a visibility
+      // change — the arrival flush player:moved is the breather's only event,
+      // so it doubles as the trigger for their exit-style personal snapshot
+      // (the destination floor's standing occupants emit no stream; without
+      // this refresh the breather cannot see them until they move).
+      if (event.type === 'player:moved') {
+        if (this.movement.stairsStateOf(event.playerId)?.phase === 'breath') {
+          this.sendExitSnapshot(event.playerId)
+        }
+      }
       if (this.telemetrySink !== null) {
         if (event.type === 'elevator:called')
           this.telemetrySink.recordElevatorCall(event.floor, event.car, undefined, this.roundTick)

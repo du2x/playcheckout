@@ -3,7 +3,9 @@ import { expect, type Page, test } from '@playwright/test'
 // Spec STAIRS-04/17/18/19 (gate scenario client:stairs): the stairwell marker
 // at the west landing, the stairs screen through transit→breath, the ambush
 // toast with its stun countdown plus the saboteur's private confirmation, and
-// the single-car panel set (no two-car DOM remnants).
+// the single-car panel set (no two-car DOM remnants). AD-051: during the
+// breath the own body renders on the destination floor (chip up, fullscreen
+// canvas hidden).
 
 async function join(page: Page, code: string, name: string) {
   await page.goto('/')
@@ -83,6 +85,41 @@ test.describe('client:stairs', () => {
       { timeout: 10_000 },
     )
     await breathShown
+    // The breath stands ON the destination floor (AD-040 amendment): the own
+    // sprite renders at the mezzanine mouth, the fullscreen stair canvas is
+    // gone, and the compact breath chip carries the countdown.
+    await bruno.waitForFunction(
+      () => {
+        const hook = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: {
+                  list: {
+                    type: string
+                    name?: string
+                    x: number
+                    visible: boolean
+                    texture?: { key?: string }
+                  }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = hook.scene('Round')
+        if (scene === null) return false
+        const list = scene.children.list
+        const chip = list.find((c) => c.name === 'breathChip')
+        const box = list.find((c) => c.name === 'stairCanvas')
+        const ownBody = list.find(
+          (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk' && c.visible,
+        )
+        return chip?.visible === true && box?.visible === false && ownBody !== undefined
+      },
+      undefined,
+      { timeout: 5000 },
+    )
     await bruno.waitForFunction(
       () => document.querySelector('#elevator-stair-screen')?.hasAttribute('hidden') === true,
       undefined,

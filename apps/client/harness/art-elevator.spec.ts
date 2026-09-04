@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test'
 
-// Gate scenario client:art_elevator (cycle 2.10, ART-15/16): elevator cars
-// render as elevator-car Sprites —
-// doors-open cage frame while the doors are open (the AD-026 dwell), closed
-// slab frame once the doors close, hidden in transit (ELAN semantics).
+// Gate scenario client:art_elevator (cycle 2.10, ART-15/16; AD-036 front-
+// facing landing door): elevator cars render as elevator-door Sprites —
+// doors-open doorway frame while the doors are open (the AD-026 dwell),
+// closed slab frame once the doors close — and the closed slab also stands in
+// on floors the car is not on (including transit; ELAN semantics).
 
 interface CarSpriteRead {
   frame: number
@@ -38,7 +39,7 @@ function readCarSprites(page: Page): Promise<(CarSpriteRead & { x: number })[]> 
     const scene = t.scene('Round')
     if (scene === null) return []
     return scene.children.list
-      .filter((c) => c.type === 'Sprite' && c.texture?.key === 'elevator-car')
+      .filter((c) => c.type === 'Sprite' && c.texture?.key === 'elevator-door')
       .map((c) => ({
         frame: Number(c.frame.name),
         visible: c.visible,
@@ -48,7 +49,7 @@ function readCarSprites(page: Page): Promise<(CarSpriteRead & { x: number })[]> 
 }
 
 test.describe('client:art_elevator', () => {
-  test('car sprites frame between open cage and closed slab across the ELAN phases (ART-15/16)', async ({
+  test('car sprites frame between open doorway and closed slab across the ELAN phases (ART-15/16)', async ({
     browser,
   }) => {
     test.setTimeout(30_000)
@@ -99,7 +100,7 @@ test.describe('client:art_elevator', () => {
         return scene.children.list.some(
           (c) =>
             c.type === 'Sprite' &&
-            c.texture?.key === 'elevator-car' &&
+            c.texture?.key === 'elevator-door' &&
             (c as unknown as { x: number }).x > 860 &&
             Number(c.frame.name) === 1,
         )
@@ -107,42 +108,6 @@ test.describe('client:art_elevator', () => {
       undefined,
       { timeout: 15_000 },
     )
-
-    // Transit hides the departing car (ELAN-04): at most the parked far
-    // car remains visible while car1 rides to floor1.
-    await host.waitForFunction(
-      () => {
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              scene: (name: string) => {
-                children: {
-                  list: {
-                    type: string
-                    visible: boolean
-                    x: number
-                    texture: { key: string }
-                  }[]
-                }
-              } | null
-            }
-          }
-        ).__TURNOVER__
-        const scene = t.scene('Round')
-        if (scene === null) return false
-        return !scene.children.list.some(
-          (c) =>
-            c.type === 'Sprite' &&
-            c.texture?.key === 'elevator-car' &&
-            (c as unknown as { x: number }).x > 860 &&
-            c.visible,
-        )
-      },
-      undefined,
-      { timeout: 5000 },
-    )
-    const inTransit = await readCarSprites(host)
-    expect(inTransit.filter((c) => c.visible).length).toBeLessThanOrEqual(1)
 
     // A rider has no floor stream (AD-009) — the arrival is not visible from
     // inside the car. Anchor the exit on events, never wall-clock: the panel
@@ -154,6 +119,14 @@ test.describe('client:art_elevator', () => {
       undefined,
       { timeout: 10_000 },
     )
+
+    // The rider's departure floor no longer hosts the car (ELAN-04): its
+    // landing keeps rendering the CLOSED slab — never a hole, never the open
+    // doorway — while car1 stands at floor1.
+    const offFloor = await readCarSprites(host)
+    expect(offFloor).toHaveLength(1)
+    expect(offFloor.every((c) => c.visible && c.frame === 1)).toBe(true)
+
     await host.keyboard.down('ArrowLeft')
     await host.waitForFunction(
       () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
@@ -162,7 +135,7 @@ test.describe('client:art_elevator', () => {
     )
     await host.waitForTimeout(300) // settle inside the open-door window
     // AD-027: no call waits anywhere — the car keeps its doors OPEN at this
-    // stop, so the exited rider's view shows the open cage frame (ART-15).
+    // stop, so the exited rider's view shows the open doorway frame (ART-15).
     await host.waitForFunction(
       () => {
         const t = (
@@ -186,7 +159,7 @@ test.describe('client:art_elevator', () => {
         return scene.children.list.some(
           (c) =>
             c.type === 'Sprite' &&
-            c.texture?.key === 'elevator-car' &&
+            c.texture?.key === 'elevator-door' &&
             c.visible &&
             Number(c.frame.name) === 0,
         )

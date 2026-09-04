@@ -33,8 +33,15 @@ export const TUNING = {
   ELEVATOR_DOOR_SECONDS: 0.5,
   ELEVATOR_CAPACITY: 2,
   PLAYER_SPEED_TILES_PER_SEC: 6,
-  /** Boarding range around a car's landing x (cycle 2.4, AD-007 — new constant, not in prd §7). */
-  ELEVATOR_LANDING_TILES: 1,
+  /** Boarding range around a car's landing x (cycle 2.4, AD-007 — new constant, not in prd §7).
+   *  AD-046: widened to 2.5 so the east hit box matches the front-facing
+   *  landing door's 80 px footprint exactly (tiles 27.5–30 of the 30-tile
+   *  hall) — a player standing anywhere on the drawn door can call/board. */
+  ELEVATOR_LANDING_TILES: 2.5,
+  /** Stairwell mouth zone at the west end (cycle 3.E, AD-040): decoupled from
+   *  the elevator landing when AD-046 matched the elevator's hit box to its
+   *  wider door art — the stair mouth keeps the original 1-tile scale. */
+  STAIRWELL_MOUTH_TILES: 1,
   /** ~2 tiles, same floor; card-read range later */
   ACCUSATION_RANGE_TILES: 2,
   /** Guest arrival cadence in seconds by lobby size (prd §7 v1.3, AD-022).

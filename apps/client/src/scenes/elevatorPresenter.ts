@@ -311,13 +311,22 @@ export class ElevatorPresenter {
       this.clocks.set(carId, advanced)
 
       const onViewFloor = advanced.floor === viewFloor
-      const visible = onViewFloor && carVisible(advanced)
-      entry.view.setVisible(visible)
-      entry.view.setAlpha(carAlpha(advanced, this.cfg))
-      entry.view.setY(carY(advanced, this.cfg, this.carY(carId)))
-      // Frame follows the same open amount the gray-box doors used: any
-      // openness renders the doors-open cage, full closure the closed slab.
-      entry.view.setFrame(doorsOpenAmount(advanced, this.cfg) > 0 ? 0 : 1)
+      const present = onViewFloor && carVisible(advanced)
+      // Every landing shows its shaft door: off-floor (and in-transit)
+      // landings render the closed slab (ART-15 frame 1) — the car is simply
+      // not there — while the on-floor landing swings per the clock below.
+      entry.view.setVisible(true)
+      if (present) {
+        entry.view.setAlpha(carAlpha(advanced, this.cfg))
+        entry.view.setY(carY(advanced, this.cfg, this.carY(carId)))
+        // Frame follows the same open amount the gray-box doors used: any
+        // openness renders the doors-open cage, full closure the closed slab.
+        entry.view.setFrame(doorsOpenAmount(advanced, this.cfg) > 0 ? 0 : 1)
+      } else {
+        entry.view.setAlpha(1)
+        entry.view.setY(this.carY(carId))
+        entry.view.setFrame(1)
+      }
     }
     this.deriveCarScreen(dtMs, rider)
   }

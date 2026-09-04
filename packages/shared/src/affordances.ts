@@ -2,6 +2,7 @@ import {
   FLOOR_IDS,
   GUEST_FLOOR_IDS,
   HALL_LENGTH_TILES,
+  ROOM_INDEXES,
   type RoomIndex,
   roomDoorXMilli,
 } from './layout'
@@ -39,20 +40,22 @@ export function inDeskZone(pos: TilePos): boolean {
   return pos.floor === 'lobby' && Math.abs(pos.x - TUNING.DESK_X_TILES) <= TUNING.DESK_RANGE_TILES
 }
 
-/** An elevator landing zone (AD-022): within ELEVATOR_LANDING_TILES of a car
- * landing (x≈0 west, x≈HALL_LENGTH_TILES east). */
+/** An elevator landing zone (AD-022; hit box matched to the 80 px door art,
+ * AD-046): within ELEVATOR_LANDING_TILES of the EAST car landing
+ * (x = HALL_LENGTH_TILES), or near the west end (stairwell mouth scale) —
+ * the west branch only gates the same key as the stairs, which route first. */
 export function onLanding(xTiles: number): boolean {
   return (
-    xTiles <= TUNING.ELEVATOR_LANDING_TILES ||
+    xTiles <= TUNING.STAIRWELL_MOUTH_TILES ||
     xTiles >= HALL_LENGTH_TILES - TUNING.ELEVATOR_LANDING_TILES
   )
 }
 
 /** The stairwell mouth zone (cycle 3.E, AD-040): within
- * ELEVATOR_LANDING_TILES of the west end (x=0) — the stairwell replaced the
- * west elevator landing, and reuses the landing scale for its mouth. */
+ * STAIRWELL_MOUTH_TILES of the west end (x=0) — the stairwell replaced the
+ * west elevator landing, and keeps the original 1-tile landing scale. */
 export function atStairwellMouth(xTiles: number): boolean {
-  return xTiles <= TUNING.ELEVATOR_LANDING_TILES
+  return xTiles <= TUNING.STAIRWELL_MOUTH_TILES
 }
 
 /** The stairs directions available from a floor (cycle 3.E, AD-040): 'up'
@@ -78,7 +81,7 @@ export function doorInRange(xTiles: number, room: RoomIndex): boolean {
  * ranges. */
 export function doorRoomAt(pos: TilePos): RoomIndex | null {
   if (!(GUEST_FLOOR_IDS as readonly string[]).includes(pos.floor)) return null
-  for (const room of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
+  for (const room of ROOM_INDEXES) {
     if (doorInRange(pos.x, room)) return room
   }
   return null

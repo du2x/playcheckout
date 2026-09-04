@@ -7,7 +7,7 @@ import type {
   SimEvent,
   TrashProvenance,
 } from '@turnover/shared'
-import { roomIndexAtMilli, TUNING } from '@turnover/shared'
+import { ROOMS_PER_FLOOR, roomIndexAtMilli, TUNING } from '@turnover/shared'
 import { TICK_HZ } from './tick.js'
 
 /**
@@ -66,7 +66,7 @@ export class WorkChannels {
   private pendingStarted: SimEvent[] = []
 
   constructor(private readonly deal: ReadonlyMap<string, Role>) {
-    for (let room = 1 as RoomIndex; room <= 8; room = (room + 1) as RoomIndex) {
+    for (let room = 1 as RoomIndex; room <= ROOMS_PER_FLOOR; room = (room + 1) as RoomIndex) {
       for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
         this.states.set(roomKey(floor, room), 'fresh')
         this.provenances.set(roomKey(floor, room), 'none')
@@ -103,7 +103,7 @@ export class WorkChannels {
   /** The carded rooms of one floor, ascending (EVID-04 snapshot query). */
   cardedOn(floor: GuestFloorId): RoomIndex[] {
     const rooms: RoomIndex[] = []
-    for (let room = 1 as RoomIndex; room <= 8; room = (room + 1) as RoomIndex) {
+    for (let room = 1 as RoomIndex; room <= ROOMS_PER_FLOOR; room = (room + 1) as RoomIndex) {
       if (this.carded.has(roomKey(floor, room))) rooms.push(room)
     }
     return rooms
@@ -117,7 +117,7 @@ export class WorkChannels {
   roomStates(): { floor: GuestFloorId; room: RoomIndex; state: RoomState }[] {
     const rows: { floor: GuestFloorId; room: RoomIndex; state: RoomState }[] = []
     for (const floor of ['floor1', 'floor2', 'floor3'] as const) {
-      for (let room = 1 as RoomIndex; room <= 8; room = (room + 1) as RoomIndex) {
+      for (let room = 1 as RoomIndex; room <= ROOMS_PER_FLOOR; room = (room + 1) as RoomIndex) {
         rows.push({ floor, room, state: this.states.get(roomKey(floor, room)) ?? 'fresh' })
       }
     }

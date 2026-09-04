@@ -47,10 +47,13 @@ describe('inDeskZone', () => {
 })
 
 describe('onLanding', () => {
-  it('covers the car landings (x≈0 west, x≈30 east) within 1 tile', () => {
+  it('covers the east car landing within the 80 px door footprint (AD-046)', () => {
     expect(onLanding(0)).toBe(true)
     expect(onLanding(1)).toBe(true)
     expect(onLanding(1.001)).toBe(false)
+    // 30 − 2.5 = 27.5: the drawn door spans tiles 27.5–30.
+    expect(onLanding(27.5)).toBe(true)
+    expect(onLanding(27.499)).toBe(false)
     expect(onLanding(29)).toBe(true)
     expect(onLanding(30)).toBe(true)
     expect(onLanding(15)).toBe(false)
@@ -106,7 +109,7 @@ describe('nearestRestingSuitcase', () => {
   it('filters by floor and range', () => {
     const own = pos('floor1', doorX(4))
     expect(nearestRestingSuitcase(own, [sc('guest:1', { floor: 'floor2', room: 4 })])).toBeNull()
-    expect(nearestRestingSuitcase(own, [sc('guest:1', { floor: 'floor1', room: 8 })])).toBeNull()
+    expect(nearestRestingSuitcase(own, [sc('guest:1', { floor: 'floor1', room: 6 })])).toBeNull()
     expect(nearestRestingSuitcase(own, [sc('guest:1', { floor: 'floor1', room: 4 })])).toBe(
       'guest:1',
     )
@@ -221,10 +224,12 @@ describe('accuseTargetAtHoldExpiry', () => {
 })
 
 describe('atStairwellMouth', () => {
-  it('covers the west end within ELEVATOR_LANDING_TILES, inclusive', () => {
+  it('covers the west end within STAIRWELL_MOUTH_TILES, inclusive (AD-046 decoupling)', () => {
     expect(atStairwellMouth(0)).toBe(true)
     expect(atStairwellMouth(1)).toBe(true)
     expect(atStairwellMouth(1.01)).toBe(false)
+    // The widened elevator hit box (2.5 tiles) must NOT widen the stair mouth.
+    expect(atStairwellMouth(2)).toBe(false)
   })
 })
 

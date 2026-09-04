@@ -382,17 +382,17 @@ test.describe('client:suitcase', () => {
     await own.waitForSelector('#suitcase-assignment', { state: 'visible' })
 
     // Ride to floor1 and place at the FIRST door west of the (east) landing —
-    // room 8 (cycle 3.E, AD-040). The room is assignment-independent (any
+    // room 7 (cycle 3.E, AD-040; AD-046 7-room layout). The room is assignment-independent (any
     // door accepts a placement). The confirm is gone (AD-034): a carrier at a
     // door places directly.
     await rideTo(own, 'ada', 'Digit1', 'floor1')
-    await walkUntil(own, 'ada', 'ArrowLeft', (x) => x <= doorXTiles(8) + 0.4)
+    await walkUntil(own, 'ada', 'ArrowLeft', (x) => x <= doorXTiles(7) + 0.4)
     // The 900ms exit hop overshoots the door zone (6 tiles/s + intent-flush
     // latency); tap back right until the label sits inside ROOM_DOOR_RANGE so
     // the ladder resolves place rather than the between-doors hold.
     for (let i = 0; i < 6; i++) {
       const p = await readLabel(own, 'ada')
-      if (Math.abs(p.x / TILE - doorXTiles(8)) <= 0.8) break
+      if (Math.abs(p.x / TILE - doorXTiles(7)) <= 0.8) break
       await own.keyboard.down('ArrowRight')
       await own.waitForTimeout(200)
       await own.keyboard.up('ArrowRight')
@@ -420,7 +420,7 @@ test.describe('client:suitcase', () => {
           ) === true
         )
       },
-      doorXTiles(8) * TILE,
+      doorXTiles(7) * TILE,
       { timeout: 30_000 },
     )
     const logAfterPlace = await own.textContent('#walkie-log')

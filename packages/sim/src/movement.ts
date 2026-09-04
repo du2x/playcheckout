@@ -226,7 +226,7 @@ export class MovementSim {
   allPositions(): { playerId: string; floor: FloorId; x: number }[] {
     return [...this.players.entries()]
       .filter(
-        ([playerId, p]) => p.inCar === null && p.kind === 'player' && !this.stairs.has(playerId),
+        ([playerId, p]) => p.inCar === null && p.kind === 'player' && !this.inStairBox(playerId),
       )
       .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI }))
   }
@@ -234,6 +234,19 @@ export class MovementSim {
   /** Standing + riding guest NPC ids (cycle 3.1) — the round-end purge list. */
   guestIds(): string[] {
     return [...this.players.entries()].filter(([, p]) => p.kind === 'guest').map(([id]) => id)
+  }
+
+  /**
+   * Inside the stairwell's black box (AD-040 amendment): transit and stun are
+   * floorless — no stream, no snapshots, no view. The arrival BREATH is not:
+   * the player stands (immobile) on the destination floor, so every floor
+   * seam (snapshots, allPositions, viewOf) treats them as a standing occupant
+   * at the destination mouth; only the movement/call/entry channels stay shut
+   * until the breath frees them (STAIRS-06/09/11).
+   */
+  private inStairBox(playerId: string): boolean {
+    const st = this.stairs.get(playerId)
+    return st !== undefined && st.phase !== 'breath'
   }
 
   /** The car's public floor — panel data is public everywhere (single car, AD-040). */
@@ -695,7 +708,9 @@ export class MovementSim {
    * floor only (the viewer included), plus both cars' public floors — the
    * panels requirement keeps car positions public everywhere. Riders are on
    * NO floor (AD-009): a player inside a car never appears in a floor
-   * snapshot (with no auto-exit they can be aboard indefinitely).
+   * snapshot (with no auto-exit they can be aboard indefinitely). Stairs
+   * TRANSIT/STUN occupants are equally floorless (AD-040) — but a mid-BREATH
+   * player stands on the destination floor and appears like any occupant.
    */
   snapshotForFloor(
     floor: FloorId,
@@ -716,7 +731,7 @@ export class MovementSim {
             p.kind === 'player' &&
             p.floor === floor &&
             p.inCar === null &&
-            !this.stairs.has(playerId),
+            !this.inStairBox(playerId),
         )
         .map(([playerId, p]) => ({ playerId, floor: p.floor, x: p.x / MILLI })),
       cars: [{ car: 1 as const, floor: this.car.floor }],
@@ -780,11 +795,13 @@ export class MovementSim {
         },
       }
     }
-    // Cycle 3.E (AD-040): a stairs occupant's own snapshot is the floorless
-    // black-box shape plus their own stairs row (self-legitimate knowledge) —
-    // present in every phase (transit, breath, stunned), absent otherwise.
+    // Cycle 3.E (AD-040): a black-box occupant's own snapshot is the floorless
+    // shape plus their own stairs row (self-legitimate knowledge). The BREATH
+    // is not the box — the player stands on the destination floor, so their
+    // snapshot is the ordinary floor snapshot (themselves included) with the
+    // stairs row riding along to keep the countdown anchored.
     const st = this.stairs.get(playerId)
-    if (st !== undefined) {
+    if (st !== undefined && st.phase !== 'breath') {
       return {
         players: [],
         cars: [{ car: 1 as const, floor: this.car.floor }],
@@ -798,7 +815,17 @@ export class MovementSim {
         },
       }
     }
-    return this.snapshotForFloor(p.floor, cardedRooms)
+    const floorSnapshot = this.snapshotForFloor(p.floor, cardedRooms)
+    if (st === undefined) return floorSnapshot
+    return {
+      ...floorSnapshot,
+      stairs: {
+        from: st.from,
+        to: st.to,
+        phase: st.phase,
+        remainingSeconds: st.ticksLeft / TICK_HZ,
+      },
+    }
   }
 
   /**
@@ -818,9 +845,11 @@ export class MovementSim {
     const p = this.players.get(playerId)
     if (p === undefined) return { floor: null, roomKey: null, car: null, x: null }
     if (p.inCar !== null) return { floor: null, roomKey: null, car: p.inCar, x: null }
-    // Cycle 3.E (AD-040): stairs occupants are floorless — the interior is a
-    // black box, so no sameFloor/room/earshot routing can see them.
-    if (this.stairs.has(playerId)) return { floor: null, roomKey: null, car: null, x: null }
+    // Cycle 3.E (AD-040): black-box occupants (transit, stunned) are floorless
+    // — no sameFloor/room/earshot routing can see them or route to them. A
+    // mid-BREATH player stands on the destination floor and gets the ordinary
+    // standing view (the movement/call channels stay shut regardless).
+    if (this.inStairBox(playerId)) return { floor: null, roomKey: null, car: null, x: null }
     if (p.floor === 'lobby') return { floor: p.floor, roomKey: null, car: null, x: p.x }
     const room = roomIndexAtMilli(p.x)
     return {

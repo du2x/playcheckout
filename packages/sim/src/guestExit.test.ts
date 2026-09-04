@@ -1,4 +1,4 @@
-import type { FloorId, GuestFloorId } from '@turnover/shared'
+import type { FloorId, GuestFloorId, RoomIndex } from '@turnover/shared'
 import {
   GUEST_FLOOR_IDS,
   HALL_LENGTH_TILES,
@@ -17,8 +17,6 @@ const STAIR_X = 0
 function doorX(room: number): number {
   return roomDoorXMilli(room as RoomIndex) / 1000
 }
-
-type RoomIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 function floorIndex(f: FloorId): number {
   return (['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as FloorId[]).indexOf(f)
@@ -121,7 +119,7 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
             movement.stopMove(sid)
           }
         } else {
-          if (Math.abs(pos.x - STAIR_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
+          if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
             const cur = floorIndex(pos.floor)
             const tgt = floorIndex('lobby')
             const dir = tgt > cur ? 'up' : 'down'
@@ -140,7 +138,7 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
       } else if (st.carrying && st.target !== null) {
         const target = st.target
         if (pos.floor !== target.floor) {
-          if (Math.abs(pos.x - STAIR_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
+          if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
             const cur = floorIndex(pos.floor)
             const tgt = floorIndex(target.floor)
             const dir = tgt > cur ? 'up' : 'down'
@@ -375,7 +373,7 @@ function runWithMisplace(seed: number): MisplaceResult {
           })
           if (victim !== undefined) {
             if (pos.floor !== victim.floor) {
-              if (Math.abs(pos.x - STAIR_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
+              if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
                 const cur = floorIndex(pos.floor)
                 const tgt = floorIndex(victim.floor)
                 const dir = tgt > cur ? 'up' : 'down'
@@ -404,7 +402,7 @@ function runWithMisplace(seed: number): MisplaceResult {
             movement.stopMove(sid)
           }
         } else {
-          if (Math.abs(pos.x - STAIR_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
+          if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
             const cur = floorIndex(pos.floor)
             const tgt = floorIndex('lobby')
             const dir = tgt > cur ? 'up' : 'down'
@@ -421,7 +419,7 @@ function runWithMisplace(seed: number): MisplaceResult {
       } else if (st.carrying && st.target !== null) {
         const target = st.target
         if (pos.floor !== target.floor) {
-          if (Math.abs(pos.x - STAIR_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
+          if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
             const cur = floorIndex(pos.floor)
             const tgt = floorIndex(target.floor)
             const dir = tgt > cur ? 'up' : 'down'

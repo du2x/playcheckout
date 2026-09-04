@@ -1441,8 +1441,63 @@
 - **Feature**: `visual-polish-4-1` (Phase 4.1, AD-045) — COMPLETE pending final verifier pass. T1 cosmetic seed module · T2 protocol cosmetic rows · T3 server emit+snapshot · T4 34×64 cast sheets · T5 staff variant renderer · T6 guest archetypes + corridor Deco · T7 juice layer (settle/foot-tap/anger/shake). Verifier iteration 1: PASS conditional; gaps G1 (fork behavioral pin) G2 (variant derivation pin) G3 (snapshot guest rows) G4 (guest teardown) fixed; G5/G6 accepted-by-art-QA notes; G7 spec amendment + this AD.
 - **Phase / Task**: Done. Next: re-verify → Phase 4.2 (environment polish) or 4.3 per roadmap Phase 4 plan.
 - **Gates**: typecheck ✓ · lint ✓ (47 warnings, 0 errors) · test:sim 553 ✓ · targeted harness green (art-players/guestSprites/corridorDepth/juice/guestFlow/restaurant/complaints); full suite has pre-existing load flakes (lobby 7th-join) + stairs STAIRS-04 failing identically on clean master.
-- **Next step**: D1–D3 decided (AD-047/048/049, 2026-09-04). Next: cycle 4.2
-  `environment` Specify → `.specs/features/environment-4-2/spec.md` (uncommitted
-  AD-046 + elevator-door swap + art-roadmap draft still pending commit).
+- **Feature**: `environment-4-2` (Phase 4.2, AD-047…050) — EXECUTE COMPLETE,
+  verifier pending. T1 manifest-first + AD-050 · T2 wall-field/sconce sheets
+  + QA + 960 mock · T3 BootScene loads + WorldScene swap (wall TileSprite,
+  layout-derived sconces, deco Graphics deleted) · T4 legacy sheet retired +
+  mocks widened · T5 art_environment + corridor_depth green 2× · T6 full
+  gates (see below). Correction: the T3 commit also carried AD-051's
+  WorldScene hunks (breath chip etc.), not only AD-046's — noted here.
+- **Gates**: typecheck ✓ (4/4) · lint red ONLY in 7 pre-existing untouched
+  files (identical set since T1) · test:sim 36/555 ✓ · targeted
+  client:art_environment + client:corridor_depth 2× green · full
+  test:client 42/47 — 4 timing failures re-proven green on calm-load retry
+  (art-players/evidence/justice/round all pass solo), lobby 7th-join is the
+  STATE-documented pre-existing flake; COMP-13 sim timeout likewise load
+  contention (passes solo). Hidden-info re-check: sconceXs reads layout only
+  (WorldScene.ts sconceXs), spectator lanes plain, no state in new textures.
+- **Next step**: Verifier PASS (validation.md, validate_state.py exit 0) →
+  Gate-4 human 5-minute round (mock
+  /tmp/opencode/wall-sconce-corridor-mock.png is the Gate-4 input).
+- **Concurrent work warning (2026-09-04)**: a second session is actively
+  working the AD-051 stairs-breath cycle in this same worktree (uncommitted
+  sim/server/harness edits + its own STATE.md append below + a concurrent
+  Playwright run observed 14:59). Coordinate before any further commit/push
+  — shared files (STATE.md, WorldScene.ts) collide.
 - **Blockers**: none.
 - **Branch**: master
+### AD-051
+- **Decision**: Amend AD-040's stairs black box (user ruling 2026-09-04): the
+  **arrival breath is ON the destination floor** — the black box covers ONLY
+  transit and stun. FR-34 already located the breath "on the arrival floor"
+  and made arrival "observable via the floor stream"; the implementation kept
+  the occupant floorless through the breath, making the breather invisible to
+  same-floor snapshots, the spectator baseline, and their own personal view.
+  Now: (1) sim — during `breath`, `snapshotForFloor`/`allPositions`/
+  `viewOf`/`snapshotFor` treat the breather as a standing occupant at the
+  destination mouth (x=0); their own snapshot is the ordinary floor shape
+  with their stairs row riding along (countdown anchor). Transit/stun stay
+  byte-identical floorless. The movement/call/entry channels stay shut
+  through the breath (STAIRS-06/09/11 unchanged) and ambush gating still
+  keys on `transit` only (FR-35: stationary players neither ambush nor are
+  ambushed). (2) room — the arrival flush `player:moved` of a player whose
+  stairs phase is `breath` triggers an exit-style personal snapshot
+  (visibility change ⇒ snapshot; standing occupants emit no stream, so
+  without it the breather cannot see them). (3) client — the own body
+  renders at the destination mouth during the breath (local prediction
+  applies the arrival when the readout rolls into breath), the fullscreen
+  stair canvas yields to a compact "catching breath" chip, and the DOM twin
+  (`syncStairScreen`) is driven again — its dead `hidden` attribute was the
+  pre-existing STAIRS-04 harness break noted in the AD-050 gates line.
+- **Reason**: FR-34's own wording; a breath that hides the breather from the
+  floor they stand on breaks same-floor visibility for everyone (and the
+  breather's own picture of the floor) — hidden-state rules unaffected (the
+  stairs row remains self-legitimate knowledge only).
+- **Trade-off**: The breather's arrival is now readable one stride earlier
+  (arrival flush) — already the prd's stated observability; the breath chip
+  adds a second stairs surface to maintain.
+- **Scope**: `packages/sim/src/movement.ts(+test)`,
+  `apps/server/src/rooms/TurnoverRoom.ts(+test)`,
+  `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/stairs.spec.ts`.
+- **Date**: 2026-09-04
+- **Status**: active

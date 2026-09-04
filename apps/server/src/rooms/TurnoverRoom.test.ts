@@ -1302,7 +1302,7 @@ describe('server:work_channels', () => {
       const outsiderFeed = record(outsider)
 
       await rideToFloor1X(instance, worker, 3) // room 1
-      await rideToFloor1X(instance, outsider, 27.5, false) // x≈27.5 → room 8 (east approach, AD-040)
+      await rideToFloor1X(instance, outsider, 24, false) // x≈24 → room 7 (east approach, AD-040/AD-046)
       console.log('PROBE15', JSON.stringify(instance.__movementDebug()))
 
       worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
@@ -1313,12 +1313,12 @@ describe('server:work_channels', () => {
       instance.__driveTicks(2)
 
       // Positive control: the outsider did receive their own interior view —
-      // the LAST observation is room 8 (they walked in from the east landing).
+      // the LAST observation is room 7 (they walked in from the east landing).
       const observed = outsiderFeed.seen.filter((m) => m.type === 'room:observed').at(-1)
       expect(observed?.payload).toEqual({
         playerId: outsider.sessionId,
         floor: 'floor1',
-        room: 8,
+        room: 7,
         state: 'fresh',
       })
       // …but none of the worker's channel facts or room transition.
@@ -2532,11 +2532,11 @@ describe('server:round_end', () => {
         cardedRooms: { floor: string; rooms: number[] }[]
       }
       // The whole building: every remaining player (the fired one excluded),
-      // both cars, all 24 room states, and every floor's carded rooms.
+      // both cars, all 21 room states, and every floor's carded rooms.
       expect(payload.players.some((p) => p.playerId === saboteur.sessionId)).toBe(false)
       expect(payload.players.length).toBe(3)
       expect(payload.cars).toHaveLength(1)
-      expect(payload.rooms).toHaveLength(24)
+      expect(payload.rooms).toHaveLength(21)
       const floor1 = payload.cardedRooms.find((row) => row.floor === 'floor1')
       expect(floor1?.rooms).toContain(1) // room 1 was prepped → carded
       // The round ended staff-win on this conviction.
@@ -3161,6 +3161,56 @@ describe('server:stairs', () => {
     aCollector.stop()
     host.leave()
     a.leave()
+  })
+
+  it('sends the breather an arrival snapshot of the destination floor (AD-040 amendment)', async () => {
+    const [host, a, b] = await roomWithFour()
+    const aCollector = collectAll(a)
+    const instance = TurnoverRoom.instances.at(-1) as TurnoverRoom
+    // b rides the stairs up first and frees — a standing occupant at the
+    // mezzanine mouth for a's arrival to reveal.
+    await walkToWestMouth(instance, b)
+    b.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+    await sleep(30)
+    driveUntilMovement(instance, () => instance.__stairsStateOf(b.sessionId) === null)
+    // a follows: the entry snapshot is the floorless black box (players: []).
+    await walkToWestMouth(instance, a)
+    a.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
+    await sleep(30)
+    instance.__driveTicks(1)
+    const entry = await aCollector.waitFor('movement:snapshot')
+    expect(entry.payload.players).toEqual([])
+    expect(entry.payload.stairs).toMatchObject({ from: 'lobby', to: 'mezzanine', phase: 'transit' })
+    // Arrival: the transit→breath flip is a visibility change — the breather's
+    // personal snapshot now carries the destination floor WITH its standing
+    // occupant (standing players emit no stream; without this refresh the
+    // breather cannot see them). One tick PAST the flip: the arrival flush
+    // (the moved event that triggers the snapshot) lands on the next tick.
+    for (
+      let i = 0;
+      i < 200 &&
+      (instance.__stairsStateOf(a.sessionId) as { phase: string } | null)?.phase !== 'breath';
+      i++
+    ) {
+      instance.__driveTicks(1)
+    }
+    expect((instance.__stairsStateOf(a.sessionId) as { phase: string } | null)?.phase).toBe(
+      'breath',
+    )
+    instance.__driveTicks(1)
+    const arrival = await aCollector.waitFor('movement:snapshot')
+    expect(arrival.payload.stairs).toMatchObject({
+      from: 'lobby',
+      to: 'mezzanine',
+      phase: 'breath',
+    })
+    const rows = arrival.payload.players as { playerId: string; floor: string; x: number }[]
+    expect(rows).toContainEqual({ playerId: a.sessionId, floor: 'mezzanine', x: 0 })
+    expect(rows).toContainEqual({ playerId: b.sessionId, floor: 'mezzanine', x: 0 })
+    aCollector.stop()
+    host.leave()
+    a.leave()
+    b.leave()
   })
 
   it('rejects a mid-hall stairs:enter silently — nothing on the wire (STAIRS-10)', async () => {

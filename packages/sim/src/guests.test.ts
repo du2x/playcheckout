@@ -161,7 +161,7 @@ describe('sim:guest_impatience', () => {
     ])
     expect(of(held, 'guest:self_assigned')).toHaveLength(0) // re-checked every tick, never forced
     expect(of(held, 'guest:left')).toHaveLength(0) // never despawned
-    tenanted.delete('floor3:8')
+    tenanted.delete('floor3:7')
     const assigned = of(
       run(movement, guests, 1, t + IMPATIENCE + 200).guestEvents,
       'guest:self_assigned',
@@ -340,7 +340,7 @@ describe('sim:suitcase_carry', () => {
     flush(movement, guests, CADENCE_5P + 2)
     movement.join('p1', { floor: 'floor1', xMilli: roomDoorXMilli(4) })
     const t = CADENCE_5P + 3
-    expect(guests.placeSuitcase('p1', 8, t)).toBe('ignored') // room 8's door is far
+    expect(guests.placeSuitcase('p1', 6, t)).toBe('ignored') // room 6's door is far
     expect(flush(movement, guests, t + 1)).toHaveLength(0)
   })
 

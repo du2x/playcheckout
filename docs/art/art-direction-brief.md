@@ -88,7 +88,8 @@ license to copy assets).
 ## Technical contract
 
 - **Asset dimensions/aspect:** characters 28×60 px (pending viewport decision:
-  28×64 at 32 px/tile). Doors 72×96 px incl. frame. Elevator car 48×64 px.
+  28×64 at 32 px/tile). Doors 72×96 px incl. frame. Elevator landing door 64×96 px
+  per frame (AD-036, front-facing, room-door visual language).
   Room interiors one canvas per room-size class, 30 tiles wide hall → interior
   ≈ 4 tiles deep per PRD §7.
 - **Alpha/background:** transparent PNG for characters, props, doors, cars.

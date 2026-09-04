@@ -121,7 +121,8 @@ Design pillars:
 
 ### 6.2 Space & Movement
 - FR-3 Building: grand lobby + mezzanine restaurant floor (v1.4/AD-032) + 3 guest
-         floors × 7–8 rooms (~24 rooms total).
+         floors × 7 rooms (~21 rooms total — AD-046: the 8th room's doorway sat
+         flush against the east elevator landing).
 - FR-4 Linear left/right movement only; pass-through bodies (no collision).
 - FR-5 One elevator at the east end of each floor (v1.6, AD-040 — the west car
        was replaced by the stairwell, FR-34). Capacity 2 per car.
@@ -293,7 +294,7 @@ stable across specs and skills.
 |---|---|---|
 | Players | 4–6 (target 5–6) | — |
 | Shift length | 5:00 | — |
-| Rooms | ~24 (3 floors × 7–8) | — |
+| Rooms | ~21 (3 floors × 7 — AD-046) | — |
 | Prep / un-prep | 5s / 3s | un-prep → 2s if saboteur weak |
 | Re-trash | Unlimited | — |
 | Coverage target | 80% | — (telemetry/KPI only since v1.5 — no longer a win check) |
@@ -304,7 +305,7 @@ stable across specs and skills.
 | Elevator | arrive 3s / ride 2s per floor / cap 2 | — |
 | Player speed | 6 tiles/s (hall ~30 tiles, room ~4 tiles) | — |
 | Accusation range | ~2 tiles, same floor | card-read range later |
-| Initial trashed rooms | 7 of 24 at t=0 | — |
+| Initial trashed rooms | 7 of 21 at t=0 (AD-046 room count) | — |
 | Guest cadence | 30s (4p) / 24s (5p) / 18s (6p) | first dial for 4-player slack |
 | Guest dwell | 45–90s, random per guest | — |
 | Complaint budget | 8 (instant loss; trash-discovery complaints only since v1.5) | scale by lobby size; harder to reach now — re-examine at the 3.5 gate |
