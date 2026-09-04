@@ -36,15 +36,17 @@ export class BootScene extends Phaser.Scene {
     this.load.image('door-closed', 'art/doors/door-closed.png')
     this.load.image('door-open', 'art/doors/door-open.png')
     this.load.image('door-card', 'art/doors/door-card.png')
-    this.load.spritesheet('elevator-car', 'art/elevator/elevator-car.png', {
-      frameWidth: 48,
-      frameHeight: 64,
+    this.load.spritesheet('elevator-door', 'art/elevator/elevator-door.png', {
+      frameWidth: 80,
+      frameHeight: 96,
     })
     this.load.spritesheet('elevator-panel', 'art/elevator/elevator-panel.png', {
       frameWidth: 16,
       frameHeight: 32,
     })
     this.load.image('corridor-band', 'art/rooms/corridor-band.png')
+    this.load.image('wall-field', 'art/rooms/wall-field.png')
+    this.load.image('sconce', 'art/props/sconce.png')
     this.load.image('room-prepped', 'art/rooms/room-prepped.png')
     this.load.image('room-trash-fresh', 'art/rooms/room-trash-fresh.png')
     this.load.image('room-trash-settled', 'art/rooms/room-trash-settled.png')

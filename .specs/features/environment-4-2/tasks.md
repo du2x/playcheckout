@@ -119,7 +119,7 @@ character sample for the grayscale read); run `asset_report.py` per sheet.
 
 ---
 
-### T3: BootScene loads + WorldScene swap
+### T3: BootScene loads + WorldScene swap ✅ DONE
 
 **What**: `BootScene.preload` loads `wall-field` (image 32×302) + `sconce`
 (image 48×52); `WorldScene.create` mounts the 960×302 `wallField` TileSprite
