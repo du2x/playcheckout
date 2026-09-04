@@ -147,7 +147,7 @@ visibility joins the existing floor-change sync (visible iff `!spectator
 
 ---
 
-### T4: Retire dead sheet + widen stale mocks to 960
+### T4: Retire dead sheet + widen stale mocks ✅ DONE to 960
 
 **What**: Delete `apps/client/public/art/chars/staff-walk-8f.png` + remove
 its manifest entry (AD-050); widen the two stale 832 mocks to 960

@@ -7,9 +7,12 @@ unchanged from AD-020):
   apps/client/public/art/doors/door-open.png       (72x96, opening transparent
                                                     so the room interior renders
                                                     behind it — FR-10)
-  apps/client/public/art/doors/door-card.png       (24x16, hallway-readable, FR-11)
-  apps/client/public/art/elevator/elevator-car.png (96x64 sheet, open|closed)
-  apps/client/public/art/elevator/elevator-panel.png (32x32 sheet, idle|flash)
+   apps/client/public/art/doors/door-card.png       (24x16, hallway-readable, FR-11)
+   apps/client/public/art/elevator/elevator-door.png (160x96 sheet, open|closed,
+                                                     AD-036 front-facing
+                                                     landing door, v3 80px wide
+                                                     brushed-inox slabs)
+   apps/client/public/art/elevator/elevator-panel.png (32x32 sheet, idle|flash)
 
 Deterministic: no randomness, no generation model. Run from repo root:
   python3 scripts/art/generate-doors-elevator.py
@@ -26,7 +29,11 @@ WALNUT = (58, 38, 32, 255)
 WALNUT_SHADE = (43, 27, 23, 255)
 WALNUT_DEEP = (32, 20, 17, 255)
 JAMB = (74, 48, 38, 255)          # lighter walnut jamb block
-CHARCOAL = (35, 35, 43, 255)      # elevator slab / panel face
+INOX = (152, 160, 168, 255)       # brushed stainless slab (contrast vs wall)
+INOX_LIGHT = (188, 195, 202, 255)  # brushed sheen band
+INOX_SHADE = (112, 120, 130, 255)  # slab edge shade
+INOX_DEEP = (74, 82, 92, 255)     # shaft interior shadow
+CHARCOAL = (35, 35, 43, 255)      # legacy slab tone (kept for reference)
 CHARCOAL_SHADE = (24, 24, 30, 255)
 BRASS = (201, 161, 59, 255)
 BRASS_SHADE = (156, 120, 44, 255)
@@ -118,43 +125,62 @@ def door_card() -> Image.Image:
     return px
 
 
-def elevator_car(open_doors: bool) -> Image.Image:
-    px = new(48, 64)
-    rect(px, 0, 0, 47, 5, BRASS)             # top beam
-    rect(px, 0, 5, 47, 5, BRASS_SHADE)
-    rect(px, 20, 1, 27, 4, IVORY)            # ceiling light
-    rect(px, 0, 0, 3, 63, BRASS)             # side posts
-    rect(px, 44, 0, 47, 63, BRASS)
-    rect(px, 0, 3, 3, 63, BRASS_SHADE)
-    rect(px, 44, 3, 47, 63, BRASS_SHADE)
+def elevator_door(open_doors: bool) -> Image.Image:
+    """Front-facing 80x96 landing door (AD-036, v3): the room-door jamb +
+    stepped brass pediment language widened to 80 px, with brushed-inox
+    (stainless) slabs that read against the slate-teal wall. Frame order
+    matches the legacy transverse sheet (open first, closed second) so the
+    presenter keeps its semantics.
+    """
+    px = new(80, 96)
+    rect(px, 0, 0, 79, 95, JAMB)             # jamb block
+    # stepped brass lintel, one row heavier than door_frame()'s pediment
+    rect(px, 9, 0, 70, 4, BRASS)             # brass cap band
+    rect(px, 5, 4, 74, 6, JAMB)
+    rect(px, 0, 0, 3, 6, WALL)               # steps recede into the wall
+    rect(px, 76, 0, 79, 6, WALL)
+    rect(px, 0, 6, 79, 7, BRASS_SHADE)       # lintel shadow line
+    rect(px, 0, 0, 2, 95, BRASS_SHADE)       # jamb edge accents
+    rect(px, 77, 0, 79, 95, BRASS_SHADE)
     if open_doors:
-        # doors parked at the sides, opening transparent (shaft shows through)
-        rect(px, 5, 6, 14, 57, CHARCOAL)
-        rect(px, 5, 6, 6, 57, CHARCOAL_SHADE)
-        rect(px, 33, 6, 42, 57, CHARCOAL)
-        rect(px, 40, 6, 42, 57, CHARCOAL_SHADE)
-        rect(px, 19, 6, 20, 57, BRASS_SHADE)  # cage bars across the opening
-        rect(px, 27, 6, 28, 57, BRASS_SHADE)
+        # doorway: transparent shaft (occupants are never drawn, ART-15)
+        rect(px, 3, 7, 76, 95, TRANSPARENT)
+        rect(px, 3, 7, 76, 9, INOX_DEEP)         # inner shadow, head
+        rect(px, 3, 7, 5, 95, INOX_DEEP)         # inner shadow, hinge side
+        rect(px, 74, 7, 76, 95, INOX_DEEP)       # inner shadow, latch side
+        rect(px, 33, 10, 46, 12, IVORY)          # ceiling light in the shaft
+        # inox slabs parked at the sides of the widened opening
+        rect(px, 6, 10, 18, 91, INOX)
+        rect(px, 6, 10, 7, 91, INOX_SHADE)
+        rect(px, 11, 10, 12, 91, INOX_LIGHT)     # brushed sheen
+        rect(px, 61, 10, 73, 91, INOX)
+        rect(px, 72, 10, 73, 91, INOX_SHADE)
+        rect(px, 67, 10, 68, 91, INOX_LIGHT)
+        rect(px, 29, 10, 30, 91, BRASS_SHADE)  # cage bars across the opening
+        rect(px, 49, 10, 50, 91, BRASS_SHADE)
     else:
-        rect(px, 5, 6, 42, 57, CHARCOAL)      # closed slab
-        rect(px, 23, 6, 24, 57, BRASS_SHADE)  # brass center seam
-        rect(px, 5, 6, 6, 57, CHARCOAL_SHADE)
-        rect(px, 41, 6, 42, 57, CHARCOAL_SHADE)
-        rect(px, 7, 29, 40, 30, BRASS_SHADE)  # safety rail across the slab
-    rect(px, 0, 58, 47, 63, BRASS_SHADE)      # floor
-    rect(px, 0, 58, 47, 58, BRASS)
-    rect(px, 8, 60, 39, 61, BRASS)            # tread accent
+        # closed double slab: brushed inox leaves with sheen + brass seam
+        rect(px, 3, 7, 76, 91, INOX)
+        rect(px, 39, 7, 40, 91, BRASS_SHADE)  # brass center seam
+        rect(px, 3, 7, 4, 91, INOX_SHADE)
+        rect(px, 75, 7, 76, 91, INOX_SHADE)
+        rect(px, 9, 7, 12, 91, INOX_LIGHT)    # sheen, left leaf
+        rect(px, 67, 7, 70, 91, INOX_LIGHT)   # sheen, right leaf
+        rect(px, 5, 45, 74, 46, BRASS_SHADE)  # safety rail across the slab
+    # landing sill on both frames (grounds the door at GROUND_Y)
+    rect(px, 3, 92, 76, 95, BRASS_SHADE)
+    rect(px, 3, 92, 76, 92, BRASS)
     return px
 
 
 def elevator_panel(flash: bool) -> Image.Image:
     px = new(16, 32)
-    rect(px, 0, 0, 15, 31, CHARCOAL)
+    rect(px, 0, 0, 15, 31, INOX)             # brushed-steel face
     rect(px, 0, 0, 15, 1, BRASS)              # brass border
     rect(px, 0, 30, 15, 31, BRASS)
     rect(px, 0, 0, 0, 31, BRASS)
     rect(px, 15, 0, 15, 31, BRASS)
-    off = CHARCOAL_SHADE
+    off = INOX_DEEP
     lamp = BRASS if flash else off
     rect(px, 5, 6, 10, 11, off)               # car-1 lamp socket
     rect(px, 5, 18, 10, 23, off)              # car-2 lamp socket
@@ -171,8 +197,8 @@ def main() -> None:
         OUT / "doors/door-closed.png": door_closed(),
         OUT / "doors/door-open.png": door_open(),
         OUT / "doors/door-card.png": door_card(),
-        OUT / "elevator/elevator-car.png": _hstack(
-            [elevator_car(True), elevator_car(False)]
+        OUT / "elevator/elevator-door.png": _hstack(
+            [elevator_door(True), elevator_door(False)]
         ),
         OUT / "elevator/elevator-panel.png": _hstack(
             [elevator_panel(False), elevator_panel(True)]
@@ -217,7 +243,7 @@ def _preview(files: dict, out: Path) -> None:
 
 
 def _mock(out: Path) -> None:
-    W, H = 832, 576
+    W, H = 960, 576
     mock = Image.new("RGBA", (W, H), INK)
     for y in range(60, 430):
         for x in range(W):
@@ -239,11 +265,12 @@ def _mock(out: Path) -> None:
     mock.alpha_composite(door_open(), (560, 329))
     mock.alpha_composite(door_closed(), (120, 329))
     mock.alpha_composite(door_card(), (204, 350))
-    # elevator shaft: cable, car (open), wall panel (flash)
+    # elevator landing: cable, front-facing door (open), wall panel (flash)
+    # above the lintel — the hall indicator sits over the shaft mouth
     for y in range(60, 496):
         mock.putpixel((790, y), WALNUT_DEEP)
-    mock.alpha_composite(elevator_car(True), (700, 430 - 64))
-    mock.alpha_composite(elevator_panel(True), (660, 340))
+    mock.alpha_composite(elevator_door(True), (700, 430 - 96))
+    mock.alpha_composite(elevator_panel(True), (740 - 8, 334 - 36))
     import importlib.util
     import sys
 

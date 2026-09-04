@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "art_direction_brief": "docs/art/alternative/art-direction-brief.md (Deco Noir, AD-029)",
-  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned.",
+  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050): 16 entries / 17 loaded textures / 18 files, ~10 KB total against ≤20 sheets / <2 MB.",
   "assets": [
     {
       "id": "staff-body",
@@ -117,35 +117,6 @@
         "in_engine_reviewed": false,
         "technical_checks_passed": true,
         "approved_by": ""
-      }
-    },
-    {
-      "id": "staff-walk",
-      "role": "player character walk cycle, all players identical uniform (no saboteur tell)",
-      "path": "apps/client/public/art/chars/staff-walk-8f.png",
-      "status": "approved",
-      "technical": {
-        "dimensions": "28x60",
-        "alpha": true,
-        "anchor": "bottom-center",
-        "frames": 8,
-        "filtering": "nearest"
-      },
-      "visual_locks": ["palette", "silhouette", "proportions", "facing", "light-direction"],
-      "source": {
-        "kind": "authored",
-        "url_or_tool": "scripts/art/generate-staff-walk.py (deterministic Pillow authoring, no generation model)",
-        "creator": "art workstream",
-        "created_at": "2026-08-29",
-        "license": "project-internal",
-        "attribution": "",
-        "prompt_or_source_record": "v3: near/far leg value separation, jacket hem y30, stride \u00b16, arm counter-swing fix; QA asset_report PASS (10 colors, full alpha) Restyled to Deco Noir palette (AD-029); sheet contract unchanged."
-      },
-      "verification": {
-        "native_scale_reviewed": true,
-        "in_engine_reviewed": true,
-        "technical_checks_passed": true,
-        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
       }
     },
     {

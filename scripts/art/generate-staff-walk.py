@@ -9,8 +9,8 @@ player (no saboteur tell), hard pixel clusters, no outlines (value separation
 only), no anti-aliasing. Sheet contract unchanged from AD-020 (28x60, 8 frames)
 pending the 960px viewport decision.
 
-Output:
-  apps/client/public/art/chars/staff-walk-8f.png   (224x60 sheet)
+Output (retired AD-050 — the 34x64 cast in generate-cast-4-1.py supersedes
+this sheet; main() writes /tmp previews only, never the build):
   /tmp/opencode/staff-walk-preview.png             (6x contact sheet)
   /tmp/opencode/staff-walk-corridor-mock.png       (native-scale corridor read)
 
@@ -180,11 +180,10 @@ def hline_mock(img: Image.Image, x0: int, x1: int, y: int, color) -> None:
 
 
 def main() -> None:
-    out_dir = Path("apps/client/public/art/chars")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Retired AD-050: the legacy 28x60 sheet is no longer written to the
+    # build (unloaded since 4.1). build_sheet stays for the legacy mocks
+    # that import it.
     sheet = build_sheet()
-    sheet.save(out_dir / "staff-walk-8f.png")
-    print(f"wrote {out_dir / 'staff-walk-8f.png'} ({sheet.width}x{sheet.height})")
 
     tmp = Path("/tmp/opencode")
     tmp.mkdir(parents=True, exist_ok=True)

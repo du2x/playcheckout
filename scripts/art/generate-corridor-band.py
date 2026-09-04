@@ -84,7 +84,7 @@ def main() -> None:
 
     build_sheet = load("generate_staff_walk", "build_sheet")
 
-    W, Hs = 832, 576
+    W, Hs = 960, 576
     mock = Image.new("RGBA", (W, Hs), NIGHT)
     for y in range(48, 350):
         for x in range(W):
@@ -97,7 +97,7 @@ def main() -> None:
     doors = load("generate_doors_elevator", "door_closed")
     door_open = load("generate_doors_elevator", "door_open")
     card = load("generate_doors_elevator", "door_card")
-    car = load("generate_doors_elevator", "elevator_car")
+    car = load("generate_doors_elevator", "elevator_door")
     panel = load("generate_doors_elevator", "elevator_panel")
 
     interior = Image.new("RGBA", (56, 86), (0, 0, 0, 0))
@@ -113,8 +113,8 @@ def main() -> None:
     mock.alpha_composite(card(), (204, 350))
     for y in range(48, 496):
         mock.putpixel((790, y), (26, 43, 60, 255))
-    mock.alpha_composite(car(True), (700, 430 - 64))
-    mock.alpha_composite(panel(True), (660, 340))
+    mock.alpha_composite(car(True), (880, 334))
+    mock.alpha_composite(panel(True), (912, 300))
     walker = build_sheet().crop((2 * 28, 0, 3 * 28, 60))
     mock.alpha_composite(walker, (380, 430 - 60))
     mock.save("/tmp/opencode/corridor-tiled-mock.png")
