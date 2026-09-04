@@ -1338,10 +1338,111 @@
 - **Date**: 2026-09-03
 - **Status**: active
 
-## Handoff
+### AD-046
+- **Decision**: Room count + elevator hit box (user direction, 2026-09-04):
+  (1) **7 rooms per guest floor** (21 total, was 8/24) — the 8th room's
+  doorway billboard (segment [24.75, 28), door x = 26.375 t = 844 px, art
+  spanning 808–880 px) sat flush against the AD-036 v3 80 px elevator door
+  (880–960 px), reading as one cramped double doorway at the east landing.
+  `ROOMS_PER_FLOOR` 8→7, `ROOM_COUNT` 24→21, `RoomIndex` narrowed to 1–7;
+  `ROOM_DEPTH_TILES` 3.25 and `ROOM_HALL_START_TILES` 2 unchanged, so rooms
+  now tile [2, 24.75] leaving a ~5.25-tile open east hall (last billboard
+  712–784 px, 96 px clear of the elevator). prd §7 rows re-pinned
+  (Rooms ~21; initial trashed 7 of 21 — the t=0 seeding itself is still
+  unimplemented, roadmap 3.1). (2) **Elevator landing hit box matches the
+  door art**: `ELEVATOR_LANDING_TILES` 1→2.5 (tiles 27.5–30 = the drawn
+  80 px door exactly; sim `atLanding` boarding guard, client `onLanding`
+  key gate, guest boarding zone all read it); the stairwell mouth is
+  DECOUPLED as `STAIRWELL_MOUTH_TILES: 1` (`atStairwellMouth`,
+  `onLanding`'s west branch) so the wider elevator box does not widen the
+  west stair mouth. Bot harnesses in `guestExit.test.ts`/`telemetry.test.ts`
+  updated to probe the stair mouth with the new constant (they previously
+  borrowed `ELEVATOR_LANDING_TILES`).
+- **Verification**: balance gates re-run at 21 rooms — `sim:exit_a` 6p ≥16/20
+  band and `sim:exit_b` 30–70% band both PASS unchanged (no §7 dial moved);
+  full `pnpm test:sim` 553/553; typecheck + lint clean.
+- **Scope**: `packages/shared` (layout, tuning, affordances + tests),
+  `packages/sim` (work.ts loops; sim/guests/movement/guestExit/telemetry
+  tests), `apps/server` (TurnoverRoom.test room-7 walk, rooms length 21),
+  `apps/client` (WorldScene tenancy loop), `prd.md` (FR-3, §7 rows).
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-047
+- **Decision**: Art-roadmap D1 resolved as a **narrow amendment** (user ruling
+  2026-09-04, the AD-029 supersede pattern): the Deco Noir palette locks stay
+  on authored art (≤24 colors, no gradients, baked light only, ≤12 sheets /
+  <2 MB), and soft FX — additive-blend glows, vignette, particles — are
+  allowed as a **render layer on top**, never baked into sheets. Soft glow
+  over nearest-neighbor pixels is the standard "stunning pixel art" recipe
+  but fights the brief's "no gradients" letter, so this is a recorded
+  amendment, not drift. Unblocks cycle 4.3 `lighting-atmosphere`.
+- **Reason**: User-confirmed recommendation from `docs/art/art-roadmap.md` D1.
+- **Trade-off**: Two visual regimes to QA (authored sheets stay palette-pinned
+  by `asset_report`; the render layer is reviewed in-engine only). Any FX
+  number (glow strength, particle rates) is client-cosmetic, never a TUNING row.
+- **Scope**: `docs/art/*`, cycle 4.3, `apps/client` render layer only. No
+  protocol, sim, tuning, or server changes.
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-048
+- **Decision**: Art-roadmap D2 resolved as **hybrid authoring** (user ruling
+  2026-09-04): architecture/geometry stays deterministic Pillow-scripted
+  (determinism + palette enforcement are free there); focal/organic art
+  (characters, clutter, interiors) may go hand-authored (Aseprite) or
+  AI-assisted. The manifest `source` block records kind/tool/license/
+  provenance per asset — "no generation model" is today's recorded state,
+  not a rule.
+- **Reason**: User-confirmed recommendation from `docs/art/art-roadmap.md` D2.
+- **Trade-off**: Mixed pipeline needs per-asset provenance discipline; the
+  manifest `verification` block stays the QA gate for every sheet regardless
+  of tool.
+- **Scope**: `docs/art/asset-manifest.json` (`source` per asset), `scripts/art/*`,
+  all future 4.x authoring cycles.
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-049
+- **Decision**: Art-roadmap D3 resolved as **integer camera zoom + pixel
+  snapping at fullscreen** (user ruling 2026-09-04): the presentation
+  contract is decided now — before 4.2 authors full-screen-filling art — and
+  lands as cycle 4.7 (`client:presentation`, incl. the FX + particle perf pin
+  over the 960×576 canvas and final native-scale review).
+- **Reason**: User-confirmed recommendation from `docs/art/art-roadmap.md` D3;
+  deciding before 4.2 avoids authoring full-bleed sheets twice (the AD-030 lesson).
+- **Trade-off**: 4.2–4.6 author against the current 960×576 canvas on the
+  promise of the 4.7 contract; any geometry the contract invalidates is
+  re-authored in 4.7 by plan.
+- **Scope**: cycle 4.7, `docs/art/art-roadmap.md`. No protocol, sim, tuning,
+  or server changes.
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-050
+- **Decision**: Amend the texture budget (art-roadmap constraint, cycle 4.2
+  D-5): **≤20 sheets / <2 MB** (was ≤12 sheets). Retire the dead legacy
+  sheet `apps/client/public/art/chars/staff-walk-8f.png` (28×60, unloaded
+  since 4.1 — `BootScene` loads `staff-body-34x64-7f` under the `staff-walk`
+  key) and remove its manifest entry. Counted honest: 15 manifest entries /
+  15 loaded textures / 17 files on disk today against a ≤12 number written
+  for the smaller AD-020 family — 4.1 already outgrew it silently. After
+  4.2 (+`wall-field`, +`sconce`, −legacy file): 16 entries / 17 loaded
+  textures / 18 files; bytes total ~12 KB, so the <2 MB half never moved.
+- **Reason**: The count guards sprawl, and 17 tiny textures is not sprawl;
+  bytes are the real constraint and hold with two orders of magnitude to
+  spare. Recorded as an AD per the roadmap's sheet-contract rule, not drift.
+- **Trade-off**: A higher count ceiling is slightly weaker sprawl protection;
+  the manifest stays the per-sheet gate (entries land before authoring).
+- **Scope**: `docs/art/asset-manifest.json`, 4.2 authoring, future 4.x cycles
+  count against ≤20.
+- **Date**: 2026-09-04
+- **Status**: active
 - **Feature**: `visual-polish-4-1` (Phase 4.1, AD-045) — COMPLETE pending final verifier pass. T1 cosmetic seed module · T2 protocol cosmetic rows · T3 server emit+snapshot · T4 34×64 cast sheets · T5 staff variant renderer · T6 guest archetypes + corridor Deco · T7 juice layer (settle/foot-tap/anger/shake). Verifier iteration 1: PASS conditional; gaps G1 (fork behavioral pin) G2 (variant derivation pin) G3 (snapshot guest rows) G4 (guest teardown) fixed; G5/G6 accepted-by-art-QA notes; G7 spec amendment + this AD.
 - **Phase / Task**: Done. Next: re-verify → Phase 4.2 (environment polish) or 4.3 per roadmap Phase 4 plan.
 - **Gates**: typecheck ✓ · lint ✓ (47 warnings, 0 errors) · test:sim 553 ✓ · targeted harness green (art-players/guestSprites/corridorDepth/juice/guestFlow/restaurant/complaints); full suite has pre-existing load flakes (lobby 7th-join) + stairs STAIRS-04 failing identically on clean master.
-- **Next step**: Phase 4 remaining cycles (see roadmap Phase 4 plan).
+- **Next step**: D1–D3 decided (AD-047/048/049, 2026-09-04). Next: cycle 4.2
+  `environment` Specify → `.specs/features/environment-4-2/spec.md` (uncommitted
+  AD-046 + elevator-door swap + art-roadmap draft still pending commit).
 - **Blockers**: none.
 - **Branch**: master

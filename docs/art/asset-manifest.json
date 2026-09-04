@@ -85,9 +85,38 @@
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
+        "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": "art workstream (asset_report + corridor mock 2026-09-03); in-engine review lands with client:guest_sprites"
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
+      }
+    },
+    {
+      "id": "wall-field",
+      "role": "Phase 4.2 corridor wall tile: frieze band (upper ~45px, #42636e + 16px-pitch dim-brass chevron) over slate-teal field; tiles horizontally with period 32, rendered as a 960x302 TileSprite at y48..350 replacing the wallFill Graphics fill",
+      "path": "apps/client/public/art/rooms/wall-field.png",
+      "status": "planned",
+      "technical": {
+        "dimensions": "32x302",
+        "alpha": false,
+        "anchor": "top-left",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette", "light-direction"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": ""
+      },
+      "verification": {
+        "native_scale_reviewed": false,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": false,
+        "approved_by": ""
       }
     },
     {
@@ -352,12 +381,12 @@
       }
     },
     {
-      "id": "elevator-car",
-      "role": "elevator car, open-shell look when doors open; panel shows position only (FR-6)",
-      "path": "apps/client/public/art/elevator/elevator-car.png",
-      "status": "approved",
+      "id": "elevator-door",
+      "role": "front-facing landing door in the room-door billboard language (AD-036); open frame shows the shaft only, never occupants (FR-6)",
+      "path": "apps/client/public/art/elevator/elevator-door.png",
+      "status": "in-review",
       "technical": {
-        "dimensions": "48x64",
+        "dimensions": "80x96",
         "alpha": true,
         "anchor": "bottom-center",
         "frames": 2,
@@ -368,16 +397,16 @@
         "kind": "authored",
         "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
         "creator": "art workstream",
-        "created_at": "2026-08-29",
+        "created_at": "2026-09-04",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-029); sheet contract unchanged."
+        "prompt_or_source_record": "AD-036: replaces the transverse 48x64 elevator-car slab with a front-facing landing door sharing door_frame()'s jamb + stepped brass pediment (one-row-heavier lintel marks the shaft); frame order unchanged (0 = open doorway, 1 = closed slab) so the presenter keeps its semantics. v3: widened to 80px (sheet 160x96) with brushed-inox (stainless) slabs for contrast against the slate-teal wall; hall indicator panel hangs above the lintel."
       },
       "verification": {
         "native_scale_reviewed": true,
-        "in_engine_reviewed": true,
+        "in_engine_reviewed": false,
         "technical_checks_passed": true,
-        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
+        "approved_by": ""
       }
     },
     {
@@ -400,7 +429,7 @@
         "created_at": "2026-08-29",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-029); sheet contract unchanged."
+        "prompt_or_source_record": "v2: elevator cage bars + closed-slab rail; QA asset_report PASS all 5 Restyled to Deco Noir palette (AD-029); sheet contract unchanged. v3: brushed-inox face matching the widened landing door; off-lamp sockets INOX_DEEP, lit lamp brass; frames unchanged (idle, flash)."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -436,6 +465,35 @@
         "in_engine_reviewed": true,
         "technical_checks_passed": true,
         "approved_by": "art workstream (in-engine evidence-cues scenario + AD-020 slice commit 9e80b72)"
+      }
+    },
+    {
+      "id": "sconce",
+      "role": "Phase 4.2 sconce prop (24x40 brass arm + candle core) with baked 48x16 pool ellipse below it; one sprite per door beat, positioned from layout geometry (room centers + landings), replacing the deco-pools Graphics ellipses. Flat pixels only, no blend modes (glow arrives in 4.3)",
+      "path": "apps/client/public/art/props/sconce.png",
+      "status": "planned",
+      "technical": {
+        "dimensions": "48x52",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette", "light-direction"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": ""
+      },
+      "verification": {
+        "native_scale_reviewed": false,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": false,
+        "approved_by": ""
       }
     }
   ]
