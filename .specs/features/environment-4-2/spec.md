@@ -203,21 +203,21 @@ human 5-minute round for mood.
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| ENV-01 | P1: Authored wall | Execute | Pending |
-| ENV-02 | P1: Authored wall | Execute | Pending |
-| ENV-03 | P1: Authored wall | Execute | Pending |
-| ENV-04 | P1: Authored wall | Execute | Pending |
-| ENV-05 | P1: Sconce beats | Execute | Pending |
-| ENV-06 | P1: Sconce beats | Execute | Pending |
-| ENV-07 | P1: Sconce beats | Execute | Pending |
-| ENV-08 | P1: Pediments | Execute | Pending |
-| ENV-09 | P1: Pediments | Execute | Pending |
-| ENV-10 | P2: Contract discipline | Execute | Pending |
-| ENV-11 | P2: Contract discipline | Execute | Pending |
-| ENV-12 | P2: Contract discipline | Execute | Pending |
-| ENV-13 | P2: Contract discipline | Execute | Pending |
+| ENV-01 | P1: Authored wall | Execute | Done (T2 sheets, T3 TileSprite) |
+| ENV-02 | P1: Authored wall | Execute | Done (T3 deletion, T5 asserts) |
+| ENV-03 | P1: Authored wall | Execute | Done (T2 tile discipline + mock) |
+| ENV-04 | P1: Authored wall | Execute | Done (T2 mock read, Gate 4) |
+| ENV-05 | P1: Sconce beats | Execute | Done (T2 sprite, T3 beats) |
+| ENV-06 | P1: Sconce beats | Execute | Done (T2 flat pixels, no blend) |
+| ENV-07 | P1: Sconce beats | Execute | Done (T3 sconceXs + T5 xs test) |
+| ENV-08 | P1: Pediments | Execute | Done (D-4 mock verdict, T5 keys) |
+| ENV-09 | P1: Pediments | Execute | Done (T3 spectator rule, T5) |
+| ENV-10 | P2: Contract discipline | Execute | Done (T1 manifest-first) |
+| ENV-11 | P2: Contract discipline | Execute | Done (T1 AD-050, T4 retirement) |
+| ENV-12 | P2: Contract discipline | Execute | Done (T2 mock + Gate 4) |
+| ENV-13 | P2: Contract discipline | Execute | Done (T6 gates below) |
 
-**Coverage:** 13 total, 0 mapped to tasks (Tasks phase pending), 13 unmapped
+**Coverage:** 13 total, 13 mapped to tasks (T1..T6), 0 unmapped
 
 ---
 

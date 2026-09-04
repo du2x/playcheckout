@@ -194,7 +194,7 @@ pediment texture keys, absence of `wallFill`/`deco-*` fills.
 
 ---
 
-### T6: Full gates + Verifier evidence
+### T6: Full gates + Verifier evidence ✅ DONE
 
 **What**: Run gates 1–3 fully green, fill the spec traceability statuses,
 attach the native mock + Gate-4 notes, update the STATE handoff for the
