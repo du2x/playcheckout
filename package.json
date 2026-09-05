@@ -12,6 +12,10 @@
     "test:sim": "vitest run",
     "test:client": "playwright test --config apps/client/harness/playwright.config.ts",
     "boot": "node scripts/dev-boot.mjs",
+    "fly:launch": "node scripts/fly.mjs launch",
+    "fly:deploy": "node scripts/fly.mjs deploy",
+    "fly:status": "node scripts/fly.mjs status",
+    "fly:logs": "node scripts/fly.mjs logs",
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build"
   },
