@@ -65,6 +65,10 @@ export async function startServer(
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 if (isMain) {
+  // SIGTERM/SIGINT drain is wired inside Colyseus itself: `new Server()`
+  // registers signal handlers that dispose rooms and process.exit (Server.ts
+  // gracefullyShutdown wiring). Adding a second handler here races it and
+  // wedges shutdown — do not add one.
   startServer().then(() => {
     console.log('turnover server: listening')
   })

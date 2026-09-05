@@ -66,6 +66,9 @@ importers:
       fastify:
         specifier: ^5
         version: 5.12.1
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
     devDependencies:
       '@colyseus/sdk':
         specifier: ~0.18.2
@@ -1596,7 +1599,7 @@ packages:
     hasBin: true
 
   uWebSockets.js@https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/fcfc622a4286909593b7f390056d89e0ca3b56b9:
-    resolution: {tarball: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/fcfc622a4286909593b7f390056d89e0ca3b56b9}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/fcfc622a4286909593b7f390056d89e0ca3b56b9}
     version: 20.57.0
 
   uid-safe@2.1.5:
