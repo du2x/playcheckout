@@ -26,6 +26,7 @@ import { renderJoin } from './ui/joinView'
 import { renderLobby } from './ui/lobbyView'
 import { renderResults } from './ui/resultsView'
 import { renderRoundHud } from './ui/roundHud'
+import { roomCodeFromSearch } from './ui/shareLink'
 
 /**
  * First-light app controller (cycle 2.2): owns the reducer state, the Colyseus
@@ -44,6 +45,8 @@ export class App {
   private state: ViewState = initialViewState()
   private connection: Connection | null = null
   private roomCode = ''
+  /** The ?room=CODE deep link (lobby share row), sanitized once at boot. */
+  private readonly deepLinkCode = roomCodeFromSearch(window.location.search)
   private stopClock: (() => void) | null = null
   /** The rider session (AD-013): the single derivation of the local player's
    * in-car state, reduced purely in riderSession.ts — the chip renders from it
@@ -328,7 +331,7 @@ export class App {
 
     switch (this.state.view) {
       case 'join':
-        renderJoin(this.root, this.state.error, this.state.joining, {
+        renderJoin(this.root, this.state.error, this.state.joining, this.deepLinkCode, {
           onSubmit: (code, name) => void this.submitJoin(code, name),
           onCreate: (name) => void this.createRoom(name),
         })

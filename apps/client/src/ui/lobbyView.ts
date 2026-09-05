@@ -2,6 +2,7 @@ import type { LobbySnapshot } from '@turnover/shared'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { roomShareUrl } from './shareLink'
 import { buildStairScreen } from './stairScreen'
 
 /**
@@ -40,6 +41,21 @@ export function renderLobby(
   startButton.addEventListener('click', cb.onStart)
   if (!snapshot.isHost) startButton.setAttribute('hidden', '')
 
+  // Share row: the ?room=CODE link under the heading — guests copy it too,
+  // since a round needs 4+ players and anyone in the lobby can invite.
+  const shareLink = roomShareUrl(roomCode, {
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+  })
+  const shareInput = el('input', { id: 'share-link', readonly: true, autocomplete: 'off' })
+  // Wide enough to show a deployed-domain link without scrolling the value.
+  shareInput.setAttribute('size', '40')
+  shareInput.setAttribute('value', shareLink)
+  const copyButton = el('button', { id: 'share-copy', type: 'button' }, ['copy link'])
+  copyButton.addEventListener('click', () => {
+    void copyShareLink(shareInput, copyButton)
+  })
+
   const errorLine = el('p', { id: 'lobby-error' })
   if (error !== null) errorLine.textContent = error
   else errorLine.setAttribute('hidden', '')
@@ -51,6 +67,7 @@ export function renderLobby(
       buildCarScreen(),
       buildStairScreen(),
       el('h2', {}, [`lobby — room ${roomCode}`]),
+      el('div', { id: 'share-row' }, [shareInput, copyButton]),
       roster,
       startButton,
       errorLine,
@@ -83,4 +100,30 @@ export function renderLobby(
       buildAccuseHud(),
     ]),
   )
+}
+
+/** How long the button reads "copied ✓" before reverting. */
+const COPY_FEEDBACK_MS = 1500
+
+/**
+ * Copy the share link: async Clipboard API first; when it is missing or
+ * refuses (plain-http LAN play, older browsers), fall back to selecting the
+ * input and the deprecated execCommand. The button label reports the outcome
+ * either way — an uncopyable link must never fail silently.
+ */
+async function copyShareLink(input: HTMLInputElement, button: HTMLButtonElement): Promise<void> {
+  const label = (text: string) => {
+    button.textContent = text
+    window.setTimeout(() => {
+      button.textContent = 'copy link'
+    }, COPY_FEEDBACK_MS)
+  }
+  try {
+    await navigator.clipboard.writeText(input.value)
+    label('copied ✓')
+  } catch {
+    input.focus()
+    input.select()
+    label(document.execCommand('copy') ? 'copied ✓' : 'select + Ctrl+C')
+  }
 }

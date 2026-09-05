@@ -3,6 +3,8 @@ import { el } from './dom'
 /**
  * Join screen (LIGHT-01..04): room code (letters only, max 4, uppercased as
  * typed) + display name (1–16 chars). Rejections render into #join-error.
+ * `initialCode` is the sanitized ?room= deep-link prefill; when set the code
+ * field comes filled and focus lands on the name input.
  */
 export interface JoinCallbacks {
   onSubmit: (code: string, name: string) => void
@@ -13,6 +15,7 @@ export function renderJoin(
   root: HTMLElement,
   error: string | null,
   joining: boolean,
+  initialCode: string,
   cb: JoinCallbacks,
 ): void {
   const codeInput = el('input', { id: 'join-code', maxlength: '4', autocomplete: 'off' })
@@ -25,6 +28,11 @@ export function renderJoin(
     if (codeInput.value !== filtered) codeInput.value = filtered
   })
   codeInput.setAttribute('placeholder', 'CODE')
+  // ?room=CODE deep link (joinView share row): prefill the code so a guest
+  // only types a name — and put the caret where the typing starts.
+  if (initialCode !== '') {
+    codeInput.value = initialCode
+  }
 
   const nameInput = el('input', { id: 'join-name', maxlength: '16', autocomplete: 'off' })
   nameInput.setAttribute('placeholder', 'your name')
@@ -73,4 +81,8 @@ export function renderJoin(
   })
 
   root.append(el('div', { id: 'join-view' }, [form]))
+  // focus() is a no-op on a detached node — the ?room= caret lands on the
+  // name input only once the view is mounted (LIGHT-01 fold: the guest's
+  // first keystroke is their name).
+  if (initialCode !== '') nameInput.focus()
 }
