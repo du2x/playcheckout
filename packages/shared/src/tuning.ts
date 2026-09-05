@@ -1,7 +1,6 @@
 /**
- * Tuning values — single source of truth, verbatim from prd §7 (v1.2, decisions locked).
- * Changing a value is a recorded decision in .specs/STATE.md (AD-NNN), never an
- * incidental edit.
+ * Tuning values — single source of truth (game design, decisions locked).
+ * Changing a value is a deliberate game-design decision, never an incidental edit.
  */
 export type LobbySize = 4 | 5 | 6
 
