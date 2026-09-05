@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.zcode
+data
+.vite
+*.tsbuildinfo
+test-results
+playwright-report
+specs-output
+THE EAGLES.Hotel California K.mid

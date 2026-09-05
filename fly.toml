@@ -1,0 +1,37 @@
+# Fly.io single-container deploy — São Paulo (gru) for game-night latency.
+app = "turnover-night"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "2567"
+  # Locks out the test-only TURNOVER_TEST_* clock overrides (TurnoverRoom gates
+  # on it). Safe in Docker: the image is built with a full explicit install.
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 2567
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Keep one machine warm so nobody eats a cold start mid-session.
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

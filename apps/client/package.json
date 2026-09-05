@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-prod-strip.mjs --expect-absent",
     "build:harness": "vite build --mode harness"
   },
   "dependencies": {
