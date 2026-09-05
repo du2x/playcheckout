@@ -1701,3 +1701,21 @@
   `apps/client/harness/guestSprites.spec.ts`, `docs/art/asset-manifest.json`.
 - **Date**: 2026-09-05
 - **Status**: active
+
+### Go-ahead — cycle 4.3 `lighting-atmosphere`
+- **Decision**: user go-ahead recorded 2026-09-05 — cycle 4.3 is cleared to
+  start as the next work after the AD-052…056 presentation pass (landed as
+  c385cf3). Scope per the roadmap Phase 4 table: additive-blend glow on
+  prepped-room light pools (AD-052 re-point — pools, never the removed
+  sconce props), lit door cards, prepped-room spill one tile past the
+  threshold, scene-wide vignette, dust motes (particles), cooler read on
+  trashed-fresh rooms. Render layer only per AD-047 (b) — authored sheets
+  keep the palette locks; no sim, protocol, tuning, or server churn. The
+  exact Phaser 4.2.1 FX surface (per-object vs camera API) is confirmed in
+  the cycle's Design phase (FX add* methods + particles verified present,
+  no postFX/addBloom).
+- **Gate**: `client:atmosphere` (new) + gates 1–3 green + Gate-4 human
+  5-minute round (mood is a Gate-4 judgment, not automatable) — the pending
+  4.2 Gate-4 round can be taken together with this cycle's.
+- **Status**: cleared — Specify phase next
+  (`.specs/features/lighting-atmosphere/`).
