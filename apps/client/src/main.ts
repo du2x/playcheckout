@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { App } from './app'
+import { armMusicAutostart } from './audio/music'
 import { installDebugHook } from './debug'
 import { BootScene } from './scenes/BootScene'
 import { WorldScene } from './scenes/WorldScene'
@@ -20,3 +21,5 @@ if (import.meta.env.MODE !== 'production') {
 }
 
 new App(document.querySelector('#overlay') as HTMLElement, game)
+
+armMusicAutostart()

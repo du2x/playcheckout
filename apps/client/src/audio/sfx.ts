@@ -2,7 +2,9 @@ import type { SfxPref } from './prefs'
 
 /**
  * Procedural SFX engine (night-juice): every cue is synthesized WebAudio —
- * no asset files, no licensing, and nothing to load. The engine is silent by
+ * no asset files, no licensing, and nothing to load. (The ambient music
+ * loop is the one asset-backed sound, but it renders through this engine's
+ * master bus — see `audio/music.ts`.) The engine is silent by
  * construction in environments without `AudioContext` (the vitest node env,
  * headless runs) — every entry point no-ops instead of throwing, so callers
  * never gate on availability. Cues are presentation-only: they never carry
@@ -38,7 +40,10 @@ export class SfxEngine {
         this.master.gain.value = this.muted ? 0 : 0.5
         this.master.connect(this.ctx.destination)
       }
-      if (this.ctx.state === 'suspended') void this.ctx.resume()
+      if (this.ctx.state === 'suspended')
+        this.ctx.resume().catch(() => {
+          // Autoplay policy: the context runs after the first user gesture.
+        })
       return this.ctx
     } catch {
       this.ctx = null
@@ -143,6 +148,17 @@ export class SfxEngine {
 
   applyPref(pref: SfxPref): void {
     this.setMuted(pref === 'off')
+  }
+
+  /**
+   * Bus for the ambient music loop (`audio/music.ts`): the shared context
+   * and master gain, so the mute toggle governs music and cues together.
+   * Returns null outside browsers.
+   */
+  musicBus(): { context: AudioContext; destination: AudioNode } | null {
+    const ctx = this.ensure()
+    if (ctx === null || this.master === null) return null
+    return { context: ctx, destination: this.master }
   }
 
   // --- Elevator cues (the arcade-confident half of the hybrid tone) ---

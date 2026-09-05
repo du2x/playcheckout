@@ -1719,3 +1719,53 @@
   4.2 Gate-4 round can be taken together with this cycle's.
 - **Status**: cleared — Specify phase next
   (`.specs/features/lighting-atmosphere/`).
+
+### AD-057
+- **Decision**: The night-shift MIDI (`apps/client/public/audio/
+  turnover-night-shift.mid`) becomes the game's ambient music loop (user
+  direction 2026-09-05, "bind the MIDI on repeat"). Audio-layer work only —
+  no sim, protocol, tuning, or server churn. (1) A dependency-free SMF
+  parser (`audio/music/parse.ts`, pure, node-tested): formats 0/1, running
+  status, tempo map, per-channel program tracking, note pairing; unclosed
+  drum note-ons (the channel-10 convention) get a default duration instead
+  of hanging. SMPTE-timed/format-2 files parse as silence, never mis-time.
+  (2) The whole song is synthesized ONCE through an OfflineAudioContext
+  (GM-ish voice tables: acoustic bass → triangle, e-piano → sine+octave,
+  glockenspiel → sine+inharmonic partial, strings → detuned saw pair
+  through a lowpass, ch10 → kick/snare/hat from noise+tone; per-channel
+  stereo pans) and played as one gaplessly looped `AudioBuffer` — the loop
+  snaps UP to the whole 32-beat bar grid (20.87 s at 92 BPM) and notes cut
+  by the loop point fade over a 20 ms seam window. (3) The loop routes
+  through the SFX engine's master bus (`SfxEngine.musicBus()`), so the
+  existing session-persisted mute toggle governs cues and music together
+  (toggle relabelled `sound on/off`; DOM id and `turnover.sfx` key
+  unchanged). (4) Boot wiring (`armMusicAutostart()` in main.ts) starts
+  the offline render immediately and the loop at the first user gesture
+  (autoplay policy). Every failure path — fetch, parse, render, no
+  `AudioContext` — is a silent no-op: music is never load-bearing,
+  harness-safe exactly like the AD-053 sfx engine.
+- **Reason**: The MIDI was left as an unwired stray at the AD-052…056
+  commit; the user bound it as in-game music. Zero-dependency parsing plus
+  a one-time offline render keeps the AD-053 runtime shape (one buffer
+  source, like the ride rumble) and the repo's no-frontend-dependencies
+  rule; no soundfont fetch, no network dependency.
+- **Trade-off**: The synth is a small GM-ish approximation (five voice
+  families), not a soundfont rendering — accepted as night-shift
+  ambience; the render costs ~100 ms once at boot; one fixed track (no
+  playlist/ducking); the Hotel California MIDI at the repo root stays
+  untracked and unwired.
+- **Verification**: parse tests pin the real asset (185 notes, 96 drums,
+  bass program 32, loopSec = 32 beats = 20.869 s) plus a synthetic
+  running-status case (7/7 green); a headless-Chromium render proof loaded
+  the real modules and measured the rendered buffer (20.87 s, peak 0.23,
+  loop started); typecheck clean; lint back to the 0-error / 47
+  pre-existing-warning baseline (the check also caught a real
+  envelope-to-bus wiring bug before it shipped); `client:art_environment`
+  harness green as the boot smoke.
+- **Scope**: `apps/client/public/audio/` (the asset, now committed),
+  `apps/client/src/audio/music.ts` + `music/parse.ts` (+tests),
+  `apps/client/src/audio/sfx.ts` (`musicBus()` + resume-catch),
+  `apps/client/src/ui/sfxToggle.ts` (label), `apps/client/src/main.ts`
+  (arm). No sim, protocol, tuning, or server changes.
+- **Date**: 2026-09-05
+- **Status**: active

@@ -5,7 +5,8 @@ import { el } from './dom'
 /**
  * The sound toggle (night-juice): one small DOM chip in the HUD corner.
  * Mute state is session-persisted (`audio/prefs.ts`) and drives the SFX
- * engine's master gain. Presentation-only — no game state behind it.
+ * engine's master gain — cues and the ambient music loop together.
+ * Presentation-only — no game state behind it.
  */
 
 const STYLE_ID = 'sfx-toggle-styles'
@@ -36,7 +37,7 @@ const STYLE = `
 let pref: SfxPref = 'on'
 
 function render(button: HTMLElement): void {
-  button.textContent = pref === 'on' ? 'sfx on' : 'sfx off'
+  button.textContent = pref === 'on' ? 'sound on' : 'sound off'
   button.dataset.muted = pref === 'off' ? 'true' : 'false'
 }
 
