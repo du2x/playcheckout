@@ -55,6 +55,8 @@ CI runs gates 1–3 on every push and PR (`.github/workflows/ci.yml`).
 
 ## Architecture notes
 
+Full details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The short version:
+
 - **Message-only protocol.** Every server→client message is declared exactly once in the registry (`packages/shared/src/protocol/`) with its payload type and recipient policy. The router stamps an envelope (sequence number + server time); a sequence gap forces a clean rejoin. Roles, saboteur identity, and room interiors never cross the wire.
 - **Deterministic core.** `@turnover/sim` is pure TypeScript with a seeded RNG — no I/O, no wall clock — so rounds are reproducible and testable headlessly.
 - **One seam for interactions.** Range and affordance predicates live in `packages/shared/src/affordances.ts` and are consumed by both the sim's authority guards and the client's prediction mirror — range expressions have exactly one home.
@@ -72,5 +74,6 @@ pnpm fly:deploy
 ## Further reading
 
 - [CONTEXT.md](CONTEXT.md) — domain vocabulary and framing: the language the code speaks
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — runtime topology, message pipeline, module seams
 - [docs/agents](docs/agents) — repo-specific agent guides
 - [docs/art](docs/art) — art direction briefs

@@ -56,6 +56,7 @@ Gotchas:
 
 - Repo-local `.opencode/skills/turnover-*`: [turnover-gates](.opencode/skills/turnover-gates/SKILL.md) (gate ladder + evidence), [turnover-protocol](.opencode/skills/turnover-protocol/SKILL.md) (leak rules), [turnover-sim-harness](.opencode/skills/turnover-sim-harness/SKILL.md) (Gate 2 scenario format), [turnover-client-harness](.opencode/skills/turnover-client-harness/SKILL.md) (Gate 3 + `window.__TURNOVER__` hook contract).
 - [docs/agents/domain.md](docs/agents/domain.md): how to consume repo domain docs while exploring.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): runtime topology, protocol pipeline, and module seams — read the recipes before adding messages or interactions.
 - [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md): issue workflow (`gh` CLI).
 - Historical architecture decisions (AD-001+) live in git history (`docs(state)` commits); read the relevant ones before changing room/sim/protocol seams.
 - [package.json](package.json): root scripts and toolchain.
