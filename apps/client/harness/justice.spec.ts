@@ -60,6 +60,65 @@ async function roleOf(page: Page): Promise<string> {
   return role
 }
 
+/**
+ * Burst-walk the own player into the accuse band — past the 1-tile desk zone
+ * (edge x=16) yet within ACCUSATION_RANGE_TILES (edge x=17) of the desk
+ * cluster. Short key bursts with a position read between them: standing still
+ * lets the moved-event stream catch up, so lag can never hide an overshoot
+ * (the 3.C single held walk drifted out of the band under parallel-worker
+ * load, one level deeper: even a gated walk reads a stale event mid-stride).
+ */
+async function seekAccuseBand(page: Page): Promise<void> {
+  const newestOwnMove = () =>
+    page.evaluate(() => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            events: { type: string; at?: number; payload?: { playerId?: string; x?: number } }[]
+            local: { playerId: string | null }
+          }
+        }
+      ).__TURNOVER__
+      const own = t.local.playerId
+      for (let i = t.events.length - 1; i >= 0; i--) {
+        const e = t.events[i]
+        if (e === undefined || e.type !== 'player:moved') continue
+        if (e.payload?.playerId !== own) continue
+        return {
+          x: typeof e.payload.x === 'number' ? e.payload.x : null,
+          ageMs: typeof e.at === 'number' ? Date.now() - e.at : Number.POSITIVE_INFINITY,
+        }
+      }
+      return null
+    })
+  let bandSeen = false
+  for (let i = 0; i < 60; i++) {
+    const move = await newestOwnMove()
+    // Settled read: in band AND the newest move is ≥250 ms old (the stream
+    // caught up — the true position cannot be further down the last walk).
+    if (
+      move !== null &&
+      move.ageMs >= 250 &&
+      move.x !== null &&
+      move.x >= 16.2 &&
+      move.x <= 16.8
+    ) {
+      return
+    }
+    // Degraded read: under heavy load the stream can freeze entirely. If the
+    // position was ever seen in band, proceed anyway — the menu wait after
+    // the hold is the real arbiter.
+    if (move !== null && move.x !== null && move.x >= 16.2 && move.x <= 16.8) bandSeen = true
+    const key = move === null || move.x === null || move.x < 16.2 ? 'ArrowRight' : 'ArrowLeft'
+    await page.keyboard.down(key)
+    await page.waitForTimeout(60)
+    await page.keyboard.up(key)
+    await page.waitForTimeout(40)
+  }
+  if (bandSeen) return
+  throw new Error('seekAccuseBand: own player never settled in x ∈ [16.2, 16.8]')
+}
+
 test.describe('client:accuse_ui', () => {
   test('tap E calls, hold E accuses, the accuser is fired name-only, the round continues', async ({
     browser,
@@ -198,49 +257,40 @@ test.describe('client:accuse_ui', () => {
       undefined,
       { timeout: 25000 },
     )
-    await accuser.keyboard.down('ArrowLeft') // exit + walk to the approach zone
-    // 3.C: ride legs doubled, so a fixed walk-sleep drifted into the desk's
-    // E-suppression zone (AD-031) and the menu never opened. 3.E: the car
-    // lands at the EAST end, so walk LEFT until the own stream reports
-    // x ≤ 16.8 — within ACCUSATION_RANGE_TILES of the spawn cluster (15) but
-    // outside DESK_RANGE_TILES of the desk zone.
+    // Exit the car: hold the exit direction through the door swing — the
+    // pending exit (AD-026) applies at full-open — until the rider chip hides
+    // (she is back on the floor stream). Then seek the accuse band.
+    await accuser.keyboard.down('ArrowLeft')
     await accuser.waitForFunction(
-      () => {
-        const t = (
-          window as unknown as {
-            __TURNOVER__: {
-              events: { type: string; payload?: { playerId?: string; x?: number } }[]
-              local: { playerId: string | null }
-            }
-          }
-        ).__TURNOVER__
-        const own = t.local.playerId
-        // Backwards scan: the newest own moved event is within the last few
-        // ticks; a forward filter would lag behind the walk and overshoot.
-        for (let i = t.events.length - 1; i >= 0; i--) {
-          const e = t.events[i]
-          if (e === undefined || e.type !== 'player:moved') continue
-          if (e.payload?.playerId !== own) continue
-          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) <= 16.8
-        }
-        return false
-      },
+      () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
       undefined,
       { timeout: 15000 },
     )
-    await accuser.keyboard.up('ArrowLeft')
+    await seekAccuseBand(accuser)
 
     // --- Hold E (≥ 400 ms): the confirm menu opens naming a nearby player —
-    // never the accuser themselves (JUST-16). ---
-    await accuser.keyboard.down('e')
-    await accuser.waitForFunction(
-      () => {
-        const menu = document.querySelector('#accuse-menu')
-        return menu !== null && !menu.hasAttribute('hidden')
-      },
-      undefined,
-      { timeout: 5000 },
-    )
+    // never the accuser themselves (JUST-16). Drift can leave the accuser a
+    // hair out of range: if the menu doesn't show, re-seek and hold again. ---
+    let menuShown = false
+    for (let attempt = 0; attempt < 4 && !menuShown; attempt++) {
+      if (attempt > 0) await seekAccuseBand(accuser)
+      await accuser.keyboard.down('e')
+      try {
+        await accuser.waitForFunction(
+          () => {
+            const menu = document.querySelector('#accuse-menu')
+            return menu !== null && !menu.hasAttribute('hidden')
+          },
+          undefined,
+          // Interval polling: a stalled rAF can sleep through the menu window.
+          { polling: 100, timeout: 4000 },
+        )
+        menuShown = true
+      } catch {
+        await accuser.keyboard.up('e')
+      }
+    }
+    if (!menuShown) throw new Error('accuse menu never opened after re-seeks')
     const menuText = (await accuser.$eval('#accuse-menu-text', (m) => m.textContent)) ?? ''
     expect(menuText).toMatch(/^accuse .+\?$/)
     expect(menuText).not.toContain(accuserName)
@@ -287,8 +337,13 @@ test.describe('client:accuse_ui', () => {
     expect(toastAudit[0]).toEqual(['playerId'])
 
     // --- The fired page: banner up, intents gated, rectangle gone. ---
-    const banner = await accuser.$eval('#fired-banner', (b) => !b.hasAttribute('hidden'))
-    expect(banner).toBe(true)
+    // The fire rides a server broadcast — wait for it rather than reading the
+    // banner once (an immediate read races the wire under load).
+    await accuser.waitForFunction(
+      () => document.querySelector('#fired-banner')?.hasAttribute('hidden') === false,
+      undefined,
+      { timeout: 15000 },
+    )
 
     for (const page of pages) {
       await page.waitForFunction(

@@ -420,7 +420,7 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
   test('an exiter sees standing occupants of the arrival floor immediately (AD-017)', async ({
     browser,
   }) => {
-    test.setTimeout(90_000)
+    test.setTimeout(240_000) // two elevator rides + a 60-attempt boarding loop
     const host = await browser.newContext().then((c) => c.newPage())
     const code = await createRoom(host, 'ada')
     const follower = await browser.newContext().then((c) => c.newPage())
@@ -467,8 +467,33 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     // Bruno rides the EAST car (car 1 is away): walk to the east landing and
     // board with the landing call press (AD-025); he steps off only briefly
     // after the ride.
+    // Walk to the east landing position-gated (x ≥ 28.4 of the 30-tile hall):
+    // a fixed walk-sleep strands bruno short of the call zone under worker
+    // lag, and every landing press then misses (AD-028 retries can't board a
+    // player who isn't there).
     await follower.keyboard.down('ArrowRight')
-    await follower.waitForTimeout(3000)
+    await follower.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              events: { type: string; payload?: { playerId?: string; x?: number } }[]
+              local: { playerId: string | null }
+            }
+          }
+        ).__TURNOVER__
+        const own = t.local.playerId
+        for (let i = t.events.length - 1; i >= 0; i--) {
+          const e = t.events[i]
+          if (e === undefined || e.type !== 'player:moved') continue
+          if (e.payload?.playerId !== own) continue
+          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) >= 28.4
+        }
+        return false
+      },
+      undefined,
+      { timeout: 20000 },
+    )
     await follower.keyboard.up('ArrowRight')
     await pressUntilRiderChip(follower)
     await follower.keyboard.press('1')

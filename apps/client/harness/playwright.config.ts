@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url))
@@ -7,6 +8,11 @@ const stripCheck = `${repoRoot}apps/client/scripts/check-prod-strip.mjs`
 export default defineConfig({
   testDir: import.meta.dirname,
   testMatch: /.*\.spec\.ts/,
+  // Local gate runs share the box with browsers/agents; the core-proportional
+  // default (8 workers on a 16-core desktop) starves the 20 Hz sim and stalls
+  // page rAFs — the source of chronic full-suite flakes. CI keeps the
+  // core-proportional default (its boxes are small).
+  workers: process.env.CI ? undefined : 4,
   use: {
     baseURL: 'http://localhost:2567',
     // Watchable evidence (cycle 3.B): record every test's pages so a run can

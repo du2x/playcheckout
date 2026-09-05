@@ -34,6 +34,7 @@ test.describe('client:round_start', () => {
   test('renders four labeled player sprites with a counting-down clock (LIGHT-09, LIGHT-10)', async ({
     browser,
   }) => {
+    test.setTimeout(90_000) // 4-page setup + round start can exceed 30 s under load
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -66,22 +67,23 @@ test.describe('client:round_start', () => {
 
       const clockStart = await page.textContent('#clock')
       // The first displayed second may already have ticked under worker load
-      // (250 ms interval); the countdown CONTRACT is pinned by the 04:59
-      // entry window below.
-      expect(clockStart).toMatch(/^05:00|04:59$/)
+      // (250 ms interval); the countdown CONTRACT is pinned by the decrease
+      // assertion below — the entry window admits 05:00..04:58.
+      expect(clockStart).toMatch(/^05:00|04:5[89]$/)
     }
 
-    // LIGHT-10: decreases by ~1 s per wall-clock second. Wait for the clock to
-    // ENTER 04:59 (its display window is exactly 1 s wide), then sample again
+    // LIGHT-10: decreases by ~1 s per wall-clock second. The first sample may
+    // land on any of 05:00..04:58 under load, so gate on reaching a fixed
+    // later mark (04:57) instead of re-assuming the entry value, then sample
     // one second later — deterministic regardless of mount latency.
     await pages[0]?.waitForFunction(
-      () => document.querySelector('#clock')?.textContent === '04:59',
+      () => document.querySelector('#clock')?.textContent === '04:57',
       undefined,
-      { timeout: 5000 },
+      { timeout: 10000 },
     )
     await pages[0]?.waitForTimeout(1000)
     const clockLater = await pages[0]?.textContent('#clock')
-    expect(clockLater).toBe('04:58')
+    expect(clockLater).toBe('04:56')
 
     await Promise.all(pages.map((p) => p.context().close()))
   })
@@ -89,6 +91,7 @@ test.describe('client:round_start', () => {
   test('each page sees only its own role, and exactly one saboteur exists (LIGHT-11)', async ({
     browser,
   }) => {
+    test.setTimeout(90_000) // 4-page setup under parallel workers exceeds 30 s
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )

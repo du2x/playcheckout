@@ -71,7 +71,7 @@ test.describe('client:art_doors', () => {
   test('door Images are phase-free, uniformly textured, and absent from the lobby (ART-06/10/11)', async ({
     browser,
   }) => {
-    test.setTimeout(30_000)
+    test.setTimeout(90_000) // elevator ride + dwell + walks exceed 30 s under load
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -96,10 +96,34 @@ test.describe('client:art_doors', () => {
 
     // --- Interior half (ART-07..09, ART-14) ---
     // Ride to floor1 (walk east — the car boards at the east landing, AD-040
-    // — board via the call press (AD-025), press floor1, exit) — the exit
-    // must happen INSIDE the open-door dwell: a closed car cannot be exited.
+    // — board via the call press (AD-025), press floor1, exit). Walk east
+    // until the own stream reports the east landing (x ≥ 28 of the 30-tile
+    // hall): position-gated, so worker lag can't strand the host short of the
+    // call zone (a fixed walk-sleep did exactly that under parallel load).
     await host.keyboard.down('ArrowRight')
-    await host.waitForTimeout(3000)
+    await host.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              events: { type: string; payload?: { playerId?: string; x?: number } }[]
+              local: { playerId: string | null }
+            }
+          }
+        ).__TURNOVER__
+        const own = t.local.playerId
+        // Backwards scan: the newest own moved event is the freshest position.
+        for (let i = t.events.length - 1; i >= 0; i--) {
+          const e = t.events[i]
+          if (e === undefined || e.type !== 'player:moved') continue
+          if (e.payload?.playerId !== own) continue
+          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) >= 28.4
+        }
+        return false
+      },
+      undefined,
+      { timeout: 20000 },
+    )
     await host.keyboard.up('ArrowRight')
     await host.keyboard.press('ArrowUp')
     await host.waitForFunction(
@@ -107,7 +131,7 @@ test.describe('client:art_doors', () => {
         document.querySelector('#elevator-riders') !== null &&
         !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
       undefined,
-      { timeout: 8000 },
+      { timeout: 15000 },
     )
     await host.keyboard.press('1')
     // AD-026 stop anatomy: the arrival moved lands at the START of the
@@ -116,14 +140,13 @@ test.describe('client:art_doors', () => {
     await host.waitForFunction(
       () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
-      { timeout: 10_000 },
+      { timeout: 15000 },
     )
-    await host.keyboard.down('ArrowLeft')
-    await host.waitForTimeout(400)
-    await host.keyboard.up('ArrowLeft')
-    // Walk left off the landing into the first reached room segment (room 7
-    // from the east approach, AD-040/AD-046) — the own-room interior renders (the
-    // FR-10 inside read).
+    // Exit and walk into the first reached room segment (room 7 from the east
+    // approach, AD-040/AD-046) in ONE held direction: the pending exit applies
+    // at door-open, and continuing to hold walks into the room until the
+    // own-room interior renders (the FR-10 inside read). Gated on the
+    // condition — a fixed exit walk raced the dwell and missed it under load.
     await host.keyboard.down('ArrowLeft')
     await host
       .waitForFunction(
@@ -166,7 +189,7 @@ test.describe('client:art_doors', () => {
           return done
         },
         undefined,
-        { timeout: 10_000 },
+        { timeout: 20000 },
       )
       .catch(async () => {
         const dbg = await host.evaluate(() => (window as unknown as { __dbg?: unknown[] }).__dbg)

@@ -174,7 +174,7 @@ test.describe('client:art_players', () => {
   test('variant overlay: pairing, flipX parity, seed-derived frame, identical across reconnect (VPOL-02..05)', async ({
     browser,
   }) => {
-    test.setTimeout(30_000)
+    test.setTimeout(90_000) // 4-page setup under parallel workers exceeds 30 s
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -182,7 +182,30 @@ test.describe('client:art_players', () => {
     const own = pages[0] as Page
 
     // VPOL-02: one variant overlay per body — pixel-locked (same x), frame
-    // within the 8 buckets, and flipX parity with its body.
+    // within the 8 buckets, and flipX parity with its body. The heads ride a
+    // later payload than the round start, so wait for the full 4/4 set before
+    // the pairing read — an immediate read races the wire under load.
+    await own.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: { list: { type: string; texture: { key: string } }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const list = t.scene('Round')?.children.list ?? []
+        const sprites = list.filter((c) => c.type === 'Sprite')
+        return (
+          sprites.filter((c) => c.texture?.key === 'staff-walk').length === 4 &&
+          sprites.filter((c) => c.texture?.key === 'staff-variant').length === 4
+        )
+      },
+      undefined,
+      { timeout: 10000 },
+    )
     const pairRead = await readPlayerSprites(own)
     const bodies = pairRead.filter((s) => s.texture === 'staff-walk')
     const heads = pairRead.filter((s) => s.texture === 'staff-variant')

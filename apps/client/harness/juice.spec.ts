@@ -34,7 +34,7 @@ async function fourPlayerRound(pages: Page[]): Promise<void> {
 
 test.describe('client:juice_small', () => {
   test('the anger cue pops with scale and expires by its TTL (VPOL-15)', async ({ browser }) => {
-    test.setTimeout(45_000)
+    test.setTimeout(90_000) // 4-page setup under parallel workers exceeds 45 s
     const pages = await Promise.all(
       Array.from({ length: 4 }, () => browser.newContext().then((c) => c.newPage())),
     )
@@ -169,8 +169,20 @@ test.describe('client:camera_juice', () => {
           playerId: 'someone-else',
         })
       })
-      await own.waitForTimeout(60)
-      expect(await shakeRunning(own)).toBe(true)
+      // The shake may start and expire inside one stalled frame under load —
+      // poll for it rather than sampling once after a fixed sleep.
+      await own.waitForFunction(
+        () => {
+          const t = (
+            window as unknown as {
+              __TURNOVER__: { scene: (name: string) => { cameras?: { main?: { shakeEffect?: { isRunning?: boolean } } } | null } }
+            }
+          ).__TURNOVER__
+          return t.scene('Round')?.cameras?.main?.shakeEffect?.isRunning === true
+        },
+        undefined,
+        { polling: 100, timeout: 5000 },
+      )
       // Input stays enabled during the shake (VPOL-17).
       const inputOk = await own.evaluate(() => {
         const t = (
