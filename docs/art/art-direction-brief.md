@@ -69,9 +69,10 @@ license to copy assets).
   paper scraps, never gore (family/streamer-safe per PRD §2).
 - **Edge/line treatment:** hard pixel clusters; optional 1px darker-self outline on
   characters only (never on architecture). No black outlines, no anti-aliasing.
-- **Lighting direction and contrast:** top-down ceiling sconces, warm; light pools
-  under sconces and inside prepped rooms. Trashed-fresh rooms flicker slightly
-  cooler. Baked shading only; no runtime lights in MVP.
+- **Lighting direction and contrast:** warm read overall; light pools inside
+  prepped rooms. Trashed-fresh rooms flicker slightly cooler. Baked shading
+  only; no runtime lights in MVP. (No wall candle/sconce props — removed by
+  user ruling 2026-09-04; the flat authored wall field carries the corridor.)
 - **Detail density and focal hierarchy:** detail concentrates on (1) characters,
   (2) door zone (card + door + frame), (3) room interior near the door. Corridor
   between doors stays quiet so the door rhythm reads. Anything invisible at 60 px

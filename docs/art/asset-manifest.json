@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "art_direction_brief": "docs/art/alternative/art-direction-brief.md (Deco Noir, AD-029)",
-  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050): 16 entries / 17 loaded textures / 18 files, ~10 KB total against ≤20 sheets / <2 MB.",
+  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050, amended AD-052; guest family expanded to 10 kinds 2026-09-05): 16 entries / 22 loaded textures / 24 files, ~12 KB total against ≤20 sheets / <2 MB. AD-052: the `sconce` entry, sheet, and generator were removed (user ruling 2026-09-04 — no candle props).",
   "assets": [
     {
       "id": "staff-body",
@@ -63,11 +63,11 @@
     },
     {
       "id": "guest-silhouettes",
-      "role": "Phase 4.1 guest archetype silhouettes (suite/tourist/clerk/elder), 34x64 grayscale tint carriers — the client setTint()s teal/burgundy/moss/plum rotations so no guest carries authored ivory/brass (VPOL-07)",
+      "role": "Guest archetype silhouettes (10 kinds: suite/tourist/clerk/elder + dandy/diva/flapper/merchant/professor/child, user direction 2026-09-05), 34x64 grayscale tint carriers — the client setTint()s teal/burgundy/moss/plum rotations so no guest carries authored ivory/brass (VPOL-07)",
       "path": "apps/client/public/art/chars/guest-suite.png",
-      "status": "approved",
+      "status": "in-review",
       "technical": {
-        "dimensions": "34x64 each (4 files)",
+        "dimensions": "34x64 each (10 files)",
         "alpha": true,
         "anchor": "bottom-center",
         "frames": 1,
@@ -81,13 +81,13 @@
         "created_at": "2026-09-03",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "grayscale base (6 colors) x runtime tint = 16 identity combos inside the sheet budget; denylist PASS on all four files; guest seed % 16 drives archetype+palette (VPOL-06)."
+        "prompt_or_source_record": "grayscale base (6 colors) x runtime tint = 40 identity combos inside the sheet budget; denylist PASS on all files; guest seed % 10 archetype + seed / 10 % 4 palette drives identity (VPOL-06). Amended 2026-09-05: +6 archetypes (dandy/diva/flapper/merchant/professor/child); the original four retain their 2026-08-30 Gate 4 approval."
       },
       "verification": {
         "native_scale_reviewed": true,
         "in_engine_reviewed": true,
         "technical_checks_passed": true,
-        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
+        "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png); the 6 added archetypes await the same review"
       }
     },
     {
@@ -105,12 +105,12 @@
       "visual_locks": ["palette", "light-direction"],
       "source": {
         "kind": "authored",
-        "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model)",
+        "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model) — script removed in AD-052 with the sconce prop; the wall-field tile it also authored remains",
         "creator": "art workstream",
         "created_at": "2026-09-04",
         "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "32px tile (frieze pitch 16 divides 32, chevron wraps by x%32); flat field below the brass closing rule. QA asset_report PASS (3 colors, opaque). Native-scale corridor mock /tmp/opencode/wall-sconce-corridor-mock.png."
+        "prompt_or_source_record": "32px tile (frieze pitch 16 divides 32, chevron wraps by x%32); flat field below the brass closing rule. QA asset_report PASS (3 colors, opaque)."
       },
       "verification": {
         "native_scale_reviewed": true,
@@ -436,35 +436,6 @@
         "in_engine_reviewed": true,
         "technical_checks_passed": true,
         "approved_by": "art workstream (in-engine evidence-cues scenario + AD-020 slice commit 9e80b72)"
-      }
-    },
-    {
-      "id": "sconce",
-      "role": "Phase 4.2 sconce prop (24x40 brass arm + candle core) with baked 48x16 pool ellipse below it; one sprite per door beat, positioned from layout geometry (room centers + landings), replacing the deco-pools Graphics ellipses. Flat pixels only, no blend modes (glow arrives in 4.3)",
-      "path": "apps/client/public/art/props/sconce.png",
-      "status": "in-review",
-      "technical": {
-        "dimensions": "48x52",
-        "alpha": true,
-        "anchor": "bottom-center",
-        "frames": 1,
-        "filtering": "nearest"
-      },
-      "visual_locks": ["palette", "light-direction"],
-      "source": {
-        "kind": "authored",
-        "url_or_tool": "scripts/art/generate-wall-sconce.py (deterministic Pillow authoring, no generation model)",
-        "creator": "art workstream",
-        "created_at": "2026-09-04",
-        "license": "project-internal",
-        "attribution": "",
-        "prompt_or_source_record": "prop x12..35/y0..39 over pool ellipse center (24,44) rx23/ry7 halo + rx14/ry4 core. QA asset_report PASS (6 colors, full alpha). West mouth at x=24 keeps the pool on-canvas. Mock /tmp/opencode/wall-sconce-corridor-mock.png."
-      },
-      "verification": {
-        "native_scale_reviewed": true,
-        "in_engine_reviewed": false,
-        "technical_checks_passed": true,
-        "approved_by": ""
       }
     },
     {

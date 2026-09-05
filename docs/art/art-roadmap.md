@@ -19,7 +19,7 @@ The direction is adopted but roughly one-third realized:
   archetype silhouettes (grayscale tint carriers), room doors + elevator landing
   door/panel, the corridor band tile, three room interiors, the rustle FX.
 - **Still code-drawn in `WorldScene`**: the wall field (Graphics fill), the chevron
-  frieze + sconce pools (drawn once per mount), elevator/stairs interior screens
+  frieze + pool ellipses (drawn once per mount), elevator/stairs interior screens
   (rectangles + text), tenancy markers, name labels.
 - **Juice v1** (`juice.ts`, AD-045): settle pop, foot-tap, anger pop + dust puffs,
   camera shake (reserved to fired/ambushed).
@@ -62,8 +62,8 @@ Cycle rules (inherited from the roadmap phase rules):
 | Cycle | Feature | Scope | New gates |
 |---|---|---|---|
 | 4.1 | `visual-polish` | **SHIPPED (AD-045)** — 34×64 cast, variant overlay, guest archetypes, corridor Deco ornament, juice v1 | see AD-045 |
-| 4.2 | `environment` | Author the corridor for real — the single biggest lever (~80% of the frame). Wall field with frieze band, wainscot, sconce props with baked light pools (brief sizes: sconce 24×40, pool 48×16), door pediments, quiet-corridor discipline between doors. Replaces the code-drawn Graphics fills/wall fill in `WorldScene`; live view only (spectator overview inherits). Needs D1+D2 decided. | `client:art_environment` (+ corridorDepth amendments) |
-| 4.3 | `lighting-atmosphere` | The mood pass — needs D1(b). Additive-blend glow on sconce pools, lit door cards, prepped-room spill one tile past the threshold (brief-sanctioned); scene-wide vignette; dust motes in the light cones (particles); cooler read on trashed-fresh rooms. Phaser 4.2.1 FX/particle surface verified present — exact per-object vs camera API confirmed in the cycle's Design phase. | `client:atmosphere` |
+| 4.2 | `environment` | Author the corridor for real — the single biggest lever (~80% of the frame). Wall field with frieze band, wainscot, door pediments, quiet-corridor discipline between doors. Replaces the code-drawn Graphics fills/wall fill in `WorldScene`; live view only (spectator overview inherits). No sconce/candle props — removed by user ruling 2026-09-04. Needs D1+D2 decided. | `client:art_environment` (+ corridorDepth amendments) |
+| 4.3 | `lighting-atmosphere` | The mood pass — needs D1(b). Additive-blend glow on prepped-room light pools, lit door cards, prepped-room spill one tile past the threshold (brief-sanctioned); scene-wide vignette; dust motes (particles); cooler read on trashed-fresh rooms. Phaser 4.2.1 FX/particle surface verified present — exact per-object vs camera API confirmed in the cycle's Design phase. | `client:atmosphere` |
 | 4.4 | `cast-motion` | Finish the deferred sheets: `staff-work-channel` (requires its own FR-9 audit — frames byte-identical for every role), guest walk cycles (guests are static single frames today), idle micro-variants; motion polish stays inside the brief's "unhurried gliding" character (≤1 px bob, 1-frame turns). | `client:cast_motion` (asserts the FR-9 byte-identical pin) |
 | 4.5 | `juice-systematic` | Extend `juice.ts` from one-off cues to systems: elevator door swing + arrival settle, complaint-counter escalation, buzzer sequence, round-start establishing shot. Camera shake stays reserved to fired/ambushed (the `shouldShake` gate — routine motion never shakes). | `client:juice_systems` |
 | 4.6 | `overlay-restyle` | The DOM overlay inherits Deco Noir: deco display typography, ivory/brass/ink panels, animated transitions, consistent iconography (lobby, HUD, door cards, walkie log, results/recap). Half the screen is DOM — cheap relative to impact. No HUD art oracle (FR-14 stays). | `client:overlay_style` |

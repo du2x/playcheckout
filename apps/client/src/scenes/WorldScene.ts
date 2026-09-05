@@ -4,7 +4,6 @@ import {
   carriedGuestIdOf,
   type FloorId,
   type GuestFloorId,
-  HALL_LENGTH_TILES,
   inDeskZone,
   type MovementSnapshot,
   onLanding,
@@ -25,6 +24,7 @@ import {
 import Phaser from 'phaser'
 import type { AccuseSession } from '../accuseSession'
 import { ACCUSE_HOLD_MS } from '../accuseSession'
+import { sfx } from '../audio/sfx'
 import {
   dropCues,
   type EvidenceSession,
@@ -34,20 +34,66 @@ import {
 } from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
-import { setCarScreenDoors, setCarScreenFloor, setCarScreenState } from '../ui/carScreen'
+import {
+  FLOOR_ORDER,
+  setCarScreenDoors,
+  setCarScreenFloor,
+  setCarScreenState,
+} from '../ui/carScreen'
 import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
+import { buildSfxToggle } from '../ui/sfxToggle'
 import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
-import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
+import {
+  CLIMB,
+  climbBobY,
+  climbWalkFraction,
+  lurchKickY,
+  sconceAlpha,
+  stairPoint,
+  stunFx,
+} from './climbPresenter'
+import {
+  arrivalBurstAlpha,
+  carSwayY,
+  DEFAULT_ANIMATION_CONFIG,
+  doorsOpenAmount,
+  ElevatorPresenter,
+} from './elevatorPresenter'
 import { JUICE, shouldShake } from './juice'
+import {
+  advanceZoom,
+  REST_ZOOM,
+  roomZoomActive,
+  type ZoomView,
+  zoomLayerTransform,
+  zoomTarget,
+} from './zoomPresenter'
 
-/** Guest archetype + palette derivation (Phase 4.1, VPOL-06): pure seed →
- *  {archetype, palette}. Palette tints are civil Deco tones — never the staff
- *  ivory `0xf2ead8`/`0xf6f1e6` or brass `0xc9a13b`/`0xb3873a` (VPOL-07). */
-const GUEST_ARCHETYPES = ['guest-suite', 'guest-tourist', 'guest-clerk', 'guest-elder'] as const
+/** Guest archetype + palette derivation (Phase 4.1, VPOL-06; 10 kinds per the
+ *  2026-09-05 user direction): pure seed → {archetype, palette}. The first
+ *  four archetypes keep their historical order so seed 0..3 stays
+ *  suite/tourist/clerk/elder. Palette tints are civil Deco tones — never the
+ *  staff ivory `0xf2ead8`/`0xf6f1e6` or brass `0xc9a13b`/`0xb3873a` (VPOL-07). */
+const GUEST_ARCHETYPES = [
+  'guest-suite',
+  'guest-tourist',
+  'guest-clerk',
+  'guest-elder',
+  'guest-dandy',
+  'guest-diva',
+  'guest-flapper',
+  'guest-merchant',
+  'guest-professor',
+  'guest-child',
+] as const
 const GUEST_PALETTES = [0x5a9aaa, 0xb06a7a, 0x8aa06a, 0x9a7a9a] as const
 function guestVariantOf(seed: number): { archetype: number; palette: number } {
-  return { archetype: ((seed >>> 0) % 4) >>> 0, palette: (((seed >>> 0) >> 2) % 4) >>> 0 }
+  const u = (seed >>> 0) % GUEST_ARCHETYPES.length
+  return {
+    archetype: u >>> 0,
+    palette: (Math.floor((seed >>> 0) / GUEST_ARCHETYPES.length) % GUEST_PALETTES.length) >>> 0,
+  }
 }
 /** Per-channel tint blend toward the dining amber (VPOL-08). */
 function blendTint(a: number, b: number, t: number): number {
@@ -76,14 +122,8 @@ function blendTint(a: number, b: number, t: number): number {
 const TILE_PX = 32 // hall width in px per tile (960 / 30, integer grid — AD-030)
 const GROUND_Y = 430
 /** Front-facing landing door width (Phase 4.2: shared by the car mount and
- *  the east sconce beat so the two never drift apart). */
+ *  the landing-panel mount so the two never drift apart). */
 const ELEVATOR_DOOR_PX = 80
-/** Sconce pool half-width (Phase 4.2, ENV-05): the west-mouth beat sits one
- *  pool-half off the canvas edge (clamped into the mouth zone) so the 48px
- *  pool renders fully on-canvas. */
-const SCONCE_POOL_HALF = 24
-/** Sconce mount y: door-lintel top (GROUND_Y − 96) + 2px sill overlap. */
-const SCONCE_MOUNT_Y = GROUND_Y - 94
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
 /** Dining tint target (VPOL-08): the lobby→mezzanine dining cue. */
 const DINING_FILL = 0xffd27a
@@ -223,7 +263,10 @@ export class WorldScene extends Phaser.Scene {
     right: Phaser.GameObjects.Rectangle
   } | null = null
   private elevatorCanvasOccupants: Phaser.GameObjects.Container | null = null
-  private elevatorCanvasButtons = new Map<FloorId, Phaser.GameObjects.Rectangle>()
+  private elevatorCanvasButtons = new Map<FloorId, Phaser.GameObjects.Arc>()
+  /** The beyond-door glow (AD-054) + its burst t0 (-1 = at rest). */
+  private elevatorCanvasBeyond: Phaser.GameObjects.Rectangle | null = null
+  private elevatorCanvasBurstT0 = -1
   /** Phaser canvas stairwell interior — full-screen when in the west stairwell
    *  (transit/stun only: the breath stands on the destination floor, where the
    *  small chip carries the countdown instead). */
@@ -232,6 +275,32 @@ export class WorldScene extends Phaser.Scene {
   private stairCanvasRoute: Phaser.GameObjects.Text | null = null
   private stairCanvasPhase: Phaser.GameObjects.Text | null = null
   private stairCanvasArrow: Phaser.GameObjects.Text | null = null
+  /** Climb-scene members (night-juice): the scrolled stair band, the lazy
+   *  climber sprite (container-owned — never a top-level harness child), the
+   *  flicker sconces, the landing glyphs, and the scuffle/blackout FX stack. */
+  private climbBand: Phaser.GameObjects.Container | null = null
+  private climbClimber: Phaser.GameObjects.Sprite | null = null
+  private climbSconces: { lamp: Phaser.GameObjects.Ellipse; seed: number }[] = []
+  private climbGlyphFrom: Phaser.GameObjects.Text | null = null
+  private climbGlyphTo: Phaser.GameObjects.Text | null = null
+  private climbFx: {
+    flashWhite: Phaser.GameObjects.Rectangle
+    flashRed: Phaser.GameObjects.Rectangle
+    sweep: Phaser.GameObjects.Rectangle
+    blackout: Phaser.GameObjects.Rectangle
+    vignette: Phaser.GameObjects.Rectangle
+  } | null = null
+  /** Stun total captured at the ambush — the FX timeline's t0 basis. */
+  private stunTotalMs = 0
+  /** `Date.now()` the interrupted transit resumed (the lurch window's t0). */
+  private climbLurchAtMs = 0
+  /** The walk fraction frozen at the ambush (a stun never advances the walk). */
+  private lastTransitWalk = 0
+  /** Previous stair/car phase — the audio transition watchers' memory. */
+  private lastStairPhase: 'transit' | 'breath' | 'stunned' | null = null
+  private lastCarPhase: string | null = null
+  /** Warm light spill at the east landing while the car's doors stand open. */
+  private spillGlow: Phaser.GameObjects.Container | null = null
   /** The breath chip: "catching breath" + countdown at the top-left of the
    *  destination floor view (AD-040 amendment — the floor renders beneath). */
   private breathChip: Phaser.GameObjects.Container | null = null
@@ -248,6 +317,13 @@ export class WorldScene extends Phaser.Scene {
   /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
   private evidence: EvidenceSession = initialEvidenceSession()
   private evidenceLayer: HTMLElement | null = null
+  /** The screen-space DOM layer (sfx toggle, ambush toasts): evidenceLayer's
+   *  untransformed sibling — the room zoom (below) transforms only the
+   *  world-anchored marker layer. */
+  private uiLayer: HTMLElement | null = null
+  /** The room zoom's camera view (room-zoom spec): the eased transform the
+   *  camera + marker layer apply per frame; REST_ZOOM is the exact identity. */
+  private zoomView: ZoomView = REST_ZOOM
   /** The west stairwell marker (cycle 3.E, AD-040, STAIRS-17): one DOM glyph
    *  following the viewed floor's lane — the camera-free west end's signpost. */
   private stairMarker: HTMLElement | null = null
@@ -292,10 +368,6 @@ export class WorldScene extends Phaser.Scene {
   /** Missing-texture fallback (spec edge case): flat fill drawn ONLY when
    *  the wall-field texture failed to load — never alongside the tile. */
   private wallFallback: Phaser.GameObjects.Graphics | null = null
-  /** Authored sconces (Phase 4.2, ENV-05): `sconce:<floor>:<i>` Images,
-   *  every x derived from shared layout — never hand-pinned, never
-   *  state-linked (ENV-07). Live view only. */
-  private sconceImages = new Map<string, Phaser.GameObjects.Image>()
   /** The own observed room's interior (ART-08): one slot — a live viewer can
    *  stand in at most one segment, so structurally ≤1 interior exists (ART-14). */
   private interiorImage: Phaser.GameObjects.Image | null = null
@@ -363,7 +435,6 @@ export class WorldScene extends Phaser.Scene {
     this.tenancyMarkers.clear()
     this.cueNodes.clear()
     this.doorImages.clear()
-    this.sconceImages.clear()
     this.wallField = null
     this.wallFallback = null
     this.riderSession = data.riderSession
@@ -371,7 +442,6 @@ export class WorldScene extends Phaser.Scene {
     this.buildGuestLayer()
     this.buildDeskLayer()
     this.buildDoorImages()
-    this.buildSconces()
     this.syncTenancyMarkers()
 
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
@@ -473,6 +543,16 @@ export class WorldScene extends Phaser.Scene {
     this.elevatorPresenter = new ElevatorPresenter(this.cars, (car) => this.carLaneY(car))
     this.createElevatorCanvasInterior()
     this.createStairCanvasInterior()
+    // The landing light spill (night-juice): container-owned so the top-level
+    // ART counts never see it; positioned over the east landing per frame.
+    const spill = this.add.container(0, 0)
+    spill.setName('spillGlow')
+    spill.setDepth(0.5)
+    spill.setVisible(false)
+    const column = this.add.rectangle(30 * TILE_PX, -80, 130, 170, 0xf0d9a8, 0.08)
+    const pool = this.add.rectangle(30 * TILE_PX, -4, 270, 12, 0xf0d9a8, 0.2)
+    spill.add([column, pool])
+    this.spillGlow = spill
 
     const keyboard = this.input.keyboard
     if (keyboard !== null) {
@@ -506,33 +586,57 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The scenic in-car interior (AD-054): a warm hotel elevator car drawn in
+   * Phaser primitives on the AD-020 palette — paneled walls, brass rail,
+   * crimson carpet, sliding doors onto a lit hallway beyond, and a floor dial
+   * above the doors that ticks with the ride. The passengers stand center
+   * stage on the carpet (the social read IS the scene); the DOM car bar is
+   * retired while riding. Container-owned, so top-level ART counts are blind
+   * to every rectangle here.
+   */
   private createElevatorCanvasInterior(): void {
     const container = this.add.container(480, 288)
     container.setScrollFactor(0)
     container.setDepth(50)
     container.setVisible(false)
-    const bg = this.add.rectangle(0, 0, 960, 576, 0x0f1419)
-    container.add(bg)
-    const panelBg = this.add.rectangle(0, 0, 420, 260, 0x1b2530)
-    panelBg.setStrokeStyle(3, 0xe6c56a)
-    container.add(panelBg)
-    const title = this.add.text(-160, -95, 'ELEVATOR', {
-      fontSize: '10px',
-      color: '#8899aa',
-      fontFamily: 'monospace',
-    })
-    title.setOrigin(0, 0.5)
-    container.add(title)
-    const carLabel = this.add.text(160, -95, '', {
-      fontSize: '10px',
-      color: '#e6c56a',
-      fontFamily: 'monospace',
-    })
-    carLabel.setOrigin(1, 0.5)
-    carLabel.setName('carLabel')
-    container.add(carLabel)
-    const floor = this.add.text(0, -50, '', {
-      fontSize: '48px',
+    container.setName('elevatorCanvas')
+    // Backdrop: oversized so the ride sway never shows an edge.
+    container.add(this.add.rectangle(0, 0, 984, 600, 0x221c12))
+    // Walls: dim cream upper, dim tan wainscot, gold trim line, panel seams.
+    container.add(this.add.rectangle(0, -160, 960, 288, 0x6e6450))
+    container.add(this.add.rectangle(0, 140, 960, 328, 0x574a36))
+    container.add(this.add.rectangle(0, -16, 960, 5, 0x8a6a2e))
+    for (let x = -360; x <= 360; x += 120) {
+      container.add(this.add.rectangle(x, -30, 3, 576, 0x4f4634))
+    }
+    // Brass handrail across the back wall.
+    container.add(this.add.rectangle(0, -34, 752, 10, 0x8a6a2e))
+    container.add(this.add.rectangle(-368, -34, 12, 24, 0x55492c))
+    container.add(this.add.rectangle(368, -34, 12, 24, 0x55492c))
+    // Carpet: crimson field with a gold edge strip (the passengers' floor).
+    container.add(this.add.rectangle(0, 216, 960, 152, 0x5e2626))
+    container.add(this.add.rectangle(0, 142, 960, 4, 0x8a6a2e))
+    // The hallway beyond the doors: a lit glow the burst drives.
+    const beyond = this.add.rectangle(0, -36, 250, 262, 0xf0d9a8, 0.32)
+    container.add(beyond)
+    const beyondFloor = this.add.rectangle(0, 84, 250, 5, 0x8a6a2e)
+    container.add(beyondFloor)
+    // Doors: brushed-steel leaves with brass jambs, center-seamed.
+    const jambL = this.add.rectangle(-141, -36, 12, 262, 0x8a6a2e)
+    const jambR = this.add.rectangle(141, -36, 12, 262, 0x8a6a2e)
+    const left = this.add.rectangle(-70, -36, 128, 258, 0x4a5568)
+    const right = this.add.rectangle(70, -36, 128, 258, 0x4a5568)
+    const seamL = this.add.rectangle(-3, -36, 3, 258, 0x2a3542)
+    const seamR = this.add.rectangle(3, -36, 3, 258, 0x2a3542)
+    container.add([beyond, jambL, jambR, left, right, seamL, seamR])
+    this.elevatorCanvasDoors = { left, right }
+    // Floor dial above the doors: brass plate, the ticking glyph, arrow.
+    const dialPlate = this.add.rectangle(0, -214, 190, 62, 0x241d12)
+    dialPlate.setStrokeStyle(2, 0x8a6a2e)
+    container.add(dialPlate)
+    const floor = this.add.text(-20, -214, '', {
+      fontSize: '40px',
       color: '#ffd98a',
       fontFamily: 'monospace',
     })
@@ -540,7 +644,23 @@ export class WorldScene extends Phaser.Scene {
     floor.setName('floor')
     container.add(floor)
     this.elevatorCanvasFloor = floor
-    const state = this.add.text(0, -10, '', {
+    const dirArrow = this.add.text(52, -214, '', {
+      fontSize: '22px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    dirArrow.setOrigin(0.5)
+    dirArrow.setName('dirArrow')
+    container.add(dirArrow)
+    // Car tag + state line.
+    const carLabel = this.add.text(-430, -262, '', {
+      fontSize: '10px',
+      color: '#8899aa',
+      fontFamily: 'monospace',
+    })
+    carLabel.setName('carLabel')
+    container.add(carLabel)
+    const state = this.add.text(0, -172, '', {
       fontSize: '11px',
       color: '#8ad07a',
       fontFamily: 'monospace',
@@ -549,24 +669,19 @@ export class WorldScene extends Phaser.Scene {
     state.setName('state')
     container.add(state)
     this.elevatorCanvasState = state
-    const left = this.add.rectangle(-36, 30, 68, 70, 0x243040)
-    left.setStrokeStyle(1, 0x2a3542)
-    const right = this.add.rectangle(36, 30, 68, 70, 0x243040)
-    right.setStrokeStyle(1, 0x2a3542)
-    container.add([left, right])
-    this.elevatorCanvasDoors = { left, right }
-    const occ = this.add.container(0, 85)
-    container.add(occ)
-    this.elevatorCanvasOccupants = occ
+    // Button pillar (right wall): five round brass buttons, pressable.
+    const pillar = this.add.rectangle(332, -36, 84, 262, 0x5a4c38)
+    pillar.setStrokeStyle(2, 0x8a6a2e)
+    container.add(pillar)
     const floors: FloorId[] = ['floor3', 'floor2', 'floor1', 'mezzanine', 'lobby']
     const labels = ['3', '2', '1', 'M', 'L']
     floors.forEach((floorId, i) => {
-      const x = -80 + i * 40
-      const btn = this.add.rectangle(x, 65, 30, 30, 0x1a2530)
+      const y = -124 + i * 58
+      const btn = this.add.circle(332, y, 17, 0x1a2530)
       btn.setStrokeStyle(1, 0x3d4a58)
       btn.setInteractive({ useHandCursor: true })
       btn.on('pointerdown', () => this.pressFloor(floorId))
-      const label = this.add.text(x, 65, labels[i] ?? '', {
+      const label = this.add.text(332, y, labels[i] ?? '', {
         fontSize: '13px',
         color: '#9fb0c0',
         fontFamily: 'monospace',
@@ -575,7 +690,13 @@ export class WorldScene extends Phaser.Scene {
       container.add([btn, label])
       this.elevatorCanvasButtons.set(floorId, btn)
     })
+    // The passengers: center stage on the carpet (rebuilt each sync).
+    const occ = this.add.container(0, 196)
+    container.add(occ)
+    this.elevatorCanvasOccupants = occ
     this.elevatorCanvas = container
+    this.elevatorCanvasBeyond = beyond
+    this.elevatorCanvasBurstT0 = -1
   }
 
   private syncElevatorCanvas(): void {
@@ -604,36 +725,65 @@ export class WorldScene extends Phaser.Scene {
     }
     const carLabel = this.elevatorCanvas.getByName('carLabel') as Phaser.GameObjects.Text | null
     if (carLabel !== null) carLabel.setText(`car ${riding.car}`)
-    if (this.elevatorCanvasDoors !== null) {
-      const carForDoors = riding.car as 1 | 2
-      const clock = this.elevatorPresenter?.clockOf(carForDoors)
-      const amount = clock !== undefined ? doorsOpenAmount(clock, DEFAULT_ANIMATION_CONFIG) : 0
-      this.elevatorCanvasDoors.left.x = -36 - amount * 34
-      this.elevatorCanvasDoors.right.x = 36 + amount * 34
+    const dirArrow = this.elevatorCanvas.getByName('dirArrow') as Phaser.GameObjects.Text | null
+    const movingFrom = readout?.floor ?? null
+    const movingTo =
+      readout !== undefined && readout.state !== null && readout.state.startsWith('moving to ')
+        ? readout.state.slice('moving to '.length).trim()
+        : null
+    if (dirArrow !== null && movingTo !== null && movingFrom !== null) {
+      const here = FLOOR_ORDER.indexOf(movingFrom)
+      const there = FLOOR_ORDER.indexOf(movingTo as FloorId)
+      dirArrow.setText(there > here ? '▲' : '▼')
+    } else if (dirArrow !== null) {
+      dirArrow.setText('')
     }
-    for (const [floor, btn] of this.elevatorCanvasButtons) {
-      const lit = riding.queue.includes(floor)
+    // Ride sway: the whole car breathes vertically while in transit.
+    const clock = this.elevatorPresenter?.clockOf(riding.car as 1 | 2)
+    const swaying = clock?.phase === 'transit'
+    this.elevatorCanvas.setY(swaying ? 288 + carSwayY(Date.now()) : 288)
+    // The beyond-door glow: an arrival burst when the doors begin opening.
+    if (this.elevatorCanvasBeyond !== null) {
+      if (clock?.phase === 'opening') {
+        if (this.elevatorCanvasBurstT0 < 0) this.elevatorCanvasBurstT0 = Date.now()
+      } else {
+        this.elevatorCanvasBurstT0 = -1
+      }
+      const burstElapsed =
+        this.elevatorCanvasBurstT0 < 0 ? -1 : Date.now() - this.elevatorCanvasBurstT0
+      this.elevatorCanvasBeyond.setAlpha(arrivalBurstAlpha(burstElapsed))
+    }
+    if (this.elevatorCanvasDoors !== null) {
+      const amount = clock !== undefined ? doorsOpenAmount(clock, DEFAULT_ANIMATION_CONFIG) : 0
+      this.elevatorCanvasDoors.left.x = -70 - amount * 66
+      this.elevatorCanvasDoors.right.x = 70 + amount * 66
+    }
+    for (const [floorId, btn] of this.elevatorCanvasButtons) {
+      const lit = riding.queue.includes(floorId)
+      const here = readout?.floor === floorId
       btn.setFillStyle(lit ? 0xc8a24a : 0x1a2530)
-      btn.setStrokeStyle(1, lit ? 0xe6c56a : 0x3d4a58)
+      btn.setStrokeStyle(here ? 2 : 1, here ? 0xe6c56a : lit ? 0xe6c56a : 0x3d4a58)
     }
     if (this.elevatorCanvasOccupants !== null) {
       this.elevatorCanvasOccupants.removeAll(true)
       const names = riding.occupants.map((id) => this.rosterNames.get(id) ?? id)
       const isYou = (name: string) => name === (this.rosterNames.get(this.ownId) ?? '')
+      const count = names.length
       names.forEach((name, idx) => {
-        const x = -60 + idx * 50
+        // Center the row on the carpet; 90px berths keep four riders legible.
+        const x = (idx - (count - 1) / 2) * 90
         const headColor = this.occupantColor(name)
-        const head = this.add.circle(x, 0, 10, headColor)
-        const body = this.add.rectangle(x, 18, 20, 14, 0x2a3a4a)
-        const label = this.add.text(x, 32, name.slice(0, 5 + 1), {
-          fontSize: '8px',
+        const head = this.add.circle(x, -26, 13, headColor)
+        const body = this.add.rectangle(x, 2, 26, 20, 0x2a3a4a)
+        const label = this.add.text(x, 24, name.slice(0, 5 + 1), {
+          fontSize: '9px',
           color: isYou(name) ? '#ffd98a' : '#dfe8f2',
           fontFamily: 'monospace',
         })
         label.setOrigin(0.5)
         if (isYou(name)) {
           head.setStrokeStyle(2, 0xe6c56a)
-          body.setStrokeStyle(1, 0xe6c56a)
+          body.setStrokeStyle(2, 0xe6c56a)
         }
         this.elevatorCanvasOccupants?.add([head, body, label])
       })
@@ -648,34 +798,38 @@ export class WorldScene extends Phaser.Scene {
     return (c.red << 16) | (c.green << 8) | c.blue
   }
 
+  /**
+   * The stairwell interior, night-juice rework ("the climb"): a side-view
+   * staircase the own sprite descends/ascends for the length of the transit —
+   * drawn entirely in Phaser primitives on the AD-020 night palette (no new
+   * sprite sheets; the deferred TILE_PX decision stays untouched). The clock
+   * lives IN the scene as a brass wall sign (the climb owns the countdown —
+   * the DOM stair bar retires to the breath window). Every member lives
+   * inside the `stairCanvas` container: the ART harness contract counts only
+   * top-level children, so nothing here pollutes it.
+   */
   private createStairCanvasInterior(): void {
     const container = this.add.container(480, 288)
     container.setScrollFactor(0)
     container.setDepth(100)
     container.setVisible(false)
     container.setName('stairCanvas')
-    const bg = this.add.rectangle(0, 0, 960, 576, 0x0f1419)
-    container.add(bg)
-    const panelBg = this.add.rectangle(0, 0, 420, 260, 0x1b2530)
-    panelBg.setStrokeStyle(3, 0x8a6a2e)
-    container.add(panelBg)
-    const title = this.add.text(-160, -105, 'STAIRWELL', {
-      fontSize: '10px',
-      color: '#8899aa',
-      fontFamily: 'monospace',
-    })
-    title.setOrigin(0, 0.5)
-    container.add(title)
-    const dirLabel = this.add.text(160, -105, '', {
-      fontSize: '10px',
-      color: '#e6c56a',
-      fontFamily: 'monospace',
-    })
-    dirLabel.setOrigin(1, 0.5)
-    dirLabel.setName('stairDir')
-    container.add(dirLabel)
-    const clock = this.add.text(0, -50, '', {
-      fontSize: '48px',
+    // Night backdrop (AD-020 night/tension band: deep blue-violet shadow).
+    container.add(this.add.rectangle(0, 0, 960, 576, 0x1d1830))
+    container.add(this.add.rectangle(0, 120, 960, 336, 0x171226))
+    // The scrolled stair band — one stride of stairwell, built once; the
+    // per-visit direction only flips the climber and the scroll sign.
+    const band = this.add.container(0, 0)
+    band.setName('climbBand')
+    container.add(band)
+    this.climbBand = band
+    this.buildClimbBand(band)
+    // Brass wall sign: the integrated clock (the climb owns the countdown).
+    const sign = this.add.rectangle(-150, -232, 236, 62, 0x0f1419)
+    sign.setStrokeStyle(2, 0xd9a441)
+    container.add(sign)
+    const clock = this.add.text(-150, -232, '', {
+      fontSize: '38px',
       color: '#ffd98a',
       fontFamily: 'monospace',
     })
@@ -683,8 +837,25 @@ export class WorldScene extends Phaser.Scene {
     clock.setName('stairClock')
     container.add(clock)
     this.stairCanvasClock = clock
-    const route = this.add.text(0, -10, '', {
-      fontSize: '12px',
+    const arrow = this.add.text(-42, -232, '', {
+      fontSize: '26px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    arrow.setOrigin(0.5)
+    arrow.setName('stairArrow')
+    container.add(arrow)
+    this.stairCanvasArrow = arrow
+    const dirLabel = this.add.text(212, -232, '', {
+      fontSize: '11px',
+      color: '#e6c56a',
+      fontFamily: 'monospace',
+    })
+    dirLabel.setOrigin(1, 0.5)
+    dirLabel.setName('stairDir')
+    container.add(dirLabel)
+    const route = this.add.text(-150, -192, '', {
+      fontSize: '13px',
       color: '#9fb0c0',
       fontFamily: 'monospace',
     })
@@ -692,7 +863,7 @@ export class WorldScene extends Phaser.Scene {
     route.setName('stairRoute')
     container.add(route)
     this.stairCanvasRoute = route
-    const phase = this.add.text(0, 10, '', {
+    const phase = this.add.text(-150, -172, '', {
       fontSize: '11px',
       color: '#e6c56a',
       fontFamily: 'monospace',
@@ -701,22 +872,28 @@ export class WorldScene extends Phaser.Scene {
     phase.setName('stairPhase')
     container.add(phase)
     this.stairCanvasPhase = phase
-    const arrow = this.add.text(0, 40, '', {
-      fontSize: '32px',
-      color: '#e6c56a',
-      fontFamily: 'monospace',
-    })
-    arrow.setOrigin(0.5)
-    arrow.setName('stairArrow')
-    container.add(arrow)
-    this.stairCanvasArrow = arrow
-    const hint = this.add.text(0, 95, 'slow · unobserved · staff only', {
+    const title = this.add.text(-258, -232, 'STAIRWELL', {
       fontSize: '9px',
-      color: '#556677',
+      color: '#66788a',
       fontFamily: 'monospace',
     })
-    hint.setOrigin(0.5)
-    container.add(hint)
+    title.setOrigin(0, 0.5)
+    container.add(title)
+    // Scuffle/blackout FX stack, topmost: white impact flash, red shock
+    // frame, the abstract dark bar (no silhouette — identity never leaks),
+    // the blackout, and the heartbeat vignette.
+    const flashWhite = this.add.rectangle(0, 0, 960, 576, 0xf2ede2, 0)
+    const flashRed = this.add.rectangle(0, 0, 960, 576, 0xa03028, 0)
+    const sweep = this.add.rectangle(0, 0, 150, 760, 0x0a0812, 0.9)
+    sweep.setRotation(-0.32)
+    const blackout = this.add.rectangle(0, 0, 960, 576, 0x050308, 0)
+    const vignette = this.add.rectangle(0, 0, 960, 576, 0x000000, 0)
+    vignette.setStrokeStyle(16, 0xb3402f)
+    for (const fx of [flashWhite, flashRed, sweep, blackout, vignette]) {
+      fx.setVisible(false)
+      container.add(fx)
+    }
+    this.climbFx = { flashWhite, flashRed, sweep, blackout, vignette }
     this.stairCanvas = container
     // The breath chip (AD-040 amendment): the arrival breath happens ON the
     // destination floor, so the fullscreen box steps aside and only this
@@ -748,6 +925,83 @@ export class WorldScene extends Phaser.Scene {
     chip.add(chipClock)
     this.breathChipClock = chipClock
     this.breathChip = chip
+  }
+
+  /**
+   * One stride of stairwell geometry (band-local, ascending to the right):
+   * treads + risers in warm hotel neutrals, a railing with gold newel caps,
+   * landing plates at both ends (glyphs set per visit), and the sconces the
+   * per-frame flicker drives. Down-transits reuse the same geometry mirrored
+   * by the scroll sign — the walker traverses it the other way.
+   */
+  private buildClimbBand(band: Phaser.GameObjects.Container): void {
+    const stepH = CLIMB.stridePx / CLIMB.treads
+    for (let i = 0; i <= CLIMB.treads; i++) {
+      const { x, y } = stairPoint(i / CLIMB.treads)
+      const tread = this.add.rectangle(x, y, CLIMB.treadRun, 14, 0xc9b28a)
+      band.add(tread)
+      if (i < CLIMB.treads) {
+        const riser = this.add.rectangle(x - CLIMB.treadRun / 2, y + stepH / 2, 10, stepH, 0x8a7a5e)
+        band.add(riser)
+      }
+      // Railing: baluster + handrail segment above every tread edge.
+      const baluster = this.add.rectangle(x, y - 44, 5, 76, 0x4a4664)
+      band.add(baluster)
+      const rail = this.add.rectangle(x, y - 84, CLIMB.treadRun + 5, 8, 0x4a4664)
+      band.add(rail)
+      if (i % 2 === 0) {
+        const cap = this.add.rectangle(x, y - 84, 14, 14, 0xd9a441)
+        band.add(cap)
+      }
+      // Sconce every other step, on the back wall, flicker-driven per frame.
+      if (i > 0 && i < CLIMB.treads && i % 2 === 1) {
+        const bracket = this.add.rectangle(x - 110, y - 190, 8, 20, 0x55492c)
+        band.add(bracket)
+        const lamp = this.add.ellipse(x - 110, y - 210, 26, 34, 0xf0d9a8, 0.85)
+        band.add(lamp)
+        const glow = this.add.ellipse(x - 110, y - 200, 130, 150, 0xf0d9a8, 0.07)
+        band.add(glow)
+        this.climbSconces.push({ lamp, seed: i * 1.7 })
+      }
+    }
+    // Landing plates + per-visit floor glyphs (from → to read on the wall).
+    const plateW = CLIMB.treadRun * 2
+    const landingFrom = this.add.rectangle(
+      stairPoint(0).x - CLIMB.treadRun,
+      stairPoint(0).y + 7,
+      plateW,
+      14,
+      0xc9b28a,
+    )
+    band.add(landingFrom)
+    const landingTo = this.add.rectangle(
+      stairPoint(1).x + CLIMB.treadRun,
+      stairPoint(1).y + 7,
+      plateW,
+      14,
+      0xc9b28a,
+    )
+    band.add(landingTo)
+    const glyphFrom = this.add.text(stairPoint(0).x - 150, stairPoint(0).y - 60, '', {
+      fontSize: '44px',
+      color: '#4a4664',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+    })
+    glyphFrom.setOrigin(0.5)
+    glyphFrom.setName('stairGlyphFrom')
+    band.add(glyphFrom)
+    this.climbGlyphFrom = glyphFrom
+    const glyphTo = this.add.text(stairPoint(1).x + 150, stairPoint(1).y - 60, '', {
+      fontSize: '44px',
+      color: '#4a4664',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+    })
+    glyphTo.setOrigin(0.5)
+    glyphTo.setName('stairGlyphTo')
+    band.add(glyphTo)
+    this.climbGlyphTo = glyphTo
   }
 
   /**
@@ -794,28 +1048,59 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     this.syncBreathSprite(breathRemaining !== null)
-    if (this.stairCanvas === null) return
+    if (this.stairCanvas === null || this.climbBand === null) return
     if (anchor === null || readout === null || breathRemaining !== null) {
       this.stairCanvas.setVisible(false)
+      this.destroyClimber()
       return
     }
     this.stairCanvas.setVisible(true)
-    const _dir = anchor.to === anchor.from ? 'up' : anchor.to > anchor.from ? 'up' : 'down'
-    // Use building order for correct up/down
-    const dir2 = (() => {
-      const order = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as const
-      return order.indexOf(anchor.to) > order.indexOf(anchor.from) ? 'up' : 'down'
-    })()
+    // Building order gives the true direction; down-transits traverse the same
+    // ascending geometry the other way (walk fraction mirrored).
+    const order: readonly string[] = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3']
+    const dir2 = order.indexOf(anchor.to) > order.indexOf(anchor.from) ? 'up' : 'down'
+    const label = (f: string) => (f === 'lobby' ? 'L' : f === 'mezzanine' ? 'M' : f.slice(-1))
+    if (this.climbGlyphFrom !== null) this.climbGlyphFrom.setText(label(anchor.from))
+    if (this.climbGlyphTo !== null) this.climbGlyphTo.setText(label(anchor.to))
+    const stunned = readout.phase === 'stunned'
+    // Band scroll: the walker sits at the fixed screen point (-60, 120); the
+    // band slides so the stair surface stays under the feet (the lurch adds
+    // its decaying kick right after a stun resumes the transit). A stun
+    // freezes the walk at the ambush point — never a jump to the landing.
+    let walk = this.lastTransitWalk
+    if (readout.phase === 'transit') {
+      walk = climbWalkFraction(readout.remainingMs)
+      this.lastTransitWalk = walk
+    }
+    const shown = dir2 === 'up' ? walk : 1 - walk
+    const point = stairPoint(shown)
+    const lurchY = lurchKickY(Date.now() - this.climbLurchAtMs)
+    // Derived, never hardcoded: the band sits so the stair surface under the
+    // walker lands exactly at the fixed screen point (-60, 120).
+    this.climbBand.setPosition(-60 - point.x, 120 - point.y + lurchY)
+    // The climber: the own body, bobbing with the treads, playing the walk
+    // cycle while moving; it freezes (frame 0) for the stun.
+    const climber = this.ensureClimber()
+    if (climber !== null) {
+      climber.setPosition(-60, 120 - climbBobY(shown))
+      climber.flipX = dir2 === 'down'
+      if (readout.phase === 'transit') {
+        if (!climber.anims.isPlaying) climber.play('staff-walk')
+      } else if (climber.anims.isPlaying) {
+        climber.anims.stop()
+        climber.setFrame(0)
+      }
+    }
+    // Sconce flicker (night-juice): every lamp wobbles on its own seed.
+    const now = Date.now()
+    for (const { lamp, seed } of this.climbSconces) lamp.setAlpha(sconceAlpha(now, seed))
+    // The wall sign readouts — the climb owns the countdown.
     if (this.stairCanvasClock !== null) {
       this.stairCanvasClock.setText(`${Math.ceil(readout.remainingMs / 1000)}s`)
-      this.stairCanvasClock.setColor(readout.phase === 'stunned' ? '#ff9a8a' : '#ffd98a')
+      this.stairCanvasClock.setColor(stunned ? '#ff9a8a' : '#ffd98a')
     }
     if (this.stairCanvasRoute !== null) {
-      const fromLabel =
-        anchor.from === 'lobby' ? 'L' : anchor.from === 'mezzanine' ? 'M' : anchor.from.slice(-1)
-      const toLabel =
-        anchor.to === 'lobby' ? 'L' : anchor.to === 'mezzanine' ? 'M' : anchor.to.slice(-1)
-      this.stairCanvasRoute.setText(`${fromLabel} → ${toLabel}`)
+      this.stairCanvasRoute.setText(`${label(anchor.from)} → ${label(anchor.to)}`)
     }
     if (this.stairCanvasPhase !== null) {
       const labels: Record<string, string> = {
@@ -824,20 +1109,131 @@ export class WorldScene extends Phaser.Scene {
         stunned: 'stunned',
       }
       this.stairCanvasPhase.setText(labels[readout.phase] ?? readout.phase)
-      this.stairCanvasPhase.setColor(
-        readout.phase === 'breath'
-          ? '#8ad07a'
-          : readout.phase === 'stunned'
-            ? '#ff7a6a'
-            : '#e6c56a',
-      )
+      this.stairCanvasPhase.setColor(stunned ? '#ff7a6a' : '#e6c56a')
     }
     if (this.stairCanvasArrow !== null) {
       this.stairCanvasArrow.setText(dir2 === 'up' ? '▲' : '▼')
-      this.stairCanvasArrow.setColor(readout.phase === 'stunned' ? '#ff7a6a' : '#e6c56a')
+      this.stairCanvasArrow.setColor(stunned ? '#ff7a6a' : '#e6c56a')
     }
     const dirLabel = this.stairCanvas.getByName('stairDir') as Phaser.GameObjects.Text | null
     if (dirLabel !== null) dirLabel.setText(dir2 === 'up' ? '▲ up' : '▼ down')
+    // The scuffle/blackout sequence (victim only, abstract — no silhouette).
+    this.syncClimbFx(readout.phase, readout.remainingMs, now)
+  }
+
+  /** The container-owned climber sprite, created on first need, never
+   *  top-level (the ART staff-walk harness counts must not see it). */
+  private ensureClimber(): Phaser.GameObjects.Sprite | null {
+    if (this.stairCanvas === null) return null
+    if (this.climbClimber === null) {
+      if (!this.textures.exists('staff-walk')) return null
+      const sprite = this.add.sprite(-60, 120, 'staff-walk')
+      sprite.setOrigin(0.5, 1)
+      sprite.setName('climbClimber')
+      this.stairCanvas.add(sprite)
+      this.climbClimber = sprite
+    }
+    return this.climbClimber
+  }
+
+  private destroyClimber(): void {
+    this.climbClimber?.destroy()
+    this.climbClimber = null
+  }
+
+  /** Drive the scuffle/blackout FX stack from the stun clock (victim only). */
+  private syncClimbFx(phase: string, remainingMs: number, nowMs: number): void {
+    if (this.climbFx === null) return
+    const { flashWhite, flashRed, sweep, blackout, vignette } = this.climbFx
+    if (phase !== 'stunned') {
+      for (const fx of [flashWhite, flashRed, sweep, blackout, vignette]) fx.setVisible(false)
+      return
+    }
+    const total = this.stunTotalMs > 0 ? this.stunTotalMs : TUNING.STAIRS_STUN_SECONDS * 1000
+    const elapsed = Math.max(0, total - remainingMs)
+    const fx = stunFx(elapsed, nowMs)
+    flashWhite.setVisible(fx.flashAlpha > 0).setAlpha(fx.flashAlpha)
+    flashRed.setVisible(fx.redAlpha > 0).setAlpha(fx.redAlpha)
+    const sweeping = fx.sweepX !== null
+    sweep.setVisible(sweeping)
+    if (fx.sweepX !== null) sweep.setX(fx.sweepX * 700)
+    blackout.setVisible(fx.blackoutAlpha > 0).setAlpha(fx.blackoutAlpha)
+    vignette.setVisible(fx.vignetteAlpha > 0).setAlpha(fx.vignetteAlpha)
+  }
+
+  /**
+   * Stair audio cues (night-juice): a transition watcher over the own stairs
+   * readout — footsteps during transit, an exhale at the breath, the sting +
+   * heartbeat when the ambush lands, and the lurch (+ step resume) when the
+   * interrupted transit continues. Loops are idempotent, so this is safe to
+   * call every frame.
+   */
+  private syncStairCues(readout: { readonly phase: string } | null): void {
+    const phase = readout?.phase ?? null
+    if (phase === this.lastStairPhase) return
+    const prev = this.lastStairPhase
+    this.lastStairPhase = phase as 'transit' | 'breath' | 'stunned' | null
+    if (phase === 'transit') {
+      if (prev === 'stunned') {
+        // The stun ended (event-order fallback — the mirror usually fired
+        // first): kill the heartbeat; the lurch t0 is set there.
+        sfx.heartbeatStop()
+        if (this.climbLurchAtMs === 0) this.climbLurchAtMs = Date.now()
+      }
+      sfx.footstepStart()
+    } else if (phase === 'breath') {
+      sfx.footstepStop()
+      sfx.breathExhale()
+    } else if (phase === 'stunned') {
+      sfx.footstepStop()
+      sfx.ambushSting()
+      sfx.heartbeatStart(CLIMB.heartbeatMs)
+    } else {
+      sfx.stopAll()
+    }
+  }
+
+  /**
+   * Elevator audio (night-juice): a transition watcher over the single car's
+   * public presenter clock. A stop on the VIEWED floor (or the own ride)
+   * dings and swings the doors; the rumble runs only while the local player
+   * rides. Derived purely from existing payloads — no new wire messages.
+   */
+  private syncElevatorAudio(): void {
+    const clock = this.elevatorPresenter?.clockOf(1)
+    const phase = clock?.phase ?? null
+    if (phase === this.lastCarPhase) return
+    const prev = this.lastCarPhase
+    this.lastCarPhase = phase
+    if (clock === undefined || phase === null) return
+    const riding = this.riderSession !== null
+    const audible = riding || clock.floor === this.viewFloor
+    if (phase === 'opening') {
+      if (audible) {
+        sfx.arrivalDing()
+        sfx.doorWhoosh()
+      }
+    } else if (phase === 'closing') {
+      if (audible) sfx.doorThunk()
+    } else if (phase === 'transit') {
+      if (riding) sfx.rumbleStart()
+    } else if (prev === 'transit') {
+      sfx.rumbleStop()
+    }
+  }
+
+  /** The warm light spill (night-juice): while the car's doors stand open on
+   *  the viewed floor, a soft amber pool on the landing tiles. */
+  private syncSpillGlow(): void {
+    if (this.spillGlow === null) return
+    const clock = this.elevatorPresenter?.clockOf(1)
+    const open =
+      clock !== undefined &&
+      clock.phase === 'open' &&
+      clock.floor === this.viewFloor &&
+      !this.spectator
+    this.spillGlow.setVisible(open)
+    if (open) this.spillGlow.setY(this.laneY(this.viewFloor))
   }
 
   /** Send work:start when the own predicted position is inside a segment. */
@@ -1050,6 +1446,9 @@ export class WorldScene extends Phaser.Scene {
         // at the called floor lights nothing, the flash registers every call.
         this.elevatorPresenter?.onCalled(action.car, action.floor)
         this.updatePanel()
+        // Night-juice: the hall-call blip (presentation-only; a decoy call
+        // still rings — the flash does, so the chime does too).
+        sfx.callBlip()
         break
       }
       case 'player-left': {
@@ -1218,6 +1617,8 @@ export class WorldScene extends Phaser.Scene {
         }
         if (this.stairsAnchor !== null) {
           this.stunResumeMs = stairPhaseReadout(this.stairsAnchor, Date.now())?.remainingMs ?? 0
+          this.stunTotalMs = action.stunSeconds * 1000
+          this.climbLurchAtMs = 0
           this.stairsAnchor = {
             ...this.stairsAnchor,
             phase: 'stunned',
@@ -1230,8 +1631,11 @@ export class WorldScene extends Phaser.Scene {
       case 'stairs-ambush':
         // The saboteur's own confirmation — a private line naming the victim
         // (legitimate self-knowledge; never broadcast). No stairs clock of
-        // their own: they are mid-transit, anchored by their snapshot.
+        // their own: they are mid-transit, anchored by their snapshot. The
+        // screen never interrupts the saboteur (night-juice decision): one
+        // sub-bass thump under the line, nothing more.
         this.showAmbushConfirm(action.victimId)
+        sfx.subThump()
         break
       case 'room-tenancy': {
         // FR-33 (cycle 3.4): tenancy flip-sign per guest door — tenancy not presence.
@@ -1636,6 +2040,7 @@ export class WorldScene extends Phaser.Scene {
   private pressFloor(floor: FloorId): void {
     if (this.selfFired) return
     if (this.riderSession === null) return
+    sfx.buttonClick()
     this.sendElevatorPress(floor)
   }
 
@@ -1901,8 +2306,21 @@ export class WorldScene extends Phaser.Scene {
     layer.style.position = 'absolute'
     layer.style.inset = '0'
     layer.style.pointerEvents = 'none'
+    // Room zoom (room-zoom spec R4): the layer carries the world-anchored
+    // markers, so it transforms WITH the camera — origin top-left, the same
+    // mapping screen = (world − scroll) × zoom the canvas renders by.
+    layer.style.transformOrigin = '0 0'
     gameEl.appendChild(layer)
     this.evidenceLayer = layer
+    // The screen-space sibling (room zoom R4): HUD chips that must NOT move
+    // with the world — the sound toggle, the ambush toast/confirm.
+    const ui = document.createElement('div')
+    ui.id = 'ui-layer'
+    ui.style.position = 'absolute'
+    ui.style.inset = '0'
+    ui.style.pointerEvents = 'none'
+    gameEl.appendChild(ui)
+    this.uiLayer = ui
     // The stairwell marker (STAIRS-17): DOM over the canvas at the west
     // landing of the viewed floor — position mirrors the card markers.
     const marker = document.createElement('div')
@@ -1913,6 +2331,28 @@ export class WorldScene extends Phaser.Scene {
       'letter-spacing:2px;text-shadow:0 0 8px rgba(230,197,106,0.62);pointer-events:none;'
     layer.appendChild(marker)
     this.stairMarker = marker
+    // The sound toggle (night-juice): one chip, top-right, session-persisted.
+    ui.appendChild(buildSfxToggle())
+    // Interior-full suppression (AD-054 fold-in): while a fullscreen interior
+    // (the climb / the scenic car) is up, the world-space DOM markers must
+    // not float over the scene. One body class hides them all with
+    // !important — the markers' own per-frame inline visibility writes lose
+    // to it, so no per-marker bookkeeping is needed.
+    const suppressStyleId = 'interior-full-suppress'
+    if (document.getElementById(suppressStyleId) === null) {
+      const suppress = document.createElement('style')
+      suppress.id = suppressStyleId
+      suppress.textContent = `
+body.interior-full [data-tenancy-key],
+body.interior-full [data-room-key],
+body.interior-full [data-cue-id],
+body.interior-full #stairwell-marker,
+body.interior-full #desk-bell {
+  visibility: hidden !important;
+}
+`
+      document.head.appendChild(suppress)
+    }
   }
 
   private roomCenterPx(room: RoomIndex): number {
@@ -1939,45 +2379,6 @@ export class WorldScene extends Phaser.Scene {
         image.setVisible(false)
         this.doorImages.set(`${floor}:${room}`, image)
       }
-    }
-  }
-
-  /**
-   * Authored sconces (Phase 4.2, ENV-05/07): one `sconce` sprite per door
-   * beat. Every x derives from shared layout — room centers for guest
-   * floors; the east landing and stairwell mouth plus one center beat for
-   * room-less floors — so the set tracks geometry edits and never
-   * occupancy, tenancy, room state, roles, or grace (static architecture,
-   * not a leak channel).
-   */
-  private sconceXs(floor: string): number[] {
-    const east = this.carPx(1) - ELEVATOR_DOOR_PX / 2
-    // West beat: pool-clear of the canvas edge, clamped into the stairwell
-    // mouth zone (design D-3: the 48px pool stays fully on-canvas).
-    const west = Math.min(SCONCE_POOL_HALF, TUNING.STAIRWELL_MOUTH_TILES * TILE_PX)
-    if (floor === 'floor1' || floor === 'floor2' || floor === 'floor3') {
-      const xs: number[] = []
-      for (let room = 1; room <= ROOMS_PER_FLOOR; room++) {
-        xs.push(this.roomCenterPx(room as RoomIndex))
-      }
-      return [...xs, east, west]
-    }
-    const center =
-      floor === 'lobby' ? TUNING.DESK_X_TILES * TILE_PX : (HALL_LENGTH_TILES * TILE_PX) / 2
-    return [west, center, east]
-  }
-
-  private buildSconces(): void {
-    if (!this.textures.exists('sconce')) return
-    for (const floor of ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as const) {
-      this.sconceXs(floor).forEach((x, i) => {
-        const image = this.add.image(x, SCONCE_MOUNT_Y, 'sconce')
-        image.setOrigin(0.5, 1)
-        image.setDepth(-1)
-        image.setName(`sconce:${floor}:${i}`)
-        image.setVisible(false)
-        this.sconceImages.set(`sconce:${floor}:${i}`, image)
-      })
     }
   }
 
@@ -2040,11 +2441,6 @@ export class WorldScene extends Phaser.Scene {
     if (!this.spectator) {
       for (const image of this.spectatorInteriors.values()) image.setVisible(false)
       this.syncOwnInterior(ownRoom)
-    }
-    for (const [key, image] of this.sconceImages) {
-      const floor = key.split(':')[1] ?? ''
-      image.setVisible(!this.spectator && floor === this.viewFloor)
-      image.y = this.laneY(floor) - (GROUND_Y - SCONCE_MOUNT_Y)
     }
   }
 
@@ -2312,7 +2708,7 @@ export class WorldScene extends Phaser.Scene {
   /** The "you were ambushed" toast (STAIRS-19): text + countdown synced per
    *  frame while the stun window runs. */
   private showAmbushToast(stunSeconds: number): void {
-    if (this.evidenceLayer === null) return
+    if (this.uiLayer === null) return
     if (this.ambushToast === null) {
       const el = document.createElement('div')
       el.id = 'ambush-toast'
@@ -2321,7 +2717,7 @@ export class WorldScene extends Phaser.Scene {
         'background:#2a1414;border:1px solid #ff7a6a;color:#ff9a8a;border-radius:8px;' +
         'padding:8px 16px;font:13px ui-monospace,monospace;letter-spacing:1px;' +
         'box-shadow:0 0 18px rgba(255,90,70,0.35);'
-      this.evidenceLayer.appendChild(el)
+      this.uiLayer.appendChild(el)
       this.ambushToast = { el, until: 0 }
     }
     this.ambushToast.until = Date.now() + stunSeconds * 1000
@@ -2329,7 +2725,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** The saboteur's private confirmation line (STAIRS-19), shown briefly. */
   private showAmbushConfirm(victimId: string): void {
-    if (this.evidenceLayer === null) return
+    if (this.uiLayer === null) return
     if (this.ambushConfirm === null) {
       const el = document.createElement('div')
       el.id = 'ambush-confirm'
@@ -2337,7 +2733,7 @@ export class WorldScene extends Phaser.Scene {
         'position:absolute;left:50%;bottom:70px;transform:translateX(-50%);' +
         'background:#14211a;border:1px solid #8ad07a;color:#a8e29a;border-radius:8px;' +
         'padding:6px 14px;font:12px ui-monospace,monospace;letter-spacing:1px;'
-      this.evidenceLayer.appendChild(el)
+      this.uiLayer.appendChild(el)
       this.ambushConfirm = { el, until: 0 }
     }
     const name = this.rosterNames.get(victimId) ?? victimId
@@ -2422,6 +2818,12 @@ export class WorldScene extends Phaser.Scene {
       own.x += this.ownMoving === 'left' ? -SPEED_TILES_PER_SEC * dt : SPEED_TILES_PER_SEC * dt
       own.x = Math.min(30, Math.max(0, own.x))
     }
+    // Room zoom (room-zoom spec): integer 2× focus WHILE the own player
+    // runs a work channel (FR-7/8/9) — eased per frame, EXACT identity at
+    // rest. The policy lives in the presenter (one home, AD-037 pinch);
+    // the camera and the world-anchored DOM marker layer apply the same
+    // view, so markers stay in lockstep with the canvas (R4).
+    this.syncRoomZoom(dt, own, ownInStairBox, this.work !== null)
     for (const [id, display] of this.players) {
       if (id !== this.ownId && display.targetX !== null) {
         // Others follow server positions within ~2 ticks (exponential approach).
@@ -2543,7 +2945,10 @@ export class WorldScene extends Phaser.Scene {
     if (this.stairsAnchor !== null && stairReadout === null) {
       if (this.stairsAnchor.phase === 'stunned' && this.stunResumeMs > 0) {
         // The stun ended: the interrupted transit resumes with its
-        // preserved remainder.
+        // preserved remainder. Night-juice: the heartbeat dies here and the
+        // climb's resume lurch takes its t0 (exactly once per stun).
+        sfx.heartbeatStop()
+        if (this.climbLurchAtMs === 0) this.climbLurchAtMs = Date.now()
         this.stairsAnchor = {
           from: this.stairsAnchor.from,
           to: this.stairsAnchor.to,
@@ -2573,11 +2978,30 @@ export class WorldScene extends Phaser.Scene {
       setCarScreenDoors(amount)
     }
     this.syncElevatorCanvas()
-    // DOM twin of the canvas clock (c1f130d: the visible screen is the
-    // in-canvas one; the DOM bar's hidden attribute stays the harness
-    // contract for the visit window, transit through breath).
-    syncStairScreen(this.stairsAnchor, Date.now())
+    // The stair screen's DOM twin (night-juice): retired to the BREATH only.
+    // The climb canvas owns the transit/stun readouts (integrated wall-sign
+    // clock), so the DOM bar shows just the breath window — its hidden
+    // attribute stays the harness contract after the visit ends.
+    {
+      const domReadout =
+        this.stairsAnchor === null ? null : stairPhaseReadout(this.stairsAnchor, Date.now())
+      syncStairScreen(
+        domReadout !== null && domReadout.phase === 'breath' ? this.stairsAnchor : null,
+        Date.now(),
+      )
+    }
     this.syncStairCanvas()
+    // Night-juice audio watchers + landing light spill (idempotent per frame).
+    this.syncStairCues(stairReadout)
+    this.syncElevatorAudio()
+    this.syncSpillGlow()
+    // Interior-full suppression (AD-054 fold-in): world-space DOM markers
+    // (Vacant/Occupied, CARD, cues, the stairs glyph, desk bell) hide while
+    // a fullscreen interior scene is up — they return the frame it ends.
+    document.body.classList.toggle(
+      'interior-full',
+      (this.stairCanvas?.visible ?? false) || (this.elevatorCanvas?.visible ?? false),
+    )
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
     if (this.stairMarker !== null) {
@@ -2594,5 +3018,45 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     this.updateRoomLabel()
+  }
+
+  /**
+   * Room zoom (room-zoom spec): one eased step per frame toward the frame's
+   * target view, applied to the camera and — through the same transform — to
+   * the world-anchored DOM marker layer, so cards, tenancy signs, cues, and
+   * the stairs glyph track their world positions while zoomed (R4). At rest
+   * the view is the EXACT identity (R3): zoom 1, scroll (0, 0), empty layer
+   * transform. The zoom runs only while `channeling` (a live work channel of
+   * the own player); spectators and floorless states (riding, stair box)
+   * never zoom — the policy is the presenter's, not mirrored here.
+   */
+  private syncRoomZoom(
+    dt: number,
+    own: PlayerDisplay | undefined,
+    ownInStairBox: boolean,
+    channeling: boolean,
+  ): void {
+    const active = roomZoomActive({
+      spectator: this.spectator,
+      riding: this.riderSession !== null,
+      inStairBox: ownInStairBox,
+      channeling,
+      floor: own?.floor ?? null,
+      xTiles: own?.x ?? null,
+    })
+    const cam = this.cameras.main
+    const target = zoomTarget(
+      active,
+      (own?.x ?? 0) * TILE_PX,
+      this.laneY(own?.floor ?? this.viewFloor),
+      cam.width,
+      cam.height,
+    )
+    this.zoomView = advanceZoom(this.zoomView, target, dt)
+    cam.setZoom(this.zoomView.zoom)
+    cam.setScroll(this.zoomView.scrollX, this.zoomView.scrollY)
+    if (this.evidenceLayer !== null) {
+      this.evidenceLayer.style.transform = zoomLayerTransform(this.zoomView)
+    }
   }
 }

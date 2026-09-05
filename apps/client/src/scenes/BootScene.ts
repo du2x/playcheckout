@@ -24,11 +24,18 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 34,
       frameHeight: 64,
     })
-    // Guest archetype silhouettes (Phase 4.1, T6) — grayscale tint carriers.
+    // Guest archetype silhouettes (Phase 4.1, T6; 10 kinds per the
+    // 2026-09-05 user direction) — grayscale tint carriers.
     this.load.image('guest-suite', 'art/chars/guest-suite.png')
     this.load.image('guest-tourist', 'art/chars/guest-tourist.png')
     this.load.image('guest-clerk', 'art/chars/guest-clerk.png')
     this.load.image('guest-elder', 'art/chars/guest-elder.png')
+    this.load.image('guest-dandy', 'art/chars/guest-dandy.png')
+    this.load.image('guest-diva', 'art/chars/guest-diva.png')
+    this.load.image('guest-flapper', 'art/chars/guest-flapper.png')
+    this.load.image('guest-merchant', 'art/chars/guest-merchant.png')
+    this.load.image('guest-professor', 'art/chars/guest-professor.png')
+    this.load.image('guest-child', 'art/chars/guest-child.png')
     this.load.spritesheet('fx-rustle', 'art/props/fx-rustle-4f.png', {
       frameWidth: 32,
       frameHeight: 32,
@@ -50,7 +57,6 @@ export class BootScene extends Phaser.Scene {
     })
     this.load.image('corridor-band', 'art/rooms/corridor-band.png')
     this.load.image('wall-field', 'art/rooms/wall-field.png')
-    this.load.image('sconce', 'art/props/sconce.png')
     this.load.image('room-prepped', 'art/rooms/room-prepped.png')
     this.load.image('room-trash-fresh', 'art/rooms/room-trash-fresh.png')
     this.load.image('room-trash-settled', 'art/rooms/room-trash-settled.png')

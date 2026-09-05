@@ -170,6 +170,47 @@ export function carY(clock: CarClock, cfg: AnimationConfig, baseY: number): numb
   return baseY - ARRIVAL_Y_OFFSET * (1 - t)
 }
 
+// --- Car-scene presentation (AD-054): pure readouts for the scenic in-car
+// interior. Presentation-only constants in a named table (JUICE/CLIMB
+// precedent); timings stay TUNING-derived everywhere else.
+
+export const CAR_SCENE = {
+  /** Vertical micro-sway while the car rides (px amplitude). */
+  swayAmplitudePx: 2.5,
+  /** Sway period (ms) — roughly the rumble's pulse. */
+  swayPeriodMs: 480,
+  /** The arrival light-burst fade length (ms) after the doors begin opening. */
+  burstFadeMs: 420,
+  /** Beyond-door glow alpha at rest / at the burst peak. */
+  burstRestAlpha: 0.32,
+  burstPeakAlpha: 0.55,
+} as const
+
+/** Ride sway: the whole car interior's y offset (px) at `nowMs`. A constant
+ *  gentle motion only while the caller drives it during transit. */
+export function carSwayY(nowMs: number): number {
+  return (
+    Math.sin((2 * Math.PI * (nowMs % CAR_SCENE.swayPeriodMs)) / CAR_SCENE.swayPeriodMs) *
+    CAR_SCENE.swayAmplitudePx
+  )
+}
+
+/**
+ * The beyond-door glow: at rest it reads as the hallway's light spill; the
+ * moment the doors begin opening it bursts brighter and settles back (the
+ * in-car answer to the arrival ding).
+ */
+export function arrivalBurstAlpha(elapsedOpeningMs: number): number {
+  if (elapsedOpeningMs < 0 || elapsedOpeningMs >= CAR_SCENE.burstFadeMs) {
+    return CAR_SCENE.burstRestAlpha
+  }
+  const t = elapsedOpeningMs / CAR_SCENE.burstFadeMs
+  return (
+    CAR_SCENE.burstRestAlpha +
+    (CAR_SCENE.burstPeakAlpha - CAR_SCENE.burstRestAlpha) * Math.sin(Math.PI * t)
+  )
+}
+
 // --- Phaser-facing wiring ---------------------------------------------------
 // Structural interfaces only (see module doc) — no `phaser` import, so this
 // class stays constructible with a fake scene/car pair in plain node tests.

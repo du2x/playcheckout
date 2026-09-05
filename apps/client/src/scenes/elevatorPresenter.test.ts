@@ -4,8 +4,11 @@ import {
   applyCalled,
   applyDoors,
   applyMoved,
+  arrivalBurstAlpha,
+  CAR_SCENE,
   type CarViewLike,
   carAlpha,
+  carSwayY,
   carVisible,
   carY,
   DEFAULT_ANIMATION_CONFIG,
@@ -349,5 +352,32 @@ describe('ElevatorPresenter — presentation state (AD-038: one clock authority)
     // A retarget re-anchors the sweep from the known departure.
     presenter.tick(0, 'lobby', { car: 1, queue: ['floor2'] })
     expect(presenter.carScreen().state).toBe('moving to 2')
+  })
+})
+
+describe('car-scene presentation (AD-054)', () => {
+  it('the ride sway oscillates within its amplitude and repeats', () => {
+    let min = Number.POSITIVE_INFINITY
+    let max = Number.NEGATIVE_INFINITY
+    for (let t = 0; t < CAR_SCENE.swayPeriodMs; t += 20) {
+      const y = carSwayY(t)
+      min = Math.min(min, y)
+      max = Math.max(max, y)
+    }
+    expect(min).toBeGreaterThanOrEqual(-CAR_SCENE.swayAmplitudePx)
+    expect(max).toBeLessThanOrEqual(CAR_SCENE.swayAmplitudePx)
+    expect(max).toBeGreaterThan(0)
+    expect(carSwayY(0)).toBeCloseTo(carSwayY(CAR_SCENE.swayPeriodMs), 9)
+  })
+
+  it('the arrival burst: rest → peak mid-fade → rest', () => {
+    expect(arrivalBurstAlpha(-1)).toBe(CAR_SCENE.burstRestAlpha)
+    const peak = arrivalBurstAlpha(CAR_SCENE.burstFadeMs / 2)
+    expect(peak).toBeCloseTo(CAR_SCENE.burstPeakAlpha, 5)
+    const rising = arrivalBurstAlpha(CAR_SCENE.burstFadeMs / 4)
+    expect(rising).toBeGreaterThan(CAR_SCENE.burstRestAlpha)
+    expect(rising).toBeLessThan(peak)
+    expect(arrivalBurstAlpha(CAR_SCENE.burstFadeMs)).toBe(CAR_SCENE.burstRestAlpha)
+    expect(arrivalBurstAlpha(10_000)).toBe(CAR_SCENE.burstRestAlpha)
   })
 })

@@ -1506,3 +1506,198 @@
   `apps/client/src/scenes/WorldScene.ts`, `apps/client/harness/stairs.spec.ts`.
 - **Date**: 2026-09-04
 - **Status**: active
+
+### AD-052
+- **Decision**: Remove the 4.2 sconce props entirely (user ruling 2026-09-04,
+  "remove the candles — so ugly"): the `sconce` texture load (`BootScene`),
+  all `sconce:<floor>:<i>` mounts + `sconceXs`/`buildSconces`/per-frame sync
+  (`WorldScene`), the `SCONCE_POOL_HALF`/`SCONCE_MOUNT_Y` constants, the
+  manifest entry + count note, the sheet
+  (`apps/client/public/art/props/sconce.png`), and the generator
+  (`scripts/art/generate-wall-sconce.py`). The environment-4-2 P1 story
+  (ENV-05/06/07) is struck from scope; the `deco-pools` Graphics deletion
+  stands — nothing code-drawn returns in its place, the authored wall-field
+  tile alone carries the corridor. Harness amended: `art_environment` and
+  `corridorDepth` now pin ZERO `sconce:` objects (absence is the gate).
+  4.3's glow layer attaches to prepped-room pools instead of sconce pools.
+- **Reason**: User rejected the candle visuals outright in playtest; the
+  corridor reads cleaner with the quiet authored wall (the brief's
+  between-doors discipline was already the goal).
+- **Trade-off**: The 4.2 light-pool beat above every door is gone until 4.3
+  re-introduces glow (now on prepped-room pools); the ENV-05/06/07 validation
+  evidence in `validation.md` documents what was verified before removal and
+  stays as history.
+- **Scope**: `apps/client/src/scenes/{WorldScene,BootScene}.ts`,
+  `apps/client/harness/{art_environment,corridorDepth}.spec.ts`,
+  `docs/art/asset-manifest.json`, `docs/art/art-direction-brief.md`,
+  `docs/art/art-roadmap.md`, `.specs/features/environment-4-2/spec.md`.
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-053
+- **Decision**: Night-juice presentation pass (user play-night polish, 2026-09-04
+  grill): pure client-side presentation over existing payloads — no sim,
+  protocol, or tuning changes. (1) The stairwell interior becomes "the climb"
+  (`climbPresenter.ts` + `WorldScene` rework of the `stairCanvas`): a side-view
+  staircase the own body traverses for the transit (staff-walk sprite,
+  container-owned so top-level ART harness counts stay untouched), tread-bob
+  synced to the walk fraction, flickering code-drawn wall sconces (AD-020
+  night palette; drawn primitives, NOT the removed AD-052 `sconce.png` props),
+  landing glyphs, and a brass wall sign carrying the countdown — the climb
+  OWNS the transit/stun readouts; the DOM stair bar (`syncStairScreen`) is
+  retired to the BREATH window only (its anchor/readout math stays the single
+  clock source; the hidden attribute remains the end-of-visit harness signal).
+  (2) The ambush (victim only) plays scuffle→blackout: camera shake (existing
+  VPOL-16), white/red flash frames, ONE abstract dark bar sweep (no
+  silhouette — the victim learns only THAT, never by whom), heartbeat-pulsing
+  vignette + red countdown, and a resume lurch when the interrupted transit
+  continues (lurch t0 pinned at the AD-040 mirror's resume branch). The
+  saboteur's screen never interrupts: private confirm line + one sub-thump.
+  A stun freezes the walk fraction at the ambush point (never jumps the
+  landing). (3) The elevator stays arcade-confident: rider chips keep the
+  screen (nothing occludes them); presenter-clock-derived call blip, arrival
+  ding + door whoosh/thunk (audible on the viewed floor or while riding), a
+  rider-only rumble loop, button clicks on both press paths, and a warm light
+  spill on the viewed floor's east landing while the doors stand open
+  (container-owned). (4) All audio is procedural WebAudio
+  (`audio/sfx.ts` — no asset files), loops idempotent, silent no-op without
+  `AudioContext` (headless-safe), with a session-persisted DOM mute toggle
+  (`ui/sfxToggle.ts`, `audio/prefs.ts`, default ON). Gate updates:
+  `harness/stairs.spec.ts` reads transit/stun from the climb canvas via the
+  `__TURNOVER__` hook (route/dir/phase/clock texts) and the breath via the
+  DOM bar's appear→hide handoff; `climbPresenter.test.ts` + `prefs.test.ts`
+  pin the pure math; SKEL-04 denylist respected (presentation constants live
+  in named tables, `0.6`-class literals avoided).
+- **Reason**: Human play-night ask for the elevator and stairs to feel like
+  scenes; tone maps onto the mechanics — the elevator is fast-but-observed
+  (confident chimes), the stairwell is camera-free (dread).
+- **Trade-off**: DOM stair bar is now breath-only (two clocks during transit
+  would bury the showpiece); the muted triangle of presentation-only timing
+  constants (impact/heartbeat/lurch) lives in `CLIMB` with provenance
+  comments, JUICE-table precedent; art-sprite work and the TILE_PX canvas
+  decision remain deferred (AD-020 unchanged).
+- **Scope**: `apps/client/src/scenes/{WorldScene,climbPresenter}.ts` (+test),
+  `apps/client/src/audio/{sfx,prefs}.ts` (+test), `apps/client/src/ui/sfxToggle.ts`,
+  `apps/client/src/app.ts`, `apps/client/harness/stairs.spec.ts`. No protocol,
+  sim, tuning, or server changes.
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-054
+- **Decision**: The elevator ride becomes a scenic interior (user ruling
+  2026-09-04, "elevator scene still sucks" — AD-053's pass had upgraded the
+  stairs but left the car a gray form). The in-canvas car interior
+  (`createElevatorCanvasInterior`/`syncElevatorCanvas` rework) is now a warm
+  hotel car on the AD-020 palette: dim cream/tan paneled walls with seams,
+  brass handrail, crimson carpet with gold edge, real sliding steel leaves
+  with brass jambs opening onto a LIT HALLWAY BEYOND (the in-car twin of the
+  landing light spill, with an arrival light-burst answering the ding —
+  `arrivalBurstAlpha`), a floor dial above the doors (glyph + direction
+  arrow, ticking with the presenter's swept readout), a pressable five-button
+  brass pillar (lit = queued, ring = current floor), a gentle vertical ride
+  sway synced to the rumble (`carSwayY`), and the PASSENGERS center-stage on
+  the carpet (scaled-up figures, name tags, the local rider brass-outlined)
+  — the social read IS the scene. The DOM car bar (`#elevator-car-screen`)
+  retires while riding: `app.ts` never shows it (no harness spec reads it);
+  in-car presses flow through the scene's pillar buttons and the existing
+  keymap (`pressFloor`, which carries the click sound). Pure readouts live in
+  `elevatorPresenter.ts` (`CAR_SCENE`, `carSwayY`, `arrivalBurstAlpha`),
+  unit-pinned in `elevatorPresenter.test.ts`.
+- **Reason**: The ride rendered two stacked flat HUD boxes (canvas panel +
+  DOM bar) showing identical data with no place, no motion, no warmth — the
+  stairs' AD-053 treatment made the gap obvious. Chips-stay-king survives as
+  passengers-in-scene: with suspects in the car, the passengers are what the
+  screen is for.
+- **Trade-off**: The mirror gag was declined (clean interior); the small
+  `#elevator-riders` chip stays mounted for its last-press line and harness
+  contract; all scene rectangles remain container-owned so the top-level ART
+  count contract is untouched.
+- **Scope**: `apps/client/src/scenes/{WorldScene,elevatorPresenter}.ts`
+  (+test), `apps/client/src/app.ts`. No protocol, sim, tuning, or server
+  changes; AD-053's audio/ambush/stairs surfaces unchanged.
+- **Date**: 2026-09-04
+- **Status**: active
+
+### AD-055
+- **Decision**: Room zoom (feature `room-zoom`, user direction "I like the
+  zoom idea", ambient variant chosen over channel-gated): while the own live
+  player stands inside a room segment on a guest floor, the camera eases to
+  an integer 2× zoom centered on their position (clamped to world bounds);
+  leaving every segment eases back to the EXACT identity view — zoom 1,
+  scroll (0, 0) — preserving the DOM overlay alignment contract at rest. The
+  trigger policy and the eased transform math live in a pure module
+  (`zoomPresenter.ts`: `roomZoomActive` consumes `GUEST_FLOOR_IDS` +
+  `roomIndexAtMilli` — one home, the AD-037 pinch rule; `zoomTarget`/
+  `advanceZoom` ease with per-component snap so rest lands exactly, never a
+  lingering 0.999…; `zoomLayerTransform` maps the world-anchored DOM marker
+  layer through the same `screen = (world − scroll) × zoom` the canvas
+  renders by). Spectators (FR-20 overview) and floorless states (riding,
+  stair-box transit/stun — their full-screen interiors must not be zoomed
+  under) never zoom; the breath stands at the west mouth, outside every
+  segment, so it is excluded naturally. The world-space `#evidence-layer`
+  (cards, tenancy signs, cues, stairs glyph) gains `transform-origin: 0 0`
+  and per-frame transform; the screen-space children split into an
+  untransformed `#ui-layer` sibling (sfx toggle, ambush toast/confirm).
+  Presentation-only: no sim, protocol, or tuning surface (AD-053/054
+  precedent); the integer target honors AD-049; rejected alternatives on
+  record: channel-gated zoom and full-screen room interiors (FR-15/FR-16
+  corridor visibility is load-bearing).
+- **Reason**: User request during a design pass on room-interior
+  presentation; full-screen rooms were declined because walk-in conviction
+  (FR-15), the clean walk-out (FR-16), and testimony from inside depend on
+  the corridor staying observable while the far floor ends leave the frame.
+- **Trade-off**: Transient non-integer zoom frames shimmer on the pixel-art
+  grid for ~0.3 s per transition (accepted; AD-049 governs targets/rest);
+  scrollFactor(0) canvas interiors scale with camera zoom in Phaser — all
+  such surfaces show only in floorless states where the zoom is at rest, so
+  no visible artifact. Gate note: `client:room_zoom` walks are x-poll-confirmed
+  (the server's breath window can reject a first `move:start` and a late
+  arrival flush snaps the prediction back to x=0 — timing-blind walks race).
+  **Committed on top of the uncommitted AD-052/053/054 work in the same
+  worktree with user sign-off ("go ahead") — WorldScene.ts/STATE.md hunks
+  interleave; commit separation is the user's call.**
+- **Scope**: `apps/client/src/scenes/zoomPresenter.ts` (+14 unit tests),
+  `apps/client/src/scenes/WorldScene.ts` (syncRoomZoom, layer split),
+  `apps/client/harness/roomZoom.spec.ts` (new gate `client:room_zoom`),
+  `.specs/features/room-zoom/spec.md`.
+- **Date**: 2026-09-05
+- **Status**: active — **Amendment (2026-09-05, user ruling post-implementation)**:
+  the trigger narrows from ambient (whenever inside a room segment) to
+  CHANNEL-GATED: the zoom runs only while the own player runs a work channel
+  (the self `work:started` → `work:ended` window — staff prep or saboteur
+  fake prep alike), restoring on completion or the FR-16 walk-out cancel.
+  "The zoom must go only when char begins the work." The segment/floor
+  predicates stay in `roomZoomActive` as the one-home room-bound guarantee;
+  `ZoomFacts` gains `channeling`. The gate scenario re-stages through a real
+  round (channels are sim-scoped): board the parked east car pre-round, ride
+  to floor1, Space in room 7, walk out mid-channel. Scope/gates otherwise
+  unchanged.
+
+### AD-056
+- **Decision**: Guest archetype family expanded from 4 to **10 kinds** (user
+  direction 2026-09-05, "create guest sprites. 10 kinds of guests"): the
+  original four (suite/tourist/clerk/elder) keep their historical seed order
+  and are joined by dandy/diva/flapper/merchant/professor/child — all
+  deterministic Pillow authoring in the same `generate-cast-4-1.py`
+  grayscale-tint-carrier contract (34x64, 6-color G_* ramp, right-facing,
+  ground row 63, no authored ivory/brass — VPOL-07 denylist). Seed mapping
+  widens client-side: `archetype = seed % 10`, `palette = floor(seed / 10) % 4`
+  (render-only; seeds are full-u32 from the decorrelated cosmetic fork, so
+  10x4 = 40 identity combos stay uniform); the sim mirror constant
+  `GUEST_VARIANT_BUCKETS` moves 16 → 40. Zero protocol/sim/tuning churn
+  (AD-053/054/055 presentation-only precedent); palette rotations stay 4.
+- **Reason**: User direction during an art pass; silhouette variety raises
+  guest legibility without touching the saboteur-tell surface (guest identity
+  stays cosmetic-seed-derived and role-blind).
+- **Trade-off**: The harness elder-injection pin (seed 3) survives only
+  because the original four keep their order — appending new archetypes is
+  now a load-bearing convention. `client:guest_sprites` re-pinned to the
+  10-silhouette set.
+- **Scope**: `scripts/art/generate-cast-4-1.py`, 6 new
+  `apps/client/public/art/chars/guest-*.png`,
+  `apps/client/src/scenes/BootScene.ts` (loads),
+  `apps/client/src/scenes/WorldScene.ts` (GUEST_ARCHETYPES/guestVariantOf),
+  `packages/sim/src/cosmetic.ts` + test,
+  `apps/client/harness/guestSprites.spec.ts`, `docs/art/asset-manifest.json`.
+- **Date**: 2026-09-05
+- **Status**: active

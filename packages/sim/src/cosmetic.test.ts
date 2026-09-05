@@ -96,7 +96,7 @@ describe('sim:variant_decorrelation (VPOL-01, VPOL-04)', () => {
     expect(assignGuestSeed(rng2)).toBe(g1)
     expect(assignGuestSeed(rng2)).toBe(g2)
     expect(variantIndex(g1, GUEST_VARIANT_BUCKETS)).toBeGreaterThanOrEqual(0)
-    expect(variantIndex(g1, GUEST_VARIANT_BUCKETS)).toBeLessThan(16)
+    expect(variantIndex(g1, GUEST_VARIANT_BUCKETS)).toBeLessThan(40)
   })
 
   // G1 (M2 sensor): the decorrelation fork is pinned BEHAVIORALLY — the

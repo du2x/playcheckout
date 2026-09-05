@@ -92,7 +92,15 @@ amended (frieze/pool `Graphics` assertions become authored-texture assertions).
 
 ---
 
-### P1: Sconces with baked pools mark every door beat
+### P1: Sconces with baked pools mark every door beat — REMOVED (user ruling 2026-09-04)
+
+> **Amendment (2026-09-04, AD-052):** the user rejected the sconce/candle
+> visuals in playtest ("remove the candles"). P1 and its acceptance criteria
+> (ENV-05/06/07) are struck from scope: the sconce prop, pool, sheet,
+> generator, and all `sconce:` mounts are removed from the client. The
+> `deco-pools` deletion stands (no Graphics fills return); 4.3's glow layer
+> attaches to prepped-room pools instead. The text below is retained as
+> historical record only.
 
 **User Story**: As a player, I want a sconce glowing above each doorway so
 that doors read as a rhythm down the hall and damage later reads as a wound
@@ -207,9 +215,9 @@ human 5-minute round for mood.
 | ENV-02 | P1: Authored wall | Execute | Done (T3 deletion, T5 asserts) |
 | ENV-03 | P1: Authored wall | Execute | Done (T2 tile discipline + mock) |
 | ENV-04 | P1: Authored wall | Execute | Done (T2 mock read, Gate 4) |
-| ENV-05 | P1: Sconce beats | Execute | Done (T2 sprite, T3 beats) |
-| ENV-06 | P1: Sconce beats | Execute | Done (T2 flat pixels, no blend) |
-| ENV-07 | P1: Sconce beats | Execute | Done (T3 sconceXs + T5 xs test) |
+| ENV-05 | P1: Sconce beats | Execute | REMOVED (AD-052, user ruling — implemented then deleted) |
+| ENV-06 | P1: Sconce beats | Execute | REMOVED (AD-052) |
+| ENV-07 | P1: Sconce beats | Execute | REMOVED (AD-052) |
 | ENV-08 | P1: Pediments | Execute | Done (D-4 mock verdict, T5 keys) |
 | ENV-09 | P1: Pediments | Execute | Done (T3 spectator rule, T5) |
 | ENV-10 | P2: Contract discipline | Execute | Done (T1 manifest-first) |
@@ -226,9 +234,8 @@ human 5-minute round for mood.
 - [ ] `pnpm typecheck` + `pnpm lint` + `pnpm test:sim` green (no sim changes —
       proves zero churn in the deterministic core).
 - [ ] `pnpm test:client` `client:art_environment` PASS — authored wall covers
-      y48..350, `deco-frieze`/`wallFill`/`deco-pools` `Graphics` gone, sconce
-      count == Design set, positions state-independent; amended
-      `client:corridor_depth` PASS.
+      y48..350, `deco-frieze`/`wallFill`/`deco-pools` `Graphics` gone, NO
+      sconce props render (AD-052); amended `client:corridor_depth` PASS.
 - [ ] Gate-4 5-min round: the corridor reads as a deco hotel after dark, the
       door rhythm beats down the hall, trash reads as a wound — mood judgment,
       not automatable.

@@ -10,10 +10,11 @@ Three families, all deterministic Pillow authoring (no generation model):
   staff-variant 34x64 x 8 variants — head + cap + hair + accessory only.
                Variant = skin(2) x hair(2) x accessory(2); the cap stays
                charcoal + brass band for all (uniform identity, not role).
-  guest-*      34x64 x 4 silhouettes (suite / tourist / clerk / elder) in a
-               neutral grayscale base — the client setTint()s the palette
-               rotation (teal/burgundy/moss/plum), so no guest ever carries
-               staff ivory or brass as authored color (VPOL-07 denylist).
+  guest-*      34x64 x 10 silhouettes (suite / tourist / clerk / elder /
+                dandy / diva / flapper / merchant / professor / child) in a
+                neutral grayscale base — the client setTint()s the palette
+                rotation (teal/burgundy/moss/plum), so no guest ever carries
+                staff ivory or brass as authored color (VPOL-07 denylist).
 
 Guests face right like staff; the client flips for left.
 
@@ -22,6 +23,9 @@ Output:
   apps/client/public/art/chars/staff-variant-8f.png       (272x64)
   apps/client/public/art/chars/guest-suite.png  guest-tourist.png
   apps/client/public/art/chars/guest-clerk.png  guest-elder.png
+  apps/client/public/art/chars/guest-dandy.png  guest-diva.png
+  apps/client/public/art/chars/guest-flapper.png  guest-merchant.png
+  apps/client/public/art/chars/guest-professor.png  guest-child.png
   /tmp/opencode/cast-4-1-preview.png                      (contact sheet)
   /tmp/opencode/cast-4-1-corridor-mock.png                (native-scale read)
 
@@ -198,10 +202,10 @@ def guest_base() -> Image.Image:
     return Image.new("RGBA", (FRAME_W, FRAME_H), TRANSPARENT)
 
 
-def guest_leg(px: Image.Image, hip_x: int, bottom: int, swing: int, far: bool) -> None:
+def guest_leg(px: Image.Image, hip_x: int, bottom: int, swing: int, far: bool, top: int = 38) -> None:
     col = G_DARK if far else G_MID
-    for y in range(38, bottom + 1):
-        t = (y - 38) / max(1, bottom - 38)
+    for y in range(top, bottom + 1):
+        t = (y - top) / max(1, bottom - top)
         x = hip_x + round(swing * t)
         rect(px, x, y, x + 3, y, col)
     rect(px, hip_x + swing, bottom + 1, hip_x + swing + 5, GROUND_ROW, G_INK)
@@ -263,6 +267,95 @@ def draw_guest_elder() -> Image.Image:
     guest_head(px, 13, 21, 9, 18)    # carried low (stoop)
     rect(px, 12, 7, 21, 10, G_MID)   # shawl over the head
     rect(px, 25, 40, 26, GROUND_ROW, G_INK)  # cane
+    return px
+
+
+def draw_guest_dandy() -> Image.Image:
+    """Tall slim figure: stovepipe hat, long frock coat, cane."""
+    px = guest_base()
+    guest_leg(px, 15, 56, 0, far=True)
+    guest_leg(px, 12, 56, 0, far=False)
+    guest_torso(px, 10, 22, 16, 54)  # frock coat
+    rect(px, 9, 54, 14, 57, G_LIGHT)  # coat tails (behind, left)
+    guest_head(px, 13, 21, 6, 16)
+    rect(px, 14, 0, 20, 5, G_MID)    # stovepipe crown (tall, narrow)
+    rect(px, 11, 5, 23, 7, G_MID)    # hat brim
+    rect(px, 25, 46, 26, GROUND_ROW, G_INK)  # cane
+    return px
+
+
+def draw_guest_diva() -> Image.Image:
+    """Broad figure: feathered plume, fur stole, tapered skirt."""
+    px = guest_base()
+    guest_leg(px, 14, 54, 0, far=True)
+    guest_leg(px, 11, 54, 0, far=False)
+    guest_torso(px, 8, 25, 16, 40)   # stole across broad shoulders
+    rect(px, 10, 40, 23, 50, G_WHITE)  # tapered skirt
+    rect(px, 10, 40, 11, 50, G_LIGHT)
+    rect(px, 23, 28, 27, 40, G_LIGHT)  # stole tail (forward side)
+    guest_head(px, 13, 21, 7, 17)
+    rect(px, 12, 4, 21, 8, G_MID)    # updo
+    rect(px, 9, 0, 11, 7, G_LIGHT)   # plume
+    rect(px, 8, 5, 10, 9, G_MID)
+    return px
+
+
+def draw_guest_flapper() -> Image.Image:
+    """Slim figure: bobbed hair, dropped-waist dress, fringed hem (no hat)."""
+    px = guest_base()
+    guest_leg(px, 14, 54, 0, far=True)
+    guest_leg(px, 12, 54, 0, far=False)
+    guest_torso(px, 10, 23, 18, 44)  # straight drop-waist dress
+    hline(px, 10, 23, 34, G_LIGHT)   # dropped waist seam
+    for x in range(10, 24, 2):       # fringe hem
+        rect(px, x, 44, x, 46, G_LIGHT)
+    guest_head(px, 13, 21, 8, 18)
+    rect(px, 12, 6, 22, 10, G_MID)   # bob crown
+    rect(px, 11, 6, 14, 17, G_MID)   # bob side mass
+    return px
+
+
+def draw_guest_merchant() -> Image.Image:
+    """Heavyset figure: bowler hat, broad coat, peddler's pack on the back."""
+    px = guest_base()
+    guest_leg(px, 17, 56, 0, far=True)
+    guest_leg(px, 10, 56, 0, far=False)
+    guest_torso(px, 7, 25, 16, 44)   # broad coat
+    hline(px, 7, 25, 40, G_LIGHT)    # hem
+    rect(px, 3, 22, 8, 36, G_LIGHT)  # pack hump (behind, left)
+    rect(px, 3, 22, 4, 36, G_MID)
+    guest_head(px, 13, 21, 6, 15)
+    rect(px, 14, 2, 20, 6, G_MID)    # bowler dome
+    rect(px, 12, 6, 22, 7, G_MID)    # bowler brim
+    return px
+
+
+def draw_guest_professor() -> Image.Image:
+    """Thin figure: bald dome with back hair, spectacles, book under arm."""
+    px = guest_base()
+    guest_leg(px, 16, 56, 0, far=True)
+    guest_leg(px, 13, 56, 0, far=False)
+    guest_torso(px, 11, 22, 16, 48)  # knee-length frock
+    rect(px, 11, 48, 22, 50, G_LIGHT)
+    guest_head(px, 13, 22, 6, 16)
+    rect(px, 12, 10, 15, 16, G_MID)  # back hair, high bald forehead
+    hline(px, 17, 23, 10, G_INK)     # spectacles (round wire read)
+    rect(px, 18, 17, 21, 18, G_DARK)  # bow tie
+    rect(px, 23, 26, 27, 34, G_MID)  # book under arm
+    return px
+
+
+def draw_guest_child() -> Image.Image:
+    """Half-height figure: big head, short coat, ball in hand."""
+    px = guest_base()
+    guest_leg(px, 15, 56, 0, far=True, top=48)
+    guest_leg(px, 12, 56, 0, far=False, top=48)
+    guest_torso(px, 12, 22, 34, 50)  # short coat
+    rect(px, 12, 50, 22, 52, G_LIGHT)
+    guest_head(px, 14, 21, 26, 36)
+    rect(px, 13, 24, 22, 29, G_MID)  # hair cap (big head ratio)
+    rect(px, 23, 54, 28, 59, G_MID)  # ball
+    rect(px, 24, 55, 27, 58, G_LIGHT)
     return px
 
 
@@ -330,6 +423,12 @@ def main() -> None:
         "guest-tourist.png": draw_guest_tourist(),
         "guest-clerk.png": draw_guest_clerk(),
         "guest-elder.png": draw_guest_elder(),
+        "guest-dandy.png": draw_guest_dandy(),
+        "guest-diva.png": draw_guest_diva(),
+        "guest-flapper.png": draw_guest_flapper(),
+        "guest-merchant.png": draw_guest_merchant(),
+        "guest-professor.png": draw_guest_professor(),
+        "guest-child.png": draw_guest_child(),
     }
     for name, img in guests.items():
         img.save(out / name)

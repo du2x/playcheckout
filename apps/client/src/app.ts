@@ -315,13 +315,10 @@ export class App {
           ? ''
           : `${names.get(riding.lastPress.playerId) ?? riding.lastPress.playerId} pressed ${riding.lastPress.floor}`
     }
-    // In-car screen (AD-013): the button panel mirrors the same session.
-    syncCarScreen(
-      riding,
-      riding.occupants.map((id) => names.get(id) ?? id),
-      (floor) => this.connection?.sendElevatorPress(floor),
-      this.state.snapshot?.ownName ?? null,
-    )
+    // In-car screen (AD-054): retired — the scenic canvas interior is the
+    // ride view (its pillar buttons press in-scene; keys route via the
+    // scene's keymap). The bar stays mounted but hidden forever.
+    syncCarScreen(null, [], () => {})
   }
 
   private render(): void {

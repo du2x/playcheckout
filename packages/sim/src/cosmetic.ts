@@ -8,7 +8,8 @@ import { Rng } from './rng.js'
 export const COSMETIC_FORK = 0x9e3779b9
 
 export const STAFF_VARIANT_BUCKETS = 8
-export const GUEST_VARIANT_BUCKETS = 16
+/** 10 guest archetypes x 4 civil palette rotations (user direction 2026-09-05). */
+export const GUEST_VARIANT_BUCKETS = 40
 
 /**
  * Pure variant index: `seed % buckets` on the unsigned `u32` view.

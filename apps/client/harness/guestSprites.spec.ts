@@ -105,10 +105,21 @@ test.describe('client:guest_sprites', () => {
       )
       const guests = await readGuests(own)
       expect(guests.length).toBeGreaterThan(0)
-      // VPOL-06: every guest is an archetype texture from the 4-silhouette set.
+      // VPOL-06: every guest is an archetype texture from the 10-silhouette set.
       const archetypes = new Set(guests.map((g) => g.texture))
       for (const a of archetypes) {
-        expect(['guest-suite', 'guest-tourist', 'guest-clerk', 'guest-elder']).toContain(a)
+        expect([
+          'guest-suite',
+          'guest-tourist',
+          'guest-clerk',
+          'guest-elder',
+          'guest-dandy',
+          'guest-diva',
+          'guest-flapper',
+          'guest-merchant',
+          'guest-professor',
+          'guest-child',
+        ]).toContain(a)
       }
       // VPOL-07: no staff livery — tints are civil Deco rotations, never the
       // ivory uniform or the brass trim channels.
@@ -120,8 +131,9 @@ test.describe('client:guest_sprites', () => {
       }
       // VPOL-09: guest:left destroys the view. Synthetic injection (the
       // complaints.spec precedent): a fake guest with a seed mapping to the
-      // `elder` archetype (seed % 4 === 3) arrives — one more elder sprite —
-      // then leaves — the count returns to baseline (destroyed, not hidden).
+      // `elder` archetype (seed % 10 === 3 — the original four keep their
+      // historical order) arrives — one more elder sprite — then leaves —
+      // the count returns to baseline (destroyed, not hidden).
       const elderCount = () =>
         own.evaluate(() => {
           const t = (
