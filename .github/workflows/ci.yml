@@ -2,20 +2,22 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   gates:
-    # Activates once Phase 1 (pnpm workspace) exists; inert before that.
-    if: ${{ hashFiles('pnpm-lock.yaml') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # Reads the pnpm version from the packageManager field (pnpm@11.24.0);
+        # a differing `version:` input hard-errors the action.
 
       - uses: actions/setup-node@v4
         with:
