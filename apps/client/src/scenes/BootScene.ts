@@ -83,10 +83,14 @@ export class BootScene extends Phaser.Scene {
     this.load.image('room-prepped', 'art/rooms/room-prepped.png')
     this.load.image('room-trash-fresh', 'art/rooms/room-trash-fresh.png')
     this.load.image('room-trash-settled', 'art/rooms/room-trash-settled.png')
+    // Boot splash: the approved cover key art (source of truth in
+    // docs/covers/turnover-cover-splash.html, rendered by docs/covers/render.mjs)
+    // — 960×576 native, so pixelArt mode keeps it crisp at 1:1.
+    this.load.image('title-card', 'art/ui/title-card.png')
   }
 
   create() {
-    this.add.rectangle(480, 288, 960, 576, 0x0f1b21)
-    this.add.text(416, 288, 'turnover', { color: '#ffffff' }).setOrigin(0.5, 0.5)
+    this.add.rectangle(480, 288, 960, 576, 0x04060c)
+    this.add.image(480, 288, 'title-card')
   }
 }

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Turnover — cover proposal (portrait)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Limelight&family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#04060c}
+  svg{display:block}
+</style>
+</head>
+<body>
+<svg id="cover" xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+  <defs>
+    <linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04060f"/>
+      <stop offset=".55" stop-color="#0b1226"/>
+      <stop offset="1" stop-color="#1a2440"/>
+    </linearGradient>
+    <radialGradient id="moonhalo">
+      <stop offset="0" stop-color="rgba(244,231,192,.22)"/>
+      <stop offset="1" stop-color="rgba(244,231,192,0)"/>
+    </radialGradient>
+    <radialGradient id="moong" cx=".38" cy=".34" r=".9">
+      <stop offset="0" stop-color="#fbf3d8"/>
+      <stop offset=".7" stop-color="#f1e2b8"/>
+      <stop offset="1" stop-color="#e3cf9c"/>
+    </radialGradient>
+    <linearGradient id="facade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141f3a"/>
+      <stop offset="1" stop-color="#0c1528"/>
+    </linearGradient>
+    <linearGradient id="doorglow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd79a"/>
+      <stop offset="1" stop-color="#c96f2c"/>
+    </linearGradient>
+    <linearGradient id="titlegrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8ecc4"/>
+      <stop offset=".55" stop-color="#dcb167"/>
+      <stop offset="1" stop-color="#b9853a"/>
+    </linearGradient>
+    <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="rgba(4,6,12,0)"/>
+      <stop offset=".55" stop-color="rgba(4,6,12,.78)"/>
+      <stop offset="1" stop-color="rgba(4,6,12,.96)"/>
+    </linearGradient>
+    <radialGradient id="underglow">
+      <stop offset="0" stop-color="rgba(255,186,106,.32)"/>
+      <stop offset="1" stop-color="rgba(255,186,106,0)"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx=".5" cy=".42" r=".85">
+      <stop offset="0" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,.42)"/>
+    </radialGradient>
+    <filter id="softglow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="blurrefl" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .045 0"/>
+    </filter>
+  </defs>
+
+  <!-- night sky -->
+  <rect width="1200" height="1600" fill="url(#skyg)"/>
+  <g id="stars"></g>
+
+  <!-- moon -->
+  <circle cx="880" cy="300" r="200" fill="url(#moonhalo)"/>
+  <circle cx="880" cy="300" r="112" fill="url(#moong)"/>
+  <circle cx="880" cy="300" r="126" fill="none" stroke="rgba(244,231,192,.22)" stroke-width="1.5"/>
+
+  <!-- distant skyline -->
+  <g id="skyline"></g>
+
+  <!-- hotel -->
+  <g id="hotel"></g>
+
+  <!-- spire -->
+  <polygon points="585,660 585,602 600,576 615,602 615,660" fill="#16233f"/>
+  <line x1="600" y1="576" x2="600" y2="546" stroke="#2c3d63" stroke-width="3"/>
+  <rect x="592" y="530" width="16" height="16" transform="rotate(45 600 538)" fill="#d8b26a"/>
+  <rect x="592" y="530" width="16" height="16" transform="rotate(45 600 538)" fill="#ffb763" filter="url(#softglow)" opacity=".55"/>
+
+  <!-- street -->
+  <rect x="0" y="1260" width="1200" height="52" fill="#141d33"/>
+  <line x1="0" y1="1261" x2="1200" y2="1261" stroke="#22304d" stroke-width="2"/>
+  <rect x="0" y="1312" width="1200" height="288" fill="#070b14"/>
+  <g id="reflections" opacity=".8"></g>
+
+  <!-- entrance: doors, canopy, marquee -->
+  <g id="entrance"></g>
+
+  <!-- silhouettes (the cast) -->
+  <g id="cast"></g>
+
+  <!-- scrim for the title band -->
+  <rect x="0" y="980" width="1200" height="620" fill="url(#scrim)"/>
+
+  <!-- deco frame -->
+  <rect x="28" y="28" width="1144" height="1544" fill="none" stroke="#caa453" stroke-width="1.5" opacity=".55"/>
+  <rect x="38" y="38" width="1124" height="1524" fill="none" stroke="#caa453" stroke-width="1" opacity=".28"/>
+  <g id="corners" stroke="#d8b26a" stroke-width="1.2" fill="none" opacity=".8"></g>
+
+  <!-- title block -->
+  <g id="titleblock" text-anchor="middle">
+    <!-- brass key with room fob -->
+    <g transform="translate(600,1230)" stroke="#d8b26a" stroke-width="3" fill="none" stroke-linecap="round">
+      <circle cx="-46" cy="-6" r="13"/>
+      <circle cx="-46" cy="-6" r="5"/>
+      <line x1="-33" y1="-6" x2="44" y2="-6"/>
+      <line x1="30" y1="-6" x2="30" y2="4"/>
+      <line x1="42" y1="-6" x2="42" y2="6"/>
+      <rect x="-64" y="16" width="30" height="30" transform="rotate(45 -49 31)" fill="#0d1526"/>
+    </g>
+    <text x="-49" y="36" transform="translate(600,1230)" text-anchor="middle" font-family="Jost, Georgia, serif" font-size="13" fill="#e6c98a" stroke="none">3:12</text>
+
+    <text x="600" y="1310" font-family="Jost, Georgia, serif" font-size="24" letter-spacing="9" fill="#c9b075">A SOCIAL DEDUCTION GAME</text>
+
+    <text x="600" y="1456" font-family="Limelight, Georgia, serif" font-size="150" letter-spacing="10" fill="#000" opacity=".55">TURNOVER</text>
+    <text x="600" y="1449" font-family="Limelight, Georgia, serif" font-size="150" letter-spacing="10" fill="url(#titlegrad)">TURNOVER</text>
+
+    <text x="600" y="1504" font-family="'Cormorant Garamond', Georgia, serif" font-style="italic" font-weight="600" font-size="42" fill="#efe4c8">Every room turned. One turncoat.</text>
+
+    <g stroke="#caa453" stroke-width="1" opacity=".8">
+      <line x1="330" y1="1524" x2="574" y2="1524"/>
+      <rect x="593" y="1517" width="14" height="14" transform="rotate(45 600 1524)" fill="#caa453" stroke="none"/>
+      <line x1="626" y1="1524" x2="870" y2="1524"/>
+    </g>
+    <text x="600" y="1552" font-family="Jost, Georgia, serif" font-size="19" letter-spacing="5" fill="#cdb67a">4–6 PLAYERS · FIVE-MINUTE SHIFTS · ONE SABOTEUR</text>
+  </g>
+
+  <!-- atmosphere -->
+  <rect width="1200" height="1600" fill="url(#vignette)"/>
+  <rect width="1200" height="1600" filter="url(#grain)" opacity=".5"/>
+</svg>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg'
+const byId = id => document.getElementById(id)
+function el(name, attrs, parent) {
+  const e = document.createElementNS(NS, name)
+  for (const k in attrs) e.setAttribute(k, attrs[k])
+  parent.appendChild(e)
+  return e
+}
+let seed = 42
+const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647
+
+/* stars */
+const stars = byId('stars')
+for (let i = 0; i < 54; i++) {
+  const x = 30 + rnd() * 1140, y = 24 + rnd() * 760
+  if (Math.hypot(x - 880, y - 300) < 230) continue
+  el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: (0.7 + rnd() * 1.1).toFixed(2),
+    fill: '#e8e4d2', opacity: (0.25 + rnd() * 0.55).toFixed(2) }, stars)
+}
+el('path', { d: 'M170 120 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z', fill: '#efe6c8', opacity: .7 }, stars)
+el('path', { d: 'M240 520 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 z', fill: '#efe6c8', opacity: .5 }, stars)
+
+/* distant skyline */
+const skyline = byId('skyline')
+const farBlocks = [
+  { x: 30, w: 160, h: 130 }, { x: 215, w: 95, h: 185 }, { x: 1005, w: 150, h: 155 },
+  { x: 1160, w: 90, h: 105 }, { x: 70, w: 110, h: 88 },
+]
+for (const b of farBlocks) {
+  el('rect', { x: b.x, y: 1035 - b.h, width: b.w, height: b.h, fill: '#0a1222' }, skyline)
+  for (let i = 0; i < 5; i++) {
+    if (rnd() < .5) continue
+    el('rect', { x: b.x + 14 + rnd() * (b.w - 26), y: 1035 - b.h + 14 + rnd() * (b.h - 28),
+      width: 4, height: 6, fill: '#6f86ad', opacity: .4 }, skyline)
+  }
+}
+
+/* hotel tower: four stepped tiers */
+const hotel = byId('hotel')
+const tiers = [
+  { x: 250, w: 700, y: 1040, h: 220, cols: 12, rows: 4 },
+  { x: 330, w: 540, y: 880,  h: 160, cols: 9,  rows: 3 },
+  { x: 430, w: 340, y: 750,  h: 130, cols: 6,  rows: 2 },
+  { x: 520, w: 160, y: 660,  h: 90,  cols: 3,  rows: 2 },
+]
+const litColors = ['#ffd39a', '#ffc27a', '#ffab5e', '#f79a4e']
+for (const t of tiers) {
+  el('rect', { x: t.x, y: t.y, width: t.w, height: t.h, fill: 'url(#facade)' }, hotel)
+  el('rect', { x: t.x - 10, y: t.y - 12, width: t.w + 20, height: 12, fill: '#1c2a48' }, hotel)
+  el('rect', { x: t.x - 10, y: t.y - 12, width: t.w + 20, height: 2, fill: '#31446e' }, hotel)
+  const mx = 26, my = 24
+  const cw = (t.w - 2 * mx) / t.cols, ch = (t.h - 2 * my) / t.rows
+  const ww = Math.min(34, cw - 14), wh = Math.min(36, ch - 16)
+  for (let r = 0; r < t.rows; r++) for (let c = 0; c < t.cols; c++) {
+    const x = t.x + mx + c * cw + (cw - ww) / 2, y = t.y + my + r * ch + (ch - wh) / 2
+    if (rnd() < .52) {
+      el('rect', { x: x.toFixed(1), y: y.toFixed(1), width: ww, height: wh, rx: 2,
+        fill: litColors[(rnd() * 4) | 0], opacity: (0.72 + rnd() * 0.28).toFixed(2) }, hotel)
+      if (rnd() < .35) el('rect', { x: x - 2, y: y + wh, width: ww + 4, height: 2,
+        fill: '#f7a54d', opacity: .3 }, hotel)
+    } else {
+      el('rect', { x: x.toFixed(1), y: y.toFixed(1), width: ww, height: wh, rx: 2,
+        fill: '#182741', opacity: .95 }, hotel)
+    }
+  }
+  el('rect', { x: t.x, y: t.y, width: 3, height: t.h, fill: '#2c3d63' }, hotel)
+  el('rect', { x: t.x + t.w - 3, y: t.y, width: 3, height: t.h, fill: '#2c3d63' }, hotel)
+}
+/* the one window that glows wrong — the saboteur's */
+{
+  const t = tiers[1], c = 6, r = 1
+  const cw = (t.w - 52) / 9, ch = (t.h - 48) / 3
+  const x = t.x + 26 + c * cw + (cw - 34) / 2, y = t.y + 24 + r * ch + (ch - 36) / 2
+  el('rect', { x: x - 3, y: y - 3, width: 40, height: 42, rx: 3, fill: '#d8433c',
+    filter: 'url(#softglow)', opacity: .8 }, hotel)
+  el('rect', { x, y, width: 34, height: 36, rx: 2, fill: '#d8433c' }, hotel)
+}
+/* vertical HOTEL blade sign on the upper tier */
+{
+  el('rect', { x: 772, y: 764, width: 34, height: 148, fill: '#0c1322', stroke: '#3a4a6a' }, hotel)
+  const tx = 796, ty = 838
+  el('text', { x: tx, y: ty, transform: `rotate(90 ${tx} ${ty})`, 'text-anchor': 'middle',
+    'font-family': 'Limelight, Georgia, serif', 'font-size': 27, 'letter-spacing': 6,
+    fill: '#ffcf8e' }, hotel).textContent = 'HOTEL'
+  for (let i = 0; i < 5; i++) {
+    el('circle', { cx: 778, cy: 782 + i * 30, r: 3, fill: '#ffd9a0', filter: 'url(#softglow)' }, hotel)
+    el('circle', { cx: 800, cy: 782 + i * 30, r: 3, fill: '#ffd9a0', filter: 'url(#softglow)' }, hotel)
+  }
+}
+
+/* wet-street reflections */
+const refl = byId('reflections')
+el('rect', { x: 838, y: 1314, width: 84, height: 120, fill: 'rgba(244,231,192,.10)',
+  filter: 'url(#blurrefl)' }, refl)
+el('rect', { x: 470, y: 1314, width: 260, height: 110, fill: 'rgba(255,176,92,.13)',
+  filter: 'url(#blurrefl)' }, refl)
+
+/* entrance: canopy + marquee + glowing doors */
+const ent = byId('entrance')
+el('ellipse', { cx: 600, cy: 1300, rx: 300, ry: 52, fill: 'url(#underglow)' }, ent)
+el('rect', { x: 400, y: 1122, width: 400, height: 10, fill: '#1c2a48' }, ent)
+el('rect', { x: 400, y: 1132, width: 400, height: 34, fill: '#0c1322', stroke: '#3a4a6a' }, ent)
+const marquee = el('text', { x: 600, y: 1156, 'text-anchor': 'middle',
+  'font-family': 'Jost, Georgia, serif', 'font-size': 13, 'letter-spacing': 6,
+  fill: '#ffd9a0' }, ent)
+marquee.textContent = 'NIGHT SHIFT'
+for (let i = 0; i < 13; i++) {
+  el('circle', { cx: 416 + i * 31, cy: 1128, r: 4, fill: '#ffe2ad', filter: 'url(#softglow)' }, ent)
+}
+for (const dx of [-45, 5]) {
+  el('path', { d: `M${560 + dx},1260 v-74 a34,34 0 0 1 40,0 v74 z`, fill: 'url(#doorglow)' }, ent)
+  el('line', { x1: 580 + dx, y1: 1188, x2: 580 + dx, y2: 1260, stroke: '#5a3617', 'stroke-width': 2 }, ent)
+}
+el('rect', { x: 552, y: 1168, width: 116, height: 8, fill: '#1c2a48' }, ent)
+
+/* the cast — backlit silhouettes on the sidewalk */
+const cast = byId('cast')
+const SIL = '#03050a'
+function figure(x, draw) {
+  const g = el('g', { transform: `translate(${x},1302)`, fill: SIL }, cast)
+  draw(g)
+  return g
+}
+/* bellhop / staff, right of the doors */
+figure(735, g => {
+  el('rect', { x: -24, y: -122, width: 48, height: 9, rx: 2 }, g)                       // cap visor
+  el('rect', { x: -13, y: -134, width: 26, height: 13, rx: 3 }, g)                       // cap crown
+  el('circle', { cx: 0, cy: -107, r: 12 }, g)                                            // head
+  el('path', { d: 'M-14,-93 L14,-93 L19,-8 L10,0 L-10,0 L-19,-8 Z' }, g)                 // jacket
+  el('rect', { x: -8, y: -8, width: 6, height: 8 }, g)                                    // legs
+  el('rect', { x: 2, y: -8, width: 6, height: 8 }, g)
+  el('rect', { x: -27, y: -78, width: 8, height: 44, rx: 3 }, g)                          // arm
+  el('rect', { x: 19, y: -78, width: 8, height: 44, rx: 3 }, g)
+  el('circle', { cx: 0, cy: -70, r: 2, fill: '#ffb763', stroke: 'none' }, g)              // brass buttons
+  el('circle', { cx: 0, cy: -56, r: 2, fill: '#ffb763', stroke: 'none' }, g)
+  el('circle', { cx: 0, cy: -42, r: 2, fill: '#ffb763', stroke: 'none' }, g)
+})
+/* flapper guest, left of the doors */
+figure(470, g => {
+  el('ellipse', { cx: 0, cy: -118, rx: 17, ry: 5 }, g)                                    // cloche brim
+  el('path', { d: 'M-12,-118 a12,10 0 0 1 24,0 z' }, g)                                   // cloche dome
+  el('circle', { cx: 0, cy: -103, r: 10 }, g)                                             // head
+  el('path', { d: 'M-9,-91 C-24,-52 -28,-8 -31,0 L31,0 C28,-8 24,-52 9,-91 Z' }, g)       // drop-waist dress
+  el('rect', { x: -12, y: -86, width: 24, height: 7, rx: 3 }, g)                          // fur collar
+})
+/* gentleman guest with hat */
+figure(545, g => {
+  el('ellipse', { cx: 0, cy: -116, rx: 16, ry: 4 }, g)                                    // fedora brim
+  el('rect', { x: -9, y: -132, width: 18, height: 17, rx: 3 }, g)                         // fedora crown
+  el('circle', { cx: 0, cy: -102, r: 10 }, g)                                             // head
+  el('path', { d: 'M-12,-90 L12,-90 L16,-6 L6,0 L-6,0 L-16,-6 Z' }, g)                    // overcoat
+  el('rect', { x: -7, y: -6, width: 5, height: 6 }, g)
+  el('rect', { x: 2, y: -6, width: 5, height: 6 }, g)
+  el('rect', { x: 14, y: -60, width: 7, height: 40, rx: 3 }, g)                           // arm
+})
+/* the suitcase — resting at the door, waiting to be carried */
+el('rect', { x: 768, y: 1278, width: 34, height: 24, rx: 3, fill: SIL }, cast)
+el('path', { d: 'M778,1278 a7,6 0 0 1 14,0', stroke: SIL, 'stroke-width': 3, fill: 'none' }, cast)
+
+/* corner ornaments */
+const corners = byId('corners')
+for (const [cx, cy, sx, sy] of [[64, 64, 1, 1], [1136, 64, -1, 1], [64, 1536, 1, -1], [1136, 1536, -1, -1]]) {
+  for (let i = 0; i < 3; i++) {
+    const r = 16 + i * 10
+    el('path', { d: `M${cx + sx * r},${cy} A${r},${r} 0 0 ${sy > 0 ? 1 : 0} ${cx},${cy + sy * r}` }, corners)
+  }
+  el('rect', { x: cx - 4, y: cy - 4, width: 8, height: 8, transform: `rotate(45 ${cx} ${cy})`,
+    fill: '#d8b26a', stroke: 'none' }, corners)
+}
+</script>
+</body>
+</html>
