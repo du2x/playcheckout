@@ -105,8 +105,10 @@ test.describe('client:guest_sprites', () => {
       )
       const guests = await readGuests(own)
       expect(guests.length).toBeGreaterThan(0)
-      // VPOL-06: every guest is an archetype texture from the 10-silhouette set.
-      const archetypes = new Set(guests.map((g) => g.texture))
+      // VPOL-06: every guest is an archetype texture from the 10-silhouette
+      // set. Seated diners (furnishing slice) render the per-archetype `-sit`
+      // variant of the same silhouette — normalize before the allowlist read.
+      const archetypes = new Set(guests.map((g) => g.texture.replace(/-sit$/, '')))
       for (const a of archetypes) {
         expect([
           'guest-suite',

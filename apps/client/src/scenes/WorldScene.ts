@@ -60,6 +60,16 @@ import {
   doorsOpenAmount,
   ElevatorPresenter,
 } from './elevatorPresenter'
+import {
+  CHAIR_SEAT_TOP_PX,
+  diningFurniture,
+  diningSlotAtXTiles,
+  diningSlotFacesEast,
+  type FurnitureAnchor,
+  LOBBY_FURNITURE,
+  MEZZANINE_FURNITURE,
+  SEATED_GUEST_DEPTH,
+} from './furniture'
 import { JUICE, shouldShake } from './juice'
 import {
   advanceZoom,
@@ -226,6 +236,16 @@ export class WorldScene extends Phaser.Scene {
   private guestSeeds = new Map<string, number>()
   /** Guests whose free impatience cue is active (foot-tap + bell, GUEST-13). */
   private impatientGuests = new Set<string>()
+  /** Guests currently dining in the mezzanine restaurant (furnishing slice):
+   *  seeded by the building-wide check-in notice (guest:assigned, SUI-03) and
+   *  cleared when the suitcase rests (suitcase:placed → SUI-13 re-target) or
+   *  the guest leaves. A dropCarry re-queue emits no message — the stale id
+   *  is harmless: the pose gate also requires the guest's floor to be the
+   *  mezzanine. */
+  private diningGuests = new Set<string>()
+  /** Furnishing views per floor (live view only — the spectator overview's
+   *  stacked lanes keep their plain backdrop, like the corridor band). */
+  private furniture = new Map<FloorId, Phaser.GameObjects.Image[]>()
   // --- Front desk (cycle 3.B): the E-zone hint; the two-step send menu is
   // gone with the walkie-broadcast model (the suitcase replaces it).
   private deskHint: HTMLElement | null = null
@@ -442,6 +462,7 @@ export class WorldScene extends Phaser.Scene {
     this.buildGuestLayer()
     this.buildDeskLayer()
     this.buildDoorImages()
+    this.buildFurniture()
     this.syncTenancyMarkers()
 
     // Hall lines (Graphics — deliberately not a Rectangle/Text: harness
@@ -1397,6 +1418,7 @@ export class WorldScene extends Phaser.Scene {
       case 'guest-left': {
         this.guests.delete(action.guestId)
         this.impatientGuests.delete(action.guestId)
+        this.diningGuests.delete(action.guestId)
         break
       }
       case 'player-moved': {
@@ -1560,8 +1582,11 @@ export class WorldScene extends Phaser.Scene {
       case 'guest-assigned': {
         // SUI-03/04 (amended AD-034): the assignment is a building-wide
         // notice — every client hears it. Render the announce walkie line
-        // and store it for the owned-marker hint.
+        // and store it for the owned-marker hint. Check-in is also the
+        // moment the guest seats itself in the mezzanine restaurant (the
+        // sim re-places it onto a dining slot) — start the seated pose.
         this.heardAssignments.set(action.guestId, { floor: action.floor, room: action.room })
+        this.diningGuests.add(action.guestId)
         this.appendWalkieLine(`a guest announces: I'm in ${action.floor}:${action.room}`)
         break
       }
@@ -1577,11 +1602,13 @@ export class WorldScene extends Phaser.Scene {
         // SUI-24: resting — pinned at the doorway until a pickup.
         // SUI-21/22: PLACEMENT IS SILENT — deliberately no walkie line; the
         // resting room is learnable only on this floor (or later via the
-        // settle/complaint lines).
+        // settle/complaint lines). SUI-13: the rest also re-targets the
+        // guest out of the restaurant — end the seated pose.
         this.suitcases.set(action.guestId, {
           carrierId: null,
           rest: { floor: action.floor, room: action.room },
         })
+        this.diningGuests.delete(action.guestId)
         break
       case 'suitcase-picked-up': {
         // SUI-24: fresh carry leg under the new carrier.
@@ -1743,6 +1770,33 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
+   * The archetype texture a guest renders right now: the standing silhouette,
+   * or its derived `-sit` variant while seated at a restaurant table (the sit
+   * art keeps the grayscale tint-carrier contract, VPOL-06). Falls back to
+   * the standing texture when the sit variant failed to load.
+   */
+  private guestTextureFor(guestId: string, seated: boolean): string {
+    const seed = this.guestSeeds.get(guestId) ?? 0
+    const { archetype } = guestVariantOf(seed)
+    const base = GUEST_ARCHETYPES[archetype] ?? 'guest-clerk'
+    if (!seated) return base
+    const sit = `${base}-sit`
+    return this.textures.exists(sit) ? sit : base
+  }
+
+  /**
+   * The dining slot a guest currently occupies, or null when it renders
+   * standing. Seated ⇔ the client heard the check-in (guest:assigned →
+   * diningGuests) AND the guest's authoritative position is at a dining
+   * slot on the mezzanine — the floor gate also absorbs a dropCarry
+   * re-queue, which emits no dedicated message.
+   */
+  private seatedSlotOf(guestId: string, g: { floor: FloorId; x: number }): number | null {
+    if (!this.diningGuests.has(guestId) || g.floor !== 'mezzanine') return null
+    return diningSlotAtXTiles(g.x)
+  }
+
+  /**
    * Phase 4.1 (VPOL-06): apply the stored guest seed to a live guest view —
    * re-derives texture + palette tint. The seed may arrive before the view
    * exists (then syncGuests consumes it at creation) or after (this path
@@ -1752,11 +1806,12 @@ export class WorldScene extends Phaser.Scene {
     const view = this.guestViews.get(guestId)
     const seed = this.guestSeeds.get(guestId)
     if (view === undefined || seed === undefined) return
-    const { archetype, palette } = guestVariantOf(seed)
-    const texture = GUEST_ARCHETYPES[archetype] ?? 'guest-clerk'
+    const { palette } = guestVariantOf(seed)
+    const g = this.guests.get(guestId)
+    const seated = g !== undefined && this.seatedSlotOf(guestId, g) !== null
+    const texture = this.guestTextureFor(guestId, seated)
     if (this.textures.exists(texture)) view.setTexture(texture)
     const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
-    const g = this.guests.get(guestId)
     view.setTint(g?.floor === 'mezzanine' ? blendTint(base, DINING_FILL, 0.45) : base)
   }
 
@@ -2231,8 +2286,9 @@ export class WorldScene extends Phaser.Scene {
 
   /** Guest marker sync (called every frame): one archetype Sprite per guest
    *  on the viewed floor (Phase 4.1, VPOL-06) — texture + palette from the
-   *  decorrelated guest seed; dining guests shift toward amber (VPOL-08);
-   *  foot-tap yoyo while its free impatience cue is active (GUEST-13/VPOL-14). */
+   *  decorrelated guest seed; dining guests shift toward amber (VPOL-08) and
+   *  sit at their restaurant slot (furnishing slice); foot-tap yoyo while its
+   *  free impatience cue is active (GUEST-13/VPOL-14). */
   private tapProxies = new Map<string, { offset: number }>()
 
   private syncGuests(delta: number): void {
@@ -2240,10 +2296,9 @@ export class WorldScene extends Phaser.Scene {
     for (const [id, g] of this.guests) {
       let view = this.guestViews.get(id)
       const laneY = this.laneY(g.floor)
+      const seatedSlot = this.seatedSlotOf(id, g)
       if (view === undefined) {
-        const seed = this.guestSeeds.get(id) ?? 0
-        const { archetype } = guestVariantOf(seed)
-        const texture = GUEST_ARCHETYPES[archetype] ?? 'guest-clerk'
+        const texture = this.guestTextureFor(id, seatedSlot !== null)
         if (!this.textures.exists(texture)) continue
         view = this.add.sprite(g.x * TILE_PX, laneY, texture)
         view.setOrigin(0.5, 1)
@@ -2252,6 +2307,16 @@ export class WorldScene extends Phaser.Scene {
       const visible = this.spectator || g.floor === this.viewFloor
       view.setVisible(visible)
       view.x = g.x * TILE_PX
+      // Seated pose (furnishing slice): the sit texture rides the seat-top
+      // lift, tucked behind the shared table; west-facing slots flip. A
+      // texture change here also covers the dining→standing transitions the
+      // seed event can miss (applyGuestVariant re-derives the same way).
+      const wantTexture = this.guestTextureFor(id, seatedSlot !== null)
+      if (view.texture.key !== wantTexture && this.textures.exists(wantTexture)) {
+        view.setTexture(wantTexture)
+      }
+      view.setDepth(seatedSlot !== null ? SEATED_GUEST_DEPTH : 0)
+      view.setFlipX(seatedSlot !== null && !diningSlotFacesEast(seatedSlot))
       // VPOL-14: the impatience cue is a Tween-driven yoyo bounce around the
       // lane line (a proxy offset survives floor teleports; the frame sync
       // only reads it).
@@ -2272,7 +2337,8 @@ export class WorldScene extends Phaser.Scene {
         this.tweens.killTweensOf(proxy)
         this.tapProxies.delete(id)
       }
-      view.y = laneY - (proxy?.offset ?? 0)
+      const seatLift = seatedSlot !== null ? CHAIR_SEAT_TOP_PX : 0
+      view.y = laneY - seatLift - (proxy?.offset ?? 0)
       const seed = this.guestSeeds.get(id) ?? 0
       const { palette } = guestVariantOf(seed)
       const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
@@ -2358,6 +2424,44 @@ body.interior-full #desk-bell {
   private roomCenterPx(room: RoomIndex): number {
     const centerMilli = (roomSegmentStartMilli(room) + roomSegmentEndMilli(room)) / 2
     return (centerMilli / 1000) * TILE_PX
+  }
+
+  /**
+   * Furnishing (lobby + mezzanine restaurant, furnishing slice): wall-plane
+   * Images from the anchors in scenes/furniture.ts — the reception desk on
+   * the E zone, lobby seating, and the dining set pinned to the sim's
+   * mezzanine slot formula. Live view only (the spectator overview's stacked
+   * lanes stay plain, like the corridor band); per-frame visibility rides
+   * syncFurniture(). Images, never Rectangles (LIGHT-09 harness contract);
+   * names follow the `furniture:<floor>:<name>` filter convention.
+   */
+  private buildFurniture(): void {
+    const plan: readonly (readonly [FloorId, readonly FurnitureAnchor[]])[] = [
+      ['lobby', LOBBY_FURNITURE],
+      ['mezzanine', [...MEZZANINE_FURNITURE, ...diningFurniture()]],
+    ]
+    for (const [floor, anchors] of plan) {
+      const views: Phaser.GameObjects.Image[] = []
+      for (const anchor of anchors) {
+        if (!this.textures.exists(anchor.texture)) continue
+        const image = this.add.image(anchor.xTiles * TILE_PX, GROUND_Y, anchor.texture)
+        image.setOrigin(0.5, 1)
+        image.setDepth(anchor.depth)
+        image.setName(`furniture:${floor}:${anchor.name}`)
+        if (anchor.flipX === true) image.setFlipX(true)
+        image.setVisible(false)
+        views.push(image)
+      }
+      this.furniture.set(floor, views)
+    }
+  }
+
+  /** Furniture follows the own view floor (synced once per frame). */
+  private syncFurniture(): void {
+    for (const [floor, views] of this.furniture) {
+      const visible = !this.spectator && floor === this.viewFloor
+      for (const view of views) view.setVisible(visible)
+    }
   }
 
   /**
@@ -2929,6 +3033,7 @@ body.interior-full #desk-bell {
     }
     this.syncCues()
     this.syncDoors()
+    this.syncFurniture()
     // The elevator panel is self-healing: view re-renders rebuild the DOM
     // element, so refresh it every frame from scene state.
     this.updatePanel()

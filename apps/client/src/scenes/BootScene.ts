@@ -44,6 +44,29 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     })
+    // Seated guest variants (lobby/mezzanine furnishing slice) — derived
+    // per-archetype by scripts/gen-furniture-art.mjs; grayscale tint carriers
+    // like the standing set.
+    this.load.image('guest-suite-sit', 'art/chars/guest-suite-sit.png')
+    this.load.image('guest-tourist-sit', 'art/chars/guest-tourist-sit.png')
+    this.load.image('guest-clerk-sit', 'art/chars/guest-clerk-sit.png')
+    this.load.image('guest-elder-sit', 'art/chars/guest-elder-sit.png')
+    this.load.image('guest-dandy-sit', 'art/chars/guest-dandy-sit.png')
+    this.load.image('guest-diva-sit', 'art/chars/guest-diva-sit.png')
+    this.load.image('guest-flapper-sit', 'art/chars/guest-flapper-sit.png')
+    this.load.image('guest-merchant-sit', 'art/chars/guest-merchant-sit.png')
+    this.load.image('guest-professor-sit', 'art/chars/guest-professor-sit.png')
+    this.load.image('guest-child-sit', 'art/chars/guest-child-sit.png')
+    // Furnishing (lobby + mezzanine restaurant): desk, lobby seating, the
+    // dining set, the kitchen door, and the receptionist NPC. Anchors and
+    // placement live in scenes/furniture.ts.
+    this.load.image('furniture-desk', 'art/props/furniture-desk.png')
+    this.load.image('furniture-bench', 'art/props/furniture-bench.png')
+    this.load.image('furniture-plant', 'art/props/furniture-plant.png')
+    this.load.image('furniture-table', 'art/props/furniture-table.png')
+    this.load.image('furniture-chair', 'art/props/furniture-chair.png')
+    this.load.image('furniture-kitchen-door', 'art/props/furniture-kitchen-door.png')
+    this.load.image('npc-receptionist', 'art/chars/npc-receptionist.png')
     this.load.image('door-closed', 'art/doors/door-closed.png')
     this.load.image('door-open', 'art/doors/door-open.png')
     this.load.image('door-card', 'art/doors/door-card.png')
