@@ -175,7 +175,11 @@ test.describe('client:camera_juice', () => {
         () => {
           const t = (
             window as unknown as {
-              __TURNOVER__: { scene: (name: string) => { cameras?: { main?: { shakeEffect?: { isRunning?: boolean } } } | null } }
+              __TURNOVER__: {
+                scene: (name: string) => {
+                  cameras?: { main?: { shakeEffect?: { isRunning?: boolean } } } | null
+                }
+              }
             }
           ).__TURNOVER__
           return t.scene('Round')?.cameras?.main?.shakeEffect?.isRunning === true

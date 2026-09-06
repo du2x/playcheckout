@@ -96,13 +96,7 @@ async function seekAccuseBand(page: Page): Promise<void> {
     const move = await newestOwnMove()
     // Settled read: in band AND the newest move is ≥250 ms old (the stream
     // caught up — the true position cannot be further down the last walk).
-    if (
-      move !== null &&
-      move.ageMs >= 250 &&
-      move.x !== null &&
-      move.x >= 16.2 &&
-      move.x <= 16.8
-    ) {
+    if (move !== null && move.ageMs >= 250 && move.x !== null && move.x >= 16.2 && move.x <= 16.8) {
       return
     }
     // Degraded read: under heavy load the stream can freeze entirely. If the

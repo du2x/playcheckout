@@ -254,10 +254,10 @@ test.describe('client:lobby_join', () => {
       await host.context().close()
     })
 
-  test('with 4 players the host starts and all pages enter the round view (LIGHT-07 smoke)', async ({
-    browser,
-  }) => {
-    test.setTimeout(90_000) // 4-page setup + round start can exceed 30 s under load
+    test('with 4 players the host starts and all pages enter the round view (LIGHT-07 smoke)', async ({
+      browser,
+    }) => {
+      test.setTimeout(90_000) // 4-page setup + round start can exceed 30 s under load
       const host = await browser.newContext().then((c) => c.newPage())
       const code = await createRoom(host, 'ada')
       const pages = [host]

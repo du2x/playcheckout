@@ -1,5 +1,5 @@
-import { fileURLToPath } from 'node:url'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
 
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url))
