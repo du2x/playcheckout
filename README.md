@@ -1,5 +1,9 @@
 # Turnover
 
+<p align="center">
+  <img src="docs/covers/turnover-cover-share.png" width="420" alt="Turnover key art — an art-déco hotel at night, every window lit warm except one crimson" title="Every room turned. One turncoat.">
+</p>
+
 **Turnover** is a browser-based social-deduction game for 4–6 friends — *Among Us with the meetings deleted and the evidence made physical.*
 
 It's the night shift at a grand hotel. Staff prepare rooms for a stream of NPC guests while one hidden player — the saboteur — quietly ruins them. Guests who find trash file complaints, and the complaint budget can lose the shift for everyone, saboteur or not. There are no corpses, no vote meetings, no chat logs: the hotel itself leaks traces (door cards, trash freshness, elevator panels, stairwell ambushes), and spoken testimony over Discord turns those traces into accusations. Wrong accusations get you fired. The results screen exposes every lie after the fact.
