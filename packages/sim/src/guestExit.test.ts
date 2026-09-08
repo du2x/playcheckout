@@ -22,6 +22,25 @@ function floorIndex(f: FloorId): number {
   return (['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3'] as FloorId[]).indexOf(f)
 }
 
+/**
+ * Oldest unclaimed room needing work (`trashed`/`settled`) — staff read the
+ * door cards / tenancy signs on foot; the sim query stands in for that walk
+ * (2026-09 pre-round occupancy: churn trash is work to do, not a mis-place
+ * trap for the next assigned guest).
+ */
+function nextNeedingWork(
+  sim: RoundSim,
+  claimed: Set<string>,
+): { floor: GuestFloorId; room: number } | null {
+  for (const r of sim.roomStates()) {
+    if (r.state !== 'trashed' && r.state !== 'settled') continue
+    const key = `${r.floor}:${r.room}`
+    if (claimed.has(key)) continue
+    return { floor: r.floor, room: r.room }
+  }
+  return null
+}
+
 class PortAdapter {
   constructor(private readonly sim: MovementSim) {}
   joinGuest(id: string, floor: FloorId, xTiles: number): void {
@@ -88,9 +107,12 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
     carrying: boolean
     guestId: string | null
     target: { floor: FloorId; room: number } | null
+    prep: { floor: GuestFloorId; room: number } | null
   }
   const bots = new Map<string, BotState>()
-  for (const id of staff) bots.set(id, { carrying: false, guestId: null, target: null })
+  for (const id of staff) bots.set(id, { carrying: false, guestId: null, target: null, prep: null })
+  const claimed = new Set<string>()
+  let waiting = 0
   const guestAssign = new Map<string, { floor: FloorId; room: number }>()
   let settled = 0
   let discovered = 0
@@ -111,32 +133,19 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
       if (pos === undefined) continue
       if (movement.viewOf(sid).car !== null) continue
       if (movement.stairsStateOf(sid) !== undefined) continue
-      if (!st.carrying) {
-        if (pos.floor === 'lobby') {
-          if (Math.abs(pos.x - DESK_X) > TUNING.DESK_RANGE_TILES + 0.01) {
-            movement.startMove(sid, pos.x < DESK_X ? 'right' : 'left')
-          } else {
-            movement.stopMove(sid)
-          }
-        } else {
-          if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
-            const cur = floorIndex(pos.floor)
-            const tgt = floorIndex('lobby')
-            const dir = tgt > cur ? 'up' : 'down'
-            const res = movement.enterStairs(sid, dir as 'up' | 'down')
-            if (res === 'ignored') {
-              if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
-                movement.callElevator(sid)
-              } else {
-                movement.startMove(sid, 'right')
-              }
-            }
-          } else {
-            movement.startMove(sid, 'left')
-          }
+      // Janitorial sweep: with nobody waiting at the desk, an idle staffer
+      // adopts the oldest room needing work and preps it — churn trash is
+      // work, not a mis-place trap for the next assigned guest.
+      if (st.prep === null && !st.carrying && waiting === 0) {
+        const claim = nextNeedingWork(sim, claimed)
+        if (claim !== null) {
+          st.prep = claim
+          claimed.add(`${claim.floor}:${claim.room}`)
         }
-      } else if (st.carrying && st.target !== null) {
-        const target = st.target
+      }
+      const goal = st.carrying ? st.target : st.prep
+      if (goal !== null) {
+        const target = goal
         if (pos.floor !== target.floor) {
           if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
             const cur = floorIndex(pos.floor)
@@ -161,6 +170,28 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
             movement.startMove(sid, pos.x < dx ? 'right' : 'left')
           }
         }
+      } else if (pos.floor === 'lobby') {
+        if (Math.abs(pos.x - DESK_X) > TUNING.DESK_RANGE_TILES + 0.01) {
+          movement.startMove(sid, pos.x < DESK_X ? 'right' : 'left')
+        } else {
+          movement.stopMove(sid)
+        }
+      } else {
+        if (Math.abs(pos.x - STAIR_X) <= TUNING.STAIRWELL_MOUTH_TILES + 0.01) {
+          const cur = floorIndex(pos.floor)
+          const tgt = floorIndex('lobby')
+          const dir = tgt > cur ? 'up' : 'down'
+          const res = movement.enterStairs(sid, dir as 'up' | 'down')
+          if (res === 'ignored') {
+            if (Math.abs(pos.x - LANDING_X) <= TUNING.ELEVATOR_LANDING_TILES + 0.01) {
+              movement.callElevator(sid)
+            } else {
+              movement.startMove(sid, 'right')
+            }
+          }
+        } else {
+          movement.startMove(sid, 'left')
+        }
       }
     }
     // Riding: press target and hold exit
@@ -168,15 +199,16 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
       const st = bots.get(sid)
       if (st === undefined) continue
       const view = movement.viewOf(sid)
-      if (view.car !== null && st.carrying && st.target !== null) {
-        movement.pressFloor(sid, st.target.floor)
+      const goal = st.carrying ? st.target : st.prep
+      if (view.car !== null && goal !== null) {
+        movement.pressFloor(sid, goal.floor)
         const carFloor = movement.carFloors()[0]?.floor
-        if (carFloor === st.target.floor) {
-          const dx = doorX(st.target.room)
+        if (carFloor === goal.floor) {
+          const dx = doorX(goal.room)
           movement.startMove(sid, dx < LANDING_X ? 'left' : 'right')
         }
       }
-      if (view.car !== null && !st.carrying) {
+      if (view.car !== null && goal === null) {
         movement.pressFloor(sid, 'lobby')
         const carFloor = movement.carFloors()[0]?.floor
         if (carFloor === 'lobby') movement.startMove(sid, 'left')
@@ -215,9 +247,28 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
         sim.suitcasePlace(sid, st.target.room as RoomIndex)
       }
     }
+    // Prep intent (2026-09 sweep): a staffer parked at their adopted room's
+    // door starts the prep channel — it runs while they hold the segment.
+    for (const sid of staff) {
+      const st = bots.get(sid)
+      if (st === undefined || st.carrying || st.prep === null) continue
+      const p = movement.positionOf(sid)
+      if (
+        p !== undefined &&
+        p.floor === st.prep.floor &&
+        Math.abs(p.x - doorX(st.prep.room)) <= TUNING.ROOM_DOOR_RANGE_TILES + 0.05
+      ) {
+        sim.startWork(sid, st.prep.floor, st.prep.room as RoomIndex)
+      }
+    }
     const flushed = sim.tick(positions)
     for (const e of flushed) {
-      if (e.type === 'guest:assigned') guestAssign.set(e.guestId, { floor: e.floor, room: e.room })
+      if (e.type === 'guest:arrived') waiting++
+      if (e.type === 'guest:assigned') {
+        guestAssign.set(e.guestId, { floor: e.floor, room: e.room })
+        waiting--
+      }
+      if (e.type === 'guest:self_assigned') waiting--
       if (e.type === 'suitcase:carried') {
         const st = bots.get(e.carrierId)
         if (st !== undefined) {
@@ -234,6 +285,13 @@ function runPureChurn(seed: number, playerIds: readonly string[]): RunResult {
             st.target = null
             break
           }
+        }
+      }
+      if (e.type === 'room:prepped') {
+        const key = `${e.floor}:${e.room}`
+        claimed.delete(key)
+        for (const st of bots.values()) {
+          if (st.prep !== null && `${st.prep.floor}:${st.prep.room}` === key) st.prep = null
         }
       }
       if (e.type === 'guest:settled') settled++

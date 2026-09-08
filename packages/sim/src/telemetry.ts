@@ -179,7 +179,13 @@ export class TelemetrySink {
       room: `${floor}:${room}` as string,
     })
   }
-  recordGuestCheckedOut(guestId: string, floor: GuestFloorId, room: RoomIndex, tick: number): void {
+  recordGuestCheckedOut(
+    guestId: string,
+    floor: GuestFloorId,
+    room: RoomIndex,
+    tick: number,
+    preRound = false,
+  ): void {
     this.push({
       kind: 'guest-checked-out',
       tick,
@@ -188,6 +194,7 @@ export class TelemetrySink {
       floor,
       roomIdx: room,
       room: `${floor}:${room}` as string,
+      ...(preRound ? { preRound: true } : {}),
     })
   }
   recordGuestLeft(guestId: string, tick: number): void {

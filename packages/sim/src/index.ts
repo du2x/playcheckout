@@ -21,8 +21,10 @@ export {
   DWELL_TICKS,
   type MoveDir,
   MovementSim,
+  playerSpawnXMilli,
   RIDE_TICKS_PER_FLOOR,
   SPEED_MILLI_PER_TICK,
+  STAIRS_TRANSIT_TICKS,
 } from './movement.js'
 export { Rng } from './rng.js'
 export { RoundSim, type RoundSimConfig } from './roundSim.js'

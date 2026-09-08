@@ -43,6 +43,22 @@ export const STAIRS_TRANSIT_TICKS = TUNING.STAIRS_TRANSIT_SECONDS * TICK_HZ
 export const STAIRS_BREATH_TICKS = TUNING.STAIRS_BREATH_SECONDS * TICK_HZ
 export const STAIRS_STUN_TICKS = TUNING.STAIRS_STUN_SECONDS * TICK_HZ
 
+/**
+ * The staff spawn row (FR-2 spawn revision, 2026-09): fresh PLAYER joiners
+ * line up in the west lounge — slot i at DESK_X − 3 − i × 1.5 tiles — the
+ * mirror of the guests' eastward desk queue. Slots stay clear of the E
+ * receive zone (DESK_X ± DESK_RANGE_TILES) and land on whole half-tiles so
+ * millitiles never drift. Facing stays 'right': the row looks east, toward
+ * the desk.
+ */
+const PLAYER_SPAWN_ROW_START_MILLI = (TUNING.DESK_X_TILES - 3) * MILLI
+const PLAYER_SPAWN_ROW_STEP_MILLI = 1.5 * MILLI
+
+/** Join-order slot i → spawn x in millitiles (i < PLAYERS_MAX by the room cap). */
+export function playerSpawnXMilli(slot: number): number {
+  return PLAYER_SPAWN_ROW_START_MILLI - slot * PLAYER_SPAWN_ROW_STEP_MILLI
+}
+
 export type MoveDir = 'left' | 'right'
 
 interface PlayerMoveState {
@@ -171,11 +187,12 @@ export class MovementSim {
   // --- roster / lifecycle -------------------------------------------------
 
   /**
-   * Fresh-joiner placement (FR-2 "spawn"): lobby center, facing right.
-   * Cycle 3.1: guest NPCs join with `{ kind: 'guest' }` and an optional
-   * deterministic spawn placement (`floor` + `xMilli` — the desk queue slots
-   * and the room-door re-entry on checkout). Every walk/elevator rule
-   * (AD-011…027) applies identically to both kinds.
+   * Fresh-joiner placement (FR-2 "spawn"): lobby center, facing right —
+   * unless the caller supplies a slot. The room passes the staff spawn row
+   * (`playerSpawnXMilli`) for players; guest NPCs join with
+   * `{ kind: 'guest' }` and their deterministic spawn placement (`floor` +
+   * `xMilli` — the desk queue slots and the room-door re-entry on checkout).
+   * Every walk/elevator rule (AD-011…027) applies identically to all kinds.
    */
   join(
     playerId: string,

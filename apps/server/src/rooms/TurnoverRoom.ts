@@ -32,6 +32,7 @@ import {
   type GuestTiming,
   type MovementPort,
   MovementSim,
+  playerSpawnXMilli,
   RoundSim,
   TelemetrySink,
   TICK_HZ,
@@ -381,8 +382,12 @@ export class TurnoverRoom extends Room {
       joinedAt: this.joinedCounter++,
       connected: true,
     })
-    // Fresh-joiner placement (FR-2 spawn): lobby center (MOVE-18 snapshot ride-along).
-    this.movement.join(client.sessionId)
+    // Fresh-joiner placement (FR-2 spawn): the staff row west of the desk —
+    // join order fills westward slots so awaiting players never stack on the
+    // desk (MOVE-18 snapshot ride-along; positions persist into the round).
+    this.movement.join(client.sessionId, {
+      xMilli: playerSpawnXMilli(this.players.size - 1),
+    })
     // Fresh snapshot to everyone so rosters stay consistent without a feed.
     for (const sessionId of this.players.keys()) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
@@ -784,6 +789,7 @@ export class TurnoverRoom extends Room {
             event.floor as GuestFloorId,
             event.room as RoomIndex,
             this.roundTick,
+            event.preRound === true,
           )
         else if (event.type === 'guest:left')
           this.telemetrySink.recordGuestLeft(event.guestId, this.roundTick)

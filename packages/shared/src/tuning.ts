@@ -50,6 +50,14 @@ export const TUNING = {
   /** Settled guest dwell, uniform per guest (prd §7 v1.3, AD-022). */
   GUEST_DWELL_MIN_SECONDS: 45,
   GUEST_DWELL_MAX_SECONDS: 90,
+  /** Pre-round occupancy (2026-09, user-approved): guests already settled in
+   *  distinct seeded rooms at round start, spread round-robin over the guest
+   *  floors. They check out on the normal settled dwell measured from t=0 —
+   *  no separate timing dial — seeding early checkout churn; their settles
+   *  predate the shift, so they never touch the settle score. Values are the
+   *  re-proof output of the exit gates (sim:exit_a / sim:guest_exit_a, sweep
+   *  bots) — the larger lobbies sit on the 16/20 bar above this. */
+  PRE_ROUND_OCCUPANCY: { 4: 5, 5: 2, 6: 2 } as Record<LobbySize, number>,
   /** Unrouted guest impatience (prd §7 v1.3, AD-022): foot-tap + bell, then
    *  self-assign. Waiting is free — no complaint cost. */
   GUEST_IMPATIENCE_SECONDS: 20,

@@ -95,6 +95,10 @@ export type SimEvent =
       readonly guestId: string
       readonly floor: FloorId
       readonly room: RoomIndex
+      /** Pre-round occupancy (2026-09): the guest was tenanted before the
+       *  round started. Telemetry-only — the registry projects the wire
+       *  payload explicitly, so this never crosses the protocol. */
+      readonly preRound?: true
     }
   | { readonly type: 'guest:left'; readonly guestId: string }
 

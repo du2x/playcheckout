@@ -188,6 +188,12 @@ export class RoundSim {
       for (const [playerId, seed] of this.cosmeticSeeds) {
         events.push({ type: 'cosmetic:player', playerId, seed })
       }
+      // Pre-round occupancy (2026-09): the shift opens tenanted — cosmetic
+      // identity flushes with the round-start batch; the door signs seed
+      // from the tenancy snapshots, and checkout churn rides GUEST-09.
+      for (const preRoundEvent of this.guests?.spawnPreRound(tickIndex) ?? []) {
+        events.push(preRoundEvent)
+      }
     }
     // Fired AND ghosted players are out of live play: one stale position may
     // arrive after the removal (the room tears them down), so they are

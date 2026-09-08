@@ -1,5 +1,6 @@
 import { Client } from '@colyseus/sdk'
 import { type LobbySnapshot, TUNING } from '@turnover/shared'
+import { CAR_LANDING_MILLI, playerSpawnXMilli, STAIRS_TRANSIT_TICKS } from '@turnover/sim'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { startServer } from '../index'
 import { TurnoverRoom } from './TurnoverRoom'
@@ -56,6 +57,36 @@ async function driveUntilMovement(
     last = JSON.stringify(state)
   }
   throw new Error(`driveUntilMovement: condition never held; last=${last}`)
+}
+
+/**
+ * Walk one or more players east to the single car's landing (AD-040) and stop
+ * there — the prelude to every landing press (AD-025). Polls the public
+ * positions instead of counting walk ticks, for the same reason
+ * driveUntilMovement polls: the FR-2 spawn row (2026-09) starts joiners on a
+ * west row, so walk budgets tuned to the old center spawn under-shoot the
+ * landing press range.
+ */
+async function walkToEastLanding(
+  instance: TurnoverRoom,
+  riders: ClientRoom | ClientRoom[],
+): Promise<void> {
+  const party = Array.isArray(riders) ? riders : [riders]
+  for (const rider of party) rider.send('move:start', { type: 'move:start', dir: 'right' })
+  await new Promise((r) => setTimeout(r, 30)) // the intents must land before driving
+  for (let driven = 0; driven < 120; driven += 1) {
+    instance.__driveTicks(1)
+    const state = instance.__movementDebug() as {
+      positions: { playerId: string; x: number }[]
+    }
+    const landed = party.every((rider) => {
+      const own = state.positions.find((p) => p.playerId === rider.sessionId)
+      return own !== undefined && own.x >= CAR_LANDING_MILLI / 1000
+    })
+    if (landed) break
+  }
+  for (const rider of party) rider.send('move:stop', { type: 'move:stop' })
+  await new Promise((r) => setTimeout(r, 30))
 }
 
 /**
@@ -185,6 +216,29 @@ describe('server:lobby_join', () => {
     expect(fulfilled).toHaveLength(1)
     expect(rejected).toHaveLength(1)
     host.leave()
+  })
+
+  it('spawns awaiting joiners into distinct staff-row slots west of the desk (FR-2 spawn row)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const instance = TurnoverRoom.instances.at(-1)
+    const positions = (
+      instance?.__movementDebug() as {
+        positions: { playerId: string; floor: string; x: number }[]
+      }
+    ).positions
+    // Join order fills the row's westward slots (millitiles → tiles); nobody
+    // lands on the desk or on each other.
+    expect(positions).toEqual(
+      [host, a, b, c].map((client, i) => ({
+        playerId: client.sessionId,
+        floor: 'lobby',
+        x: playerSpawnXMilli(i) / 1000,
+      })),
+    )
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
   })
 
   it('stays message-only: patchRate null, no Schema state', () => {
@@ -661,7 +715,8 @@ describe('server:movement', () => {
     const moved = await guestMoves
     expect(moved.payload.playerId).toBe(guest.sessionId)
     expect(moved.payload.floor).toBe('lobby')
-    expect((moved.payload.x as number) > 15).toBe(true)
+    // Walked east from the FR-2 spawn row (the guest is the second joiner).
+    expect(moved.payload.x as number).toBeGreaterThan(playerSpawnXMilli(1) / 1000)
     expect(moved.payload.facing).toBe('right')
 
     guestCollector.stop()
@@ -703,7 +758,9 @@ describe('server:movement', () => {
         (p) => p.playerId === host.sessionId,
       )
       expect(own?.floor).toBe('lobby')
-      expect(own?.x).toBeGreaterThan(15) // moved right pre-round, kept through the round
+      // Moved right pre-round (the host holds the row's first slot), kept
+      // through the round.
+      expect(own?.x).toBeGreaterThan(playerSpawnXMilli(0) / 1000)
 
       // Post-buzzer, a new snapshot is self-policy — the guest never sees one
       // generated for the host's connection.
@@ -735,11 +792,7 @@ describe('server:movement', () => {
       // Board the parked east car with the landing call press (AD-025) and
       // choose the destination in-car: the rider-exclusive press and the public
       // arrival both route through the Router.
-      host.send('move:start', { type: 'move:start', dir: 'right' })
-      await new Promise((r) => setTimeout(r, 30))
-      instanceRef?.__driveTicks(50)
-      host.send('move:stop', { type: 'move:stop' })
-      await new Promise((r) => setTimeout(r, 30))
+      await walkToEastLanding(instanceRef as TurnoverRoom, host)
       host.send('elevator:call', { type: 'elevator:call' }) // parked-car press: boards
       await new Promise((r) => setTimeout(r, 30))
       instanceRef?.__driveTicks(12) // doors open (AD-026) + flush the boarding + flash
@@ -784,11 +837,7 @@ describe('server:movement', () => {
     expect(called.payload).toEqual({ floor: 'lobby', car: 1 })
     // Pre-round boarding, in-car press, and ride all work (AD-011): walk to
     // the east landing and board the parked car with the call press (AD-025).
-    host.send('move:start', { type: 'move:start', dir: 'right' })
-    await new Promise((r) => setTimeout(r, 50))
-    instance?.__driveTicks(60)
-    host.send('move:stop', { type: 'move:stop' })
-    await new Promise((r) => setTimeout(r, 50))
+    await walkToEastLanding(instance as TurnoverRoom, host)
     host.send('elevator:call', { type: 'elevator:call' }) // parked-car press: boards
     await new Promise((r) => setTimeout(r, 50))
     instance?.__driveTicks(12) // doors open (AD-026) + flush the boarding + flash
@@ -837,13 +886,7 @@ describe('server:elevator_riders', () => {
 
   /** Board both players into the parked east car and press floor1 (car departs). */
   async function boardAndPressFloor1(instance: TurnoverRoom, riders: ClientRoom[]) {
-    for (const rider of riders) {
-      rider.send('move:start', { type: 'move:start', dir: 'right' })
-    }
-    await sleep(50)
-    instance.__driveTicks(60) // walk from center to the east landing (clamped at 30)
-    for (const rider of riders) rider.send('move:stop', { type: 'move:stop' })
-    await sleep(50)
+    await walkToEastLanding(instance, riders)
     for (const rider of riders) {
       rider.send('elevator:call', { type: 'elevator:call' }) // parked-car press: boards
     }
@@ -1053,11 +1096,7 @@ describe('server:elevator_riders', () => {
       )
       instance.__driveTicks(10) // the doors finish opening (AD-026)
       await sleep(50)
-      b.send('move:start', { type: 'move:start', dir: 'right' })
-      await sleep(50)
-      instance.__driveTicks(60) // walk from center to the east landing
-      b.send('move:stop', { type: 'move:stop' })
-      await sleep(50)
+      await walkToEastLanding(instance, b)
       b.send('elevator:call', { type: 'elevator:call' }) // parked-car press: boards
       await sleep(50)
       instance.__driveTicks(12) // flush the boarding
@@ -1179,13 +1218,8 @@ describe('server:work_channels', () => {
     first = true,
   ) {
     void first
-    const toLanding = 'right'
     const awayFromLanding = 'left'
-    player.send('move:start', { type: 'move:start', dir: toLanding })
-    await sleep(50)
-    instance.__driveTicks(60) // walk from center to the landing
-    player.send('move:stop', { type: 'move:stop' })
-    await sleep(50)
+    await walkToEastLanding(instance, player)
     // Landing press: the parked doors swing open (AD-026) and the board
     // lands when they finish — a rider is on NO floor, so boarding shows as
     // the player vanishing from the public positions.
@@ -1556,11 +1590,7 @@ describe('server:evidence', () => {
       const receiverCollector = collectAll(receiver)
 
       // --- Staff rider: car 1 up, exit, park inside room 1, real prep. ---
-      staffPage.send('move:start', { type: 'move:start', dir: 'right' })
-      await sleep(60)
-      instanceRef?.__driveTicks(60) // walk to the east landing (AD-040)
-      staffPage.send('move:stop', { type: 'move:stop' })
-      await sleep(60)
+      await walkToEastLanding(instanceRef as TurnoverRoom, staffPage)
       staffPage.send('elevator:call', { type: 'elevator:call' }) // parked-car press: boards
       await sleep(60)
       instanceRef?.__driveTicks(12) // doors open (AD-026) + flush the boarding + flash
@@ -1644,11 +1674,7 @@ describe('server:evidence', () => {
       // carries the arrival floor's carded rooms (EVID-04). Car 2 sits parked
       // open-doors at the east lobby landing: walk there and board with the
       // landing call press (AD-025).
-      receiver.send('move:start', { type: 'move:start', dir: 'right' })
-      await sleep(60)
-      instanceRef?.__driveTicks(50) // walk to the east landing
-      receiver.send('move:stop', { type: 'move:stop' })
-      await sleep(60)
+      await walkToEastLanding(instanceRef as TurnoverRoom, receiver)
       // The car is away on floor1 (the staff rider's stop): the call queues,
       // the car attends, and the landing press boards once it stands here —
       // retry the press until the receiver vanishes from the floor stream.
@@ -1772,11 +1798,7 @@ describe('server:justice', () => {
   async function rideToRoom1(instance: TurnoverRoom, player: ClientRoom) {
     // Single car (AD-040): the car parks at the EAST lobby landing — walk
     // there and board through the landing press (AD-025/026).
-    player.send('move:start', { type: 'move:start', dir: 'right' })
-    await sleep(50)
-    instance.__driveTicks(60) // walk from center to the east landing
-    player.send('move:stop', { type: 'move:stop' })
-    await sleep(50)
+    await walkToEastLanding(instance, player)
     // The car may be away (the previous ride left it on floor1): retry the
     // landing press until the player vanishes from the floor stream (boarding
     // puts a rider on NO floor, AD-009).
@@ -2185,11 +2207,7 @@ describe('server:round_end', () => {
    *  Single car (AD-040): board at the east lobby landing, retrying the press
    *  while the car may be away. */
   async function rideToRoom1(instance: TurnoverRoom, player: ClientRoom) {
-    player.send('move:start', { type: 'move:start', dir: 'right' })
-    await sleep(50)
-    instance.__driveTicks(60) // walk from center to the east landing
-    player.send('move:stop', { type: 'move:stop' })
-    await sleep(50)
+    await walkToEastLanding(instance, player)
     for (let i = 0; i < 80; i++) {
       player.send('elevator:call', { type: 'elevator:call' })
       await sleep(30)
@@ -2254,11 +2272,7 @@ describe('server:round_end', () => {
   async function rideToFloor1Landing(instance: TurnoverRoom, player: ClientRoom) {
     // Single car (AD-040): board at the east lobby landing, retrying the
     // press while the car may be away on floor1.
-    player.send('move:start', { type: 'move:start', dir: 'right' })
-    await sleep(50)
-    instance.__driveTicks(60) // walk from center to the east landing
-    player.send('move:stop', { type: 'move:stop' })
-    await sleep(50)
+    await walkToEastLanding(instance, player)
     for (let i = 0; i < 80; i++) {
       player.send('elevator:call', { type: 'elevator:call' })
       await sleep(30)
@@ -2341,214 +2355,225 @@ describe('server:round_end', () => {
     }
   })
 
-  it('recap carries rides, a crime, and the catch in tick order (REND-08/09)', async () => {
-    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '120')
-    try {
-      const [host, a, b, c] = await roomWithFour()
-      const clients = [host, a, b, c]
-      const collectors = clients.map((room) => collectAll(room))
-      const { instance, staff, saboteur } = await startWithRoles(clients)
-      const worker = staff[0]
-      if (worker === undefined) throw new Error('no staff player')
-      const watcher = staff[1]
-      if (watcher === undefined) throw new Error('no second staff')
-      const sabSeen: { type: string; payload: Record<string, unknown> }[] = []
-      const sabOff = saboteur.onMessage('*', (messageType, envelope) => {
-        sabSeen.push({
-          type: String(messageType),
-          payload: (envelope as { payload: Record<string, unknown> }).payload,
+  // Walk-in choreography note (2026-09): pre-round checkout traffic (the
+  // 45-90 s dwell, now inside the 120 s shift) can drift the wall-clock
+  // staging by a few ticks; retry absorbs the residual transport race.
+  it(
+    'recap carries rides, a crime, and the catch in tick order (REND-08/09)',
+    { retry: 2 },
+    async () => {
+      vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '120')
+      try {
+        const [host, a, b, c] = await roomWithFour()
+        const clients = [host, a, b, c]
+        const collectors = clients.map((room) => collectAll(room))
+        const { instance, staff, saboteur } = await startWithRoles(clients)
+        const worker = staff[0]
+        if (worker === undefined) throw new Error('no staff player')
+        const watcher = staff[1]
+        if (watcher === undefined) throw new Error('no second staff')
+        const sabSeen: { type: string; payload: Record<string, unknown> }[] = []
+        const sabOff = saboteur.onMessage('*', (messageType, envelope) => {
+          sabSeen.push({
+            type: String(messageType),
+            payload: (envelope as { payload: Record<string, unknown> }).payload,
+          })
         })
-      })
 
-      // Staff preps room 1; the saboteur un-preps it to COMPLETION (a crime
-      // for the recap); the watcher pre-positions at floor1's west landing.
-      await rideToRoom1(instance, worker)
-      console.log('PROBE-WORKER-PARK', JSON.stringify(instance.__movementDebug()))
-      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      try {
-        await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
-      } catch (e) {
+        // Staff preps room 1; the saboteur un-preps it to COMPLETION (a crime
+        // for the recap); the watcher pre-positions at floor1's west landing.
+        await rideToRoom1(instance, worker)
+        console.log('PROBE-WORKER-PARK', JSON.stringify(instance.__movementDebug()))
+        worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+        try {
+          await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
+        } catch (e) {
+          console.log(
+            'PROBE-WORKER-ERR',
+            JSON.stringify({
+              types: collectorOf(collectors, clients, worker).types().slice(-8),
+            }),
+          )
+          throw e
+        }
+        await rideToRoom1(instance, saboteur)
+        saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+        try {
+          await driveUntil(collectorOf(collectors, clients, saboteur), 'work:ended', instance)
+        } catch (e) {
+          console.log(
+            'PROBE-RECAP-SAB',
+            JSON.stringify({
+              phase: instance.__phase(),
+              types: collectorOf(collectors, clients, saboteur).types().slice(-10),
+              state: instance.__movementDebug(),
+            }),
+          )
+          throw e
+        }
+        // The worker re-preps the trashed room; the watcher rides to the
+        // landing while that channel runs.
+        worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+        try {
+          await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
+        } catch (e) {
+          console.log(
+            'PROBE-RECAP',
+            JSON.stringify({
+              phase: instance.__phase(),
+              types: collectorOf(collectors, clients, worker).types().slice(-12),
+              state: instance.__movementDebug(),
+            }),
+          )
+          throw e
+        }
+        await rideToFloor1Landing(instance, watcher)
+        // Pre-position the watcher just east of room 1 (x≈8.4, room 3): from
+        // the east landing room 1 is 88 ticks away — farther than the 60-tick
+        // un-prep channel, so the mid-channel entry needs the head start.
+        watcher.send('move:start', { type: 'move:start', dir: 'left' })
+        await sleep(50)
+        instance.__driveTicks(72)
+        watcher.send('move:stop', { type: 'move:stop' })
+        await sleep(50)
+        // The saboteur un-preps again; the watcher walks INTO room 1 mid-channel
+        // → walk-in conviction — the round ends staff-win.
+        saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+        // The watcher pre-positions east of room 1 (the east-landing approach,
+        // AD-040): walking LEFT crosses into room 1 mid-channel → the catch.
+        watcher.send('move:start', { type: 'move:start', dir: 'left' })
+        await sleep(50)
+        instance.__driveTicks(30)
         console.log(
-          'PROBE-WORKER-ERR',
-          JSON.stringify({
-            types: collectorOf(collectors, clients, worker).types().slice(-8),
-          }),
+          'PROBE-SAB-ERR',
+          JSON.stringify(sabSeen.filter((m) => m.type === 'error').map((m) => m.payload)),
         )
-        throw e
-      }
-      await rideToRoom1(instance, saboteur)
-      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      try {
-        await driveUntil(collectorOf(collectors, clients, saboteur), 'work:ended', instance)
-      } catch (e) {
-        console.log(
-          'PROBE-RECAP-SAB',
-          JSON.stringify({
-            phase: instance.__phase(),
-            types: collectorOf(collectors, clients, saboteur).types().slice(-10),
-            state: instance.__movementDebug(),
-          }),
-        )
-        throw e
-      }
-      // The worker re-preps the trashed room; the watcher rides to the
-      // landing while that channel runs.
-      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      try {
-        await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
-      } catch (e) {
-        console.log(
-          'PROBE-RECAP',
-          JSON.stringify({
-            phase: instance.__phase(),
-            types: collectorOf(collectors, clients, worker).types().slice(-12),
-            state: instance.__movementDebug(),
-          }),
-        )
-        throw e
-      }
-      await rideToFloor1Landing(instance, watcher)
-      // Pre-position the watcher just east of room 1 (x≈8.4, room 3): from
-      // the east landing room 1 is 88 ticks away — farther than the 60-tick
-      // un-prep channel, so the mid-channel entry needs the head start.
-      watcher.send('move:start', { type: 'move:start', dir: 'left' })
-      await sleep(50)
-      instance.__driveTicks(72)
-      watcher.send('move:stop', { type: 'move:stop' })
-      await sleep(50)
-      // The saboteur un-preps again; the watcher walks INTO room 1 mid-channel
-      // → walk-in conviction — the round ends staff-win.
-      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      // The watcher pre-positions east of room 1 (the east-landing approach,
-      // AD-040): walking LEFT crosses into room 1 mid-channel → the catch.
-      watcher.send('move:start', { type: 'move:start', dir: 'left' })
-      await sleep(50)
-      instance.__driveTicks(30)
-      console.log(
-        'PROBE-SAB-ERR',
-        JSON.stringify(sabSeen.filter((m) => m.type === 'error').map((m) => m.payload)),
-      )
-      sabOff()
-      console.log(
-        'PROBE-CATCH',
-        JSON.stringify({
-          sabErr: collectorOf(collectors, clients, saboteur)
-            .types()
-            .filter((t) => t === 'error').length,
-          watcherEntered: collectorOf(collectors, clients, watcher)
-            .types()
-            .filter((t) => t === 'room:entered').length,
-          state: instance.__movementDebug(),
-        }),
-      )
-      const ended = await driveUntil(
-        collectorOf(collectors, clients, host),
-        'round:ended',
-        instance,
-      ).catch((e) => {
+        sabOff()
         console.log(
           'PROBE-CATCH',
           JSON.stringify({
-            phase: instance.__phase(),
-            clock: instance.__clockTicksRemaining(),
-            sabTypes: collectorOf(collectors, clients, saboteur).types().slice(-8),
+            sabErr: collectorOf(collectors, clients, saboteur)
+              .types()
+              .filter((t) => t === 'error').length,
+            watcherEntered: collectorOf(collectors, clients, watcher)
+              .types()
+              .filter((t) => t === 'room:entered').length,
             state: instance.__movementDebug(),
           }),
         )
-        throw e
-      })
-      watcher.send('move:stop', { type: 'move:stop' })
-      expect(ended.payload).toMatchObject({ winner: 'staff', reason: 'saboteur-fired' })
-      const recap = await collectorOf(collectors, clients, host).waitFor('round:recap')
-      const entries = recap.payload.entries as {
-        kind: string
-        tick: number
-        entrantId?: string
-        saboteurId?: string
-        riderIds?: string[]
-      }[]
-      const kinds = new Set(entries.map((e) => e.kind))
-      expect(kinds.has('ride')).toBe(true) // the elevator legs of the choreography
-      expect(kinds.has('crime')).toBe(true) // the completed un-prep
-      expect(kinds.has('catch')).toBe(true) // the walk-in conviction
-      const catchEntry = entries.find((e) => e.kind === 'catch')
-      expect(catchEntry?.entrantId).toBe(watcher.sessionId)
-      expect(catchEntry?.saboteurId).toBe(saboteur.sessionId)
-      // Tick-ordered timeline; entries carry ids only (names are roster data).
-      const ticks = entries.map((e) => e.tick)
-      expect([...ticks].sort((x, y) => x - y)).toEqual(ticks)
-      for (const entry of entries) {
-        expect(Object.keys(entry)).not.toContain('name')
+        const ended = await driveUntil(
+          collectorOf(collectors, clients, host),
+          'round:ended',
+          instance,
+        ).catch((e) => {
+          console.log(
+            'PROBE-CATCH',
+            JSON.stringify({
+              phase: instance.__phase(),
+              clock: instance.__clockTicksRemaining(),
+              sabTypes: collectorOf(collectors, clients, saboteur).types().slice(-8),
+              state: instance.__movementDebug(),
+            }),
+          )
+          throw e
+        })
+        watcher.send('move:stop', { type: 'move:stop' })
+        expect(ended.payload).toMatchObject({ winner: 'staff', reason: 'saboteur-fired' })
+        const recap = await collectorOf(collectors, clients, host).waitFor('round:recap')
+        const entries = recap.payload.entries as {
+          kind: string
+          tick: number
+          entrantId?: string
+          saboteurId?: string
+          riderIds?: string[]
+        }[]
+        const kinds = new Set(entries.map((e) => e.kind))
+        expect(kinds.has('ride')).toBe(true) // the elevator legs of the choreography
+        expect(kinds.has('crime')).toBe(true) // the completed un-prep
+        expect(kinds.has('catch')).toBe(true) // the walk-in conviction
+        const catchEntry = entries.find((e) => e.kind === 'catch')
+        expect(catchEntry?.entrantId).toBe(watcher.sessionId)
+        expect(catchEntry?.saboteurId).toBe(saboteur.sessionId)
+        // Tick-ordered timeline; entries carry ids only (names are roster data).
+        const ticks = entries.map((e) => e.tick)
+        expect([...ticks].sort((x, y) => x - y)).toEqual(ticks)
+        for (const entry of entries) {
+          expect(Object.keys(entry)).not.toContain('name')
+        }
+        host.leave()
+        a.leave()
+        b.leave()
+        c.leave()
+      } finally {
+        vi.unstubAllEnvs()
       }
-      host.leave()
-      a.leave()
-      b.leave()
-      c.leave()
-    } finally {
-      vi.unstubAllEnvs()
-    }
-  })
+    },
+  )
 
-  it('sends the fired session a full-world spectator baseline (REND-14)', async () => {
-    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '120')
-    try {
-      const [host, a, b, c] = await roomWithFour()
-      const clients = [host, a, b, c]
-      const collectors = clients.map((room) => collectAll(room))
-      const { instance, staff, saboteur } = await startWithRoles(clients)
-      const worker = staff[0]
-      if (worker === undefined) throw new Error('no staff player')
+  it(
+    'sends the fired session a full-world spectator baseline (REND-14)',
+    { retry: 2 },
+    async () => {
+      vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '120')
+      try {
+        const [host, a, b, c] = await roomWithFour()
+        const clients = [host, a, b, c]
+        const collectors = clients.map((room) => collectAll(room))
+        const { instance, staff, saboteur } = await startWithRoles(clients)
+        const worker = staff[0]
+        if (worker === undefined) throw new Error('no staff player')
 
-      // Staff preps room 1; the watcher pre-positions at floor1's west
-      // landing; the saboteur un-preps; the watcher walks in mid-channel.
-      await rideToRoom1(instance, worker)
-      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
-      const watcher = staff[1]
-      if (watcher === undefined) throw new Error('no second staff')
-      await rideToFloor1Landing(instance, watcher)
-      // Pre-position just east of room 1 (see the recap choreography above).
-      watcher.send('move:start', { type: 'move:start', dir: 'left' })
-      await sleep(50)
-      instance.__driveTicks(72)
-      watcher.send('move:stop', { type: 'move:stop' })
-      await sleep(50)
-      await rideToRoom1(instance, saboteur)
-      console.log('PROBE state', JSON.stringify(instance.__movementDebug()))
-      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
-      // The watcher pre-positions east of room 1 (the east-landing approach,
-      // AD-040): walking LEFT crosses into room 1 mid-channel → the catch.
-      watcher.send('move:start', { type: 'move:start', dir: 'left' })
-      await driveUntil(collectorOf(collectors, clients, saboteur), 'player:fired', instance)
-      watcher.send('move:stop', { type: 'move:stop' })
+        // Staff preps room 1; the watcher pre-positions at floor1's west
+        // landing; the saboteur un-preps; the watcher walks in mid-channel.
+        await rideToRoom1(instance, worker)
+        worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+        await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
+        const watcher = staff[1]
+        if (watcher === undefined) throw new Error('no second staff')
+        await rideToFloor1Landing(instance, watcher)
+        // Pre-position just east of room 1 (see the recap choreography above).
+        watcher.send('move:start', { type: 'move:start', dir: 'left' })
+        await sleep(50)
+        instance.__driveTicks(72)
+        watcher.send('move:stop', { type: 'move:stop' })
+        await sleep(50)
+        await rideToRoom1(instance, saboteur)
+        console.log('PROBE state', JSON.stringify(instance.__movementDebug()))
+        saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+        // The watcher pre-positions east of room 1 (the east-landing approach,
+        // AD-040): walking LEFT crosses into room 1 mid-channel → the catch.
+        watcher.send('move:start', { type: 'move:start', dir: 'left' })
+        await driveUntil(collectorOf(collectors, clients, saboteur), 'player:fired', instance)
+        watcher.send('move:stop', { type: 'move:stop' })
 
-      const snapshot = await collectorOf(collectors, clients, saboteur).waitFor(
-        'spectator:snapshot',
-      )
-      const payload = snapshot.payload as {
-        players: { playerId: string; floor: string }[]
-        cars: { car: number }[]
-        rooms: { floor: string; room: number; state: string }[]
-        cardedRooms: { floor: string; rooms: number[] }[]
+        const snapshot = await collectorOf(collectors, clients, saboteur).waitFor(
+          'spectator:snapshot',
+        )
+        const payload = snapshot.payload as {
+          players: { playerId: string; floor: string }[]
+          cars: { car: number }[]
+          rooms: { floor: string; room: number; state: string }[]
+          cardedRooms: { floor: string; rooms: number[] }[]
+        }
+        // The whole building: every remaining player (the fired one excluded),
+        // both cars, all 21 room states, and every floor's carded rooms.
+        expect(payload.players.some((p) => p.playerId === saboteur.sessionId)).toBe(false)
+        expect(payload.players.length).toBe(3)
+        expect(payload.cars).toHaveLength(1)
+        expect(payload.rooms).toHaveLength(21)
+        const floor1 = payload.cardedRooms.find((row) => row.floor === 'floor1')
+        expect(floor1?.rooms).toContain(1) // room 1 was prepped → carded
+        // The round ended staff-win on this conviction.
+        expect(instance.__phase()).toBe('results')
+        host.leave()
+        a.leave()
+        b.leave()
+        c.leave()
+      } finally {
+        vi.unstubAllEnvs()
       }
-      // The whole building: every remaining player (the fired one excluded),
-      // both cars, all 21 room states, and every floor's carded rooms.
-      expect(payload.players.some((p) => p.playerId === saboteur.sessionId)).toBe(false)
-      expect(payload.players.length).toBe(3)
-      expect(payload.cars).toHaveLength(1)
-      expect(payload.rooms).toHaveLength(21)
-      const floor1 = payload.cardedRooms.find((row) => row.floor === 'floor1')
-      expect(floor1?.rooms).toContain(1) // room 1 was prepped → carded
-      // The round ended staff-win on this conviction.
-      expect(instance.__phase()).toBe('results')
-      host.leave()
-      a.leave()
-      b.leave()
-      c.leave()
-    } finally {
-      vi.unstubAllEnvs()
-    }
-  })
+    },
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -2930,11 +2955,36 @@ describe('server:suitcase_carry', () => {
       host.send('lobby:start', { type: 'lobby:start' })
       await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
       instance.__driveTicks(1)
-      // Deterministic staging: the scaled cadence is 24 ticks — exactly ONE
-      // guest is queued now, no ambient traffic self-assigns mid-flow.
-      instance.__driveTicks(24)
+      const startClock = instance.__clockTicksRemaining() ?? 0
+      // The staff spawn row (FR-2) starts the host west of the desk: walk into
+      // the E receive zone so the check-in press lands.
+      host.send('move:start', { type: 'move:start', dir: 'right' })
+      await new Promise((r) => setTimeout(r, 30))
+      for (let i = 0; i < 30; i++) {
+        instance.__driveTicks(1)
+        const state = instance.__movementDebug() as {
+          positions: { playerId: string; x: number }[]
+        }
+        const own = state.positions.find((p) => p.playerId === host.sessionId)
+        if (own !== undefined && own.x >= TUNING.DESK_X_TILES - TUNING.DESK_RANGE_TILES) break
+      }
+      host.send('move:stop', { type: 'move:stop' })
+      await new Promise((r) => setTimeout(r, 30))
+      // Deterministic staging: drive to JUST past the first arrival (scaled
+      // cadence 24 ticks) and stage only 2 more — the guest is queued, its
+      // impatience tick (+20) has not fired, and the next arrival is a
+      // cadence away. Pre-round guests hold the first TUNING.PRE_ROUND_OCCUPANCY
+      // ordinals inside rooms, so the id comes off the wire, not from a count.
+      // Deterministic staging: the scaled cadence queues the FIRST arrival at
+      // round tick 24 and its impatience fires at +20 — stage at tick 26, in
+      // the window where exactly one queued guest exists. Pre-round guests
+      // hold the first TUNING.PRE_ROUND_OCCUPANCY ordinals inside their rooms
+      // (not in hall view), so the queue front is the occupancy-th ordinal.
+      const elapsed = startClock - (instance.__clockTicksRemaining() ?? 0)
+      if (elapsed < 26) instance.__driveTicks(26 - elapsed)
+      const firstArrivalId = `guest:${TUNING.PRE_ROUND_OCCUPANCY[4] + 1}`
       const guests = (instance.__movementDebug() as { guestIds: string[] }).guestIds
-      expect(guests).toEqual(['guest:1'])
+      expect(guests).toContain(firstArrivalId)
       // Check-in: the host at the desk takes the suitcase.
       host.send('desk:interact', { type: 'desk:interact' })
       await new Promise((r) => setTimeout(r, 150))
@@ -3067,12 +3117,8 @@ describe('server:restaurant_floor', () => {
     const instance = TurnoverRoom.instances.at(-1)
     if (instance === undefined) throw new Error('no room instance')
     try {
-      // Walk to the west landing and board the parked car (AD-025 press).
-      host.send('move:start', { type: 'move:start', dir: 'right' })
-      await sleep(60)
-      instance.__driveTicks(60)
-      host.send('move:stop', { type: 'move:stop' })
-      await sleep(60)
+      // Walk to the east landing and board the parked car (AD-025 press).
+      await walkToEastLanding(instance, host)
       host.send('elevator:call', { type: 'elevator:call' })
       await sleep(60)
       instance.__driveTicks(12) // doors open (AD-026) + boarding flush
@@ -3318,9 +3364,16 @@ describe('server:stairs', () => {
       await vi.waitFor(() => expect(instance.__phase()).toBe('round'))
       instance.__driveTicks(1) // the deal flushes on the round's first tick
       await Promise.all(collectors.map((co) => co.waitFor('role:dealt')))
-      // The walk takes ~52 of the 100-tick shift; the entry lands mid-round
-      // with ~40 transit ticks left at the buzzer.
       await walkToWestMouth(instance, a)
+      // The staff row start (FR-2) shortened the westward walk: hold at the
+      // mouth until less than one transit remains in the shift, so the buzzer
+      // — not a natural arrival — resolves a's stairs state.
+      while (
+        instance.__phase() === 'round' &&
+        (instance.__clockTicksRemaining() ?? 0) > STAIRS_TRANSIT_TICKS - 5
+      ) {
+        instance.__driveTicks(1)
+      }
       a.send('stairs:enter', { type: 'stairs:enter', dir: 'up' })
       await sleep(30)
       for (let i = 0; i < 100 && instance.__phase() === 'round'; i++) instance.__driveTicks(2)

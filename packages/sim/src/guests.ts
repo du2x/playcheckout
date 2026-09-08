@@ -80,6 +80,10 @@ interface Guest {
   diningDwellTicks: number | null
   /** Absolute tick a settling guest checks out (settle + seeded dwell). */
   dwellEndsAt: number | null
+  /** Pre-round occupancy (2026-09): the guest was tenanted before the round
+   *  started — their settle predates the shift, so it never touched the
+   *  settle score; the flag rides only the checkout event (telemetry). */
+  readonly preRound: boolean
   /** The trash-discovery report of an angered guest (cycle 3.3, FR-29(b)) —
    *  the room they discovered and the freshness tier they observed. Set at
    *  the discovery tick, consumed (and cleared) at the desk-arrival tick;
@@ -112,6 +116,14 @@ const DINING_START = TUNING.GUEST_RESTAURANT_START_TILES
 const ARRIVAL_TOLERANCE_TILES = 0.3
 
 const roomKey = (floor: GuestFloorId, room: RoomIndex): string => `${floor}:${room}`
+
+/**
+ * Pre-round stream fork (2026-09): the pre-round occupancy draws — room
+ * placement, settled dwell, cosmetic seed — come from a decorrelated Rng
+ * fork (the COSMETIC_FORK technique) so the guest timing stream (`this.rng`)
+ * and the cosmetic stream keep their exact pre-existing draw order.
+ */
+const PRE_ROUND_FORK = 0x2545f491
 
 function slotX(index: number): number {
   return DESK_X + index * QUEUE_STEP
@@ -181,6 +193,10 @@ export class GuestSim {
    *  the MOVE-10 announce pattern: tick() is the only event emitter. */
   private pending: SimEvent[] = []
   private readonly rng: Rng
+  /** Pre-round occupancy stream — decorrelated fork, see PRE_ROUND_FORK. */
+  private readonly preRoundRng: Rng
+  /** Once-per-sim guard: pre-round occupancy spawns at the round's first tick. */
+  private preRoundSpawned = false
   /** Cosmetic identity stream (Phase 4.1, VPOL-06) — a dedicated Rng fork so
    *  seed draws NEVER shift the guest timing stream (`this.rng`). */
   private readonly cosmeticRng: Rng
@@ -200,12 +216,13 @@ export class GuestSim {
 
   constructor(
     seed: number,
-    playerCount: LobbySize,
+    private readonly playerCount: LobbySize,
     private readonly movement: MovementPort,
     timing?: GuestTiming,
     private readonly roomIntel?: RoomIntelPort,
   ) {
     this.rng = new Rng(seed)
+    this.preRoundRng = new Rng((seed ^ PRE_ROUND_FORK) >>> 0)
     this.cosmeticRng = new Rng((seed ^ COSMETIC_FORK) >>> 0)
     this.cadenceTicks = timing?.cadenceTicks ?? TUNING.GUEST_CADENCE_SECONDS[playerCount] * TICK_HZ
     this.impatienceTicks = timing?.impatienceTicks ?? IMPATIENCE_TICKS
@@ -316,7 +333,15 @@ export class GuestSim {
         guestId: g.id,
         floor: assigned.floor,
         room: assigned.room,
+        ...(g.preRound ? { preRound: true } : {}),
       })
+      // Pre-round identity announces HERE, not at spawn: the guest enters
+      // hall view this flush, so the cosmetic seed is renderable and the
+      // snapshot carries its guest row (VPOL-05 announce-⇒-row invariant).
+      if (g.preRound) {
+        const seed = this.guestSeeds.get(g.id)
+        if (seed !== undefined) events.push({ type: 'cosmetic:guest', guestId: g.id, seed })
+      }
       // FR-33 (3.4): checkout flips the sign to Vacant.
       events.push({
         type: 'room:tenancy',
@@ -352,6 +377,7 @@ export class GuestSim {
       diningDwellTicks: null,
       dwellEndsAt: null,
       complaintReport: null,
+      preRound: false,
     }
     this.guests.set(id, guest)
     this.queue.push(id)
@@ -367,6 +393,61 @@ export class GuestSim {
   /** One guest's cosmetic seed (Phase 4.1) — undefined for unknown ids. */
   guestSeedOf(guestId: string): number | undefined {
     return this.guestSeeds.get(guestId)
+  }
+
+  /**
+   * Pre-round occupancy (2026-09): the shift opens with PRE_ROUND_OCCUPANCY
+   * guests already settled in distinct seeded rooms, spread round-robin over
+   * the guest floors — a row of Occupied signs at t=0. The RoundSim calls
+   * this once, at the round's first tick, and flushes the returned events
+   * with the round-start batch. Pre-round guests join no queue and no hall
+   * view (they are inside their rooms) and check out on the normal settled
+   * dwell measured from this tick — the same GUEST_DWELL_MIN/MAX dial, the
+   * `dwellScale` test seam included — reusing the GUEST-09 path unchanged.
+   * Their rooms leave the vacancy pool immediately (tenanted), so check-in
+   * and self-assignment never target them. Every draw comes from the
+   * decorrelated pre-round fork, so the arrival/timing/cosmetic streams keep
+   * their pre-existing draw order.
+   *
+   * Nothing is announced here: the seed is stored for the checkout tick (a
+   * guest inside a room has no movement row, so an early `cosmetic:guest`
+   * would break the announce-⇒-snapshot-row invariant — VPOL-05), no
+   * `guest:arrived` (no queue line), no `guest:settled` (the settle predates
+   * the shift — the settle score stays clean), no `room:tenancy` (the door
+   * signs seed from the tenancy snapshot; a tick-0 sameFloor event would
+   * reach nobody in the lobby).
+   */
+  spawnPreRound(tick: number): SimEvent[] {
+    if (this.preRoundSpawned) return []
+    this.preRoundSpawned = true
+    const remaining = new Map<GuestFloorId, RoomIndex[]>(
+      GUEST_FLOOR_IDS.map((floor) => [floor, [...ROOM_INDEXES]]),
+    )
+    for (let i = 0; i < TUNING.PRE_ROUND_OCCUPANCY[this.playerCount]; i++) {
+      // Round-robin spread — the modulo is always in range of the tuple.
+      const floor = GUEST_FLOOR_IDS[i % GUEST_FLOOR_IDS.length] as GuestFloorId
+      const pool = remaining.get(floor)
+      const room = pool?.splice(this.preRoundRng.int(pool.length - 1), 1)[0]
+      if (room === undefined) continue // tuning guard: occupancy exceeds a floor's rooms
+      this.ordinal++
+      const id = `guest:${this.ordinal}`
+      const guest: Guest = {
+        id,
+        phase: 'settling',
+        assigned: { floor, room },
+        target: null,
+        impatientAt: 0,
+        impatienceRemaining: null,
+        diningDwellTicks: null,
+        dwellEndsAt: tick + this.drawDwellTicksFrom(this.preRoundRng),
+        complaintReport: null,
+        preRound: true,
+      }
+      this.guests.set(id, guest)
+      this.tenanted.set(roomKey(floor, room), id)
+      this.guestSeeds.set(id, this.preRoundRng.int(0xffffffff))
+    }
+    return []
   }
 
   /** Every guest cosmetic seed (Phase 4.1) — the spectator baseline slice. */
@@ -572,6 +653,14 @@ export class GuestSim {
     return Math.max(1, Math.round(seconds * this.diningScale * TICK_HZ))
   }
 
+  /** One seeded settled-dwell draw in ticks (uniform within the 45–90 s dial,
+   *  scaled by the test seam). Shared by the in-round settle and the
+   *  pre-round occupancy spawn. */
+  private drawDwellTicksFrom(rng: Rng): number {
+    const seconds = rng.uniform(TUNING.GUEST_DWELL_MIN_SECONDS, TUNING.GUEST_DWELL_MAX_SECONDS)
+    return Math.max(1, Math.round(seconds * this.dwellScale * TICK_HZ))
+  }
+
   /** The drawn dining dwell of the current dining stay, or null (tests +
    *  telemetry; no behavioral consumer, REST-10). */
   diningDwellOf(guestId: string): number | null {
@@ -659,12 +748,7 @@ export class GuestSim {
     this.settledTotal += 1
     this.tenanted.set(roomKey(floor, room), g.id)
     this.reserved.delete(roomKey(floor, room))
-    const dwellSeconds = this.rng.uniform(
-      TUNING.GUEST_DWELL_MIN_SECONDS,
-      TUNING.GUEST_DWELL_MAX_SECONDS,
-    )
-    const dwellTicks = Math.max(1, Math.round(dwellSeconds * this.dwellScale * TICK_HZ))
-    g.dwellEndsAt = tick + dwellTicks
+    g.dwellEndsAt = tick + this.drawDwellTicksFrom(this.rng)
     events.push({ type: 'guest:settled', guestId: g.id, floor, room })
     // FR-33 (3.4): settle flips the door sign to Occupied — sameFloor hallway-visible.
     events.push({ type: 'room:tenancy', floor, room, occupied: true })

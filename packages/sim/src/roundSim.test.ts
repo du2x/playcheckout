@@ -280,11 +280,16 @@ describe('sim:win_checks', () => {
   it('buzzer with the settle score at target: staff win, settle-target-met (REND-03, 3.D)', () => {
     // The guest economy runs inside the round (movement port): impatient
     // guests self-assign at 2.5 s and settle; by the buzzer the score
-    // reaches the 4p SETTLE_TARGET (5 of 24 rooms, prd §7 v1.5).
+    // reaches the 4p SETTLE_TARGET (prd §7 v1.5). The window is churn-free
+    // by construction: dwellScale=100 pushes every checkout — pre-round
+    // (TUNING.PRE_ROUND_OCCUPANCY) and in-round — far past the buzzer, so
+    // this leg isolates the buzzer verdict from the churn economy (proven by
+    // sim:checkout_churn and sim:pre_round_b).
     const movement = new MovementSim()
     const sim = new RoundSim({
       seed: 1,
       playerIds: IDS,
+      totalTicks: 1400,
       movement: {
         joinGuest: (id, floor, xTiles) =>
           movement.join(id, { kind: 'guest', floor, xMilli: Math.round(xTiles * 1000) }),
@@ -300,12 +305,14 @@ describe('sim:win_checks', () => {
         callElevator: (id) => movement.callElevator(id),
         pressFloor: (id, floor) => movement.pressFloor(id, floor),
       },
-      guestTiming: { cadenceTicks: 300, impatienceTicks: 50 },
+      guestTiming: { cadenceTicks: 5, impatienceTicks: 10, dwellScale: 100 },
     })
     const events: SimEvent[] = []
     // The room drives movement and the round in production order: the
     // movement sim ticks first, then the round flushes the guest economy.
-    while (sim.clockTicksRemaining > 0) {
+    // The isEnded guard keeps the drive finite against any early verdict —
+    // tick() goes silent once the round has ended.
+    while (sim.clockTicksRemaining > 0 && !sim.isEnded) {
       movement.tick()
       events.push(...sim.tick(new Map()))
     }
@@ -432,21 +439,30 @@ function lobbyPositions(at: Record<string, number>): Map<string, { floor: FloorI
   return map
 }
 
-/** Drive one round to the first guest arrival, returning the tick cursor. */
+/** Drive one round to the first guest arrival, returning the tick cursor and
+ *  the arrival's guest id (shifts with TUNING.PRE_ROUND_OCCUPANCY, which
+ *  takes the first ordinals). */
 function runToArrival(
   movement: MovementSim,
   sim: RoundSim,
   positions: Map<string, { floor: FloorId; x: number }>,
-): number {
+): { t: number; guestId: string } {
   sim.tick(positions) // starts the round
   let arrived = false
+  let guestId: string | null = null
   let t = 1
   for (; t < 200 && !arrived; t++) {
     movement.tick()
-    arrived = sim.tick(positions).some((e) => e.type === 'guest:arrived')
+    for (const e of sim.tick(positions)) {
+      if (e.type === 'guest:arrived') {
+        arrived = true
+        guestId = e.guestId
+      }
+    }
   }
   expect(arrived).toBe(true)
-  return t
+  if (guestId === null) throw new Error('missing guest:arrived')
+  return { t, guestId }
 }
 
 describe('sim:suitcase_carry (round integration)', () => {
@@ -459,7 +475,7 @@ describe('sim:suitcase_carry (round integration)', () => {
       guestTiming: { cadenceTicks: 20, impatienceTicks: 100000, dwellScale: 0.001 },
     })
     const positions = lobbyPositions({ p1: 15, p2: 15, p3: 15, p4: 15 })
-    const t = runToArrival(movement, sim, positions)
+    const { t, guestId } = runToArrival(movement, sim, positions)
     expect(sim.deskInteract('p1')).toBe('accepted')
     // MOVE-10 announce pattern: the assignment notice + handoff flush next.
     const flushed = sim.tick(positions)
@@ -467,10 +483,10 @@ describe('sim:suitcase_carry (round integration)', () => {
     if (overheard === undefined || overheard.type !== 'guest:assigned') {
       throw new Error('missing guest:assigned')
     }
-    expect(overheard.guestId).toBe('guest:1')
+    expect(overheard.guestId).toBe(guestId)
     expect(flushed).toContainEqual({
       type: 'suitcase:carried',
-      guestId: 'guest:1',
+      guestId,
       carrierId: 'p1',
     } satisfies SimEvent)
     void t

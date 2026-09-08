@@ -69,6 +69,9 @@ export interface TelemetryEvent {
   readonly open?: boolean
   /** Guest-discovered: freshness the discoverer observed. */
   readonly fresh?: boolean
+  /** guest-checked-out only (2026-09): the guest was tenanted pre-round —
+   *  early checkout churn from the pre-round occupancy. */
+  readonly preRound?: boolean
   /** Guest-discovered / room-transition: author dimension. Churn vs sabotage (FR-32) or none. */
   readonly provenance?: 'sabotage' | 'churn' | 'none'
   /** For sabotage provenance on guest-discovered: the saboteur's playerId. */

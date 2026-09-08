@@ -5,6 +5,7 @@ import {
   DOOR_TICKS,
   DWELL_TICKS,
   MovementSim,
+  playerSpawnXMilli,
   RIDE_TICKS_PER_FLOOR,
   SPEED_MILLI_PER_TICK,
 } from './movement.js'
@@ -69,6 +70,26 @@ function runUntilCarMoved(sim: MovementSim, car: 1, floor: FloorId, max = 400): 
   }
   return -1
 }
+
+// FR-2 spawn row (2026-09 revision): join-order slots spread fresh joiners
+// through the west lounge so awaiting players never stack on the desk.
+describe('sim:spawn_row', () => {
+  it('fills westward slots: distinct, uniform step, clear of the desk zone', () => {
+    const xs = Array.from({ length: TUNING.PLAYERS_MAX }, (_, i) => playerSpawnXMilli(i))
+    expect(new Set(xs).size).toBe(TUNING.PLAYERS_MAX)
+    const step = (xs.at(0) ?? Number.NaN) - (xs.at(1) ?? Number.NaN)
+    for (let i = 1; i < xs.length; i++)
+      expect((xs.at(i - 1) ?? Number.NaN) - (xs.at(i) ?? Number.NaN)).toBe(step)
+    // The E receive zone starts at DESK_X − DESK_RANGE_TILES; the row stays west of it.
+    const deskZoneWestEdgeMilli = (TUNING.DESK_X_TILES - TUNING.DESK_RANGE_TILES) * 1000
+    const hallMaxMilli = HALL_LENGTH_TILES * 1000
+    for (const x of xs) {
+      expect(x).toBeLessThan(deskZoneWestEdgeMilli)
+      expect(x).toBeGreaterThanOrEqual(0)
+      expect(x).toBeLessThanOrEqual(hallMaxMilli)
+    }
+  })
+})
 
 // Spec MOVE-01..05, MOVE-07/08 (gate scenario sim:motion): scripted intents over
 // the pure movement sim. Integration is exact integer millitiles — bit-for-bit.
