@@ -7,6 +7,8 @@ import {
   pruneToasts,
   reduceAccuse,
 } from './accuseSession'
+import { music } from './audio/music'
+import { trackForView } from './audio/music/tracks'
 import { Connection } from './net/connection'
 import { initialRiderSession, type RiderUpdate, reduceRider } from './riderSession'
 import type { WorldScene } from './scenes/WorldScene'
@@ -208,6 +210,9 @@ export class App {
    */
   private syncScenes(previousView: ViewName): void {
     if (this.state.view === previousView) return
+    // Cue swap rides the same view changes as scene mounts (presentation
+    // only): rounds get the tension loop, every other view the lobby one.
+    music.request(trackForView(this.state.view))
     if (this.state.view === 'lobby' && previousView === 'join') {
       this.startWorld()
     } else if (

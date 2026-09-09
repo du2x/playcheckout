@@ -1,19 +1,26 @@
 import { type MidiNote, type MidiSong, parseMidi } from './music/parse'
+import { type MusicTrack, TRACK_URLS } from './music/tracks'
 import { sfx } from './sfx'
 
 /**
- * Ambient music loop (user-directed, 2026-09-05): the night-shift MIDI in
- * `public/audio/` is parsed, synthesized once through an OfflineAudioContext,
- * and played as a gaplessly looping `AudioBuffer` — after the first render
- * the runtime cost is one buffer source, identical in shape to the sfx
- * rumble loop. The loop routes through the SFX engine's master bus, so the
- * existing mute toggle governs music too. Presentation-only: the file
- * carries no game state. Silent no-op outside browsers and on any failure
+ * Ambient music loops (user-directed, 2026-09-09): each cue (the night-shift
+ * lobby loop, AD-057; the round tension loop) is a MIDI in `public/audio/`
+ * parsed, synthesized once through an OfflineAudioContext, and played as a
+ * gaplessly looping `AudioBuffer` — after the first render the runtime cost
+ * is one buffer source per audible cue, identical in shape to the sfx
+ * rumble loop. Every loop routes through the SFX engine's master bus, so the
+ * existing mute toggle governs music too. The app requests a track on view
+ * changes (tracks.ts) and running cues crossfade; view flips before a track
+ * has rendered land when its render finishes. Presentation-only: the files
+ * carry no game state. Silent no-op outside browsers and on any failure
  * (fetch, parse, render) — music is never load-bearing.
  */
 
-/** Music gain into the shared sfx master (which itself runs at 0.5). */
+/** Music gain into the shared sfx master (which itself runs at 0.7). */
 const MUSIC_LEVEL = 0.5
+
+/** Crossfade window between the lobby and round cues (500 ms). */
+const FADE_SEC = 0.5
 
 const RENDER_SAMPLE_RATE = 44100
 
@@ -251,47 +258,99 @@ async function loadAndRender(url: string): Promise<{ buffer: AudioBuffer; loopSe
 }
 
 class MusicEngine {
-  private buffer: AudioBuffer | null = null
-  private loopSec = 0
+  private buffers = new Map<MusicTrack, AudioBuffer>()
+  private loopSecs = new Map<MusicTrack, number>()
+  private loading = new Map<MusicTrack, Promise<void>>()
   private source: AudioBufferSourceNode | null = null
-  private loading: Promise<void> | null = null
+  private gain: GainNode | null = null
+  /** The cue that is audible right now (null until the first start). */
+  private current: MusicTrack | null = null
+  /** The cue the app last asked for — takes over at the next opportunity. */
+  private desired: MusicTrack = 'lobby'
 
-  /** True once the looped source is running (used to release the arm listeners). */
+  /** True once a looped source is running (used to release the arm listeners). */
   get started(): boolean {
     return this.source !== null
   }
 
-  /** Fetch + parse + offline-render once; failures leave the engine idle. */
-  load(url: string): Promise<void> {
-    this.loading ??= loadAndRender(url)
-      .then(({ buffer, loopSec }) => {
-        this.buffer = buffer
-        this.loopSec = loopSec
-      })
-      .catch(() => {
-        // No asset, no renderer, no permission: the game stays silent.
-      })
-    return this.loading
+  /** Fetch + parse + offline-render once per track; failures leave it idle. */
+  load(track: MusicTrack): Promise<void> {
+    let pending = this.loading.get(track)
+    if (pending === undefined) {
+      pending = loadAndRender(TRACK_URLS[track])
+        .then(({ buffer, loopSec }) => {
+          this.buffers.set(track, buffer)
+          this.loopSecs.set(track, loopSec)
+        })
+        .catch(() => {
+          // No asset, no renderer, no permission: the game stays silent.
+        })
+      this.loading.set(track, pending)
+    }
+    return pending
   }
 
-  /** Starts the seamless loop; idempotent, no-op until a load succeeded. */
+  /**
+   * The app's view changed: the requested cue takes over — crossfading now
+   * if audio is running, else at the next gesture start. A flip to a track
+   * still rendering lands when that render finishes (unless the app has
+   * flipped away again first).
+   */
+  request(track: MusicTrack): void {
+    if (track === this.desired) return
+    this.desired = track
+    if (this.source === null) return
+    if (this.buffers.has(track)) {
+      this.startTrack(track)
+      return
+    }
+    void this.load(track).then(() => {
+      if (this.desired === track && this.source !== null) this.startTrack(track)
+    })
+  }
+
+  /** Starts the desired loop; idempotent, no-op until a load succeeded. */
   start(): void {
-    if (this.source !== null || this.buffer === null) return
+    if (this.source !== null) return
+    this.startTrack(this.desired)
+  }
+
+  /** Crossfade: fade the audible loop out while the requested one fades in. */
+  private startTrack(track: MusicTrack): void {
+    if (this.current === track) return
+    const buffer = this.buffers.get(track)
+    const loopSec = this.loopSecs.get(track) ?? 0
     const bus = sfx.musicBus()
-    if (bus === null) return
+    if (buffer === undefined || bus === null) return
     try {
-      const source = bus.context.createBufferSource()
-      source.buffer = this.buffer
+      const ctx = bus.context
+      const now = ctx.currentTime
+      if (this.source !== null && this.gain !== null) {
+        const oldSource = this.source
+        const oldGain = this.gain
+        oldGain.gain.cancelScheduledValues(now)
+        oldGain.gain.setValueAtTime(oldGain.gain.value, now)
+        oldGain.gain.linearRampToValueAtTime(0.0001, now + FADE_SEC)
+        oldSource.stop(now + FADE_SEC + 0.05)
+      }
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
       source.loop = true
-      if (this.loopSec > 0) source.loopEnd = this.loopSec
-      const gain = bus.context.createGain()
-      gain.gain.value = MUSIC_LEVEL
+      if (loopSec > 0) source.loopEnd = loopSec
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.linearRampToValueAtTime(MUSIC_LEVEL, now + FADE_SEC)
       source.connect(gain)
       gain.connect(bus.destination)
       source.start()
       this.source = source
+      this.gain = gain
+      this.current = track
     } catch {
+      // A failed switch stays silent rather than half-crossfaded.
       this.source = null
+      this.gain = null
+      this.current = null
     }
   }
 }
@@ -299,15 +358,16 @@ class MusicEngine {
 /** The app-wide music singleton (silent no-op outside browsers). */
 export const music = new MusicEngine()
 
-const MUSIC_URL = 'audio/turnover-night-shift.mid'
-
 /**
- * Boot wiring: kick off the render immediately and start the loop at the
+ * Boot wiring: kick off the lobby render immediately and start it at the
  * first user gesture (autoplay policy keeps the context suspended before
- * that). The listeners remove themselves once the loop is running.
+ * that); the round cue renders in the background so the mid-round switch
+ * never waits on the wire. The listeners remove themselves once a loop is
+ * running.
  */
 export function armMusicAutostart(): void {
-  void music.load(MUSIC_URL).then(() => music.start())
+  void music.load('lobby').then(() => music.start())
+  void music.load('round')
   const kick = (): void => {
     music.start()
     if (music.started) {
