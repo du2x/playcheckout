@@ -4,6 +4,7 @@ import { buildCarScreen } from './carScreen'
 import { el } from './dom'
 import { roomShareUrl } from './shareLink'
 import { buildStairScreen } from './stairScreen'
+import { buildTutorialHud } from './tutorialHud'
 
 /**
  * Lobby view (LIGHT-05..08): roster names, host marker, start control for the
@@ -66,6 +67,9 @@ export function renderLobby(
       // window, directly under the game canvas (no modal, no separate window).
       buildCarScreen(),
       buildStairScreen(),
+      // Tutorial card (first-run onboarding): walking and the car are
+      // learnable pre-round, so the card rides in the lobby view too.
+      buildTutorialHud(),
       el('h2', {}, [`lobby — room ${roomCode}`]),
       el('div', { id: 'share-row' }, [shareInput, copyButton]),
       roster,

@@ -3,6 +3,7 @@ import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
 import { buildStairScreen } from './stairScreen'
+import { buildTutorialHud } from './tutorialHud'
 
 /**
  * Round HUD (LIGHT-09..12): countdown clock from the round:started receipt
@@ -30,6 +31,9 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
 
   root.append(
     el('div', { id: 'round-hud' }, [
+      // Tutorial card (first-run onboarding): rides at the top of the HUD,
+      // synced by the App after every render (buildAccuseHud precedent).
+      buildTutorialHud(),
       clock,
       // Elevator + stairs — inline HUD bars at the top of the main window
       // (directly under the clock), no modal window.

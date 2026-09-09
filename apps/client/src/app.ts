@@ -21,6 +21,13 @@ import {
   type ViewName,
   type ViewState,
 } from './state'
+import { loadTutorialDone, storeTutorialDone } from './tutorial/prefs'
+import {
+  initialTutorialSession,
+  reduceTutorial,
+  type TutorialAction,
+  type TutorialSession,
+} from './tutorial/tutorialSession'
 import { syncAccuseHud } from './ui/accuseHud'
 import { syncCarScreen } from './ui/carScreen'
 import { el } from './ui/dom'
@@ -29,6 +36,7 @@ import { renderLobby } from './ui/lobbyView'
 import { renderResults } from './ui/resultsView'
 import { renderRoundHud } from './ui/roundHud'
 import { roomCodeFromSearch } from './ui/shareLink'
+import { syncTutorialHud } from './ui/tutorialHud'
 
 /**
  * First-light app controller (cycle 2.2): owns the reducer state, the Colyseus
@@ -57,6 +65,10 @@ export class App {
   /** The accusation session (cycle 2.8, FR-18): menu, firing toasts, and the
    * self-fired gate — reduced purely in accuseSession.ts. */
   private accuse: AccuseSession = initialAccuseSession()
+  /** The tutorial session (first-run onboarding): guided-step cards reduced
+   * purely in tutorialSession.ts from own-fact wire events + local intents;
+   * completion (or skip) is the one localStorage flag in tutorial/prefs.ts. */
+  private tutorial: TutorialSession = initialTutorialSession(loadTutorialDone(window.localStorage))
 
   constructor(
     private readonly root: HTMLElement,
@@ -129,6 +141,9 @@ export class App {
             this.world()?.setAccuseSession(this.accuse)
             this.syncAccuseHud()
           }
+          // Tutorial facts reduce in lockstep too (one state home,
+          // tutorialSession.ts): own-fact triggers advance the guided cards.
+          this.applyTutorial(reduceTutorial(this.tutorial, action, ownId))
           const route = ACTION_ROUTES[action.type]
           if (route === 'scene') {
             if (isSceneAction(action)) this.world()?.applyAction(action)
@@ -232,9 +247,19 @@ export class App {
     this.game.scene.start('Round', {
       players: snapshot.roster.map(({ id, name }) => ({ id, name })),
       ownId: snapshot.ownId,
-      sendMoveStart: (dir: 'left' | 'right') => this.connection?.sendMoveStart(dir),
+      sendMoveStart: (dir: 'left' | 'right') => {
+        this.connection?.sendMoveStart(dir)
+        // The walk step's local trigger (the wire mirror is player-moved).
+        this.reduceTutorialLocal({ type: 'local-move' })
+      },
       sendMoveStop: () => this.connection?.sendMoveStop(),
-      sendElevatorCall: () => this.connection?.sendElevatorCall(),
+      sendElevatorCall: () => {
+        this.connection?.sendElevatorCall()
+        // elevator:called carries no caller (decoys exist), so the local
+        // intent is the honest own-call signal; boarding still counts via
+        // the riders-policy payload.
+        this.reduceTutorialLocal({ type: 'local-elevator-call' })
+      },
       sendElevatorPress: (floor: FloorId) => this.connection?.sendElevatorPress(floor),
       sendStairsEnter: (dir: 'up' | 'down') => this.connection?.sendStairsEnter(dir),
       sendWorkStart: (floor: GuestFloorId, room: RoomIndex) =>
@@ -289,6 +314,34 @@ export class App {
     const before = this.accuse
     this.accuse = reduceAccuse(this.accuse, action, this.state.snapshot?.ownId, Date.now())
     if (this.accuse !== before) this.syncAccuseHud()
+  }
+
+  /** Local tutorial facts (move/call intents, card buttons, help toggle). */
+  private reduceTutorialLocal(action: TutorialAction): void {
+    this.applyTutorial(reduceTutorial(this.tutorial, action, this.state.snapshot?.ownId))
+  }
+
+  /** Absorb a reduced tutorial session: persist completion, sync the card. */
+  private applyTutorial(next: TutorialSession): void {
+    if (next === this.tutorial) return
+    const wasActive = this.tutorial.active
+    this.tutorial = next
+    if (wasActive && !next.active) storeTutorialDone(window.localStorage)
+    this.syncTutorialHud()
+  }
+
+  /**
+   * Surgical tutorial-hud write: the current step card plus the help panel,
+   * rebuilt on view re-renders and re-synced on every session change. The
+   * goal card names the settle target for the live lobby (clamped in the HUD).
+   */
+  private syncTutorialHud(): void {
+    const size = this.state.roundPlayerIds.length || this.state.snapshot?.roster.length || 0
+    syncTutorialHud(this.tutorial, size, {
+      onConfirm: () => this.reduceTutorialLocal({ type: 'step-confirm' }),
+      onSkip: () => this.reduceTutorialLocal({ type: 'tutorial-skip' }),
+      onToggleHelp: () => this.reduceTutorialLocal({ type: 'help-toggle' }),
+    })
   }
 
   /**
@@ -366,6 +419,8 @@ export class App {
     this.syncAccuseHud()
     // View re-renders rebuild the chip DOM: restore the rider-exclusive state.
     this.updateRiderChip()
+    // View re-renders rebuild the tutorial card: restore the current step.
+    this.syncTutorialHud()
   }
 }
 
