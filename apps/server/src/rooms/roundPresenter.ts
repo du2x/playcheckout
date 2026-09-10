@@ -8,7 +8,12 @@ import type {
   SpectatorSnapshot,
 } from '@turnover/shared'
 import { type MovementEvent, type MovementSnapshot, settleTargetFor } from '@turnover/shared'
-import type { MovementSim, RoundSim, TelemetrySink } from '@turnover/sim'
+import {
+  type MovementSim,
+  projectSimEventToTelemetry,
+  type RoundSim,
+  type TelemetrySink,
+} from '@turnover/sim'
 import type { Router, ViewContext } from './router'
 
 /**
@@ -247,105 +252,12 @@ export class RoundPresenter {
     }
     let roundEnded = false
     const sink = this.io.sink()
+    const projectionCtx = { saboteurId: sim.saboteurId }
     for (const event of sim.tick(positions)) {
       this.router.route(event)
-      if (sink !== null) {
-        if (event.type === 'room:prepped' || event.type === 'room:trashed') {
-          const prov = event.type === 'room:trashed' ? ('sabotage' as const) : ('none' as const)
-          const state = event.type === 'room:prepped' ? ('prepped' as const) : ('trashed' as const)
-          sink.recordRoomTransition(
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            undefined,
-            state,
-            prov,
-            this.roundTick,
-          )
-        } else if (event.type === 'guest:arrived')
-          sink.recordGuestArrived(event.guestId, this.roundTick)
-        else if (event.type === 'guest:assigned')
-          sink.recordGuestAssigned(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'guest:self_assigned')
-          sink.recordGuestSelfAssigned(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'suitcase:carried')
-          sink.recordSuitcaseCarried(event.guestId, event.carrierId, this.roundTick)
-        else if (event.type === 'suitcase:placed')
-          sink.recordSuitcasePlaced(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'suitcase:picked_up')
-          sink.recordSuitcasePickedUp(event.guestId, event.carrierId, this.roundTick)
-        else if (event.type === 'guest:settled')
-          sink.recordGuestSettled(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'guest:checked_out')
-          sink.recordGuestCheckedOut(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-            event.preRound === true,
-          )
-        else if (event.type === 'guest:left') sink.recordGuestLeft(event.guestId, this.roundTick)
-        else if (event.type === 'guest:angered')
-          sink.recordGuestAngered(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'guest:discovered') {
-          const prov = event.fresh ? ('sabotage' as const) : ('churn' as const)
-          sink.recordGuestDiscovered(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            event.fresh,
-            prov,
-            prov === 'sabotage' ? sim.saboteurId : undefined,
-            this.roundTick,
-          )
-        } else if (event.type === 'guest:complained')
-          sink.recordGuestComplained(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'room:tenancy')
-          sink.recordTenancy(
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            event.occupied,
-            this.roundTick,
-          )
-        else if (event.type === 'player:fired' && event.reason === 'carry-clock')
-          sink.recordCarryClockExpiry(event.playerId, this.roundTick)
-        else if (event.type === 'round:ended')
-          sink.recordRoundEnded(
-            event.winner as 'staff' | 'saboteur',
-            event.reason,
-            event.saboteurId,
-            this.roundTick,
-          )
-      }
+      // The telemetry projection is a table row per event kind
+      // (packages/sim/src/telemetry.ts) — the tick loop never names one.
+      if (sink !== null) projectSimEventToTelemetry(sink, event, this.roundTick, projectionCtx)
       // Justice teardown (JUST-04/06/11): a fired session loses their movement
       // slot (no further position streams) — their sim-side channels were
       // already cancelled by the sim. No player:left: the fired event itself

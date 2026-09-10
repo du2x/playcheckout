@@ -28,7 +28,13 @@ export {
 } from './movement.js'
 export { Rng } from './rng.js'
 export { RoundSim, type RoundSimConfig } from './roundSim.js'
-export { TelemetrySink } from './telemetry.js'
+export {
+  ALL_SIM_EVENT_TYPES,
+  projectSimEventToTelemetry,
+  TELEMETRY_PROJECTIONS,
+  TelemetrySink,
+  UNTRACKED_SIM_EVENTS,
+} from './telemetry.js'
 export { TICK_HZ } from './tick.js'
 export {
   type PositionSample,

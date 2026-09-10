@@ -8,7 +8,7 @@ import type {
   RoundEnded,
   RoundRecap,
 } from '@turnover/shared'
-import { STAIRS_ARRIVAL_X_TILES, TUNING } from '@turnover/shared'
+import { PROTOCOL_REGISTRY, STAIRS_ARRIVAL_X_TILES, TUNING } from '@turnover/shared'
 
 /**
  * AI staff member for the bot smoke (`runSmokeRound.ts`): a protocol-true
@@ -382,56 +382,12 @@ export class BotPlayer {
     this.world = newBotWorld(opts.name, room.sessionId, opts.shiftSeconds)
   }
 
-  /** Subscribe to every registry message the policy layer consumes. */
+  /** Subscribe to every registry message the policy layer consumes. The
+   *  wire names are DERIVED from PROTOCOL_REGISTRY — a new registry row is
+   *  audible to bots by construction, never a hand-copied list to forget.
+   *  `error` is the one server→client name outside the registry. */
   listen(): void {
-    const names = [
-      'lobby:snapshot',
-      'round:started',
-      'role:dealt',
-      'round:buzzer',
-      'round:ended',
-      'round:recap',
-      'movement:snapshot',
-      'player:moved',
-      'player:left-floor',
-      'player:left',
-      'elevator:called',
-      'elevator:moved',
-      'elevator:doors',
-      'elevator:pressed',
-      'elevator:riders',
-      'guest:moved',
-      'guest:arrived',
-      'guest:impatient',
-      'guest:self_assigned',
-      'guest:assigned',
-      'guest:settled',
-      'guest:checked_out',
-      'guest:left',
-      'guest:complained',
-      'guest:angered',
-      'guest:discovered',
-      'suitcase:carried',
-      'suitcase:placed',
-      'suitcase:picked_up',
-      'room:observed',
-      'room:carded',
-      'room:prepped',
-      'room:trashed',
-      'room:entered',
-      'room:tenancy',
-      'room:rustle',
-      'room:settled',
-      'cosmetic:player',
-      'cosmetic:guest',
-      'player:fired',
-      'round:resumed',
-      'work:started',
-      'work:ended',
-      'stairs:ambushed',
-      'stairs:ambush',
-      'error',
-    ]
+    const names: readonly string[] = [...Object.keys(PROTOCOL_REGISTRY), 'error']
     for (const name of names) {
       this.room.onMessage(name, (envelope: unknown) => {
         const payload = (envelope as { payload: unknown }).payload
