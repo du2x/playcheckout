@@ -17,7 +17,7 @@ import { sfx } from './sfx'
  */
 
 /** Music gain into the shared sfx master (which itself runs at 0.7). */
-const MUSIC_LEVEL = 0.5
+const MUSIC_LEVEL = 1.0
 
 /** Crossfade window between the lobby and round cues (500 ms). */
 const FADE_SEC = 0.5

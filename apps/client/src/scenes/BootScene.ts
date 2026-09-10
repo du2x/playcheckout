@@ -24,6 +24,16 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 34,
       frameHeight: 64,
     })
+    // Catching-breath pose (AD-040 amendment): swapped onto the own body
+    // while the arrival breath runs; collar-pinned to the walk frames so the
+    // variant overlay keeps its pixel lock.
+    this.load.image('staff-breath', 'art/chars/staff-body-breath.png')
+    // Stairwell shadow-play climber (the climb): the walk sheet flattened to
+    // one near-black ink — same 34x64 x 7f grid, anim mirrors staff-walk.
+    this.load.spritesheet('staff-shadow', 'art/chars/staff-shadow-7f.png', {
+      frameWidth: 34,
+      frameHeight: 64,
+    })
     // Guest archetype silhouettes (Phase 4.1, T6; 10 kinds per the
     // 2026-09-05 user direction) — grayscale tint carriers.
     this.load.image('guest-suite', 'art/chars/guest-suite.png')
