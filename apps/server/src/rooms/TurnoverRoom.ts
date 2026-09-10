@@ -16,6 +16,9 @@ import {
   suitcasePickupIntentSchema,
   suitcasePlaceIntentSchema,
   TUNING,
+  voiceByeIntentSchema,
+  voiceHelloIntentSchema,
+  voiceSignalIntentSchema,
   workStartIntentSchema,
 } from '@turnover/shared'
 import {
@@ -123,6 +126,13 @@ export class TurnoverRoom extends Room {
    * every-floor stream delivery is the existing machinery, not new routing.
    */
   private spectators = new Map<string, string>()
+  /**
+   * Voice party members (per game session, phase-free): rostered players who
+   * turned their mic on. The room only tracks MEMBERSHIP and relays opaque
+   * WebRTC signaling verbatim — the audio itself is peer-to-peer and never
+   * touches the server. Dev spectators hold no seat and can never join.
+   */
+  private voiceMembers = new Set<string>()
   private joinedCounter = 0
   private router!: Router
   private movement!: MovementSim
@@ -311,6 +321,37 @@ export class TurnoverRoom extends Room {
       this.sim.suitcasePickup(client.sessionId)
     })
 
+    // Voice party (per game session): join/leave are membership facts the
+    // whole room may know (the roster already is); signaling relays opaque
+    // player-generated WebRTC payloads between members verbatim. Fired
+    // sessions cannot join or relay — a fired spectator's sanctioned
+    // over-delivery is VISION (FR-20); the living never hear the fired.
+    this.onMessage('voice:hello', voiceHelloIntentSchema, (client) => {
+      if (!this.ensureLive(client.sessionId)) return
+      const sessionId = client.sessionId
+      if (!this.voiceMembers.has(sessionId)) {
+        this.voiceMembers.add(sessionId)
+        this.router.toAll('voice:joined', { playerId: sessionId })
+      }
+      this.router.toSelf('voice:state', sessionId, {
+        playerIds: [...this.voiceMembers].filter((id) => id !== sessionId),
+      })
+    })
+    this.onMessage('voice:bye', voiceByeIntentSchema, (client) => {
+      this.dropVoiceMember(client.sessionId)
+    })
+    this.onMessage('voice:signal', voiceSignalIntentSchema, (client, intent) => {
+      const from = client.sessionId
+      if (!this.voiceMembers.has(from)) return
+      if (this.presenter.isFired(from)) return
+      if (!this.voiceMembers.has(intent.to)) return
+      this.router.toSelf('voice:signal', intent.to, {
+        from,
+        kind: intent.kind,
+        data: intent.data,
+      })
+    })
+
     if (TurnoverRoom.tickMs > 0) {
       this.setSimulationInterval(() => this.presenter.tick(), TurnoverRoom.tickMs)
     }
@@ -387,6 +428,9 @@ export class TurnoverRoom extends Room {
       this.router.forget(client.sessionId)
       return
     }
+    // The departed connection's voice membership dies with it (both the
+    // seat-hold and the clean path below) — the party hears them leave.
+    this.dropVoiceMember(client.sessionId)
     // Colyseus 0.18 delivers the numeric close code (CloseCode.CONSENTED =
     // 4000); anything else is an unconsented drop. A drop DURING a round
     // holds a reconnection seat (FR-25): roster entry + frozen movement slot
@@ -704,5 +748,11 @@ export class TurnoverRoom extends Room {
       message: 'you were fired — spectators cannot act',
     })
     return false
+  }
+
+  /** Leave the voice party if a member; the leave is public. Idempotent. */
+  private dropVoiceMember(sessionId: string): void {
+    if (!this.voiceMembers.delete(sessionId)) return
+    this.router.toAll('voice:left', { playerId: sessionId })
   }
 }

@@ -38,6 +38,7 @@ import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
 import { buildSfxToggle } from '../ui/sfxToggle'
 import { syncStairScreen } from '../ui/stairScreen'
+import { buildVoiceToggle } from '../ui/voiceToggle'
 import { CarInteriorView } from './carInteriorView'
 import { ClimbView } from './climbView'
 import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
@@ -1635,6 +1636,8 @@ export class WorldScene extends Phaser.Scene {
     this.stairMarker = marker
     // The sound toggle (night-juice): one chip, top-right, session-persisted.
     ui.appendChild(buildSfxToggle())
+    // The voice party chip (per game session): under the sound toggle.
+    ui.appendChild(buildVoiceToggle())
     // Interior-full suppression (AD-054 fold-in): while a fullscreen interior
     // (the climb / the scenic car) is up, the world-space DOM markers must
     // not float over the scene. One body class hides them all with

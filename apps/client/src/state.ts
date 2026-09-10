@@ -158,6 +158,14 @@ export type ViewAction =
     }
   | { type: 'spectator-snapshot'; snapshot: SpectatorSnapshot }
   | { type: 'connection-dropped' }
+  // Voice party (per game session): membership facts + the targeted signaling
+  // relay. Route 'consumed' — the voice engine absorbs them before view
+  // routing; the reducer never sees them (the switch keeps the no-op cases
+  // for exhaustiveness only).
+  | { type: 'voice-state'; playerIds: readonly string[] }
+  | { type: 'voice-joined'; playerId: string }
+  | { type: 'voice-left'; playerId: string }
+  | { type: 'voice-signal'; from: string; kind: 'offer' | 'answer' | 'ice'; data: string }
   | {
       type: 'round-resumed'
       remainingTicks: number
@@ -268,6 +276,10 @@ export const ACTION_ROUTES = {
   'spectator-snapshot': 'scene',
   'connection-dropped': 'view',
   'round-resumed': 'view',
+  'voice-state': 'consumed',
+  'voice-joined': 'consumed',
+  'voice-left': 'consumed',
+  'voice-signal': 'consumed',
   'role-dealt': 'view',
   buzzer: 'view',
   'intent-error': 'view',
@@ -428,6 +440,12 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
     case 'cosmetic-guest':
     case 'player-fired':
     case 'spectator-snapshot':
+    // Voice actions are route-'consumed' — the engine absorbs them before
+    // view routing; these no-op arms exist for switch exhaustiveness only.
+    case 'voice-state':
+    case 'voice-joined':
+    case 'voice-left':
+    case 'voice-signal':
       return state
   }
 }

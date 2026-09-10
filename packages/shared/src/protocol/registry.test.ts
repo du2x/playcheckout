@@ -8,6 +8,9 @@ import {
   elevatorPressIntentSchema,
   suitcasePickupIntentSchema,
   suitcasePlaceIntentSchema,
+  voiceByeIntentSchema,
+  voiceHelloIntentSchema,
+  voiceSignalIntentSchema,
 } from './intents.js'
 import {
   type LobbySnapshot,
@@ -16,6 +19,10 @@ import {
   type RoundResumed,
   type RoundStarted,
   type SpectatorSnapshot,
+  type VoiceJoined,
+  type VoiceLeft,
+  type VoiceSignal,
+  type VoiceState,
 } from './messages.js'
 import { PROTOCOL_REGISTRY } from './registry.js'
 
@@ -120,6 +127,23 @@ describe('protocol payloads', () => {
     expect(() => suitcasePickupIntentSchema.parse({ type: 'suitcase:pickup', room: 3 })).toThrow()
     expect(() => suitcasePickupIntentSchema.parse({})).toThrow()
   })
+
+  // Voice party signaling: the relay intent carries exactly {to, kind, data};
+  // data is bounded opaque JSON — nothing structured the server would read.
+  it('voice intents accept exactly their shapes and reject the rest', () => {
+    expect(voiceHelloIntentSchema.parse({ type: 'voice:hello' })).toEqual({ type: 'voice:hello' })
+    expect(() => voiceHelloIntentSchema.parse({ type: 'voice:hello', to: 'p2' })).toThrow()
+    expect(voiceByeIntentSchema.parse({ type: 'voice:bye' })).toEqual({ type: 'voice:bye' })
+
+    const signal = { type: 'voice:signal', to: 'p2', kind: 'ice', data: '{"candidate":"x"}' }
+    expect(voiceSignalIntentSchema.parse(signal)).toEqual(signal)
+    expect(() => voiceSignalIntentSchema.parse({ ...signal, kind: 'sdp' })).toThrow()
+    expect(() => voiceSignalIntentSchema.parse({ ...signal, to: '' })).toThrow()
+    expect(() => voiceSignalIntentSchema.parse({ ...signal, data: '' })).toThrow()
+    expect(() => voiceSignalIntentSchema.parse({ ...signal, data: 'x'.repeat(65537) })).toThrow()
+    expect(() => voiceSignalIntentSchema.parse({ ...signal, extra: 1 })).toThrow()
+    expect(() => voiceSignalIntentSchema.parse({})).toThrow()
+  })
 })
 
 // Spec REG-01/REG-03/REG-19 + WORK-16/17: the registry is the single catalog
@@ -175,6 +199,10 @@ describe('protocol registry', () => {
     'round:recap': 'all',
     'spectator:snapshot': 'self',
     'round:resumed': 'self',
+    'voice:state': 'self',
+    'voice:joined': 'all',
+    'voice:left': 'all',
+    'voice:signal': 'self',
   } as const
 
   it('declares exactly the core, movement, and work types — riders rows included (REG-03, AD-013)', () => {
@@ -316,6 +344,27 @@ describe('protocol registry', () => {
   it('keeps room-originated types out of the sim-event surface (fromSim undefined)', () => {
     expect(PROTOCOL_REGISTRY['lobby:snapshot'].fromSim).toBeUndefined()
     expect(PROTOCOL_REGISTRY.error.fromSim).toBeUndefined()
+  })
+
+  // Voice party (per game session): membership rows carry ids only; the
+  // signaling row is opaque player-generated WebRTC data — no role, no
+  // hidden fact can ride it because the room relays it verbatim.
+  it('declares the voice rows room-originated with ids-only / opaque payloads', () => {
+    expect(PROTOCOL_REGISTRY['voice:state'].fromSim).toBeUndefined()
+    expect(PROTOCOL_REGISTRY['voice:joined'].fromSim).toBeUndefined()
+    expect(PROTOCOL_REGISTRY['voice:left'].fromSim).toBeUndefined()
+    expect(PROTOCOL_REGISTRY['voice:signal'].fromSim).toBeUndefined()
+    expect(PROTOCOL_REGISTRY['voice:signal'].recipients).toBe('self')
+
+    const signal: VoiceSignal = { from: 'p1', kind: 'offer', data: '{"type":"offer"}' }
+    expect(Object.keys(signal).sort()).toEqual(['data', 'from', 'kind'])
+    expect(Object.keys(signal)).not.toContain('role')
+    const joined: VoiceJoined = { playerId: 'p2' }
+    expect(Object.keys(joined).sort()).toEqual(['playerId'])
+    const left: VoiceLeft = { playerId: 'p2' }
+    expect(Object.keys(left).sort()).toEqual(['playerId'])
+    const state: VoiceState = { playerIds: ['p2'] }
+    expect(Object.keys(state).sort()).toEqual(['playerIds'])
   })
 
   it('projects role:dealt to the named player with the payload shape of the declared type (REG-05 prep)', () => {

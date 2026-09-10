@@ -37,6 +37,7 @@ import { renderResults } from './ui/resultsView'
 import { renderRoundHud } from './ui/roundHud'
 import { roomCodeFromSearch } from './ui/shareLink'
 import { syncTutorialHud } from './ui/tutorialHud'
+import { voice } from './voice/voice'
 
 /**
  * First-light app controller (cycle 2.2): owns the reducer state, the Colyseus
@@ -69,6 +70,9 @@ export class App {
    * purely in tutorialSession.ts from own-fact wire events + local intents;
    * completion (or skip) is the one localStorage flag in tutorial/prefs.ts. */
   private tutorial: TutorialSession = initialTutorialSession(loadTutorialDone(window.localStorage))
+  /** Set on an unconsented drop; the restore messages trigger the voice
+   *  party re-join (membership died with the drop, the mic intent did not). */
+  private voiceResyncPending = false
 
   constructor(
     private readonly root: HTMLElement,
@@ -144,6 +148,9 @@ export class App {
           // Tutorial facts reduce in lockstep too (one state home,
           // tutorialSession.ts): own-fact triggers advance the guided cards.
           this.applyTutorial(reduceTutorial(this.tutorial, action, ownId))
+          // Voice party facts reduce in lockstep (one state home, the voice
+          // engine over voiceSession.ts): membership + signaling + fired.
+          if (this.applyVoice(action)) continue
           const route = ACTION_ROUTES[action.type]
           if (route === 'scene') {
             if (isSceneAction(action)) this.world()?.applyAction(action)
@@ -184,11 +191,15 @@ export class App {
       onDrop: () => {
         // Unconsented drop (FR-25): the seat may be held — show the
         // reconnecting state but KEEP the world mounted so the restore is
-        // seamless when the SDK lands the reconnection.
+        // seamless when the SDK lands the reconnection. The voice party
+        // membership died with the drop (server-side cleanup); the restore
+        // re-hellos if the mic intent stayed on.
+        this.voiceResyncPending = true
         this.dispatch({ type: 'connection-dropped' })
         this.render()
       },
       onDisconnect: () => {
+        voice.detach()
         this.dispatch({ type: 'connection-lost' })
         this.render()
       },
@@ -199,10 +210,58 @@ export class App {
     return (this.game.scene.getScene('Round') as WorldScene | null) ?? null
   }
 
+  /**
+   * Voice party lockstep (per game session): feeds the engine the public
+   * membership facts, the targeted signaling relay, and the firing/departure
+   * mirrors. Returns true when the action is fully voice-owned (skips view
+   * routing); player-left/player-fired are mirrored and still routed on.
+   */
+  private applyVoice(action: ViewAction): boolean {
+    switch (action.type) {
+      case 'voice-state':
+        voice.apply({ type: 'voice-state', playerIds: action.playerIds })
+        return true
+      case 'voice-joined':
+        voice.apply({ type: 'voice-joined', playerId: action.playerId })
+        return true
+      case 'voice-left':
+        voice.apply({ type: 'voice-left', playerId: action.playerId })
+        return true
+      case 'voice-signal':
+        voice.onSignal(action.from, action.kind, action.data)
+        return true
+      case 'player-left':
+        voice.apply({ type: 'player-left', playerId: action.playerId })
+        return false
+      case 'player-fired':
+        voice.apply({ type: 'player-fired', playerId: action.playerId })
+        return false
+      case 'snapshot':
+      case 'round-resumed':
+        // Restore path (FR-25): the first restore message after a drop
+        // re-hellos the party when the mic intent survived the drop.
+        if (this.voiceResyncPending) {
+          this.voiceResyncPending = false
+          voice.resync()
+        }
+        return false
+      default:
+        return false
+    }
+  }
+
   private async connect(open: () => Promise<Connection>): Promise<void> {
     try {
       this.connection = await open()
       this.roomCode = this.connection.roomId
+      // The voice engine binds to THIS session: peer identity = session id,
+      // signaling rides the room's relay intents.
+      voice.attach(this.connection.sessionId, {
+        hello: () => this.connection?.sendVoiceHello(),
+        bye: () => this.connection?.sendVoiceBye(),
+        signal: (to, kind, data) => this.connection?.sendVoiceSignal(to, kind, data),
+      })
+      this.voiceResyncPending = false
     } catch (error) {
       this.dispatch({
         type: 'join-failed',

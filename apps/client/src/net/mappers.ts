@@ -75,4 +75,10 @@ export const MAPPERS: {
   'round:recap': (p) => [{ type: 'round-recap', ...p }],
   'spectator:snapshot': (snapshot) => [{ type: 'spectator-snapshot', snapshot }],
   'round:resumed': (p) => [{ type: 'round-resumed', ...p }],
+  // Voice party (per game session): public membership facts + the targeted
+  // signaling relay — consumed by the voice engine before view routing.
+  'voice:state': ({ playerIds }) => [{ type: 'voice-state', playerIds }],
+  'voice:joined': ({ playerId }) => [{ type: 'voice-joined', playerId }],
+  'voice:left': ({ playerId }) => [{ type: 'voice-left', playerId }],
+  'voice:signal': (p) => [{ type: 'voice-signal', ...p }],
 }

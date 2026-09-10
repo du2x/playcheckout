@@ -132,3 +132,44 @@ export const suitcasePickupIntentSchema = z
   })
   .strict()
 export type SuitcasePickupIntent = z.infer<typeof suitcasePickupIntentSchema>
+
+// ---------------------------------------------------------------------------
+// Voice party (per game session). The party is room-scoped and phase-free:
+// every rostered player in the room may join, lobby through results. The
+// signaling intents carry OPAQUE player-generated WebRTC payloads — the room
+// relays them verbatim between voice members and never reads game state into
+// them (nothing here touches hidden information; the roster is already public).
+// ---------------------------------------------------------------------------
+
+/** Join the room's voice party (idempotent — re-join re-sends the member list). */
+export const voiceHelloIntentSchema = z
+  .object({
+    type: z.literal('voice:hello'),
+  })
+  .strict()
+export type VoiceHelloIntent = z.infer<typeof voiceHelloIntentSchema>
+
+/** Leave the room's voice party (idempotent; sent on mic-off). */
+export const voiceByeIntentSchema = z
+  .object({
+    type: z.literal('voice:bye'),
+  })
+  .strict()
+export type VoiceByeIntent = z.infer<typeof voiceByeIntentSchema>
+
+const VOICE_SIGNAL_MAX = 65536
+
+/**
+ * Relay one WebRTC signaling message (SDP offer/answer or ICE candidate) to a
+ * fellow voice member. `data` is the JSON.stringify'd RTCSessionDescriptionInit
+ * or RTCIceCandidateInit — opaque to the server by design.
+ */
+export const voiceSignalIntentSchema = z
+  .object({
+    type: z.literal('voice:signal'),
+    to: z.string().min(1),
+    kind: z.enum(['offer', 'answer', 'ice']),
+    data: z.string().min(1).max(VOICE_SIGNAL_MAX),
+  })
+  .strict()
+export type VoiceSignalIntent = z.infer<typeof voiceSignalIntentSchema>

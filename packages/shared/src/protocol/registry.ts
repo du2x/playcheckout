@@ -47,6 +47,10 @@ import type {
   SuitcaseCarried,
   SuitcasePickedUp,
   SuitcasePlaced,
+  VoiceJoined,
+  VoiceLeft,
+  VoiceSignal,
+  VoiceState,
   WorkEnded,
   WorkStarted,
 } from './messages.js'
@@ -208,6 +212,18 @@ export interface Payloads {
   'spectator:snapshot': SpectatorSnapshot
   /** server → one reconnected player. Seat restore: honest clock + cast (FR-25). */
   'round:resumed': RoundResumed
+  // --- Voice party (per game session): membership is public (the roster
+  // already is); signaling is targeted player-generated data, opaque on
+  // purpose. The 'self' rows address exactly one live connection each —
+  // the party member state reply and the relay destination. ---
+  /** server → one joining member. The current voice members, minus the recipient. */
+  'voice:state': VoiceState
+  /** server → all players. A player joined the voice party. */
+  'voice:joined': VoiceJoined
+  /** server → all players. A player left the voice party. */
+  'voice:left': VoiceLeft
+  /** server → one voice member (self). A member's signaling message, verbatim. */
+  'voice:signal': VoiceSignal
 }
 
 export type RegistryKey = keyof Payloads
@@ -633,6 +649,31 @@ export const PROTOCOL_REGISTRY = {
   },
   'round:resumed': {
     payload: {} as RoundResumed,
+    recipients: 'self',
+    fromSim: undefined,
+  },
+  // --- Voice party (per game session). All four rows are room-originated
+  // (fromSim undefined): the party is a transport-layer fact, not sim state.
+  // Membership is public — the roster already names every player, and a
+  // voice member is audible to every other member anyway. Signaling relays
+  // opaque player-generated payloads to exactly one live connection ('self').
+  'voice:state': {
+    payload: {} as VoiceState,
+    recipients: 'self',
+    fromSim: undefined,
+  },
+  'voice:joined': {
+    payload: {} as VoiceJoined,
+    recipients: 'all',
+    fromSim: undefined,
+  },
+  'voice:left': {
+    payload: {} as VoiceLeft,
+    recipients: 'all',
+    fromSim: undefined,
+  },
+  'voice:signal': {
+    payload: {} as VoiceSignal,
     recipients: 'self',
     fromSim: undefined,
   },

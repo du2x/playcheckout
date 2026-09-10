@@ -663,6 +663,37 @@ export interface CosmeticSeeds {
   readonly guests?: readonly CosmeticGuest[]
 }
 
+// ---------------------------------------------------------------------------
+// Voice party (per game session). Membership is public knowledge — the roster
+// already is, and you can hear who joined. Signal payloads carry player-
+// generated WebRTC data only; no payload ever names a role or a hidden fact.
+// ---------------------------------------------------------------------------
+
+/** server → one player (self). The current voice members, excluding the recipient. */
+export interface VoiceState {
+  readonly playerIds: readonly string[]
+}
+
+/** server → all players. A player joined the voice party. */
+export interface VoiceJoined {
+  readonly playerId: string
+}
+
+/** server → all players. A player left the voice party (mic-off, drop, or firing). */
+export interface VoiceLeft {
+  readonly playerId: string
+}
+
+/**
+ * server → one player (self). A signaling message relayed verbatim from a
+ * fellow voice member. `data` is opaque player-generated WebRTC JSON.
+ */
+export interface VoiceSignal {
+  readonly from: string
+  readonly kind: 'offer' | 'answer' | 'ice'
+  readonly data: string
+}
+
 /**
  * client → server intent: host starts the round (FR-2). Validated by zod in the
  * room's `validate()` handler; the server rejects, it never trusts. Intents are

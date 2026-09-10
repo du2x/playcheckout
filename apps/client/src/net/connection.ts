@@ -167,6 +167,24 @@ export class Connection {
     this.room.send('suitcase:pickup', { type: 'suitcase:pickup' })
   }
 
+  /** Voice party (per game session): join / leave / opaque signaling relay. */
+  sendVoiceHello(): void {
+    this.room.send('voice:hello', { type: 'voice:hello' })
+  }
+
+  sendVoiceBye(): void {
+    this.room.send('voice:bye', { type: 'voice:bye' })
+  }
+
+  sendVoiceSignal(to: string, kind: 'offer' | 'answer' | 'ice', data: string): void {
+    this.room.send('voice:signal', { type: 'voice:signal', to, kind, data })
+  }
+
+  /** The Colyseus session id — the voice mesh's peer identity. */
+  get sessionId(): string {
+    return this.room.sessionId
+  }
+
   leave(): void {
     this.room.leave()
   }

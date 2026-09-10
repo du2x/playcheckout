@@ -45,4 +45,28 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 60000,
   },
+  projects: [
+    {
+      // Every pre-existing scenario — unchanged contract (client:<name>).
+      name: 'default',
+      testIgnore: /voice\.spec\.ts/,
+    },
+    {
+      // client:voice_party needs mic capture + WebRTC: the fake-media flags
+      // hand the browser a silent fake audio device and auto-grant the prompt.
+      name: 'voice',
+      testMatch: /voice\.spec\.ts/,
+      use: {
+        launchOptions: {
+          args: [
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-background-timer-throttling',
+            '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+          ],
+        },
+      },
+    },
+  ],
 })
