@@ -6,7 +6,9 @@ import { expect, type Page, test } from '@playwright/test'
 // bar is retired to the breath window), the ambush toast with its stun
 // countdown plus the saboteur's private confirmation, and the single-car
 // panel set (no two-car DOM remnants). AD-051: during the breath the own body
-// renders on the destination floor (chip up, fullscreen canvas hidden).
+// renders on the destination floor wearing the catching-breath pose, standing
+// one tile east of the mouth (STAIRS_ARRIVAL_X_TILES — sim truth now, not a
+// render offset) with the chip up and the fullscreen canvas hidden.
 
 async function join(page: Page, code: string, name: string) {
   await page.goto('/')
@@ -161,8 +163,10 @@ test.describe('client:stairs', () => {
     )
     await breathShown
     // The breath stands ON the destination floor (AD-040 amendment): the own
-    // sprite renders at the mezzanine mouth, the fullscreen stair canvas is
-    // gone, and the compact breath chip carries the countdown.
+    // sprite stands at STAIRS_ARRIVAL_X_TILES — one tile east of the wall
+    // (32 px at the 32 px/tile grid) — wearing the catching-breath pose, the
+    // fullscreen stair canvas is gone, and the compact breath chip carries
+    // the countdown.
     await bruno.waitForFunction(
       () => {
         const hook = (
@@ -188,9 +192,9 @@ test.describe('client:stairs', () => {
         const chip = list.find((c) => c.name === 'breathChip')
         const box = list.find((c) => c.name === 'stairCanvas')
         const ownBody = list.find(
-          (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk' && c.visible,
+          (c) => c.type === 'Sprite' && c.texture?.key === 'staff-breath' && c.visible,
         )
-        return chip?.visible === true && box?.visible === false && ownBody !== undefined
+        return chip?.visible === true && box?.visible === false && ownBody?.x === 32
       },
       undefined,
       { timeout: 5000 },

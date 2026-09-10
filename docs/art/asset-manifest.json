@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "art_direction_brief": "docs/art/alternative/art-direction-brief.md (Deco Noir, AD-029)",
-  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050, amended AD-052; guest family expanded to 10 kinds 2026-09-05): 16 entries / 22 loaded textures / 24 files, ~12 KB total against ≤20 sheets / <2 MB. AD-052: the `sconce` entry, sheet, and generator were removed (user ruling 2026-09-04 — no candle props).",
+  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050, amended AD-052; guest family expanded to 10 kinds 2026-09-05; staff-body-breath pose added 2026-09-08; staff-shadow climb sheet added 2026-09-08): 18 entries / 24 loaded textures / 26 files, ~12 KB total against ≤20 sheets / <2 MB. AD-052: the `sconce` entry, sheet, and generator were removed (user ruling 2026-09-04 — no candle props).",
   "assets": [
     {
       "id": "staff-body",
@@ -30,6 +30,70 @@
         "in_engine_reviewed": false,
         "technical_checks_passed": true,
         "approved_by": "art workstream (asset_report + corridor mock 2026-09-03); in-engine review lands with client:char_variants"
+      }
+    },
+    {
+      "id": "staff-body-breath",
+      "role": "Catching-breath body pose (hands braced on the knees) swapped onto the own body sprite during the stairs arrival breath (AD-040 amendment); headless like staff-body, collar pinned to the walk frames' neck line so the variant overlay stays pixel-locked",
+      "path": "apps/client/public/art/chars/staff-body-breath.png",
+      "status": "approved",
+      "technical": {
+        "dimensions": "34x64 (single frame)",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": [
+        "palette",
+        "proportions",
+        "facing",
+        "light-direction",
+        "collar line (overlay pixel-lock)"
+      ],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-08",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "parallelogram torso (shoulders east of hips) + both arms braced down-east into gloves at knee height + knees bent east; 8x pose comparison vs idle/walk reviewed side by side with variant overlay composited."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (pose-compare sheet 2026-09-08); in-engine review rides client:breath_sprite"
+      }
+    },
+    {
+      "id": "staff-shadow",
+      "role": "Stairwell shadow-play climber (the climb, user direction 2026-09-08): the staff-body walk sheet with the variant-0 capped head composited in, flattened to one near-black ink — the own-body silhouette against the backlit stairwell (cap reads as a fedora profile); derived from staff-body + draw_variant_head(0) so the anim mirrors staff-walk 1:1 (never drawn by hand)",
+      "path": "apps/client/public/art/chars/staff-shadow-7f.png",
+      "status": "in-review",
+      "technical": {
+        "dimensions": "238x64 (7 frames of 34x64)",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 7,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["silhouette-of-staff-body", "proportions", "facing"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (build_shadow_sheet — alpha channel of staff-body carried by SHADOW_INK, deterministic Pillow, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-08",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "single-ink (9,7,16) retexture of the approved staff-body sheet + variant-0 head overlay (same geometry the client composites on the floors, so the collar pixel-lock holds); amended 2026-09-08 after the 400% zoom review showed the headless body reading as a black box. Own-viewer only — the stairwell interior publishes nothing (FR-34)."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (derived sheet, Gate 3 stairs/breath green); in-engine review rides the climb shadow-play pass"
       }
     },
     {

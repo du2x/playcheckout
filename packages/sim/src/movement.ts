@@ -5,6 +5,7 @@ import {
   type FloorId,
   HALL_LENGTH_TILES,
   roomIndexAtMilli,
+  STAIRS_ARRIVAL_X_TILES,
   stairsDirections,
   TUNING,
 } from '@turnover/shared'
@@ -424,16 +425,18 @@ export class MovementSim {
       if (st.phase === 'transit') {
         st.ticksLeft--
         if (st.ticksLeft > 0) continue
-        // Arrival: place at the destination mouth; the arrival floor's stream
-        // resumes NEXT tick via facingDirty (mirrors exitCar) — the arrival
-        // itself emits no dedicated event (design: sameFloor self-visibility).
+        // Arrival: place at the destination mouth, one tile east of the wall
+        // (STAIRS_ARRIVAL_X_TILES — clear of the mouth glyph, still inside the
+        // mouth zone); the arrival floor's stream resumes NEXT tick via
+        // facingDirty (mirrors exitCar) — the arrival itself emits no
+        // dedicated event (design: sameFloor self-visibility).
         const p = this.players.get(playerId)
         if (p === undefined) {
           this.stairs.delete(playerId)
           continue
         }
         p.floor = st.to
-        p.x = 0
+        p.x = STAIRS_ARRIVAL_X_TILES * MILLI
         p.facingDirty = true
         st.phase = 'breath'
         st.ticksLeft = STAIRS_BREATH_TICKS

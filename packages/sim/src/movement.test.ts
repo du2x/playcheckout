@@ -1,5 +1,5 @@
 import type { FloorId, MovementEvent } from '@turnover/shared'
-import { HALL_LENGTH_TILES, TUNING } from '@turnover/shared'
+import { HALL_LENGTH_TILES, STAIRS_ARRIVAL_X_TILES, TUNING } from '@turnover/shared'
 import { describe, expect, it } from 'vitest'
 import {
   DOOR_TICKS,
@@ -1571,7 +1571,7 @@ describe('sim:stairs_transit', () => {
     for (let i = 0; i < 58; i++) sim.tick() // transit ticks 2..59
     expect(sim.stairsStateOf('p1')?.phase).toBe('transit')
     sim.tick() // transit tick 60: arrival
-    expect(sim.positionOf('p1')).toMatchObject({ floor: 'mezzanine', x: 0 })
+    expect(sim.positionOf('p1')).toMatchObject({ floor: 'mezzanine', x: STAIRS_ARRIVAL_X_TILES })
     expect(sim.stairsStateOf('p1')?.phase).toBe('breath')
   })
 
@@ -1616,7 +1616,11 @@ describe('sim:stairs_transit', () => {
     // Exactly ONE player:moved for the transiter across the whole visit: the
     // arrival flush (next tick after arrival — mirrors exitCar).
     expect(own).toHaveLength(1)
-    expect(own[0]).toMatchObject({ playerId: 'p1', floor: 'mezzanine', x: 0 })
+    expect(own[0]).toMatchObject({
+      playerId: 'p1',
+      floor: 'mezzanine',
+      x: STAIRS_ARRIVAL_X_TILES,
+    })
     // The departure is observable to the origin floor: player:left-floor.
     expect(events).toContainEqual({ type: 'player:left-floor', playerId: 'p1', floor: 'lobby' })
   })
@@ -1668,24 +1672,36 @@ describe('sim:stairs_transit', () => {
     expect(sim.snapshotForFloor('mezzanine').players).toContainEqual({
       playerId: 'p1',
       floor: 'mezzanine',
-      x: 0,
+      x: STAIRS_ARRIVAL_X_TILES,
     })
     expect(sim.snapshotForFloor('lobby').players.some((r) => r.playerId === 'p1')).toBe(false)
     // The spectator baseline (fired overview) includes the breather.
-    expect(sim.allPositions()).toContainEqual({ playerId: 'p1', floor: 'mezzanine', x: 0 })
+    expect(sim.allPositions()).toContainEqual({
+      playerId: 'p1',
+      floor: 'mezzanine',
+      x: STAIRS_ARRIVAL_X_TILES,
+    })
     // The breather has the ordinary standing view of the destination floor —
     // sameFloor routing reaches them again (they can see and be seen).
-    expect(sim.viewOf('p1')).toMatchObject({ floor: 'mezzanine', x: 0 })
+    // viewOf keeps the raw millitile x (the affordances-facts unit).
+    expect(sim.viewOf('p1')).toMatchObject({
+      floor: 'mezzanine',
+      x: STAIRS_ARRIVAL_X_TILES * 1000,
+    })
     // Their own snapshot is the floor shape (self included) + the stairs row.
     const own = sim.snapshotFor('p1')
-    expect(own.players).toContainEqual({ playerId: 'p1', floor: 'mezzanine', x: 0 })
+    expect(own.players).toContainEqual({
+      playerId: 'p1',
+      floor: 'mezzanine',
+      x: STAIRS_ARRIVAL_X_TILES,
+    })
     expect(own.stairs).toMatchObject({ from: 'lobby', to: 'mezzanine', phase: 'breath' })
     // Another occupant's personal snapshot of the same floor names the breather.
     joinAtMouth(sim, 'p2', 'mezzanine')
     expect(sim.snapshotFor('p2').players).toContainEqual({
       playerId: 'p1',
       floor: 'mezzanine',
-      x: 0,
+      x: STAIRS_ARRIVAL_X_TILES,
     })
   })
 
@@ -1745,8 +1761,8 @@ describe('sim:stairs_transit', () => {
     expect(sim.stairsStateOf('up1')).toMatchObject({ from: 'floor1', to: 'floor2' })
     expect(sim.stairsStateOf('down1')).toMatchObject({ from: 'mezzanine', to: 'lobby', dir: -1 })
     for (let i = 0; i < 61; i++) sim.tick()
-    expect(sim.positionOf('up1')).toMatchObject({ floor: 'floor2', x: 0 })
-    expect(sim.positionOf('down1')).toMatchObject({ floor: 'lobby', x: 0 })
+    expect(sim.positionOf('up1')).toMatchObject({ floor: 'floor2', x: STAIRS_ARRIVAL_X_TILES })
+    expect(sim.positionOf('down1')).toMatchObject({ floor: 'lobby', x: STAIRS_ARRIVAL_X_TILES })
   })
 
   it('drops the stairs state when the player leaves mid-transit (FR-25 seat loss)', () => {
@@ -1814,7 +1830,7 @@ describe('sim:stairs_ambush', () => {
     expect(sim.stairsStateOf('victim')).toMatchObject({ phase: 'transit', to: 'floor1' })
     expect(sim.stairsStateOf('victim')?.ticksLeft ?? -1).toBe(remaining)
     for (let i = 0; i < remaining; i++) sim.tick()
-    expect(sim.positionOf('victim')).toMatchObject({ floor: 'floor1', x: 0 })
+    expect(sim.positionOf('victim')).toMatchObject({ floor: 'floor1', x: STAIRS_ARRIVAL_X_TILES })
     expect(sim.stairsStateOf('victim')?.phase).toBe('breath')
   })
 

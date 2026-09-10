@@ -3,8 +3,8 @@ import {
   CLIMB,
   climbBobY,
   climbWalkFraction,
+  glowFlicker,
   lurchKickY,
-  sconceAlpha,
   stairPoint,
   stunFx,
 } from './climbPresenter'
@@ -38,10 +38,10 @@ describe('climb presenter (night-juice)', () => {
     expect(climbBobY(0.5 / CLIMB.treads)).toBe(CLIMB.bobPx)
   })
 
-  it('sconce flicker stays in the warm band for any seed', () => {
+  it('lamp-glow flicker stays in the warm band for any seed', () => {
     for (const seed of [0, 1.3, 9.7, 42]) {
       for (let t = 0; t < 5000; t += 97) {
-        const a = sconceAlpha(t, seed)
+        const a = glowFlicker(t, seed)
         expect(a).toBeGreaterThanOrEqual(0.55)
         expect(a).toBeLessThanOrEqual(1)
       }

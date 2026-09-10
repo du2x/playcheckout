@@ -17,6 +17,7 @@ import {
   roomSegmentEndMilli,
   roomSegmentStartMilli,
   type SpectatorSnapshot,
+  STAIRS_ARRIVAL_X_TILES,
   type SuitcaseRef,
   stairsDirections,
   TUNING,
@@ -48,8 +49,8 @@ import {
   CLIMB,
   climbBobY,
   climbWalkFraction,
+  glowFlicker,
   lurchKickY,
-  sconceAlpha,
   stairPoint,
   stunFx,
 } from './climbPresenter'
@@ -212,6 +213,9 @@ interface PlayerDisplay {
   /** Juice state (VPOL-13): whether the last frame counted as moving — the
    *  settle pop fires on the moving→idle transition only. */
   wasMoving?: boolean
+  /** The own display wears the staff-breath pose while the arrival breath
+   *  runs (own-viewer only — the stairs row is personal-snapshot truth). */
+  breathing?: boolean
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -295,12 +299,14 @@ export class WorldScene extends Phaser.Scene {
   private stairCanvasRoute: Phaser.GameObjects.Text | null = null
   private stairCanvasPhase: Phaser.GameObjects.Text | null = null
   private stairCanvasArrow: Phaser.GameObjects.Text | null = null
-  /** Climb-scene members (night-juice): the scrolled stair band, the lazy
-   *  climber sprite (container-owned — never a top-level harness child), the
-   *  flicker sconces, the landing glyphs, and the scuffle/blackout FX stack. */
+  /** Climb-scene members (night-juice, shadow-play): the scrolled stair band,
+   *  the lazy shadow climber + its wall-shade echo (container-owned — never
+   *  top-level harness children), the flicker light wells, the landing
+   *  glyphs, and the scuffle/blackout FX stack. */
   private climbBand: Phaser.GameObjects.Container | null = null
   private climbClimber: Phaser.GameObjects.Sprite | null = null
-  private climbSconces: { lamp: Phaser.GameObjects.Ellipse; seed: number }[] = []
+  private climbShade: Phaser.GameObjects.Sprite | null = null
+  private climbGlows: { glow: Phaser.GameObjects.Ellipse; seed: number }[] = []
   private climbGlyphFrom: Phaser.GameObjects.Text | null = null
   private climbGlyphTo: Phaser.GameObjects.Text | null = null
   private climbFx: {
@@ -501,6 +507,17 @@ export class WorldScene extends Phaser.Scene {
       this.anims.create({
         key: 'staff-walk',
         frames: this.anims.generateFrameNumbers('staff-walk', { start: 1, end: last }),
+        frameRate: 12,
+        repeat: -1,
+      })
+    }
+    if (this.textures.exists('staff-shadow') && !this.anims.exists('staff-shadow-walk')) {
+      // The shadow-play climber mirrors the staff-walk cycle 1:1 (derived
+      // sheet, same grid) — the climb stage's own-body silhouette.
+      const last = this.textures.get('staff-shadow').frameTotal - 1
+      this.anims.create({
+        key: 'staff-shadow-walk',
+        frames: this.anims.generateFrameNumbers('staff-shadow', { start: 1, end: last }),
         frameRate: 12,
         repeat: -1,
       })
@@ -820,14 +837,16 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * The stairwell interior, night-juice rework ("the climb"): a side-view
-   * staircase the own sprite descends/ascends for the length of the transit —
-   * drawn entirely in Phaser primitives on the AD-020 night palette (no new
-   * sprite sheets; the deferred TILE_PX decision stays untouched). The clock
-   * lives IN the scene as a brass wall sign (the climb owns the countdown —
-   * the DOM stair bar retires to the breath window). Every member lives
-   * inside the `stairCanvas` container: the ART harness contract counts only
-   * top-level children, so nothing here pollutes it.
+   * The stairwell interior, night-juice rework staged as shadow play ("the
+   * climb", user direction 2026-09-08): a side-view staircase the own body —
+   * flattened to the near-black `staff-shadow` silhouette — descends/ascends
+   * for the length of the transit, backlit by a wall light pool, falling
+   * light shafts, and drifting dust. No lamp props (AD-052 ruling: light,
+   * not fixtures). The clock lives IN the scene as a brass wall sign (the
+   * climb owns the countdown — the DOM stair bar retires to the breath
+   * window). Every member lives inside the `stairCanvas` container: the ART
+   * harness contract counts only top-level children, so nothing here
+   * pollutes it.
    */
   private createStairCanvasInterior(): void {
     const container = this.add.container(480, 288)
@@ -835,18 +854,69 @@ export class WorldScene extends Phaser.Scene {
     container.setDepth(100)
     container.setVisible(false)
     container.setName('stairCanvas')
-    // Night backdrop (AD-020 night/tension band: deep blue-violet shadow).
-    container.add(this.add.rectangle(0, 0, 960, 576, 0x1d1830))
-    container.add(this.add.rectangle(0, 120, 960, 336, 0x171226))
-    // The scrolled stair band — one stride of stairwell, built once; the
+    // Near-black violet backdrop: the shadow stage reads only where light
+    // falls (AD-020 night/tension band, pushed darker for the play).
+    container.add(this.add.rectangle(0, 0, 960, 576, 0x0b0916))
+    container.add(this.add.rectangle(0, 120, 960, 336, 0x0e0b1c))
+    // The backlit wall pool: the light the walker's shadow plays against —
+    // two soft ellipses, fixed to the frame while the stairs scroll past.
+    container.add(this.add.ellipse(-60, 10, 820, 600, 0x241d40, 0.55))
+    container.add(this.add.ellipse(-60, 40, 560, 400, 0x332a52, 0.55))
+    // The wall-shade echo: the walker's cast shadow, stretched up the lit
+    // wall behind the stair band (the treads occlude its lower body). The
+    // per-frame sync rides it with the walker's bob.
+    if (this.textures.exists('staff-shadow')) {
+      const shade = this.add.sprite(-86, 104, 'staff-shadow')
+      shade.setOrigin(0.5, 1)
+      shade.setScale(1.08, 1.42)
+      shade.setAlpha(0.2)
+      shade.setName('climbShade')
+      container.add(shade)
+      this.climbShade = shade
+    }
+    // The scrolled stair band — the multi-flight run built once; the
     // per-visit direction only flips the climber and the scroll sign.
     const band = this.add.container(0, 0)
     band.setName('climbBand')
     container.add(band)
     this.climbBand = band
     this.buildClimbBand(band)
+    // Falling light shafts over everything but the HUD: the walker crosses
+    // them as the band scrolls (fixed frame, moving stairs = parallax life).
+    const shaft = (x: number, w: number, color: number, alpha: number): void => {
+      const beam = this.add.rectangle(x, -60, w, 960, color, alpha)
+      beam.setRotation(0.38)
+      container.add(beam)
+    }
+    shaft(-320, 96, 0x9db4d6, 0.05)
+    shaft(-130, 46, 0x9db4d6, 0.07)
+    shaft(40, 140, 0xcfd8e8, 0.045)
+    shaft(250, 60, 0xd9b26a, 0.035)
+    // Drifting dust in the shafts: a tiny soft mote texture + a sparse slow
+    // emitter, container-owned like every other member here.
+    if (!this.textures.exists('climb-mote')) {
+      const g = this.add.graphics()
+      g.fillStyle(0xffffff, 1)
+      g.fillCircle(2, 2, 2)
+      g.generateTexture('climb-mote', 4, 4)
+      g.destroy()
+    }
+    const motes = this.add.particles(0, 0, 'climb-mote', {
+      x: { min: -460, max: 460 },
+      y: { min: -270, max: 270 },
+      lifespan: 7000,
+      speedY: { min: -10, max: -4 },
+      speedX: { min: -5, max: 5 },
+      scale: { min: 0.4, max: 0.9 },
+      alpha: { start: 0.35, end: 0 },
+      frequency: 650,
+      quantity: 1,
+      blendMode: 'ADD',
+    })
+    motes.setName('climbMotes')
+    container.add(motes)
     // Brass wall sign: the integrated clock (the climb owns the countdown).
-    const sign = this.add.rectangle(-150, -232, 236, 62, 0x0f1419)
+    const sign = this.add.rectangle(-150, -232, 236, 62, 0x0a0e14)
     sign.setStrokeStyle(2, 0xd9a441)
     container.add(sign)
     const clock = this.add.text(-150, -232, '', {
@@ -901,8 +971,8 @@ export class WorldScene extends Phaser.Scene {
     title.setOrigin(0, 0.5)
     container.add(title)
     // Scuffle/blackout FX stack, topmost: white impact flash, red shock
-    // frame, the abstract dark bar (no silhouette — identity never leaks),
-    // the blackout, and the heartbeat vignette.
+    // frame, the abstract dark bar (no attacker silhouette — identity never
+    // leaks), the blackout, and the heartbeat vignette.
     const flashWhite = this.add.rectangle(0, 0, 960, 576, 0xf2ede2, 0)
     const flashRed = this.add.rectangle(0, 0, 960, 576, 0xa03028, 0)
     const sweep = this.add.rectangle(0, 0, 150, 760, 0x0a0812, 0.9)
@@ -949,63 +1019,69 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * One stride of stairwell geometry (band-local, ascending to the right):
-   * treads + risers in warm hotel neutrals, a railing with gold newel caps,
-   * landing plates at both ends (glyphs set per visit), and the sconces the
-   * per-frame flicker drives. Down-transits reuse the same geometry mirrored
-   * by the scroll sign — the walker traverses it the other way.
+   * The stairwell run (band-local, ascending to the right), staged for the
+   * shadow play at proportional scale — a tread is ~¼ the walker's height:
+   * `flights` continuous flights of treads whose only lit note is the warm
+   * nose edge the stairwell light catches, one continuous handrail riding
+   * the slope, a stringer spine beneath, floor-landing plates with the
+   * per-visit glyphs at the walked stride's two ends, and the flicker-driven
+   * light wells (halo + core, no lamp props — AD-052). The walker traverses
+   * the middle flight; the flights below and above are scenery, so the well
+   * never shows its ends. Down-transits reuse the same geometry mirrored by
+   * the scroll sign — the walker traverses it the other way.
    */
   private buildClimbBand(band: Phaser.GameObjects.Container): void {
     const stepH = CLIMB.stridePx / CLIMB.treads
-    for (let i = 0; i <= CLIMB.treads; i++) {
-      const { x, y } = stairPoint(i / CLIMB.treads)
-      const tread = this.add.rectangle(x, y, CLIMB.treadRun, 14, 0xc9b28a)
-      band.add(tread)
-      if (i < CLIMB.treads) {
-        const riser = this.add.rectangle(x - CLIMB.treadRun / 2, y + stepH / 2, 10, stepH, 0x8a7a5e)
+    const strideRun = CLIMB.treadRun * CLIMB.treads
+    const first = -Math.floor(CLIMB.flights / 2)
+    const last = first + CLIMB.flights
+    const slope = Math.atan2(-CLIMB.stridePx, strideRun)
+    // The treads: slab + lit nose + thin riser + one baluster each, from two
+    // flights below the walked stride to two above.
+    for (let f = first; f < last; f++) {
+      for (let i = 0; i < CLIMB.treads; i++) {
+        const { x, y } = stairPoint(f + i / CLIMB.treads)
+        const slab = this.add.rectangle(x, y + 4, CLIMB.treadRun, 8, 0x241d38)
+        band.add(slab)
+        const nose = this.add.rectangle(x, y + 1.5, CLIMB.treadRun, 2.5, 0x7a6438, 0.9)
+        band.add(nose)
+        const riser = this.add.rectangle(x - CLIMB.treadRun / 2, y + stepH / 2, 4, stepH, 0x161128)
         band.add(riser)
-      }
-      // Railing: baluster + handrail segment above every tread edge.
-      const baluster = this.add.rectangle(x, y - 44, 5, 76, 0x4a4664)
-      band.add(baluster)
-      const rail = this.add.rectangle(x, y - 84, CLIMB.treadRun + 5, 8, 0x4a4664)
-      band.add(rail)
-      if (i % 2 === 0) {
-        const cap = this.add.rectangle(x, y - 84, 14, 14, 0xd9a441)
-        band.add(cap)
-      }
-      // Sconce every other step, on the back wall, flicker-driven per frame.
-      if (i > 0 && i < CLIMB.treads && i % 2 === 1) {
-        const bracket = this.add.rectangle(x - 110, y - 190, 8, 20, 0x55492c)
-        band.add(bracket)
-        const lamp = this.add.ellipse(x - 110, y - 210, 26, 34, 0xf0d9a8, 0.85)
-        band.add(lamp)
-        const glow = this.add.ellipse(x - 110, y - 200, 130, 150, 0xf0d9a8, 0.07)
-        band.add(glow)
-        this.climbSconces.push({ lamp, seed: i * 1.7 })
+        const baluster = this.add.rectangle(x, y - 17, 3, 34, 0x2c2742)
+        band.add(baluster)
       }
     }
-    // Landing plates + per-visit floor glyphs (from → to read on the wall).
-    const plateW = CLIMB.treadRun * 2
-    const landingFrom = this.add.rectangle(
-      stairPoint(0).x - CLIMB.treadRun,
-      stairPoint(0).y + 7,
-      plateW,
-      14,
-      0xc9b28a,
-    )
-    band.add(landingFrom)
-    const landingTo = this.add.rectangle(
-      stairPoint(1).x + CLIMB.treadRun,
-      stairPoint(1).y + 7,
-      plateW,
-      14,
-      0xc9b28a,
-    )
-    band.add(landingTo)
-    const glyphFrom = this.add.text(stairPoint(0).x - 150, stairPoint(0).y - 60, '', {
-      fontSize: '44px',
-      color: '#4a4664',
+    // One continuous handrail (waist height) + the stringer spine under the
+    // noses: two rotated beams sharing the flight slope, spanning the run.
+    const mid = stairPoint((first + last) / 2)
+    const runLen = Math.hypot(strideRun * CLIMB.flights, CLIMB.stridePx * CLIMB.flights)
+    const rail = this.add.rectangle(mid.x, mid.y - 36, runLen + 8, 5, 0x2c2742)
+    rail.setRotation(slope)
+    band.add(rail)
+    const stringer = this.add.rectangle(mid.x, mid.y + 14, runLen, 14, 0x1a1528)
+    stringer.setRotation(slope)
+    band.add(stringer)
+    // Floor-landing plates at the walked stride's two ends — each extends
+    // back over the flight below it (a landing slab one riser above those
+    // treads), with a newel post, a brass cap, and the per-visit glyph.
+    const plate = (w: number, side: -1 | 1): void => {
+      const { x, y } = stairPoint(w)
+      const cx = x + (side * CLIMB.landingPx) / 2
+      const slab = this.add.rectangle(cx, y + 3, CLIMB.landingPx, 5.5, 0x241d38)
+      band.add(slab)
+      const nose = this.add.rectangle(cx, y + 1, CLIMB.landingPx, 2, 0x7a6438, 0.9)
+      band.add(nose)
+      const postX = x + side * CLIMB.landingPx
+      const post = this.add.rectangle(postX, y - 11, 3, 22, 0x2c2742)
+      band.add(post)
+      const cap = this.add.rectangle(postX, y - 24, 7, 7, 0x6a5428, 0.9)
+      band.add(cap)
+    }
+    plate(0, -1)
+    plate(1, 1)
+    const glyphFrom = this.add.text(stairPoint(0).x - 70, stairPoint(0).y - 42, '', {
+      fontSize: '30px',
+      color: '#584d78',
       fontFamily: 'monospace',
       fontStyle: 'bold',
     })
@@ -1013,9 +1089,9 @@ export class WorldScene extends Phaser.Scene {
     glyphFrom.setName('stairGlyphFrom')
     band.add(glyphFrom)
     this.climbGlyphFrom = glyphFrom
-    const glyphTo = this.add.text(stairPoint(1).x + 150, stairPoint(1).y - 60, '', {
-      fontSize: '44px',
-      color: '#4a4664',
+    const glyphTo = this.add.text(stairPoint(1).x + 70, stairPoint(1).y - 42, '', {
+      fontSize: '30px',
+      color: '#584d78',
       fontFamily: 'monospace',
       fontStyle: 'bold',
     })
@@ -1023,6 +1099,17 @@ export class WorldScene extends Phaser.Scene {
     glyphTo.setName('stairGlyphTo')
     band.add(glyphTo)
     this.climbGlyphTo = glyphTo
+    // Light wells riding the band (both floor landings + one flight above):
+    // a static warm halo and a core the per-frame flicker drives. Fixtures
+    // stay out — the light hangs in the air (AD-052).
+    for (const [wellIdx, w] of [0, 1, 2].entries()) {
+      const { x, y } = stairPoint(w)
+      const halo = this.add.ellipse(x, y - 116, 150, 180, 0xd9b26a, 0.07)
+      band.add(halo)
+      const core = this.add.ellipse(x, y - 112, 64, 84, 0xf0dcb0, 0.15)
+      band.add(core)
+      this.climbGlows.push({ glow: core, seed: 1.3 + wellIdx * 3.1 })
+    }
   }
 
   /**
@@ -1045,13 +1132,15 @@ export class WorldScene extends Phaser.Scene {
       return
     }
     if (this.breathSprite === null) {
-      this.breathSprite = this.add.sprite(own.x, 0, 'fx-breath')
+      this.breathSprite = this.add.sprite(0, 0, 'fx-breath')
       this.breathSprite.setOrigin(0.5, 1)
       this.breathSprite.setDepth(1)
       this.breathSprite.setName('fx-breath-own')
       this.breathSprite.play('breath')
     }
-    this.breathSprite.setPosition(own.x, this.laneY(own.floor) - 68)
+    // Anchor over the body's lane x (px, not raw tiles — the arrival mouth is
+    // STAIRS_ARRIVAL_X_TILES east of the wall).
+    this.breathSprite.setPosition(own.x * TILE_PX, this.laneY(own.floor) - 68)
     this.breathSprite.setVisible(!this.spectator && own.floor === this.viewFloor)
   }
 
@@ -1099,22 +1188,29 @@ export class WorldScene extends Phaser.Scene {
     // Derived, never hardcoded: the band sits so the stair surface under the
     // walker lands exactly at the fixed screen point (-60, 120).
     this.climbBand.setPosition(-60 - point.x, 120 - point.y + lurchY)
-    // The climber: the own body, bobbing with the treads, playing the walk
-    // cycle while moving; it freezes (frame 0) for the stun.
+    // The climber: the own body as the shadow-play silhouette, bobbing with
+    // the treads, playing the mirrored walk cycle while moving; it freezes
+    // (frame 0) for the stun. The wall-shade echo rides a damped bob so the
+    // cast shadow lags the walker ever so slightly.
     const climber = this.ensureClimber()
     if (climber !== null) {
       climber.setPosition(-60, 120 - climbBobY(shown))
       climber.flipX = dir2 === 'down'
       if (readout.phase === 'transit') {
-        if (!climber.anims.isPlaying) climber.play('staff-walk')
+        if (!climber.anims.isPlaying) climber.play('staff-shadow-walk')
       } else if (climber.anims.isPlaying) {
         climber.anims.stop()
         climber.setFrame(0)
       }
     }
-    // Sconce flicker (night-juice): every lamp wobbles on its own seed.
+    if (this.climbShade !== null) {
+      this.climbShade.setPosition(-86, 122 - climbBobY(shown) * 0.55)
+      this.climbShade.flipX = dir2 === 'down'
+      this.climbShade.setVisible(climber !== null)
+    }
+    // Light-well flicker (night-juice): every core wobbles on its own seed.
     const now = Date.now()
-    for (const { lamp, seed } of this.climbSconces) lamp.setAlpha(sconceAlpha(now, seed))
+    for (const { glow, seed } of this.climbGlows) glow.setAlpha(0.15 * glowFlicker(now, seed))
     // The wall sign readouts — the climb owns the countdown.
     if (this.stairCanvasClock !== null) {
       this.stairCanvasClock.setText(`${Math.ceil(readout.remainingMs / 1000)}s`)
@@ -1142,13 +1238,13 @@ export class WorldScene extends Phaser.Scene {
     this.syncClimbFx(readout.phase, readout.remainingMs, now)
   }
 
-  /** The container-owned climber sprite, created on first need, never
+  /** The container-owned shadow climber sprite, created on first need, never
    *  top-level (the ART staff-walk harness counts must not see it). */
   private ensureClimber(): Phaser.GameObjects.Sprite | null {
     if (this.stairCanvas === null) return null
     if (this.climbClimber === null) {
-      if (!this.textures.exists('staff-walk')) return null
-      const sprite = this.add.sprite(-60, 120, 'staff-walk')
+      if (!this.textures.exists('staff-shadow')) return null
+      const sprite = this.add.sprite(-60, 120, 'staff-shadow')
       sprite.setOrigin(0.5, 1)
       sprite.setName('climbClimber')
       this.stairCanvas.add(sprite)
@@ -1388,6 +1484,8 @@ export class WorldScene extends Phaser.Scene {
         this.guests.set(action.guestId, { floor: 'lobby', x: 15 })
         // SUI-21: arrival is a lifecycle fact — the walkie reads it out.
         this.appendWalkieLine('a guest arrives at the front desk')
+        // The counter bell rides the same public fact (presentation-only).
+        sfx.deskBell()
         break
       }
       case 'guest-impatient': {
@@ -2903,13 +3001,15 @@ body.interior-full #desk-bell {
     if (stairReadout !== null && stairReadout.phase === 'breath') {
       // The breath stands ON the destination floor (AD-040 amendment): the
       // moment the local clock rolls into the breath, the own display moves
-      // to the destination mouth — the server's arrival flush and personal
-      // snapshot reconcile it a tick later.
+      // to STAIRS_ARRIVAL_X_TILES east of the destination mouth — the
+      // server's arrival flush and personal snapshot reconcile it a tick
+      // later.
       const breathOwn = this.players.get(this.ownId)
       if (breathOwn !== undefined && this.stairsAnchor !== null) {
-        if (breathOwn.floor !== this.stairsAnchor.to || breathOwn.x !== 0) {
+        const arrivalX = STAIRS_ARRIVAL_X_TILES
+        if (breathOwn.floor !== this.stairsAnchor.to || breathOwn.x !== arrivalX) {
           breathOwn.floor = this.stairsAnchor.to
-          breathOwn.x = 0
+          breathOwn.x = arrivalX
           breathOwn.targetX = null
           this.viewFloor = this.stairsAnchor.to
         }
@@ -2928,6 +3028,11 @@ body.interior-full #desk-bell {
     // the camera and the world-anchored DOM marker layer apply the same
     // view, so markers stay in lockstep with the canvas (R4).
     this.syncRoomZoom(dt, own, ownInStairBox, this.work !== null)
+    // Catching-breath pose inputs (AD-040 amendment): the own body wears the
+    // braced pose while the breath runs — own-viewer only (the stairs row is
+    // personal-snapshot truth, never broadcast).
+    const breathPoseOk = this.textures.exists('staff-breath')
+    const ownBreathing = stairReadout !== null && stairReadout.phase === 'breath'
     for (const [id, display] of this.players) {
       if (id !== this.ownId && display.targetX !== null) {
         // Others follow server positions within ~2 ticks (exponential approach).
@@ -2950,6 +3055,17 @@ body.interior-full #desk-bell {
       display.sprite.setVisible(visible)
       display.variant?.setVisible(visible)
       display.label.setVisible(visible)
+      // The pose swap rides the texture, once per edge: breath in → the
+      // braced frame (walk anim suppressed — the sim pins the breather),
+      // breath out → back to the walk sheet. The breather's x is sim truth
+      // (STAIRS_ARRIVAL_X_TILES east of the wall) — no render offset.
+      const breathing = id === this.ownId && ownBreathing && breathPoseOk
+      if (display.breathing !== breathing) {
+        display.breathing = breathing
+        display.sprite.setTexture(breathing ? 'staff-breath' : 'staff-walk')
+        display.sprite.anims.stop()
+        display.sprite.setFrame(0)
+      }
       const px = display.x * TILE_PX
       display.sprite.x = px
       display.variant?.setPosition(px, laneY)
@@ -2964,8 +3080,9 @@ body.interior-full #desk-bell {
       // mirrors facing pixel-for-pixel (VPOL-02 flipX parity).
       if (id === this.ownId && this.ownMoving !== null) display.facing = this.ownMoving
       const moving =
-        (id === this.ownId && this.ownMoving !== null) ||
-        (display.targetX !== null && Math.abs(display.targetX - display.x) > 0.01)
+        !breathing &&
+        ((id === this.ownId && this.ownMoving !== null) ||
+          (display.targetX !== null && Math.abs(display.targetX - display.x) > 0.01))
       const flip = display.facing === 'left'
       display.sprite.flipX = flip
       if (display.variant !== null) {
@@ -3065,8 +3182,11 @@ body.interior-full #desk-bell {
       } else {
         const ownEnd = this.players.get(this.ownId)
         if (ownEnd !== undefined) {
+          // The visit ends where the breath stood: STAIRS_ARRIVAL_X_TILES
+          // east of the mouth — the same x the sim's arrival placed (and the
+          // breath guard above mirrored), NOT the wall.
           ownEnd.floor = this.stairsAnchor.to
-          ownEnd.x = 0
+          ownEnd.x = STAIRS_ARRIVAL_X_TILES
           ownEnd.targetX = null
         }
         this.stairsAnchor = null

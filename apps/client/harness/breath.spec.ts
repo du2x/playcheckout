@@ -2,8 +2,9 @@ import { expect, type Page, test } from '@playwright/test'
 
 // Gate scenario client:breath_sprite (breath-sprites, BR-01/02/03): during
 // the own arrival breath a looping fx-breath sprite floats above the own
-// body; it is gone when the breath ends. The breathChip countdown keeps
-// ticking throughout. Own-viewer only — other breathers render nothing new.
+// body and the body wears the hands-on-knees catching-breath pose; both are
+// gone when the breath ends. The breathChip countdown keeps ticking
+// throughout. Own-viewer only — other breathers render nothing new.
 
 async function join(page: Page, code: string, name: string) {
   await page.goto('/')
@@ -36,6 +37,7 @@ type SceneList = {
   type: string
   name?: string
   visible: boolean
+  x?: number
   texture?: { key?: string }
 }[]
 
@@ -93,6 +95,20 @@ test.describe('client:breath_sprite', () => {
       undefined,
       { timeout: 3000 },
     )
+    // …and the own body wears the catching-breath pose (hands on knees) for
+    // the whole window — the pose swap is part of the breath presentation.
+    const bodyInPose = await bruno.evaluate(() => {
+      const hook = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => { children: { list: SceneList } } | null
+          }
+        }
+      ).__TURNOVER__
+      const list = hook.scene('Round')?.children.list ?? []
+      return list.some((c) => c.type === 'Sprite' && c.texture?.key === 'staff-breath')
+    })
+    expect(bodyInPose).toBe(true)
     // …while the chip countdown ticks (BR-02).
     const clockText = await bruno.textContent('.stair-screen-clock')
     expect(clockText?.endsWith('s')).toBe(true)
@@ -112,6 +128,42 @@ test.describe('client:breath_sprite', () => {
       undefined,
       { timeout: 8000 },
     )
+    // The pose retires with the breath: the body is back on the walk sheet.
+    await bruno.waitForFunction(
+      () => {
+        const hook = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => { children: { list: SceneList } } | null
+            }
+          }
+        ).__TURNOVER__
+        const list = hook.scene('Round')?.children.list ?? []
+        return list.some((c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk' && c.visible)
+      },
+      undefined,
+      { timeout: 3000 },
+    )
+    // …and the body STAYS where the breath stood: STAIRS_ARRIVAL_X_TILES east
+    // of the wall (32 px) — the visit-end mirror must never snap it back to
+    // the mouth (regression: the freed player teleported one tile west).
+    // Bruno is alone on the destination floor, so the visible walk sprite is
+    // his; other players idle on the lobby, hidden from this view.
+    const xAfterBreath = await bruno.evaluate(() => {
+      const hook = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (name: string) => { children: { list: SceneList } } | null
+          }
+        }
+      ).__TURNOVER__
+      const list = hook.scene('Round')?.children.list ?? []
+      const body = list.find(
+        (c) => c.type === 'Sprite' && c.texture?.key === 'staff-walk' && c.visible,
+      )
+      return body?.x ?? null
+    })
+    expect(xAfterBreath).toBe(32)
     // BR-03: nobody else's screen gained a breath sprite — caro idled in
     // the lobby the whole ride and renders none.
     const caro = pages[2] as Page

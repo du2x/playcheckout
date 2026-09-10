@@ -1,31 +1,42 @@
 import { TUNING } from '@turnover/shared'
 
 /**
- * Climb presenter (night-juice): the pure math behind the stairwell interior —
- * "the climb". No Phaser, no DOM: the scene consumes these readouts per frame
- * the same way `elevatorPresenter` feeds the door/ride visuals. Durations that
- * are pure presentation (flash window, heartbeat pulse, resume lurch) live in
- * the `CLIMB` table with provenance comments, per the JUICE-table precedent —
- * they never alter sim timing (transit/breath/stun stay TUNING-derived).
+ * Climb presenter (night-juice, shadow-play rework): the pure math behind the
+ * stairwell interior — "the climb", now staged as a shadow walking the stairs
+ * (user direction 2026-09-08): the own body renders as a black silhouette
+ * against the backlit stairwell, up or down. No Phaser, no DOM: the scene
+ * consumes these readouts per frame the same way `elevatorPresenter` feeds
+ * the door/ride visuals. Durations that are pure presentation (flash window,
+ * heartbeat pulse, resume lurch) live in the `CLIMB` table with provenance
+ * comments, per the JUICE-table precedent — they never alter sim timing
+ * (transit/breath/stun stay TUNING-derived).
  *
  * Leak rules: everything here renders the recipient's OWN transit (personal
  * `movement:snapshot` stairs row + private `stairs:ambushed`). The geometry
  * never implies co-transitors — the interior publishes nothing (FR-34) — and
  * the ambush FX are abstract (flash frames, a sweeping dark bar, blackout):
- * no silhouette, no identity hint (the victim learns only THAT they were
- * ambushed, never by whom).
+ * no attacker silhouette, no identity hint (the victim learns only THAT they
+ * were ambushed, never by whom). The walking shadow is the recipient's own
+ * body — self-knowledge, not a leak.
  */
 
 /** Presentation-only constants (see module docstring for why they live here). */
 export const CLIMB = {
-  /** Scroll distance of one floor stride (2 screen-heights of stairwell). */
-  stridePx: 1152,
+  /** Rise of one floor stride: 10 proportional treads at 16px each
+   *  (re-proportioned 2026-09-08 — the old 150x164px slabs read oversized
+   *  against the 34x64 body; a tread is now ~¼ the walker's height). */
+  stridePx: 160,
   /** Treads per stride — the bob cadence and the step layout. */
-  treads: 7,
+  treads: 10,
   /** Horizontal run of one tread (px, band-local). */
-  treadRun: 150,
+  treadRun: 28,
   /** Sprite bob amplitude per tread (px). */
-  bobPx: 7,
+  bobPx: 5,
+  /** Flights drawn on the band: the walked stride plus two flights below
+   *  and two above, so the well never shows its ends mid-transit. */
+  flights: 5,
+  /** Floor-landing plate width (px) at the stride's both ends. */
+  landingPx: 110,
   /** Scuffle window at stun start: flash frames + the dark sweep (ms). */
   impactMs: 700,
   /** Blackout fade-in length after the impact window (ms). */
@@ -38,9 +49,10 @@ export const CLIMB = {
   lurchPx: 9,
 } as const
 
-/** The stair surface point (band-local) under the walker at walk-fraction w. */
+/** The stair surface point (band-local) under the walker at walk-fraction w;
+ *  w beyond 0..1 keeps climbing the scenery flights at the same slope. */
 export function stairPoint(w: number): { x: number; y: number } {
-  return { x: -420 + CLIMB.treadRun * 7 * w, y: 120 - CLIMB.stridePx * w }
+  return { x: -420 + CLIMB.treadRun * CLIMB.treads * w, y: 120 - CLIMB.stridePx * w }
 }
 
 /**
@@ -59,8 +71,9 @@ export function climbBobY(w: number): number {
   return Math.abs(Math.sin(w * CLIMB.treads * Math.PI)) * CLIMB.bobPx
 }
 
-/** Warm sconce flicker in 0.55..1 — layered slow sines, `seed` desyncs lamps. */
-export function sconceAlpha(nowMs: number, seed: number): number {
+/** Warm lamp-glow flicker in 0.55..1 — layered slow sines, `seed` desyncs
+ *  the light wells (no lamp props — AD-052 ruling; light only). */
+export function glowFlicker(nowMs: number, seed: number): number {
   const a =
     0.78 + 0.14 * Math.sin(nowMs * 0.011 + seed) + 0.08 * Math.sin(nowMs * 0.037 + seed * 2.7)
   return Math.max(0.55, Math.min(1, a))
