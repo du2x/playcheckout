@@ -7,6 +7,14 @@ Three families, all deterministic Pillow authoring (no generation model):
                the head zone (rows 0..17) stays transparent because the
                variant overlay supplies head + cap + hair + accessory.
                Identical for every player (FR-9).
+  staff-body-breath 34x64 x 1 frame — the catching-breath pose (hands braced
+               on the knees) for the stairs arrival breath (AD-040
+               amendment); same headless contract, collar pinned to the walk
+               frames' neck line so the overlay never shifts.
+  staff-shadow 34x64 x 7 frames — the walk sheet flattened to one near-black
+               ink: the stairwell shadow-play climber (the climb, user
+               direction 2026-09-08). Same grid as staff-body, so the anim
+               mirrors staff-walk 1:1; derived, never redrawn.
   staff-variant 34x64 x 8 variants — head + cap + hair + accessory only.
                Variant = skin(2) x hair(2) x accessory(2); the cap stays
                charcoal + brass band for all (uniform identity, not role).
@@ -20,6 +28,8 @@ Guests face right like staff; the client flips for left.
 
 Output:
   apps/client/public/art/chars/staff-body-34x64-7f.png    (238x64)
+  apps/client/public/art/chars/staff-body-breath.png      (34x64)
+  apps/client/public/art/chars/staff-shadow-7f.png        (238x64)
   apps/client/public/art/chars/staff-variant-8f.png       (272x64)
   apps/client/public/art/chars/guest-suite.png  guest-tourist.png
   apps/client/public/art/chars/guest-clerk.png  guest-elder.png
@@ -144,11 +154,93 @@ def draw_body_frame(sheet_index: int) -> Image.Image:
     return px
 
 
+def draw_body_breath_leg(px: Image.Image, hip_x: int, far: bool) -> None:
+    """Breath stance: both feet planted, knees nudged east — the bent-knee
+    rest a climber falls into, with the kneecap under the braced hands."""
+    pants = CHARCOAL_SHADE if far else CHARCOAL
+    top, bottom = 36, 56
+    for y in range(top, bottom + 1):
+        bend = 3 if 42 <= y <= 50 else 0
+        x = hip_x + bend
+        rect(px, x, y, x + 3, y, pants)
+    rect(px, hip_x, bottom + 1, hip_x + 5, GROUND_ROW, INK)
+
+
+def draw_body_breath_arm(px: Image.Image, shoulder_x: int, reach: int, far: bool) -> None:
+    """Breath arm: braced down from the shoulder to a glove resting on a knee
+    (the hands-on-knees read); `reach` slants the glove east of the shoulder."""
+    sleeve = IVORY_SHADE if far else IVORY
+    for y in range(22, 47):
+        t = (y - 22) / 24
+        x = shoulder_x + round(reach * t)
+        rect(px, x, y, x + 2, y, sleeve)
+    glove_x = shoulder_x + reach
+    rect(px, glove_x, 46, glove_x + 2, 49, GLOVE)
+    rect(px, glove_x, 46, glove_x + 2, 46, BRASS_SHADE)
+
+
+def draw_body_breath() -> Image.Image:
+    """Catching-breath pose (arrival breath, AD-040 amendment): headless body
+    with hands braced on the knees. The collar row stays at the walk frames'
+    neck line so the variant overlay stays pixel-locked; the lean reads
+    through a parallelogram torso (shoulders east of the hips), both arms
+    slanting down-east into gloves on the knees, and knees bent east."""
+    px = Image.new("RGBA", (FRAME_W, FRAME_H), TRANSPARENT)
+
+    # far arm + far leg behind the torso; the far glove lands on the far knee
+    draw_body_breath_arm(px, 13, 8, far=True)
+    draw_body_breath_leg(px, 17, far=True)
+
+    # torso: ivory mess jacket leaning forward — a parallelogram, top (shoulder)
+    # row 12..26, hip row 8..22 over the legs; collar row stays put for the
+    # overlay. Coat tail behind at the west bottom.
+    for y in range(18, 39):
+        x0 = 12 - round((y - 18) / 20 * 4)
+        rect(px, x0, y, x0 + 14, y, IVORY)
+        rect(px, x0, y, x0 + 1, y, IVORY_SHADE)
+        if y in (22, 27, 32):
+            rect(px, x0 + 12, y, x0 + 12, y, BRASS)
+    rect(px, 7, 38, 10, 42, IVORY)
+    hline(px, 8, 22, 37, BRASS_SHADE)
+
+    # near leg over the hem, then near arm braced onto the knees
+    draw_body_breath_leg(px, 13, far=False)
+    draw_body_breath_arm(px, 20, 3, far=False)
+    # collar — identical to the walk frames so the overlay never shifts
+    hline(px, 14, 21, 18, IVORY_SHADE)
+    return px
+
+
 def build_body_sheet() -> Image.Image:
     sheet = Image.new("RGBA", (FRAME_W * BODY_FRAMES, FRAME_H), TRANSPARENT)
     for i in range(BODY_FRAMES):
         sheet.paste(draw_body_frame(i), (i * FRAME_W, 0))
     return sheet
+
+
+# The shadow-play ink: one near-black violet so the silhouette never reads as
+# a flat #000 cutout against the pure-black blackout FX.
+SHADOW_INK = (9, 7, 16, 255)
+
+
+def build_shadow_sheet() -> Image.Image:
+    """The walk sheet + variant-0 head carried by SHADOW_INK — the stairwell
+    shadow-play climber (user direction 2026-09-08; the capped head was
+    composited in after the 400% review showed the headless body reading as
+    a black box). Derived from build_body_sheet() + draw_variant_head(0), so
+    the 7-frame grid and the collar line stay pinned to the walk cycle; the
+    charcoal cap flattens to a fedora-like profile — uniform for every
+    player (FR-9), and the same overlay geometry the floors already use."""
+    body = build_body_sheet()
+    head = draw_variant_head(0)
+    composited = Image.new("RGBA", body.size, TRANSPARENT)
+    for i in range(BODY_FRAMES):
+        frame = body.crop((i * FRAME_W, 0, (i + 1) * FRAME_W, FRAME_H)).copy()
+        frame.alpha_composite(head)
+        composited.paste(frame, (i * FRAME_W, 0))
+    shadow = Image.new("RGBA", body.size, SHADOW_INK[:3] + (0,))
+    shadow.putalpha(composited.getchannel("A"))
+    return shadow
 
 
 def draw_variant_head(index: int) -> Image.Image:
@@ -359,7 +451,9 @@ def draw_guest_child() -> Image.Image:
     return px
 
 
-def corridor_mock(body: Image.Image, variants: Image.Image, guests: dict[str, Image.Image]) -> Image.Image:
+def corridor_mock(
+    body: Image.Image, breath_body: Image.Image, variants: Image.Image, guests: dict[str, Image.Image]
+) -> Image.Image:
     """Native-scale 960x576 read: corridor bands + cast composited in place."""
     W, H = 960, 576
     mock = Image.new("RGBA", (W, H), INK)
@@ -394,6 +488,12 @@ def corridor_mock(body: Image.Image, variants: Image.Image, guests: dict[str, Im
     staff.alpha_composite(body_f2)
     staff.alpha_composite(head_v2)
     mock.alpha_composite(staff, (400, 431 - FRAME_H))  # game ground line y430
+    # the same variant in the breath pose beside them — the overlay must sit
+    # exactly as on the walk frames (collar-pinned neck line)
+    breather = Image.new("RGBA", (FRAME_W, FRAME_H), TRANSPARENT)
+    breather.alpha_composite(breath_body)
+    breather.alpha_composite(head_v2)
+    mock.alpha_composite(breather, (340, 431 - FRAME_H))
     # guests tinted teal / burgundy beside them (the runtime setTint read)
     tints = {"guest-suite.png": (90, 154, 170, 255), "guest-clerk.png": (176, 106, 122, 255)}
     x0 = 480
@@ -416,6 +516,10 @@ def main() -> None:
 
     body = build_body_sheet()
     body.save(out / "staff-body-34x64-7f.png")
+    breath = draw_body_breath()
+    breath.save(out / "staff-body-breath.png")
+    shadow = build_shadow_sheet()
+    shadow.save(out / "staff-shadow-7f.png")
     variants = build_variant_sheet()
     variants.save(out / "staff-variant-8f.png")
     guests = {
@@ -433,14 +537,14 @@ def main() -> None:
     for name, img in guests.items():
         img.save(out / name)
 
-    for name in ["staff-body-34x64-7f.png", "staff-variant-8f.png", *guests.keys()]:
+    for name in ["staff-body-34x64-7f.png", "staff-body-breath.png", "staff-shadow-7f.png", "staff-variant-8f.png", *guests.keys()]:
         p = out / name
         print(f"wrote {p} ({p and Image.open(p).size})")
 
     # Contact sheet at 3x over a dark backdrop, wrapped rows
     tmp = Path("/tmp/opencode")
     tmp.mkdir(parents=True, exist_ok=True)
-    items = [body] + [variants] + list(guests.values())
+    items = [body] + [breath] + [shadow] + [variants] + list(guests.values())
     scale = 3
     margin = 8
     row_w = 1200
@@ -462,7 +566,7 @@ def main() -> None:
     preview.save(tmp / "cast-4-1-preview.png")
     print(f"wrote {tmp / 'cast-4-1-preview.png'}")
 
-    mock = corridor_mock(body, variants, guests)
+    mock = corridor_mock(body, breath, variants, guests)
     mock.convert("RGB").save(tmp / "cast-4-1-corridor-mock.png")
     print(f"wrote {tmp / 'cast-4-1-corridor-mock.png'}")
 
