@@ -45,14 +45,9 @@ import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
 import { buildSfxToggle } from '../ui/sfxToggle'
 import { syncStairScreen } from '../ui/stairScreen'
+import { CarInteriorView } from './carInteriorView'
 import { ClimbView } from './climbView'
-import {
-  arrivalBurstAlpha,
-  carSwayY,
-  DEFAULT_ANIMATION_CONFIG,
-  doorsOpenAmount,
-  ElevatorPresenter,
-} from './elevatorPresenter'
+import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
 import {
   CHAIR_SEAT_TOP_PX,
   diningFurniture,
@@ -270,20 +265,11 @@ export class WorldScene extends Phaser.Scene {
    *  the in-car screen readout (ELAN + AD-038): the single clock authority for
    *  elevator presentation — built in `create()` once cars exist. */
   private elevatorPresenter: ElevatorPresenter | null = null
-  /** Phaser canvas elevator interior — drawn inside the main window, not as a
-   *  DOM modal. Visible only while riding. */
-  private elevatorCanvas: Phaser.GameObjects.Container | null = null
-  private elevatorCanvasFloor: Phaser.GameObjects.Text | null = null
-  private elevatorCanvasState: Phaser.GameObjects.Text | null = null
-  private elevatorCanvasDoors: {
-    left: Phaser.GameObjects.Rectangle
-    right: Phaser.GameObjects.Rectangle
-  } | null = null
-  private elevatorCanvasOccupants: Phaser.GameObjects.Container | null = null
-  private elevatorCanvasButtons = new Map<FloorId, Phaser.GameObjects.Arc>()
-  /** The beyond-door glow (AD-054) + its burst t0 (-1 = at rest). */
-  private elevatorCanvasBeyond: Phaser.GameObjects.Rectangle | null = null
-  private elevatorCanvasBurstT0 = -1
+  /** The car interior as a view module (scenes/carInteriorView.ts): the
+   *  fullscreen car built in create(), driven by one sync per frame with
+   *  readouts — the scene resolves occupant names and pulls the presenter's
+   *  screen/clock; button presses come back through a callback. */
+  private carInterior: CarInteriorView | null = null
   /** The climb canvas as a view module (scenes/climbView.ts): the fullscreen
    *  stairwell interior + its stair audio cues, built in create(), driven by
    *  one sync per frame with the visit readout. */
@@ -542,7 +528,7 @@ export class WorldScene extends Phaser.Scene {
     }
     // Fresh presenter per scene restart (its constructor resets both clocks).
     this.elevatorPresenter = new ElevatorPresenter(this.cars, (car) => this.carLaneY(car))
-    this.createElevatorCanvasInterior()
+    this.carInterior = new CarInteriorView(this, (floor) => this.pressFloor(floor))
     this.climbView = new ClimbView(this)
     this.buildBreathChip()
     // The landing light spill (night-juice): container-owned so the top-level
@@ -588,215 +574,18 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * The scenic in-car interior (AD-054): a warm hotel elevator car drawn in
-   * Phaser primitives on the AD-020 palette — paneled walls, brass rail,
-   * crimson carpet, sliding doors onto a lit hallway beyond, and a floor dial
-   * above the doors that ticks with the ride. The passengers stand center
-   * stage on the carpet (the social read IS the scene); the DOM car bar is
-   * retired while riding. Container-owned, so top-level ART counts are blind
-   * to every rectangle here.
-   */
-  private createElevatorCanvasInterior(): void {
-    const container = this.add.container(480, 288)
-    container.setScrollFactor(0)
-    container.setDepth(50)
-    container.setVisible(false)
-    container.setName('elevatorCanvas')
-    // Backdrop: oversized so the ride sway never shows an edge.
-    container.add(this.add.rectangle(0, 0, 984, 600, 0x221c12))
-    // Walls: dim cream upper, dim tan wainscot, gold trim line, panel seams.
-    container.add(this.add.rectangle(0, -160, 960, 288, 0x6e6450))
-    container.add(this.add.rectangle(0, 140, 960, 328, 0x574a36))
-    container.add(this.add.rectangle(0, -16, 960, 5, 0x8a6a2e))
-    for (let x = -360; x <= 360; x += 120) {
-      container.add(this.add.rectangle(x, -30, 3, 576, 0x4f4634))
-    }
-    // Brass handrail across the back wall.
-    container.add(this.add.rectangle(0, -34, 752, 10, 0x8a6a2e))
-    container.add(this.add.rectangle(-368, -34, 12, 24, 0x55492c))
-    container.add(this.add.rectangle(368, -34, 12, 24, 0x55492c))
-    // Carpet: crimson field with a gold edge strip (the passengers' floor).
-    container.add(this.add.rectangle(0, 216, 960, 152, 0x5e2626))
-    container.add(this.add.rectangle(0, 142, 960, 4, 0x8a6a2e))
-    // The hallway beyond the doors: a lit glow the burst drives.
-    const beyond = this.add.rectangle(0, -36, 250, 262, 0xf0d9a8, 0.32)
-    container.add(beyond)
-    const beyondFloor = this.add.rectangle(0, 84, 250, 5, 0x8a6a2e)
-    container.add(beyondFloor)
-    // Doors: brushed-steel leaves with brass jambs, center-seamed.
-    const jambL = this.add.rectangle(-141, -36, 12, 262, 0x8a6a2e)
-    const jambR = this.add.rectangle(141, -36, 12, 262, 0x8a6a2e)
-    const left = this.add.rectangle(-70, -36, 128, 258, 0x4a5568)
-    const right = this.add.rectangle(70, -36, 128, 258, 0x4a5568)
-    const seamL = this.add.rectangle(-3, -36, 3, 258, 0x2a3542)
-    const seamR = this.add.rectangle(3, -36, 3, 258, 0x2a3542)
-    container.add([beyond, jambL, jambR, left, right, seamL, seamR])
-    this.elevatorCanvasDoors = { left, right }
-    // Floor dial above the doors: brass plate, the ticking glyph, arrow.
-    const dialPlate = this.add.rectangle(0, -214, 190, 62, 0x241d12)
-    dialPlate.setStrokeStyle(2, 0x8a6a2e)
-    container.add(dialPlate)
-    const floor = this.add.text(-20, -214, '', {
-      fontSize: '40px',
-      color: '#ffd98a',
-      fontFamily: 'monospace',
-    })
-    floor.setOrigin(0.5)
-    floor.setName('floor')
-    container.add(floor)
-    this.elevatorCanvasFloor = floor
-    const dirArrow = this.add.text(52, -214, '', {
-      fontSize: '22px',
-      color: '#e6c56a',
-      fontFamily: 'monospace',
-    })
-    dirArrow.setOrigin(0.5)
-    dirArrow.setName('dirArrow')
-    container.add(dirArrow)
-    // Car tag + state line.
-    const carLabel = this.add.text(-430, -262, '', {
-      fontSize: '10px',
-      color: '#8899aa',
-      fontFamily: 'monospace',
-    })
-    carLabel.setName('carLabel')
-    container.add(carLabel)
-    const state = this.add.text(0, -172, '', {
-      fontSize: '11px',
-      color: '#8ad07a',
-      fontFamily: 'monospace',
-    })
-    state.setOrigin(0.5)
-    state.setName('state')
-    container.add(state)
-    this.elevatorCanvasState = state
-    // Button pillar (right wall): five round brass buttons, pressable.
-    const pillar = this.add.rectangle(332, -36, 84, 262, 0x5a4c38)
-    pillar.setStrokeStyle(2, 0x8a6a2e)
-    container.add(pillar)
-    const floors: FloorId[] = ['floor3', 'floor2', 'floor1', 'mezzanine', 'lobby']
-    const labels = ['3', '2', '1', 'M', 'L']
-    floors.forEach((floorId, i) => {
-      const y = -124 + i * 58
-      const btn = this.add.circle(332, y, 17, 0x1a2530)
-      btn.setStrokeStyle(1, 0x3d4a58)
-      btn.setInteractive({ useHandCursor: true })
-      btn.on('pointerdown', () => this.pressFloor(floorId))
-      const label = this.add.text(332, y, labels[i] ?? '', {
-        fontSize: '13px',
-        color: '#9fb0c0',
-        fontFamily: 'monospace',
-      })
-      label.setOrigin(0.5)
-      container.add([btn, label])
-      this.elevatorCanvasButtons.set(floorId, btn)
-    })
-    // The passengers: center stage on the carpet (rebuilt each sync).
-    const occ = this.add.container(0, 196)
-    container.add(occ)
-    this.elevatorCanvasOccupants = occ
-    this.elevatorCanvas = container
-    this.elevatorCanvasBeyond = beyond
-    this.elevatorCanvasBurstT0 = -1
-  }
-
-  private syncElevatorCanvas(): void {
-    if (this.elevatorCanvas === null) return
-    const riding = this.riderSession
-    if (riding === null) {
-      this.elevatorCanvas.setVisible(false)
-      return
-    }
-    this.elevatorCanvas.setVisible(true)
-    const readout = this.elevatorPresenter?.carScreen()
-    if (this.elevatorCanvasFloor !== null) {
-      const label = readout?.floor ?? null
-      this.elevatorCanvasFloor.setText(
-        label === null
-          ? ''
-          : label === 'lobby'
-            ? 'L'
-            : label === 'mezzanine'
-              ? 'M'
-              : label.slice(-1),
-      )
-    }
-    if (this.elevatorCanvasState !== null) {
-      this.elevatorCanvasState.setText(readout?.state ?? '')
-    }
-    const carLabel = this.elevatorCanvas.getByName('carLabel') as Phaser.GameObjects.Text | null
-    if (carLabel !== null) carLabel.setText(`car ${riding.car}`)
-    const dirArrow = this.elevatorCanvas.getByName('dirArrow') as Phaser.GameObjects.Text | null
-    const movingFrom = readout?.floor ?? null
-    const movingTo = readout?.state?.startsWith('moving to ')
-      ? readout.state.slice('moving to '.length).trim()
-      : null
-    if (dirArrow !== null && movingTo !== null && movingFrom !== null) {
-      const here = FLOOR_ORDER.indexOf(movingFrom)
-      const there = FLOOR_ORDER.indexOf(movingTo as FloorId)
-      dirArrow.setText(there > here ? '▲' : '▼')
-    } else if (dirArrow !== null) {
-      dirArrow.setText('')
-    }
-    // Ride sway: the whole car breathes vertically while in transit.
-    const clock = this.elevatorPresenter?.clockOf(riding.car as 1 | 2)
-    const swaying = clock?.phase === 'transit'
-    this.elevatorCanvas.setY(swaying ? 288 + carSwayY(Date.now()) : 288)
-    // The beyond-door glow: an arrival burst when the doors begin opening.
-    if (this.elevatorCanvasBeyond !== null) {
-      if (clock?.phase === 'opening') {
-        if (this.elevatorCanvasBurstT0 < 0) this.elevatorCanvasBurstT0 = Date.now()
-      } else {
-        this.elevatorCanvasBurstT0 = -1
-      }
-      const burstElapsed =
-        this.elevatorCanvasBurstT0 < 0 ? -1 : Date.now() - this.elevatorCanvasBurstT0
-      this.elevatorCanvasBeyond.setAlpha(arrivalBurstAlpha(burstElapsed))
-    }
-    if (this.elevatorCanvasDoors !== null) {
-      const amount = clock !== undefined ? doorsOpenAmount(clock, DEFAULT_ANIMATION_CONFIG) : 0
-      this.elevatorCanvasDoors.left.x = -70 - amount * 66
-      this.elevatorCanvasDoors.right.x = 70 + amount * 66
-    }
-    for (const [floorId, btn] of this.elevatorCanvasButtons) {
-      const lit = riding.queue.includes(floorId)
-      const here = readout?.floor === floorId
-      btn.setFillStyle(lit ? 0xc8a24a : 0x1a2530)
-      btn.setStrokeStyle(here ? 2 : 1, here ? 0xe6c56a : lit ? 0xe6c56a : 0x3d4a58)
-    }
-    if (this.elevatorCanvasOccupants !== null) {
-      this.elevatorCanvasOccupants.removeAll(true)
-      const names = riding.occupants.map((id) => this.rosterNames.get(id) ?? id)
-      const isYou = (name: string) => name === (this.rosterNames.get(this.ownId) ?? '')
-      const count = names.length
-      names.forEach((name, idx) => {
-        // Center the row on the carpet; 90px berths keep four riders legible.
-        const x = (idx - (count - 1) / 2) * 90
-        const headColor = this.occupantColor(name)
-        const head = this.add.circle(x, -26, 13, headColor)
-        const body = this.add.rectangle(x, 2, 26, 20, 0x2a3a4a)
-        const label = this.add.text(x, 24, name.slice(0, 5 + 1), {
-          fontSize: '9px',
-          color: isYou(name) ? '#ffd98a' : '#dfe8f2',
-          fontFamily: 'monospace',
-        })
-        label.setOrigin(0.5)
-        if (isYou(name)) {
-          head.setStrokeStyle(2, 0xe6c56a)
-          body.setStrokeStyle(2, 0xe6c56a)
-        }
-        this.elevatorCanvasOccupants?.add([head, body, label])
-      })
-    }
-  }
-
-  private occupantColor(name: string): number {
-    let hash = 0
-    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
-    const hue = hash % 360
-    const c = Phaser.Display.Color.HSLToColor(hue / 360, 0.58, 0.5)
-    return (c.red << 16) | (c.green << 8) | c.blue
+  /** One fullscreen-car-interior sync per frame: the scene pulls the
+   *  presenter's screen + clock and resolves rider ids to roster names —
+   *  the view (scenes/carInteriorView.ts) renders facts, not sources. */
+  private syncCarInterior(): void {
+    const rider = this.riderSession
+    const screen = this.elevatorPresenter?.carScreen() ?? { floor: null, state: null }
+    const clock = rider !== null ? this.elevatorPresenter?.clockOf(rider.car) : undefined
+    const occupants = (rider?.occupants ?? []).map((id) => ({
+      name: this.rosterNames.get(id) ?? id,
+      you: id === this.ownId,
+    }))
+    this.carInterior?.sync({ rider, screen, clock, occupants })
   }
 
   /** The breath chip (AD-040 amendment): "catching breath" + a countdown at
@@ -2734,7 +2523,7 @@ body.interior-full #desk-bell {
         doorClock !== undefined ? doorsOpenAmount(doorClock, DEFAULT_ANIMATION_CONFIG) : 0
       setCarScreenDoors(amount)
     }
-    this.syncElevatorCanvas()
+    this.syncCarInterior()
     // The stair screen's DOM twin (night-juice): retired to the BREATH only.
     // The climb canvas owns the transit/stun readouts (integrated wall-sign
     // clock), so the DOM bar shows just the breath window — its hidden
@@ -2758,7 +2547,7 @@ body.interior-full #desk-bell {
     // a fullscreen interior scene is up — they return the frame it ends.
     document.body.classList.toggle(
       'interior-full',
-      (this.climbView?.visible ?? false) || (this.elevatorCanvas?.visible ?? false),
+      (this.climbView?.visible ?? false) || (this.carInterior?.visible ?? false),
     )
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
