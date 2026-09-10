@@ -1,60 +1,23 @@
 import type { FloorId } from '@turnover/shared'
-import { TUNING } from '@turnover/shared'
-import { FLOOR_ORDER, floorLabel } from './carScreen'
+import { stairDirection } from '../scenes/stairsVisit'
+import { floorLabel } from './carScreen'
 import { el } from './dom'
 
 /**
- * Stairwell screen (AD-040 client presentation): a fullscreen overlay shown
- * only while the local player is inside the west stairwell — transit, breath,
- * or stunned. It renders the recipient's OWN stairs state exclusively, from
- * the personal `movement:snapshot` `stairs` row (self-policy: the stairwell
- * interior is a black box to everyone else, so there is no occupant view and
- * never will be) plus the private `stairs:ambushed` stun seconds. The phase
- * clock re-anchors on every personal snapshot and ticks locally between them
- * (transit → breath is derived from TUNING, self-healing like the car screen
- * readouts). Purely client-side presentation over existing payloads — no new
- * message types, nothing hidden is named.
+ * Stairwell screen (AD-040 client presentation): the DOM twin of the climb,
+ * shown only through the BREATH window — the climb canvas owns the
+ * transit/stun readouts (integrated wall-sign clock). It renders the
+ * recipient's OWN stairs state exclusively, fed by the visit module's
+ * readout (`scenes/stairsVisit.ts` owns the clock; this screen never
+ * re-derives it). Purely client-side presentation over existing payloads —
+ * no new message types, nothing hidden is named.
  */
 
-export type StairPhase = 'transit' | 'breath' | 'stunned'
-
-/**
- * One anchor of the own stairs clock: a personal snapshot's stairs row (or a
- * `stairs:ambushed` stun override), stamped with the wall-clock moment it
- * landed. `remainingMs` is what the payload said was left of `phase`.
- */
-export interface StairAnchor {
+/** The breath slice `syncStairScreen` renders (from the visit readout). */
+export interface StairBreathView {
   readonly from: FloorId
   readonly to: FloorId
-  readonly phase: StairPhase
   readonly remainingMs: number
-  /** `Date.now()` when the anchor landed. */
-  readonly anchoredAtMs: number
-}
-
-/** The live phase readout; `null` = the current stair visit is over. */
-export type StairReadout = { readonly phase: StairPhase; readonly remainingMs: number } | null
-
-/**
- * The phase + countdown at `nowMs`, derived purely from the anchor and
- * TUNING: the anchored phase counts down, an expired transit rolls into the
- * breath (STAIRS_BREATH_SECONDS), and an expired breath or stun ends the
- * visit (the resumed floor stream re-anchors the truth).
- */
-export function stairPhaseReadout(anchor: StairAnchor, nowMs: number): StairReadout {
-  const remaining = anchor.remainingMs - (nowMs - anchor.anchoredAtMs)
-  if (remaining > 0) return { phase: anchor.phase, remainingMs: remaining }
-  const overshoot = -remaining
-  if (anchor.phase === 'transit') {
-    const breathMs = TUNING.STAIRS_BREATH_SECONDS * 1000
-    if (overshoot < breathMs) return { phase: 'breath', remainingMs: breathMs - overshoot }
-  }
-  return null
-}
-
-/** The visit direction from the building order (always one stride apart). */
-export function stairDirection(from: FloorId, to: FloorId): 'up' | 'down' {
-  return FLOOR_ORDER.indexOf(to) > FLOOR_ORDER.indexOf(from) ? 'up' : 'down'
 }
 
 const STYLE_ID = 'elevator-stair-screen-styles'
@@ -237,47 +200,40 @@ export function buildStairScreen(): HTMLElement {
   ])
 }
 
-const PHASE_LABELS: Record<StairPhase, string> = {
-  transit: 'moving',
-  breath: 'catching breath',
-  stunned: 'stunned',
-}
-
 /**
- * Mirror the own stairs state onto the screen (world-scene driven every
- * frame, self-healing like the car screen): visible only while a phase
- * readout is live, re-anchored by every personal snapshot, ticking locally
- * between them. `null` anchor hides the screen.
+ * Mirror the breath window onto the screen (world-scene driven every frame
+ * with the visit readout's breath slice): visible only while the own visit
+ * breathes, hidden otherwise — no clock derivation here, the visit module
+ * already did it.
  */
-export function syncStairScreen(anchor: StairAnchor | null, nowMs: number): void {
+export function syncStairScreen(breath: StairBreathView | null): void {
   const screen = document.getElementById('elevator-stair-screen')
   if (screen === null) return
-  const readout = anchor === null ? null : stairPhaseReadout(anchor, nowMs)
-  if (readout === null) {
+  if (breath === null) {
     screen.setAttribute('hidden', '')
     return
   }
   screen.removeAttribute('hidden')
-  const dir = anchor === null ? 'up' : stairDirection(anchor.from, anchor.to)
+  const dir = stairDirection(breath.from, breath.to)
   const badge = screen.querySelector('.stair-screen-dir')
   if (badge !== null) badge.textContent = dir === 'up' ? '▲ up' : '▼ down'
   const clock = screen.querySelector<HTMLElement>('.stair-screen-clock')
   if (clock !== null) {
-    clock.dataset.phase = readout.phase
-    clock.textContent = `${Math.ceil(readout.remainingMs / 1000)}s`
+    clock.dataset.phase = 'breath'
+    clock.textContent = `${Math.ceil(breath.remainingMs / 1000)}s`
   }
   const route = screen.querySelector('.stair-screen-route')
-  if (route !== null && anchor !== null) {
-    route.textContent = `${floorLabel(anchor.from)} → ${floorLabel(anchor.to)}`
+  if (route !== null) {
+    route.textContent = `${floorLabel(breath.from)} → ${floorLabel(breath.to)}`
   }
   const phase = screen.querySelector<HTMLElement>('.stair-screen-phase')
   if (phase !== null) {
-    phase.dataset.phase = readout.phase
-    phase.textContent = PHASE_LABELS[readout.phase]
+    phase.dataset.phase = 'breath'
+    phase.textContent = 'catching breath'
   }
   const arrow = screen.querySelector<HTMLElement>('.stair-screen-arrow')
   if (arrow !== null) {
-    arrow.dataset.phase = readout.phase
+    arrow.dataset.phase = 'breath'
     arrow.textContent = dir === 'up' ? '▲' : '▼'
   }
 }

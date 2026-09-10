@@ -110,6 +110,16 @@ interrupted transit resumes to the intended floor. A stun pauses, it never
 drops a carried suitcase or clears a carry clock (a pause, not a foul).
 _Avoid_: knockout, kill, capture
 
+**Stairs visit**:
+The client's single derivation of the own stairwell transit: the anchor clock
+plus every transition edge — breath arrival on the destination floor, stun
+resume with the preserved transit remainder, visit end — reduced in one
+place from the personal `movement:snapshot` stairs row and the private
+`stairs:ambushed`. Renderers (climb canvas, DOM twin, audio watcher) consume
+its readouts; none of them re-anchors the clock.
+_Avoid_: stairs state, climb state, stairs clock (the clock belongs to the
+visit, not to a scene field)
+
 **Complaint budget**:
 The building-wide counter of trash-discovery complaints (FR-31, cycle 3.3) —
 trash-discovery desk reports only, wrong-delivery door complaints count

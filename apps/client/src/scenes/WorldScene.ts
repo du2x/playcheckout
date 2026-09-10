@@ -44,7 +44,7 @@ import {
 import { ComplaintHud } from '../ui/complaintHud'
 import { ScoreHud } from '../ui/scoreHud'
 import { buildSfxToggle } from '../ui/sfxToggle'
-import { type StairAnchor, stairPhaseReadout, syncStairScreen } from '../ui/stairScreen'
+import { syncStairScreen } from '../ui/stairScreen'
 import {
   CLIMB,
   climbBobY,
@@ -72,6 +72,7 @@ import {
   SEATED_GUEST_DEPTH,
 } from './furniture'
 import { JUICE, shouldShake } from './juice'
+import { StairsVisit, type StairsVisitReadout } from './stairsVisit'
 import {
   advanceZoom,
   REST_ZOOM,
@@ -316,10 +317,6 @@ export class WorldScene extends Phaser.Scene {
     blackout: Phaser.GameObjects.Rectangle
     vignette: Phaser.GameObjects.Rectangle
   } | null = null
-  /** Stun total captured at the ambush — the FX timeline's t0 basis. */
-  private stunTotalMs = 0
-  /** `Date.now()` the interrupted transit resumed (the lurch window's t0). */
-  private climbLurchAtMs = 0
   /** The walk fraction frozen at the ambush (a stun never advances the walk). */
   private lastTransitWalk = 0
   /** Previous stair/car phase — the audio transition watchers' memory. */
@@ -357,9 +354,6 @@ export class WorldScene extends Phaser.Scene {
    *  countdown; the saboteur instead gets a private confirmation line. */
   private ambushToast: { el: HTMLElement; until: number } | null = null
   private ambushConfirm: { el: HTMLElement; until: number } | null = null
-  /** The transit remainder captured at the ambush — the resume clock after
-   *  the local stun expiry (the interior publishes no resume event). */
-  private stunResumeMs = 0
   /** Guest NPC markers (Phase 4.1): one archetype Sprite per guest —
    *  texture + palette derive from the decorrelated guest seed (VPOL-06/07);
    *  created lazily, pruned on guest:left. */
@@ -423,10 +417,11 @@ export class WorldScene extends Phaser.Scene {
   private corridorBand: Phaser.GameObjects.TileSprite | null = null
   /** Roster names for the reconnection re-add (unknown-id player:moved). */
   private rosterNames = new Map<string, string>()
-  /** The own stairs clock (AD-040 client presentation): anchored by every
-   *  personal snapshot's `stairs` row, stunned by the private ambush event,
-   *  cleared when the own floor stream resumes. */
-  private stairsAnchor: StairAnchor | null = null
+  /** The own stairs visit (AD-040 client presentation): the single home of the
+   *  anchor clock and its transitions — anchored by every personal snapshot's
+   *  `stairs` row, stunned by the private ambush event, ended by the local
+   *  expiry. The scene applies the readout + transitions it publishes. */
+  private readonly stairsVisit = new StairsVisit()
 
   constructor() {
     super('Round')
@@ -452,7 +447,7 @@ export class WorldScene extends Phaser.Scene {
     this.viewFloor = 'lobby'
     this.work = null
     this.interior = null
-    this.stairsAnchor = null
+    this.stairsVisit.reset()
     this.breathSprite = null
     this.evidence = initialEvidenceSession()
     this.cardMarkers.clear()
@@ -765,10 +760,9 @@ export class WorldScene extends Phaser.Scene {
     if (carLabel !== null) carLabel.setText(`car ${riding.car}`)
     const dirArrow = this.elevatorCanvas.getByName('dirArrow') as Phaser.GameObjects.Text | null
     const movingFrom = readout?.floor ?? null
-    const movingTo =
-      readout !== undefined && readout.state !== null && readout.state.startsWith('moving to ')
-        ? readout.state.slice('moving to '.length).trim()
-        : null
+    const movingTo = readout?.state?.startsWith('moving to ')
+      ? readout.state.slice('moving to '.length).trim()
+      : null
     if (dirArrow !== null && movingTo !== null && movingFrom !== null) {
       const here = FLOOR_ORDER.indexOf(movingFrom)
       const there = FLOOR_ORDER.indexOf(movingTo as FloorId)
@@ -1144,9 +1138,7 @@ export class WorldScene extends Phaser.Scene {
     this.breathSprite.setVisible(!this.spectator && own.floor === this.viewFloor)
   }
 
-  private syncStairCanvas(): void {
-    const anchor = this.stairsAnchor
-    const readout = anchor === null ? null : stairPhaseReadout(anchor, Date.now())
+  private syncStairCanvas(readout: StairsVisitReadout | null): void {
     // The breath is ON the destination floor (AD-040 amendment): no fullscreen
     // box — the chip carries the countdown while the floor view renders.
     const breathRemaining =
@@ -1159,19 +1151,18 @@ export class WorldScene extends Phaser.Scene {
     }
     this.syncBreathSprite(breathRemaining !== null)
     if (this.stairCanvas === null || this.climbBand === null) return
-    if (anchor === null || readout === null || breathRemaining !== null) {
+    if (readout === null || breathRemaining !== null) {
       this.stairCanvas.setVisible(false)
       this.destroyClimber()
       return
     }
     this.stairCanvas.setVisible(true)
-    // Building order gives the true direction; down-transits traverse the same
-    // ascending geometry the other way (walk fraction mirrored).
-    const order: readonly string[] = ['lobby', 'mezzanine', 'floor1', 'floor2', 'floor3']
-    const dir2 = order.indexOf(anchor.to) > order.indexOf(anchor.from) ? 'up' : 'down'
+    // Down-transits traverse the same ascending geometry the other way (walk
+    // fraction mirrored) — the visit readout carries the building-order truth.
+    const dir2 = readout.direction
     const label = (f: string) => (f === 'lobby' ? 'L' : f === 'mezzanine' ? 'M' : f.slice(-1))
-    if (this.climbGlyphFrom !== null) this.climbGlyphFrom.setText(label(anchor.from))
-    if (this.climbGlyphTo !== null) this.climbGlyphTo.setText(label(anchor.to))
+    if (this.climbGlyphFrom !== null) this.climbGlyphFrom.setText(label(readout.from))
+    if (this.climbGlyphTo !== null) this.climbGlyphTo.setText(label(readout.to))
     const stunned = readout.phase === 'stunned'
     // Band scroll: the walker sits at the fixed screen point (-60, 120); the
     // band slides so the stair surface stays under the feet (the lurch adds
@@ -1184,7 +1175,7 @@ export class WorldScene extends Phaser.Scene {
     }
     const shown = dir2 === 'up' ? walk : 1 - walk
     const point = stairPoint(shown)
-    const lurchY = lurchKickY(Date.now() - this.climbLurchAtMs)
+    const lurchY = lurchKickY(readout.lurchElapsedMs ?? -1)
     // Derived, never hardcoded: the band sits so the stair surface under the
     // walker lands exactly at the fixed screen point (-60, 120).
     this.climbBand.setPosition(-60 - point.x, 120 - point.y + lurchY)
@@ -1217,7 +1208,7 @@ export class WorldScene extends Phaser.Scene {
       this.stairCanvasClock.setColor(stunned ? '#ff9a8a' : '#ffd98a')
     }
     if (this.stairCanvasRoute !== null) {
-      this.stairCanvasRoute.setText(`${label(anchor.from)} → ${label(anchor.to)}`)
+      this.stairCanvasRoute.setText(`${label(readout.from)} → ${label(readout.to)}`)
     }
     if (this.stairCanvasPhase !== null) {
       const labels: Record<string, string> = {
@@ -1235,7 +1226,7 @@ export class WorldScene extends Phaser.Scene {
     const dirLabel = this.stairCanvas.getByName('stairDir') as Phaser.GameObjects.Text | null
     if (dirLabel !== null) dirLabel.setText(dir2 === 'up' ? '▲ up' : '▼ down')
     // The scuffle/blackout sequence (victim only, abstract — no silhouette).
-    this.syncClimbFx(readout.phase, readout.remainingMs, now)
+    this.syncClimbFx(readout, now)
   }
 
   /** The container-owned shadow climber sprite, created on first need, never
@@ -1259,16 +1250,14 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** Drive the scuffle/blackout FX stack from the stun clock (victim only). */
-  private syncClimbFx(phase: string, remainingMs: number, nowMs: number): void {
+  private syncClimbFx(readout: StairsVisitReadout, nowMs: number): void {
     if (this.climbFx === null) return
     const { flashWhite, flashRed, sweep, blackout, vignette } = this.climbFx
-    if (phase !== 'stunned') {
+    if (readout.phase !== 'stunned') {
       for (const fx of [flashWhite, flashRed, sweep, blackout, vignette]) fx.setVisible(false)
       return
     }
-    const total = this.stunTotalMs > 0 ? this.stunTotalMs : TUNING.STAIRS_STUN_SECONDS * 1000
-    const elapsed = Math.max(0, total - remainingMs)
-    const fx = stunFx(elapsed, nowMs)
+    const fx = stunFx(readout.elapsedStunMs ?? 0, nowMs)
     flashWhite.setVisible(fx.flashAlpha > 0).setAlpha(fx.flashAlpha)
     flashRed.setVisible(fx.redAlpha > 0).setAlpha(fx.redAlpha)
     const sweeping = fx.sweepX !== null
@@ -1285,17 +1274,16 @@ export class WorldScene extends Phaser.Scene {
    * interrupted transit continues. Loops are idempotent, so this is safe to
    * call every frame.
    */
-  private syncStairCues(readout: { readonly phase: string } | null): void {
+  private syncStairCues(readout: StairsVisitReadout | null): void {
     const phase = readout?.phase ?? null
     if (phase === this.lastStairPhase) return
     const prev = this.lastStairPhase
-    this.lastStairPhase = phase as 'transit' | 'breath' | 'stunned' | null
+    this.lastStairPhase = phase
     if (phase === 'transit') {
       if (prev === 'stunned') {
-        // The stun ended (event-order fallback — the mirror usually fired
-        // first): kill the heartbeat; the lurch t0 is set there.
+        // The stun ended: kill the heartbeat — the resume lurch's t0 came
+        // with the visit's stun-resumed transition.
         sfx.heartbeatStop()
-        if (this.climbLurchAtMs === 0) this.climbLurchAtMs = Date.now()
       }
       sfx.footstepStart()
     } else if (phase === 'breath') {
@@ -1733,24 +1721,14 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'stairs-ambushed':
         // Cycle 3.E (AD-040): the private ambush lands ONLY on the victim —
-        // capture the live transit remainder (the resume clock), override
-        // the own stairs clock with the stun phase, and raise the toast with
-        // a local stun countdown (STAIRS-19). VPOL-16: the medium-tier
-        // camera punch marks the beat.
+        // the visit captures the live transit remainder (the resume clock)
+        // and overrides the own stairs clock with the stun phase, while the
+        // toast below carries the local countdown (STAIRS-19). VPOL-16: the
+        // medium-tier camera punch marks the beat.
         if (shouldShake('stairs-ambushed')) {
           this.cameras.main.shake(JUICE.shake.durationMs, JUICE.shake.intensity)
         }
-        if (this.stairsAnchor !== null) {
-          this.stunResumeMs = stairPhaseReadout(this.stairsAnchor, Date.now())?.remainingMs ?? 0
-          this.stunTotalMs = action.stunSeconds * 1000
-          this.climbLurchAtMs = 0
-          this.stairsAnchor = {
-            ...this.stairsAnchor,
-            phase: 'stunned',
-            remainingMs: action.stunSeconds * 1000,
-            anchoredAtMs: Date.now(),
-          }
-        }
+        this.stairsVisit.onAmbush(action.stunSeconds, Date.now())
         this.showAmbushToast(action.stunSeconds)
         break
       case 'stairs-ambush':
@@ -2005,16 +1983,7 @@ export class WorldScene extends Phaser.Scene {
     // presence IS the stairs-truth (present only while the recipient is in
     // the stairwell), and a fresh row re-anchors the local countdown.
     const ownStairs = snapshot.stairs
-    this.stairsAnchor =
-      ownStairs === undefined
-        ? null
-        : {
-            from: ownStairs.from,
-            to: ownStairs.to,
-            phase: ownStairs.phase,
-            remainingMs: ownStairs.remainingSeconds * 1000,
-            anchoredAtMs: Date.now(),
-          }
+    this.stairsVisit.onSnapshot(ownStairs ?? null, Date.now())
     // Cosmetic seeds (Phase 4.1, VPOL-05): snapshot rows re-derive identical
     // variants for late joiners and reconnects — same pure mapping as the
     // dealt events.
@@ -2994,26 +2963,35 @@ body.interior-full #desk-bell {
 
   override update(_time: number, delta: number): void {
     const dt = delta / 1000
-    // Stairs clock (AD-040), one readout per frame: it gates the own body,
-    // applies the breath arrival, and drives the visit-end mirror below.
-    const stairReadout =
-      this.stairsAnchor === null ? null : stairPhaseReadout(this.stairsAnchor, Date.now())
-    if (stairReadout !== null && stairReadout.phase === 'breath') {
-      // The breath stands ON the destination floor (AD-040 amendment): the
-      // moment the local clock rolls into the breath, the own display moves
-      // to STAIRS_ARRIVAL_X_TILES east of the destination mouth — the
-      // server's arrival flush and personal snapshot reconcile it a tick
-      // later.
-      const breathOwn = this.players.get(this.ownId)
-      if (breathOwn !== undefined && this.stairsAnchor !== null) {
-        const arrivalX = STAIRS_ARRIVAL_X_TILES
-        if (breathOwn.floor !== this.stairsAnchor.to || breathOwn.x !== arrivalX) {
-          breathOwn.floor = this.stairsAnchor.to
-          breathOwn.x = arrivalX
+    // Stairs clock (AD-040): one derivation per frame, one home — the visit
+    // module ticks the anchor and publishes the edges the scene mirrors.
+    const { readout: stairReadout, transitions } = this.stairsVisit.tick(Date.now())
+    for (const t of transitions) {
+      if (t.type === 'breath-entered') {
+        // The breath stands ON the destination floor (AD-040 amendment): the
+        // moment the local clock rolls into the breath, the own display moves
+        // to STAIRS_ARRIVAL_X_TILES east of the destination mouth — the
+        // server's arrival flush and personal snapshot reconcile it a tick
+        // later.
+        const breathOwn = this.players.get(this.ownId)
+        if (breathOwn !== undefined) {
+          breathOwn.floor = t.floor
+          breathOwn.x = STAIRS_ARRIVAL_X_TILES
           breathOwn.targetX = null
-          this.viewFloor = this.stairsAnchor.to
+          this.viewFloor = t.floor
+        }
+      } else if (t.type === 'visit-ended') {
+        // The visit ends where the breath stood: STAIRS_ARRIVAL_X_TILES east
+        // of the mouth — the same x the sim's arrival placed, NOT the wall.
+        const ownEnd = this.players.get(this.ownId)
+        if (ownEnd !== undefined) {
+          ownEnd.floor = t.floor
+          ownEnd.x = STAIRS_ARRIVAL_X_TILES
+          ownEnd.targetX = null
         }
       }
+      // 'stun-resumed': the heartbeat dies in the audio watcher below; the
+      // lurch t0 came with the transition (readout.lurchElapsedMs).
     }
     const ownInStairBox = stairReadout !== null && stairReadout.phase !== 'breath'
     // Local prediction for the own rectangle; server positions reconcile it.
@@ -3159,39 +3137,6 @@ body.interior-full #desk-bell {
     // floor swept through transition floors mid-ride, state line naming the
     // door/motion phase. Both cleared when not riding.
     this.syncCarScreenReadouts()
-    // The stairwell clock prediction mirror (AD-040): when the local clock
-    // says the visit is over, the arrival is applied to the own display —
-    // the sameFloor stream resumed while the client was floorless, so the
-    // event never reached us. The stairwell screen itself is hidden —
-    // elevator-only — but the clock still ticks for movement.
-    if (this.stairsAnchor !== null && stairReadout === null) {
-      if (this.stairsAnchor.phase === 'stunned' && this.stunResumeMs > 0) {
-        // The stun ended: the interrupted transit resumes with its
-        // preserved remainder. Night-juice: the heartbeat dies here and the
-        // climb's resume lurch takes its t0 (exactly once per stun).
-        sfx.heartbeatStop()
-        if (this.climbLurchAtMs === 0) this.climbLurchAtMs = Date.now()
-        this.stairsAnchor = {
-          from: this.stairsAnchor.from,
-          to: this.stairsAnchor.to,
-          phase: 'transit',
-          remainingMs: this.stunResumeMs,
-          anchoredAtMs: Date.now(),
-        }
-        this.stunResumeMs = 0
-      } else {
-        const ownEnd = this.players.get(this.ownId)
-        if (ownEnd !== undefined) {
-          // The visit ends where the breath stood: STAIRS_ARRIVAL_X_TILES
-          // east of the mouth — the same x the sim's arrival placed (and the
-          // breath guard above mirrored), NOT the wall.
-          ownEnd.floor = this.stairsAnchor.to
-          ownEnd.x = STAIRS_ARRIVAL_X_TILES
-          ownEnd.targetX = null
-        }
-        this.stairsAnchor = null
-      }
-    }
     // Doors on the elevator screen — the leaves slide with the presenter's
     // clock (the single car, cycle 3.E). The screen is the star, so the
     // doors read live even before the car sprite animates.
@@ -3207,15 +3152,16 @@ body.interior-full #desk-bell {
     // The climb canvas owns the transit/stun readouts (integrated wall-sign
     // clock), so the DOM bar shows just the breath window — its hidden
     // attribute stays the harness contract after the visit ends.
-    {
-      const domReadout =
-        this.stairsAnchor === null ? null : stairPhaseReadout(this.stairsAnchor, Date.now())
-      syncStairScreen(
-        domReadout !== null && domReadout.phase === 'breath' ? this.stairsAnchor : null,
-        Date.now(),
-      )
+    if (stairReadout !== null && stairReadout.phase === 'breath') {
+      syncStairScreen({
+        from: stairReadout.from,
+        to: stairReadout.to,
+        remainingMs: stairReadout.remainingMs,
+      })
+    } else {
+      syncStairScreen(null)
     }
-    this.syncStairCanvas()
+    this.syncStairCanvas(stairReadout)
     // Night-juice audio watchers + landing light spill (idempotent per frame).
     this.syncStairCues(stairReadout)
     this.syncElevatorAudio()
