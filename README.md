@@ -44,6 +44,7 @@ Open [http://localhost:5173](http://localhost:5173) and share the room link. One
 | `pnpm lint` | Biome (`biome check .`) — fix with `pnpm exec biome check --write .` |
 | `pnpm test:sim` | Vitest across all workspace projects (sim logic, protocol, server shell) |
 | `pnpm test:client` | Playwright end-to-end harness — real server + client in headless Chromium |
+| `pnpm bots:smoke` | Opt-in bot smoke — AI staff members play a full round on the real network stack (NOT a gate; see below) |
 | `pnpm fly:launch` / `fly:deploy` / `fly:status` / `fly:logs` | Fly.io operations via `scripts/fly.mjs` |
 
 ## Verification
@@ -56,6 +57,10 @@ Changes are gated, in order — compile output is not proof that gameplay works:
 4. A human 5-minute round for anything player-facing
 
 CI runs gates 1–3 on every push and PR (`.github/workflows/ci.yml`).
+
+### Bot smoke (opt-in, outside the ladder)
+
+`pnpm bots:smoke` runs AI staff members (staff churn policy + one saboteur policy, dealt by the room like any player) through full rounds as real Colyseus clients — protocol intents only, no hidden state. It is deliberately NOT a CI gate: it is the automated pre-check before gate 4's human round. Standalone (`--players 4..6`, `--rounds`, `--shift-seconds`, `--guest-scale`, `--expect staff|saboteur`) it boots its own server; `--connect ws://… --code CÓDIGO` sends the bots into a live `pnpm boot` room instead (add `--auto-start` to let a bot host start the round, otherwise a human host starts). Exit 0 = every round reached a verdict + recap; a stall aborts with a per-bot state dump.
 
 ## Architecture notes
 

@@ -11,6 +11,7 @@
     "lint": "biome check .",
     "test:sim": "vitest run",
     "test:client": "playwright test --config apps/client/harness/playwright.config.ts",
+    "bots:smoke": "tsx apps/server/src/bots/runSmokeRound.ts",
     "boot": "node scripts/dev-boot.mjs",
     "fly:launch": "node scripts/fly.mjs launch",
     "fly:deploy": "node scripts/fly.mjs deploy",
