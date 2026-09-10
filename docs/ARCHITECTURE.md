@@ -85,8 +85,15 @@ Subsystems under `RoundSim` (each a module in `packages/sim/src`):
 | `telemetry.ts` / `kpis.ts` | Per-round JSONL lines; post-hoc KPI aggregation |
 | `rng.ts` | Seeded, stream-partitioned randomness |
 
-The room journals what the sim doesn't see (elevator ride legs) and merges both
-halves into the `round:recap` timeline at the buzzer. Telemetry is
+The round presenter (`apps/server/src/rooms/roundPresenter.ts`) is the
+server's round-scoped layer: it journals the movement half of the recap
+(elevator ride legs) alongside the sim's entries and merges both into the
+`round:recap` timeline at the buzzer, assembles the personal/spectator
+snapshots, owns the fired policy and the seat-expiry resolution (ghost vs
+aborted round), and projects sim + movement events into telemetry. It is
+non-network — everything it emits goes through the Router (the only sender)
+— while `TurnoverRoom` stays the transport shell: Colyseus lifecycle, zod
+intents, the lobby roster, and the telemetry file I/O. Telemetry is
 server-authoritative only: one JSONL file per round under `data/telemetry/`
 (git-ignored), closed with a machine-readable `round-ended` marker — it never
 touches the wire.

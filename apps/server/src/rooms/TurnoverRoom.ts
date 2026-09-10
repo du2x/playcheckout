@@ -1,16 +1,7 @@
 import { randomInt } from 'node:crypto'
 import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import * as path from 'node:path'
-import type {
-  CarId,
-  CosmeticSeeds,
-  FloorId,
-  GuestFloorId,
-  MovementEvent,
-  RecapEntry,
-  RoomIndex,
-  SpectatorSnapshot,
-} from '@turnover/shared'
+import type { FloorId, RoomIndex } from '@turnover/shared'
 import {
   accuseIntentSchema,
   deskInteractIntentSchema,
@@ -21,7 +12,6 @@ import {
   type MovementSnapshot,
   moveStartIntentSchema,
   moveStopIntentSchema,
-  settleTargetFor,
   stairsEnterIntentSchema,
   suitcasePickupIntentSchema,
   suitcasePlaceIntentSchema,
@@ -38,6 +28,7 @@ import {
   TICK_HZ,
 } from '@turnover/sim'
 import { type Client, CloseCode, Room } from 'colyseus'
+import { RoundPresenter } from './roundPresenter'
 import { Router } from './router'
 
 /** Colyseus 0.18 close code for a deliberate `room.leave()` (verified in installed sources). */
@@ -124,7 +115,6 @@ export class TurnoverRoom extends Room {
    */
   static reconnectSeconds = 60
 
-  private phase: 'lobby' | 'round' | 'results' = 'lobby'
   private players = new Map<string, LobbyPlayer>()
   /**
    * Dev-only building-wide watchers (join `{ spectator: true }`): no movement
@@ -134,88 +124,48 @@ export class TurnoverRoom extends Room {
    */
   private spectators = new Map<string, string>()
   private joinedCounter = 0
-  private sim: RoundSim | null = null
   private router!: Router
   private movement!: MovementSim
-  /** Justice (cycle 2.8): sessions fired this round — out of live play, still connected. */
-  private fired = new Set<string>()
-  // --- Round end (cycle 2.9): the results phase + the FR-22 ride journal.
-  /** 0-based round tick stamp for room-journaled entries (matches the sim's). */
-  private roundTick = 0
-  /** Ride legs observed during the round — the recap's movement half. */
-  private rideJournal: RecapEntry[] = []
-  /** Last known rider list per car (elevator:riders events the room routes). */
-  private lastRiders = new Map<CarId, string[]>()
-  /** Last known floor per car — the `from` half of a ride leg. */
-  private carFloor = new Map<CarId, FloorId>()
+  /** The round-scoped presentation layer (rooms/roundPresenter.ts): snapshot
+   *  assembly, ride journal, fired policy, tick routing + telemetry
+   *  projection, seat-expiry resolution, results transition. Built in
+   *  onCreate once the movement sim and router exist. */
+  private presenter!: RoundPresenter
   // --- Telemetry (cycle, FR-23/24): server-authoritative JSONL per round.
   private telemetrySink: TelemetrySink | null = null
   private telemetryStream: import('node:fs').WriteStream | null = null
   private telemetryPath: string | null = null
   private telemetryRoundIdx = 0
 
-  /**
-   * Personal movement snapshot enriched with the resting suitcases of the
-   * viewer's floor (cycle 3.B, SUI-24 late joiners) — sameFloor-filtered like
-   * the guests; a spectator (fired, no position) sees every floor's resting
-   * suitcases. Carried suitcases are derived client-side from the carrier's
-   * position stream.
-   */
-  private movementSnapshotFor(
-    sessionId: string,
-    cardedRooms?: readonly RoomIndex[],
-  ): MovementSnapshot {
-    let snap: MovementSnapshot =
-      cardedRooms === undefined
-        ? this.movement.snapshotFor(sessionId)
-        : this.movement.snapshotFor(sessionId, cardedRooms)
-    const sim = this.sim
-    if (sim === null) return snap
-    // Resting suitcases (cycle 3.B) — sameFloor-filtered
-    const allSuit = sim.restingSuitcases()
-    if (allSuit.length !== 0) {
-      const view = this.movement.viewOf(sessionId)
-      const spectator =
-        view.floor === null && view.roomKey === null && view.car === null && view.x === null
-      const visible = spectator ? allSuit : allSuit.filter((r) => r.floor === view.floor)
-      if (visible.length !== 0) snap = { ...snap, suitcases: visible }
-    }
-    // Tenancy signs (cycle 3.4, FR-33) — sameFloor-filtered like suitcases
-    const view2 = this.movement.viewOf(sessionId)
-    const spectator2 =
-      view2.floor === null && view2.roomKey === null && view2.car === null && view2.x === null
-    const tenancies = spectator2 ? sim.allTenancies() : sim.tenanciesOn(view2.floor as FloorId)
-    if (tenancies.length !== 0) snap = { ...snap, tenancies }
-    // Cosmetic seeds (Phase 4.1, VPOL-05): every player's seed is public
-    // identity; guest seeds ride the sameFloor guest rows this snapshot
-    // already carries. Spectators (fired overview) receive every guest seed.
-    const seedRows: CosmeticSeeds = (() => {
-      const players = sim.allPlayerSeeds()
-      const guestRows = spectator2
-        ? sim.allGuestSeeds()
-        : (snap.guests ?? [])
-            .map((g) => ({ guestId: g.guestId, seed: sim.guestSeedOf(g.guestId) }))
-            .filter((r): r is { guestId: string; seed: number } => r.seed !== undefined)
-      return guestRows.length !== 0 ? { players, guests: guestRows } : { players }
-    })()
-    return { ...snap, cosmeticSeeds: seedRows }
+  /** The round sim lives in the presenter; these delegations keep the
+   *  transport shell's reads one-hop (intents, restore, guest port). */
+  private get sim(): RoundSim | null {
+    return this.presenter.simOf()
+  }
+
+  private get phase(): 'lobby' | 'round' | 'results' {
+    return this.presenter.phase
   }
 
   override onCreate() {
     this.patchRate = null
     this.router = new Router(this)
     this.movement = new MovementSim()
+    // The round-scoped presentation layer: the router stays the only sender
+    // (bypass-denylist invariant) and the telemetry file I/O stays here —
+    // the presenter routes and projects, this shell reads and writes disk.
+    this.presenter = new RoundPresenter(this.movement, this.router, {
+      sink: () => this.telemetrySink,
+      flush: () => this.flushTelemetry(),
+      close: () => this.closeTelemetry(),
+    })
     // AD-008: the Router resolves positional policies (sameFloor/occupants)
     // against each viewer's legitimate view, derived from the movement sim.
     // FR-20 (cycle 2.9): a session with NO position — a fired player (their
     // slot was torn down) — is a spectator: they receive every floor's stream
-    // and interiors until the round ends and through the results phase.
-    this.router.setViewContext((sessionId) => {
-      const view = this.movement.viewOf(sessionId)
-      const slotless =
-        view.floor === null && view.roomKey === null && view.car === null && view.x === null
-      return { ...view, spectator: slotless }
-    })
+    // and interiors until the round ends and through the results phase. One
+    // home: the presenter's viewContextOf.
+    this.router.setViewContext((sessionId) => this.presenter.viewContextOf(sessionId))
     // Custom roomId = the shareable code (settable only during onCreate, verified
     // against installed 0.18.8 sources). Codes die with the room (FR-1: fresh
     // codes only for new groups).
@@ -236,7 +186,7 @@ export class TurnoverRoom extends Room {
       const carBefore = this.movement.viewOf(client.sessionId).car
       this.movement.startMove(client.sessionId, intent.dir)
       if (carBefore !== null && this.movement.viewOf(client.sessionId).car === null) {
-        this.sendExitSnapshot(client.sessionId)
+        this.presenter.sendExitSnapshot(client.sessionId)
       }
     })
     this.onMessage('move:stop', moveStopIntentSchema, (client) => {
@@ -271,7 +221,7 @@ export class TurnoverRoom extends Room {
         this.router.toSelf(
           'movement:snapshot',
           client.sessionId,
-          this.movementSnapshotFor(client.sessionId),
+          this.presenter.movementSnapshotFor(client.sessionId),
         )
       }
     })
@@ -349,7 +299,7 @@ export class TurnoverRoom extends Room {
     })
 
     if (TurnoverRoom.tickMs > 0) {
-      this.setSimulationInterval(() => this.advance(), TurnoverRoom.tickMs)
+      this.setSimulationInterval(() => this.presenter.tick(), TurnoverRoom.tickMs)
     }
   }
 
@@ -486,7 +436,11 @@ export class TurnoverRoom extends Room {
     if (seat !== undefined) seat.connected = true
     if (this.phase !== 'round' || sim === null) {
       this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
-      this.router.toSelf('movement:snapshot', sessionId, this.movementSnapshotFor(sessionId))
+      this.router.toSelf(
+        'movement:snapshot',
+        sessionId,
+        this.presenter.movementSnapshotFor(sessionId),
+      )
       return
     }
     // Re-add the rectangle everywhere: one player:moved re-announces the
@@ -499,7 +453,7 @@ export class TurnoverRoom extends Room {
       // saboteur card included (prd reconnection contract).
       this.router.toSelf('role:dealt', sessionId, { role })
     }
-    const ownFired = this.fired.has(sessionId)
+    const ownFired = this.presenter.isFired(sessionId)
     this.router.toSelf('round:resumed', sessionId, {
       remainingTicks: sim.clockTicksRemaining,
       playerIds: sim.playerIds,
@@ -508,48 +462,29 @@ export class TurnoverRoom extends Room {
       complaints: sim.complaintCount,
     })
     if (ownFired) {
-      this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
+      this.router.toSelf('spectator:snapshot', sessionId, this.presenter.spectatorSnapshot())
     } else {
-      this.router.toSelf('movement:snapshot', sessionId, this.movementSnapshotFor(sessionId))
+      this.router.toSelf(
+        'movement:snapshot',
+        sessionId,
+        this.presenter.movementSnapshotFor(sessionId),
+      )
     }
   }
 
-  /** The window closed without reconnection — FR-25 resolution (REND-19/20). */
+  /** The window closed without reconnection — FR-25 resolution (REND-19/20).
+   *  The room owns WHEN (this 60 s window); the presenter owns WHAT the
+   *  expiry means (ghost vs aborted round). */
   private expireSeat(sessionId: string): void {
-    const sim = this.sim
     const seat = this.players.get(sessionId)
-    if (this.phase !== 'round' || sim === null) {
+    if (!this.presenter.roundLive) {
       // The round ended during the window: release the seat like a lobby leave.
       this.movement.leave(sessionId)
       if (seat !== undefined) this.players.delete(sessionId)
       this.sendLobbySnapshots()
       return
     }
-    if (sim.saboteurId === sessionId) {
-      // REND-20: the saboteur is gone for good — the round aborts. No traitor
-      // reveal on an aborted round; the result is excluded from KPIs (FR-25).
-      if (this.telemetrySink !== null) {
-        this.telemetrySink.recordRoundEnded(
-          'aborted',
-          'saboteur-disconnected',
-          null,
-          this.roundTick,
-        )
-        this.flushTelemetry()
-      }
-      this.movement.leave(sessionId)
-      this.router.toAll('round:ended', {
-        winner: 'aborted',
-        reason: 'saboteur-disconnected',
-        saboteurId: null,
-      })
-      this.finishRound()
-      return
-    }
-    // REND-19: an idle ghost — out of live play (win checks count them out),
-    // silently; the roster entry stays so the recap still resolves the name.
-    sim.ghost(sessionId)
-    this.movement.leave(sessionId)
+    this.presenter.expireSeat(sessionId)
   }
 
   private drawCode(): string {
@@ -606,19 +541,11 @@ export class TurnoverRoom extends Room {
   }
 
   private startRound() {
-    this.phase = 'round'
-    this.fired.clear()
     // FR-25 (cycle 2.9): expired seats' roster entries are purged at the next
     // round start — ghosts free their slot exactly when a new deal begins.
     for (const [sessionId, seat] of this.players) {
       if (!seat.connected) this.players.delete(sessionId)
     }
-    // Round-end journal reset (cycle 2.9): a fresh deal starts a fresh recap.
-    this.roundTick = 0
-    this.rideJournal = []
-    this.lastRiders.clear()
-    // Seed the cars' known floors so the first ride leg has a real `from`.
-    for (const car of this.movement.carFloors()) this.carFloor.set(car.car, car.floor)
     // Positions persist across start/buzzer (MOVE-07): the movement layer is
     // phase-free and simply keeps running.
     const playerIds = [...this.players.values()]
@@ -627,7 +554,7 @@ export class TurnoverRoom extends Room {
     // Seed never leaves the server: it appears in no event and no payload.
     const shiftTicks = testShiftTicks()
     const seed = randomInt(2 ** 31)
-    this.sim = new RoundSim({
+    const sim = new RoundSim({
       seed,
       playerIds,
       // Guest-traffic economy (cycle 3.1, AD-028): the sim drives NPC guests
@@ -636,19 +563,22 @@ export class TurnoverRoom extends Room {
       ...(testGuestTiming() === undefined ? {} : { guestTiming: testGuestTiming() }),
       ...(shiftTicks === undefined ? {} : { totalTicks: shiftTicks }),
     })
-    this.openTelemetry(seed, this.sim.saboteurId)
+    this.openTelemetry(seed, sim.saboteurId)
+    // The presenter takes the deal + the roster: phase → round, journal and
+    // fired state reset, car floors seeded for the first ride leg's `from`.
+    this.presenter.startRound(sim, playerIds)
     // AD-040 ambush authority (design: the AD-028 adapter inverted): the room
     // pushes its role/liveness view INTO the movement layer at round start.
     // The sim's own REND-02 liveness rule is the single home of "live staff".
     this.movement.setAmbushAuthority({
-      isSaboteur: (id) => this.sim?.saboteurId === id,
-      isLiveStaff: (id) => this.sim?.isLiveStaff(id) ?? false,
+      isSaboteur: (id) => sim.saboteurId === id,
+      isLiveStaff: (id) => sim.isLiveStaff(id),
     })
     // The FR-20 baseline reaches the dev spectators too — the round:started
     // broadcast follows on the first tick; the baseline must precede it so
     // the overview seeds before the HUD mounts.
     for (const sessionId of this.spectators.keys()) {
-      this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
+      this.router.toSelf('spectator:snapshot', sessionId, this.presenter.spectatorSnapshot())
     }
   }
 
@@ -713,281 +643,9 @@ export class TurnoverRoom extends Room {
     this.telemetrySink = null
   }
 
-  /** One fixed 0.05 s step; the production interval and the test hook share this path. */
-  private advance() {
-    // Movement runs in BOTH phases (AD-005); the round sim only in round.
-    // AD-026: riders before the tick — a PENDING exit (a direction held
-    // through the opening swing) applies inside the sim, so the rider→floor
-    // transition is detected here and the exit snapshot still goes out.
-    const ridersBefore: string[] = []
-    for (const sessionId of this.players.keys()) {
-      if (this.movement.viewOf(sessionId).car !== null) ridersBefore.push(sessionId)
-    }
-    for (const event of this.movement.tick()) {
-      this.router.route(event)
-      this.journalMovement(event)
-      // Stairs arrival (AD-040): the transit→breath flip is a visibility
-      // change — the arrival flush player:moved is the breather's only event,
-      // so it doubles as the trigger for their exit-style personal snapshot
-      // (the destination floor's standing occupants emit no stream; without
-      // this refresh the breather cannot see them until they move).
-      if (event.type === 'player:moved') {
-        if (this.movement.stairsStateOf(event.playerId)?.phase === 'breath') {
-          this.sendExitSnapshot(event.playerId)
-        }
-      }
-      if (this.telemetrySink !== null) {
-        if (event.type === 'elevator:called')
-          this.telemetrySink.recordElevatorCall(event.floor, event.car, undefined, this.roundTick)
-        else if (event.type === 'elevator:moved')
-          this.telemetrySink.recordElevatorRide(event.car, event.floor, this.roundTick)
-        else if (event.type === 'elevator:doors')
-          this.telemetrySink.recordElevatorDoors(event.car, event.floor, event.open, this.roundTick)
-      }
-    }
-    for (const sessionId of ridersBefore) {
-      if (!this.players.has(sessionId)) continue
-      if (this.movement.viewOf(sessionId).car === null) this.sendExitSnapshot(sessionId)
-    }
-    const sim = this.sim
-    if (sim === null || this.phase !== 'round') {
-      // No round — still flush any movement telemetry that was just recorded.
-      if (this.telemetrySink !== null) this.flushTelemetry()
-      return
-    }
-    // AD-005 seam: the work channels consume the movement layer's positions
-    // (integer millitiles) — inside-segment validation, walk-out cancels,
-    // and room observation all derive from them.
-    const positions = new Map<string, { floor: FloorId; x: number }>()
-    for (const sessionId of this.players.keys()) {
-      const p = this.movement.positionOf(sessionId)
-      if (p !== undefined) {
-        positions.set(sessionId, { floor: p.floor, x: Math.round(p.x * 1000) })
-      }
-    }
-    let roundEnded = false
-    for (const event of sim.tick(positions)) {
-      this.router.route(event)
-      if (this.telemetrySink !== null) {
-        if (event.type === 'room:prepped' || event.type === 'room:trashed') {
-          const prov = event.type === 'room:trashed' ? ('sabotage' as const) : ('none' as const)
-          const state = event.type === 'room:prepped' ? ('prepped' as const) : ('trashed' as const)
-          this.telemetrySink.recordRoomTransition(
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            undefined,
-            state,
-            prov,
-            this.roundTick,
-          )
-        } else if (event.type === 'guest:arrived')
-          this.telemetrySink.recordGuestArrived(event.guestId, this.roundTick)
-        else if (event.type === 'guest:assigned')
-          this.telemetrySink.recordGuestAssigned(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'guest:self_assigned')
-          this.telemetrySink.recordGuestSelfAssigned(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'suitcase:carried')
-          this.telemetrySink.recordSuitcaseCarried(event.guestId, event.carrierId, this.roundTick)
-        else if (event.type === 'suitcase:placed')
-          this.telemetrySink.recordSuitcasePlaced(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'suitcase:picked_up')
-          this.telemetrySink.recordSuitcasePickedUp(event.guestId, event.carrierId, this.roundTick)
-        else if (event.type === 'guest:settled')
-          this.telemetrySink.recordGuestSettled(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'guest:checked_out')
-          this.telemetrySink.recordGuestCheckedOut(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-            event.preRound === true,
-          )
-        else if (event.type === 'guest:left')
-          this.telemetrySink.recordGuestLeft(event.guestId, this.roundTick)
-        else if (event.type === 'guest:angered')
-          this.telemetrySink.recordGuestAngered(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'guest:discovered') {
-          const prov = event.fresh ? ('sabotage' as const) : ('churn' as const)
-          this.telemetrySink.recordGuestDiscovered(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            event.fresh,
-            prov,
-            prov === 'sabotage' ? sim.saboteurId : undefined,
-            this.roundTick,
-          )
-        } else if (event.type === 'guest:complained')
-          this.telemetrySink.recordGuestComplained(
-            event.guestId,
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            this.roundTick,
-          )
-        else if (event.type === 'room:tenancy')
-          this.telemetrySink.recordTenancy(
-            event.floor as GuestFloorId,
-            event.room as RoomIndex,
-            event.occupied,
-            this.roundTick,
-          )
-        else if (event.type === 'player:fired' && event.reason === 'carry-clock')
-          this.telemetrySink.recordCarryClockExpiry(event.playerId, this.roundTick)
-        else if (event.type === 'round:ended')
-          this.telemetrySink.recordRoundEnded(
-            event.winner as 'staff' | 'saboteur',
-            event.reason,
-            event.saboteurId,
-            this.roundTick,
-          )
-      }
-      // Justice teardown (JUST-04/06/11): a fired session loses their movement
-      // slot (no further position streams) — their sim-side channels were
-      // already cancelled by the sim. No player:left: the fired event itself
-      // removes the rectangle client-side. Cycle 2.9: the fired session also
-      // receives their FR-20 spectator baseline.
-      if (event.type === 'player:fired') {
-        this.fired.add(event.playerId)
-        this.movement.leave(event.playerId)
-        this.router.toSelf('spectator:snapshot', event.playerId, this.spectatorSnapshot())
-      }
-      if (event.type === 'round:ended') roundEnded = true
-    }
-    if (this.telemetrySink !== null) {
-      let preppedCount = 0
-      try {
-        const rs = sim.roomStates()
-        for (const r of rs) if (r.state === 'prepped') preppedCount++
-      } catch {}
-      this.telemetrySink.sampleCoverage(this.roundTick, preppedCount)
-      this.flushTelemetry()
-    }
-    this.roundTick++
-    if (roundEnded) this.finishRound()
-  }
-
-  /**
-   * The results transition (REND-04/06, FR-21/22): the sim's verdict routed,
-   * so the roles die with the sim (AD-002) and everyone gets the recap + a
-   * fresh view of where players and cars stand (MOVE-18). The results phase
-   * is lobby-like — joins and the host's next `lobby:start` flow through.
-   */
-  private finishRound() {
-    const sim = this.sim
-    const entries: RecapEntry[] = sim
-      ? [...sim.recapEntries(), ...this.rideJournal]
-      : [...this.rideJournal]
-    entries.sort((a, b) => a.tick - b.tick)
-    this.rideJournal = []
-    // The verdict's inputs ride the recap (cycle 3.D, AD-039): final settle
-    // score vs the §7 target for the lobby size.
-    const lobbySize = sim?.playerIds.length ?? this.players.size
-    this.router.toAll('round:recap', {
-      entries,
-      settleScore: sim?.settledCount ?? 0,
-      settleTarget: settleTargetFor(lobbySize),
-      complaints: sim?.complaintCount ?? 0,
-    })
-    this.flushTelemetry()
-    this.closeTelemetry()
-    this.phase = 'results'
-    // Roles were the sim's alone — dropping it wipes the deal (AD-002); the
-    // reveal already happened on the wire, so nothing is lost.
-    this.sim = null
-    this.fired.clear()
-    // AD-040: the ambush authority dies with the round (no ambush pre-round or
-    // at results), and every stairs occupant resolves to their destination so
-    // the results snapshots show honest positions (stun cleared, no breath).
-    this.movement.setAmbushAuthority(null)
-    this.movement.resolveStairsForResults()
-    // Guests are round-scoped weather (cycle 3.1, GUEST-11): the sim is dead,
-    // so their movers leave the phase-free movement layer — no guest state or
-    // position streams survive into results/lobby.
-    for (const guestId of this.movement.guestIds()) this.movement.leave(guestId)
-    for (const sessionId of this.players.keys()) {
-      this.router.toSelf('movement:snapshot', sessionId, this.movementSnapshotFor(sessionId))
-    }
-  }
-
-  /**
-   * FR-22 ride journal (cycle 2.9): the room observes the movement events it
-   * routes — `elevator:riders` refreshes the known occupant set, and every
-   * real floor change is one ride leg carrying the riders at that moment.
-   * Occupancy/validity on the recap is legal because the round is over.
-   */
-  private journalMovement(event: MovementEvent): void {
-    if (this.phase !== 'round') return
-    if (event.type === 'elevator:riders') {
-      this.lastRiders.set(event.car, [...event.riders])
-    } else if (event.type === 'elevator:moved') {
-      const from = this.carFloor.get(event.car) ?? event.floor
-      this.carFloor.set(event.car, event.floor)
-      if (from === event.floor) return
-      this.rideJournal.push({
-        kind: 'ride',
-        tick: this.roundTick,
-        car: event.car,
-        riderIds: this.lastRiders.get(event.car) ?? [],
-        from,
-        to: event.floor,
-      })
-    }
-  }
-
-  /** The FR-20 spectator baseline (fired sessions only): the whole world. */
-  private spectatorSnapshot(): SpectatorSnapshot {
-    const sim = this.sim
-    const base: SpectatorSnapshot = {
-      players: this.movement.allPositions(),
-      cars: this.movement.carFloors(),
-      rooms: sim ? sim.roomStates() : [],
-      cardedRooms: sim
-        ? (['floor1', 'floor2', 'floor3'] as const).map((floor) => ({
-            floor,
-            rooms: sim.cardedOn(floor),
-          }))
-        : [],
-    }
-    if (sim !== null) {
-      const ten = sim.allTenancies()
-      // Cosmetic seeds (Phase 4.1, VPOL-05): the spectator baseline carries
-      // every player and guest seed (full-building overview, FR-20).
-      const cosmeticSeeds = { players: sim.allPlayerSeeds(), guests: sim.allGuestSeeds() }
-      return ten.length !== 0
-        ? { ...base, tenancies: ten, cosmeticSeeds }
-        : { ...base, cosmeticSeeds }
-    }
-    return base
-  }
-
   /** Test hook: drive the sim deterministically without wall-clock waits. */
   __driveTicks(count: number) {
-    for (let i = 0; i < count; i++) this.advance()
+    for (let i = 0; i < count; i++) this.presenter.tick()
   }
 
   /** Test hook: read the phase without poking private state from tests. */
@@ -1019,29 +677,6 @@ export class TurnoverRoom extends Room {
    * intent handler rejects with a coarse justice error. One message, no
    * validity or role information (FR-18).
    */
-  /**
-   * Door-open exit = floor change (protocol rule: personal snapshots on
-   * visibility change). The exiter's picture of the arrival floor is stale —
-   * standing occupants emit no stream, so without this refresh they stay
-   * invisible until they move. Same-floor occupants learn the arrival from
-   * the exiter's own resumed player:moved stream. EVID-04: the arrival
-   * floor's carded rooms ride along — cards are floor-public (FR-11) and the
-   * round sim owns them (empty pre-round; cards die with the sim at the
-   * buzzer, evidence is round-scoped). AD-026: also fired by the tick for a
-   * PENDING exit (a direction held through the opening swing) — the sim
-   * applies that hop-off itself, one intent-less tick later.
-   */
-  private sendExitSnapshot(sessionId: string): void {
-    const arrivalFloor = this.movement.viewOf(sessionId).floor
-    const cards =
-      arrivalFloor !== null && arrivalFloor !== 'lobby' && arrivalFloor !== 'mezzanine'
-        ? (this.sim?.cardedOn(arrivalFloor) ?? [])
-        : []
-    this.router.toSelf('movement:snapshot', sessionId, {
-      ...this.movementSnapshotFor(sessionId, cards),
-    })
-  }
-
   private ensureLive(sessionId: string): boolean {
     if (this.spectators.has(sessionId)) {
       this.router.toSelf('error', sessionId, {
@@ -1050,7 +685,7 @@ export class TurnoverRoom extends Room {
       })
       return false
     }
-    if (!this.fired.has(sessionId)) return true
+    if (!this.presenter.isFired(sessionId)) return true
     this.router.toSelf('error', sessionId, {
       code: 'justice-rejected',
       message: 'you were fired — spectators cannot act',
