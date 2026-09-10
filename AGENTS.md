@@ -18,7 +18,7 @@ This repo is a 4–6 player social-deduction game with hidden roles, physical ev
 
 ## Verification ladder
 
-Every feature should name its gates and run the relevant checks before claiming success:
+Every feature should name its gates and run the relevant checks before claiming success (CI in `.github/workflows/ci.yml` runs the same ladder on master pushes and PRs):
 
 1. `pnpm typecheck` and `pnpm lint`
 2. `pnpm test:sim`
@@ -44,17 +44,21 @@ Gotchas:
 
 ## Dev workflow
 
+- Toolchain is pnpm-only (pnpm@11 via `packageManager`, Node ≥22; server and CI run Node 24) — no npm/yarn commands.
 - `pnpm boot` starts the server (:2567) + Vite client (:5173), waits for both, and kills stale port owners first; override with `PORT`/`CLIENT_PORT`. One Fastify process hosts both static client and the Colyseus endpoint (`noServer` transport + `attachToServer`) — never run a separate server port.
+- Deploy target is Fly.io (root `Dockerfile` + `fly.toml`, driven by `pnpm fly:launch|deploy|status|logs` via scripts/fly.mjs). Run deploy commands only on explicit user request — see Hard constraints.
 
 ## Project conventions
 
 - Use the domain vocabulary from [CONTEXT.md](CONTEXT.md); avoid drift to synonyms the repo explicitly rejects.
 - For protocol changes, review `.opencode/skills/turnover-protocol/SKILL.md` and the message registry in `packages/shared/src/protocol/` first: every server→client message is declared exactly once (payload type + recipient policy); adding a message means adding a registry entry, not a new switch case.
 - Prefer small, well-scoped edits over broad refactors. This repo documents the intended architecture in [docs/agents/domain.md](docs/agents/domain.md).
+- Art and audio are generated, not hand-edited: `scripts/art/generate-*.py` produce the assets under `apps/client/public/art` and `apps/client/public/audio`, tracked in `docs/art/asset-manifest.json`. Edit a generator and re-run it rather than patching binaries; start from `.opencode/skills/create-game-assets/SKILL.md`.
 
 ## Helpful references
 
 - Repo-local `.opencode/skills/turnover-*`: [turnover-gates](.opencode/skills/turnover-gates/SKILL.md) (gate ladder + evidence), [turnover-protocol](.opencode/skills/turnover-protocol/SKILL.md) (leak rules), [turnover-sim-harness](.opencode/skills/turnover-sim-harness/SKILL.md) (Gate 2 scenario format), [turnover-client-harness](.opencode/skills/turnover-client-harness/SKILL.md) (Gate 3 + `window.__TURNOVER__` hook contract).
+- The same `.opencode/skills/` dir hosts general game skills — `phaser-core`, `game-feel`, `game-ui-ux`, `create-game-assets` — consult the relevant one before client or art work.
 - [docs/agents/domain.md](docs/agents/domain.md): how to consume repo domain docs while exploring.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): runtime topology, protocol pipeline, and module seams — read the recipes before adding messages or interactions.
 - [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md): issue workflow (`gh` CLI).
