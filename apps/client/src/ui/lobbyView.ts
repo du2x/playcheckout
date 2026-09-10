@@ -22,7 +22,7 @@ const STYLE_ID = 'lobby-view-styles'
 const STYLE = `
 #lobby-view {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 #lobby-card {
@@ -30,7 +30,8 @@ const STYLE = `
   flex-direction: column;
   gap: 10px;
   width: 380px;
-  max-height: 540px;
+  max-height: 500px;
+  margin-top: 10px;
   padding: 20px 24px;
   background: rgba(13, 18, 24, 0.9);
   border: 1px solid #2a3542;
@@ -102,6 +103,13 @@ const STYLE = `
 }
 #start-button:hover { filter: brightness(1.1); }
 #start-button[hidden] { display: none; }
+#lobby-waiting {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-align: center;
+  color: #8899aa;
+}
 #lobby-error { margin: 0; font-size: 11px; color: #ff9a8a; text-align: center; }
 #lobby-error[hidden] { display: none; }
 `
@@ -132,7 +140,11 @@ export function renderLobby(
 
   const startButton = el('button', { id: 'start-button' }, ['Start round'])
   startButton.addEventListener('click', cb.onStart)
+  // The start control is the host's alone (the server refuses non-host
+  // intents anyway); guests get a status line in its place.
   if (!snapshot.isHost) startButton.setAttribute('hidden', '')
+  const waitingLine = el('p', { id: 'lobby-waiting' }, ['waiting for the host to start the shift…'])
+  if (snapshot.isHost) waitingLine.setAttribute('hidden', '')
 
   // Share row: the ?room=CODE link under the heading — guests copy it too,
   // since a round needs 4+ players and anyone in the lobby can invite.
@@ -179,6 +191,7 @@ export function renderLobby(
         el('div', { id: 'share-row' }, [shareInput, copyButton]),
         roster,
         startButton,
+        waitingLine,
         errorLine,
       ]),
       // The elevator runs from room creation (AD-011): the position-only
