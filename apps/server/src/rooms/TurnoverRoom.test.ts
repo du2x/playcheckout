@@ -1,5 +1,5 @@
 import { Client } from '@colyseus/sdk'
-import { type LobbySnapshot, TUNING } from '@turnover/shared'
+import { type LobbySnapshot, STAIRS_ARRIVAL_X_TILES, TUNING } from '@turnover/shared'
 import { CAR_LANDING_MILLI, playerSpawnXMilli, STAIRS_TRANSIT_TICKS } from '@turnover/sim'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { startServer } from '../index'
@@ -3251,8 +3251,16 @@ describe('server:stairs', () => {
       phase: 'breath',
     })
     const rows = arrival.payload.players as { playerId: string; floor: string; x: number }[]
-    expect(rows).toContainEqual({ playerId: a.sessionId, floor: 'mezzanine', x: 0 })
-    expect(rows).toContainEqual({ playerId: b.sessionId, floor: 'mezzanine', x: 0 })
+    expect(rows).toContainEqual({
+      playerId: a.sessionId,
+      floor: 'mezzanine',
+      x: STAIRS_ARRIVAL_X_TILES,
+    })
+    expect(rows).toContainEqual({
+      playerId: b.sessionId,
+      floor: 'mezzanine',
+      x: STAIRS_ARRIVAL_X_TILES,
+    })
     aCollector.stop()
     host.leave()
     a.leave()

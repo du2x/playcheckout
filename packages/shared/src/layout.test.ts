@@ -12,7 +12,9 @@ import {
   roomIndexAtMilli,
   roomSegmentEndMilli,
   roomSegmentStartMilli,
+  STAIRS_ARRIVAL_X_TILES,
 } from './layout'
+import { TUNING } from './tuning'
 
 // Expected values copied from roadmap step 0 / prd FR-3 — locked planning docs
 // (7 rooms per floor: AD-046).
@@ -56,6 +58,15 @@ describe('layout', () => {
     expect(roomIndexAtMilli(24_749)).toBe(7)
     expect(roomIndexAtMilli(24_750)).toBe(7)
     expect(roomIndexAtMilli(24_751)).toBe(0)
+  })
+
+  it('lands the stairs arrival east of the mouth but inside its zone (AD-040 amendment)', () => {
+    // One tile east of the west wall — clear of the mouth glyph, still within
+    // STAIRWELL_MOUTH_TILES (affordances) so a freed player re-enters without
+    // stepping back, and west of the first room segment.
+    expect(STAIRS_ARRIVAL_X_TILES).toBe(1)
+    expect(STAIRS_ARRIVAL_X_TILES).toBeLessThanOrEqual(TUNING.STAIRWELL_MOUTH_TILES)
+    expect(STAIRS_ARRIVAL_X_TILES).toBeLessThan(ROOM_HALL_START_TILES)
   })
 })
 

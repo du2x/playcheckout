@@ -21,6 +21,15 @@ export const HALL_LENGTH_TILES = 30
 export const ROOM_DEPTH_TILES = 3.25
 export const ROOM_HALL_START_TILES = 2
 
+/**
+ * Where a stairs rider stands on the destination floor (AD-040 amendment):
+ * one tile east of the west wall — clear of the mouth glyph at x=0, still
+ * inside STAIRWELL_MOUTH_TILES so a freed player can re-enter without
+ * stepping back. The sim's arrival placement and the client's breath
+ * prediction mirror share this constant.
+ */
+export const STAIRS_ARRIVAL_X_TILES = 1
+
 const ROOM_HALL_START_MILLI = ROOM_HALL_START_TILES * 1000
 const ROOM_WIDTH_MILLI = ROOM_DEPTH_TILES * 1000
 
