@@ -1090,9 +1090,15 @@ export class WorldScene extends Phaser.Scene {
         break
       case 'spectator-snapshot': {
         // FR-20 baseline: kept for the spectator overview (own client only —
-        // the server routes it 'self' to the fired session).
+        // the server routes it 'self' to fired sessions and to the from-t0
+        // dev spectators). The message's existence IS the spectator flag for
+        // the latter: they were never fired, so this is their activation.
         this.spectatorSnapshot = action.snapshot
-        if (this.spectator) this.seedFromSpectatorSnapshot()
+        if (!this.spectator) {
+          this.spectator = true
+          this.applyViewMode()
+        }
+        this.seedFromSpectatorSnapshot()
         break
       }
       case 'stairs-ambushed':

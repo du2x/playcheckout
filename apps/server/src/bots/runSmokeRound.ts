@@ -174,6 +174,10 @@ async function main(): Promise<number> {
     if (code === null) {
       code = room.roomId
       console.log(`room ${code} created — humans may join it too while the smoke runs`)
+      console.log(
+        `spectate: open ${url.replace('ws', 'http')} and join ${code} ` +
+          `with "watch (spectator)" checked (dev builds only)`,
+      )
     }
     const memory = newBotMemory()
     const bot = new BotPlayer(room, {

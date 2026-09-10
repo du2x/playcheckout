@@ -7,7 +7,7 @@ import { el } from './dom'
  * field comes filled and focus lands on the name input.
  */
 export interface JoinCallbacks {
-  onSubmit: (code: string, name: string) => void
+  onSubmit: (code: string, name: string, spectator: boolean) => void
   onCreate: (name: string) => void
 }
 
@@ -37,6 +37,10 @@ export function renderJoin(
   const nameInput = el('input', { id: 'join-name', maxlength: '16', autocomplete: 'off' })
   nameInput.setAttribute('placeholder', 'your name')
 
+  // Dev spectator (FR-20 from t=0, server refuses it in production): no seat,
+  // no role — the whole building as stacked lanes.
+  const spectatorInput = el('input', { id: 'join-spectator', type: 'checkbox' })
+
   const submit = el('button', { id: 'join-submit', disabled: joining }, ['Join'])
   const errorLine = el('p', { id: 'join-error' })
   if (error !== null) {
@@ -51,6 +55,10 @@ export function renderJoin(
     codeInput,
     el('label', { for: 'join-name' }, ['Your name']),
     nameInput,
+    el('span', { id: 'join-spectator-row' }, [
+      spectatorInput,
+      el('label', { for: 'join-spectator' }, ['watch (spectator)']),
+    ]),
     submit,
     errorLine,
   ])
@@ -77,7 +85,7 @@ export function renderJoin(
       errorLine.removeAttribute('hidden')
       return
     }
-    cb.onSubmit(codeInput.value, name)
+    cb.onSubmit(codeInput.value, name, spectatorInput.checked)
   })
 
   root.append(el('div', { id: 'join-view' }, [form]))

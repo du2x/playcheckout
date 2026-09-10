@@ -126,6 +126,13 @@ export class TurnoverRoom extends Room {
 
   private phase: 'lobby' | 'round' | 'results' = 'lobby'
   private players = new Map<string, LobbyPlayer>()
+  /**
+   * Dev-only building-wide watchers (join `{ spectator: true }`): no movement
+   * slot, no roster entry, no role — the FR-20 fired-spectator view from t=0.
+   * The Router marks any session without a position as a spectator, so the
+   * every-floor stream delivery is the existing machinery, not new routing.
+   */
+  private spectators = new Map<string, string>()
   private joinedCounter = 0
   private sim: RoundSim | null = null
   private router!: Router
@@ -361,17 +368,28 @@ export class TurnoverRoom extends Room {
     return this.telemetryStream === null
   }
 
-  override onJoin(client: Client, options: { name?: unknown }) {
+  override onJoin(client: Client, options: { name?: unknown; spectator?: unknown }) {
     // Results (cycle 2.9) is lobby-like: a new player may join between rounds.
     if (this.phase === 'round') {
       throw new Error('round in progress')
     }
-    if (this.players.size >= TUNING.PLAYERS_MAX) {
-      throw new Error('room full')
-    }
     const name = typeof options?.name === 'string' ? options.name.trim() : ''
     if (name.length < 1 || name.length > 16) {
       throw new Error('invalid name')
+    }
+    if (options?.spectator === true) {
+      // A dev-only watching tool, never a live-game seat: the omniscient view
+      // is legitimate for a fired player (FR-20) but would leak the building
+      // to a non-participant in a real match — production refuses the join.
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('spectator joins are dev-only')
+      }
+      this.spectators.set(client.sessionId, name)
+      this.sendLobbySnapshots()
+      return
+    }
+    if (this.players.size >= TUNING.PLAYERS_MAX) {
+      throw new Error('room full')
     }
     for (const player of this.players.values()) {
       if (player.name === name) throw new Error('name taken')
@@ -389,9 +407,7 @@ export class TurnoverRoom extends Room {
       xMilli: playerSpawnXMilli(this.players.size - 1),
     })
     // Fresh snapshot to everyone so rosters stay consistent without a feed.
-    for (const sessionId of this.players.keys()) {
-      this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
-    }
+    this.sendLobbySnapshots()
     // Personal movement snapshot (snapshotFor resolves the rider-vs-floor
     // policy internally — join and buzzer share one path).
     this.router.toSelf(
@@ -402,6 +418,12 @@ export class TurnoverRoom extends Room {
   }
 
   override onLeave(client: Client, code?: number) {
+    // Spectators hold no seat and no roster entry — their departure is silent
+    // (no seat hold mid-round, no player:left for an id no client renders).
+    if (this.spectators.delete(client.sessionId)) {
+      this.router.forget(client.sessionId)
+      return
+    }
     // Colyseus 0.18 delivers the numeric close code (CloseCode.CONSENTED =
     // 4000); anything else is an unconsented drop. A drop DURING a round
     // holds a reconnection seat (FR-25): roster entry + frozen movement slot
@@ -435,9 +457,7 @@ export class TurnoverRoom extends Room {
     }
     // Host is whoever joined earliest among the remaining players, so migration
     // is implicit: the next snapshot simply flips isHost (CHURN-02).
-    for (const sessionId of this.players.keys()) {
-      this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
-    }
+    this.sendLobbySnapshots()
   }
 
   /**
@@ -502,9 +522,7 @@ export class TurnoverRoom extends Room {
       // The round ended during the window: release the seat like a lobby leave.
       this.movement.leave(sessionId)
       if (seat !== undefined) this.players.delete(sessionId)
-      for (const id of this.players.keys()) {
-        this.router.toSelf('lobby:snapshot', id, this.buildSnapshot(id))
-      }
+      this.sendLobbySnapshots()
       return
     }
     if (sim.saboteurId === sessionId) {
@@ -548,9 +566,16 @@ export class TurnoverRoom extends Room {
     const own = this.players.get(ownId)
     return {
       ownId,
-      ownName: own?.name ?? '',
+      ownName: own?.name ?? this.spectators.get(ownId) ?? '',
       isHost: ownId === hostId,
       roster,
+    }
+  }
+
+  /** Roster refresh to players and spectators alike (lobby + results phases). */
+  private sendLobbySnapshots(): void {
+    for (const sessionId of [...this.players.keys(), ...this.spectators.keys()]) {
+      this.router.toSelf('lobby:snapshot', sessionId, this.buildSnapshot(sessionId))
     }
   }
 
@@ -619,6 +644,12 @@ export class TurnoverRoom extends Room {
       isSaboteur: (id) => this.sim?.saboteurId === id,
       isLiveStaff: (id) => this.sim?.isLiveStaff(id) ?? false,
     })
+    // The FR-20 baseline reaches the dev spectators too — the round:started
+    // broadcast follows on the first tick; the baseline must precede it so
+    // the overview seeds before the HUD mounts.
+    for (const sessionId of this.spectators.keys()) {
+      this.router.toSelf('spectator:snapshot', sessionId, this.spectatorSnapshot())
+    }
   }
 
   /**
@@ -1012,6 +1043,13 @@ export class TurnoverRoom extends Room {
   }
 
   private ensureLive(sessionId: string): boolean {
+    if (this.spectators.has(sessionId)) {
+      this.router.toSelf('error', sessionId, {
+        code: 'justice-rejected',
+        message: 'spectators cannot act',
+      })
+      return false
+    }
     if (!this.fired.has(sessionId)) return true
     this.router.toSelf('error', sessionId, {
       code: 'justice-rejected',

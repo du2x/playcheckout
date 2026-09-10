@@ -90,7 +90,7 @@ export class App {
   }
 
   /** Guest path: join an existing room by 4-letter code (LIGHT-01..04). */
-  async submitJoin(rawCode: string, rawName: string): Promise<void> {
+  async submitJoin(rawCode: string, rawName: string, spectator = false): Promise<void> {
     if (!this.beginConnection()) return
     const code = rawCode.trim().toUpperCase()
     const name = rawName.trim()
@@ -104,7 +104,7 @@ export class App {
       this.render()
       return
     }
-    await this.connect(() => Connection.open(code, name, this.callbacks()))
+    await this.connect(() => Connection.open(code, name, this.callbacks(), { spectator }))
   }
 
   startRound(): void {
@@ -390,7 +390,7 @@ export class App {
     switch (this.state.view) {
       case 'join':
         renderJoin(this.root, this.state.error, this.state.joining, this.deepLinkCode, {
-          onSubmit: (code, name) => void this.submitJoin(code, name),
+          onSubmit: (code, name, spectator) => void this.submitJoin(code, name, spectator),
           onCreate: (name) => void this.createRoom(name),
         })
         break

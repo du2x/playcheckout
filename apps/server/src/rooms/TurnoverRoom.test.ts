@@ -3543,3 +3543,101 @@ describe('server:cosmetic_seeds', () => {
     },
   )
 })
+
+// Dev spectators (FR-20 from t=0): join {spectator:true} — no seat, no roster
+// entry, no role, every-floor stream. server:spectator_*
+describe('server:spectator_join', () => {
+  it('watcher holds no roster seat and cannot start (spectator is not a player)', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const watcher = await newClient().joinById(host.roomId, {
+      name: 'watcher',
+      spectator: true,
+    })
+    const watcherFeed = collectAll(watcher)
+    const hostFeed = collectAll(host)
+
+    const snap = await watcherFeed.waitFor('lobby:snapshot')
+    expect(snap.payload.isHost).toBe(false)
+    expect(snap.payload.ownName).toBe('watcher')
+    expect(snap.payload.roster).toHaveLength(4)
+    const hostSnap = await hostFeed.waitFor('lobby:snapshot')
+    expect(hostSnap.payload.roster).toHaveLength(4) // the watcher is absent
+
+    watcher.send('lobby:start', { type: 'lobby:start' })
+    const err = await watcherFeed.waitFor('error')
+    expect(err.payload.code).toBe('not-host')
+
+    watcherFeed.stop()
+    hostFeed.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+    watcher.leave()
+  })
+})
+
+describe('server:spectator_view', () => {
+  it('baseline + live stream during a round, intents refused, never a role', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const watcher = await newClient().joinById(host.roomId, {
+      name: 'watcher',
+      spectator: true,
+    })
+    const watcherFeed = collectAll(watcher)
+    const instance = TurnoverRoom.instances.at(-1)
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(2)
+
+    // The FR-20 baseline precedes round:started (the overview seeds first).
+    const baseline = await watcherFeed.waitFor('spectator:snapshot')
+    expect(Array.isArray(baseline.payload.players)).toBe(true)
+    expect(Array.isArray(baseline.payload.rooms)).toBe(true)
+    await watcherFeed.waitFor('round:started')
+
+    // Live same-floor stream reaches the slotless session: walk the host.
+    // The send must LAND before the ticks drive (walkToEastLanding's 30 ms).
+    host.send('move:start', { type: 'move:start', dir: 'right' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    instance?.__driveTicks(6)
+    const moved = await watcherFeed.waitFor('player:moved')
+    expect((moved.payload as { playerId: string }).playerId).toBe(host.sessionId)
+    host.send('move:stop', { type: 'move:stop' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    // Intents are refused with the spectator refusal (not the fired wording).
+    watcher.send('move:start', { type: 'move:start', dir: 'left' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const err = await watcherFeed.waitFor('error')
+    expect(err.payload.code).toBe('justice-rejected')
+    expect(err.payload.message).toBe('spectators cannot act')
+
+    // Protocol rule 3: a role never crosses to anyone — spectator included.
+    instance?.__driveTicks(2)
+    expect(watcherFeed.types().includes('role:dealt')).toBe(false)
+    watcherFeed.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+    watcher.leave()
+  })
+})
+
+describe('server:spectator_prod_locked', () => {
+  it('production refuses the omniscient join; ordinary joins are untouched', async () => {
+    const host = await createRoom('ada')
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      await expect(
+        newClient().joinById(host.roomId, { name: 'watcher', spectator: true }),
+      ).rejects.toThrow(/dev-only/i)
+      const late = await newClient().joinById(host.roomId, { name: 'bruno' })
+      late.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    host.leave()
+  })
+})

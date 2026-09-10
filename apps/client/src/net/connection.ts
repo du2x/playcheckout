@@ -52,10 +52,22 @@ export class Connection {
     return Connection.wire(room, cb)
   }
 
-  /** Join the room by 4-letter code; rejects with the server's join reason. */
-  static async open(code: string, name: string, cb: ConnectionCallbacks): Promise<Connection> {
+  /**
+   * Join the room by 4-letter code; rejects with the server's join reason.
+   * `spectator` (dev-only, server-enforced) watches the whole building
+   * without a seat — the FR-20 overview from t=0 instead of after a firing.
+   */
+  static async open(
+    code: string,
+    name: string,
+    cb: ConnectionCallbacks,
+    opts: { spectator?: boolean } = {},
+  ): Promise<Connection> {
     const client = new Client(window.location.origin)
-    const room = (await client.joinById(code, { name })) as ClientRoom
+    const room = (await client.joinById(code, {
+      name,
+      spectator: opts.spectator === true,
+    })) as ClientRoom
     return Connection.wire(room, cb)
   }
 
