@@ -7,12 +7,16 @@ import { WorldScene } from './scenes/WorldScene'
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  parent: 'game',
+  parent: 'game-wrapper',
   width: 960,
   height: 576,
   backgroundColor: '#0f1419',
   pixelArt: true,
   roundPixels: true,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
   scene: [BootScene, WorldScene],
 })
 

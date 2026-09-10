@@ -1,7 +1,9 @@
+import type Phaser from 'phaser'
 import { clockRemainingMs, type ViewState } from '../state'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { buildFullscreenToggle } from './fullscreenToggle'
 import { buildStairScreen } from './stairScreen'
 import { buildTutorialHud } from './tutorialHud'
 
@@ -11,7 +13,7 @@ import { buildTutorialHud } from './tutorialHud'
  * role:dealt payload. No other player's role exists in any payload — nothing
  * to render even by accident.
  */
-export function renderRoundHud(root: HTMLElement, state: ViewState): () => void {
+export function renderRoundHud(root: HTMLElement, state: ViewState, game: Phaser.Game): () => void {
   const clock = el('div', { id: 'clock' })
   const roleCard = el('div', { id: 'role-card' }, [state.role ?? ''])
   const errorLine = el('p', { id: 'hud-error' })
@@ -35,6 +37,8 @@ export function renderRoundHud(root: HTMLElement, state: ViewState): () => void 
       // synced by the App after every render (buildAccuseHud precedent).
       buildTutorialHud(),
       clock,
+      // Fullscreen toggle — always visible top-right.
+      buildFullscreenToggle(game),
       // Elevator + stairs — inline HUD bars at the top of the main window
       // (directly under the clock), no modal window.
       buildCarScreen(),

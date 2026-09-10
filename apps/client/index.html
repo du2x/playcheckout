@@ -16,10 +16,12 @@
     <title>Turnover</title>
   </head>
   <body>
-    <!-- Phaser renders the game world here (prd §11) -->
-    <div id="game"></div>
-    <!-- DOM overlay root: lobby, HUD, firing toasts, results, recap (Phase 3) -->
-    <div id="overlay"></div>
+    <div id="game-wrapper">
+      <!-- Phaser renders the game world here (prd §11) -->
+      <div id="game"></div>
+      <!-- DOM overlay root: lobby, HUD, firing toasts, results, recap (Phase 3) -->
+      <div id="overlay"></div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

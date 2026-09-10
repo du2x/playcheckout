@@ -396,13 +396,20 @@ export class App {
         break
       case 'lobby':
         if (this.state.snapshot !== null) {
-          renderLobby(this.root, this.state.snapshot, this.roomCode, this.state.error, {
-            onStart: () => this.startRound(),
-          })
+          renderLobby(
+            this.root,
+            this.state.snapshot,
+            this.roomCode,
+            this.state.error,
+            {
+              onStart: () => this.startRound(),
+            },
+            this.game,
+          )
         }
         break
       case 'round':
-        this.stopClock = renderRoundHud(this.root, this.state)
+        this.stopClock = renderRoundHud(this.root, this.state, this.game)
         break
       case 'results':
         renderResults(this.root, this.state, { onStart: () => this.startRound() })

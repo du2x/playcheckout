@@ -1,7 +1,9 @@
 import type { LobbySnapshot } from '@turnover/shared'
+import type Phaser from 'phaser'
 import { buildAccuseHud } from './accuseHud'
 import { buildCarScreen } from './carScreen'
 import { el } from './dom'
+import { buildFullscreenToggle } from './fullscreenToggle'
 import { roomShareUrl } from './shareLink'
 import { buildStairScreen } from './stairScreen'
 import { buildTutorialHud } from './tutorialHud'
@@ -21,6 +23,7 @@ export function renderLobby(
   roomCode: string,
   error: string | null,
   cb: LobbyCallbacks,
+  game: Phaser.Game,
 ): void {
   const roster = el(
     'ul',
@@ -70,6 +73,8 @@ export function renderLobby(
       // Tutorial card (first-run onboarding): walking and the car are
       // learnable pre-round, so the card rides in the lobby view too.
       buildTutorialHud(),
+      // Fullscreen toggle — always visible top-right.
+      buildFullscreenToggle(game),
       el('h2', {}, [`lobby — room ${roomCode}`]),
       el('div', { id: 'share-row' }, [shareInput, copyButton]),
       roster,
