@@ -3,6 +3,7 @@ import { sfx } from '../audio/sfx'
 import {
   CLIMB,
   climbBobY,
+  climbLandingFloors,
   climbWalkFraction,
   glowFlicker,
   lurchKickY,
@@ -36,8 +37,8 @@ export class ClimbView {
   private climber: Phaser.GameObjects.Sprite | null = null
   private shade: Phaser.GameObjects.Sprite | null = null
   private glows: { glow: Phaser.GameObjects.Ellipse; seed: number }[] = []
-  private glyphFrom: Phaser.GameObjects.Text | null = null
-  private glyphTo: Phaser.GameObjects.Text | null = null
+  private glyphLow: Phaser.GameObjects.Text | null = null
+  private glyphHigh: Phaser.GameObjects.Text | null = null
   private clock: Phaser.GameObjects.Text | null = null
   private route: Phaser.GameObjects.Text | null = null
   private phaseLabel: Phaser.GameObjects.Text | null = null
@@ -285,26 +286,26 @@ export class ClimbView {
     }
     plate(0, -1)
     plate(1, 1)
-    const glyphFrom = scene.add.text(stairPoint(0).x - 70, stairPoint(0).y - 42, '', {
+    const glyphLow = scene.add.text(stairPoint(0).x - 70, stairPoint(0).y - 42, '', {
       fontSize: '30px',
       color: '#584d78',
       fontFamily: 'monospace',
       fontStyle: 'bold',
     })
-    glyphFrom.setOrigin(0.5)
-    glyphFrom.setName('stairGlyphFrom')
-    band.add(glyphFrom)
-    this.glyphFrom = glyphFrom
-    const glyphTo = scene.add.text(stairPoint(1).x + 70, stairPoint(1).y - 42, '', {
+    glyphLow.setOrigin(0.5)
+    glyphLow.setName('stairGlyphLow')
+    band.add(glyphLow)
+    this.glyphLow = glyphLow
+    const glyphHigh = scene.add.text(stairPoint(1).x + 70, stairPoint(1).y - 42, '', {
       fontSize: '30px',
       color: '#584d78',
       fontFamily: 'monospace',
       fontStyle: 'bold',
     })
-    glyphTo.setOrigin(0.5)
-    glyphTo.setName('stairGlyphTo')
-    band.add(glyphTo)
-    this.glyphTo = glyphTo
+    glyphHigh.setOrigin(0.5)
+    glyphHigh.setName('stairGlyphHigh')
+    band.add(glyphHigh)
+    this.glyphHigh = glyphHigh
     // Light wells riding the band (both floor landings + one flight above):
     // a static warm halo and a core the per-frame flicker drives. Fixtures
     // stay out — the light hangs in the air (AD-052).
@@ -325,8 +326,11 @@ export class ClimbView {
     // fraction mirrored) — the visit readout carries the building-order truth.
     const dir = readout.direction
     const label = (f: string) => (f === 'lobby' ? 'L' : f === 'mezzanine' ? 'M' : f.slice(-1))
-    if (this.glyphFrom !== null) this.glyphFrom.setText(label(readout.from))
-    if (this.glyphTo !== null) this.glyphTo.setText(label(readout.to))
+    // The landing plates are positional (low = walk w=0): on a down-transit
+    // the walker departs HIGH, so `to` is the low plate, `from` the high one.
+    const landings = climbLandingFloors(readout.from, readout.to, dir)
+    if (this.glyphLow !== null) this.glyphLow.setText(label(landings.low))
+    if (this.glyphHigh !== null) this.glyphHigh.setText(label(landings.high))
     const stunned = readout.phase === 'stunned'
     // Band scroll: the walker sits at the fixed screen point (-60, 120); the
     // band slides so the stair surface stays under the feet (the lurch adds

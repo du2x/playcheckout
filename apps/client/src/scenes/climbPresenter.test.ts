@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CLIMB,
   climbBobY,
+  climbLandingFloors,
   climbWalkFraction,
   glowFlicker,
   lurchKickY,
@@ -25,6 +26,20 @@ describe('climb presenter (night-juice)', () => {
     const end = stairPoint(1)
     expect(end.y - start.y).toBe(-CLIMB.stridePx)
     expect(end.x).toBeGreaterThan(start.x)
+  })
+
+  it('landing plates are positional: up paints from low, down paints to low', () => {
+    // Up lobby → floor1: the walker departs at the band's low end.
+    expect(climbLandingFloors('lobby', 'floor1', 'up')).toEqual({
+      low: 'lobby',
+      high: 'floor1',
+    })
+    // Down floor1 → lobby: the walker departs HIGH, so the destination
+    // (lobby) is the low plate — never the origin.
+    expect(climbLandingFloors('lobby', 'floor1', 'down')).toEqual({
+      low: 'floor1',
+      high: 'lobby',
+    })
   })
 
   it('the bob is flat at both landings and bounded by the amplitude', () => {

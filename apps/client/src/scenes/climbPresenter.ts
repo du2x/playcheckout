@@ -1,4 +1,4 @@
-import { TUNING } from '@turnover/shared'
+import { type FloorId, TUNING } from '@turnover/shared'
 
 /**
  * Climb presenter (night-juice, shadow-play rework): the pure math behind the
@@ -64,6 +64,21 @@ export function climbWalkFraction(remainingMs: number): number {
   const transitMs = TUNING.STAIRS_TRANSIT_SECONDS * 1000
   const elapsed = Math.max(0, Math.min(transitMs, transitMs - remainingMs))
   return elapsed / transitMs
+}
+
+/**
+ * The floor painted on each landing plate, band-local: `low` sits at walk
+ * w=0 (the band's bottom-left end), `high` at w=1 — the geometry ascends to
+ * the right in BOTH directions, so the walked ends swap with the direction:
+ * an up-transit departs low (`from` painted low), a down-transit departs
+ * high (`to` painted low).
+ */
+export function climbLandingFloors(
+  from: FloorId,
+  to: FloorId,
+  direction: 'up' | 'down',
+): { low: FloorId; high: FloorId } {
+  return direction === 'up' ? { low: from, high: to } : { low: to, high: from }
 }
 
 /** The sprite bob at walk fraction w: zero at the landings, one bump per tread. */

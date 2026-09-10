@@ -47,6 +47,14 @@ interface ClimbChild {
 /** Read a named Text child of the fullscreen climb canvas (stairCanvas). */
 async function climbText(page: Page, name: string): Promise<string | null> {
   return page.evaluate((childName) => {
+    const find = (list: ClimbChild[], want: string): ClimbChild | null => {
+      for (const child of list) {
+        if (child.name === want) return child
+        const nested = child.list === undefined ? null : find(child.list, want)
+        if (nested !== null) return nested
+      }
+      return null
+    }
     const hook = (
       window as unknown as {
         __TURNOVER__?: {
@@ -57,8 +65,7 @@ async function climbText(page: Page, name: string): Promise<string | null> {
     const scene = hook?.scene('Round')
     if (scene === null || scene === undefined) return null
     const canvas = scene.children.list.find((c) => c.name === 'stairCanvas')
-    const child = canvas?.list?.find((c) => c.name === childName)
-    return child?.text ?? null
+    return canvas?.list === undefined ? null : (find(canvas.list, childName)?.text ?? null)
   }, name)
 }
 
@@ -83,6 +90,14 @@ async function climbVisible(page: Page): Promise<boolean> {
 function climbTextWait(page: Page, name: string, want: string, timeout = 10_000) {
   return page.waitForFunction(
     ([childName, wantText]) => {
+      const find = (list: ClimbChild[], want: string): ClimbChild | null => {
+        for (const child of list) {
+          if (child.name === want) return child
+          const nested = child.list === undefined ? null : find(child.list, want)
+          if (nested !== null) return nested
+        }
+        return null
+      }
       const hook = (
         window as unknown as {
           __TURNOVER__?: {
@@ -93,7 +108,7 @@ function climbTextWait(page: Page, name: string, want: string, timeout = 10_000)
       const scene = hook?.scene('Round')
       if (scene === null || scene === undefined) return false
       const canvas = scene.children.list.find((c) => c.name === 'stairCanvas')
-      return canvas?.list?.find((c) => c.name === childName)?.text === wantText
+      return canvas?.list !== undefined && find(canvas.list, childName)?.text === wantText
     },
     [name, want] as const,
     { timeout },
@@ -152,6 +167,11 @@ test.describe('client:stairs', () => {
     expect(await climbText(bruno, 'stairRoute')).toBe('L → M')
     expect(await climbText(bruno, 'stairDir')).toBe('▲ up')
     expect(await climbText(bruno, 'stairPhase')).toBe('moving')
+    // The landing plates are positional (STAIRS-18): the band ascends to the
+    // right, so the low plate carries the walk's bottom floor — lobby — in
+    // either direction.
+    expect(await climbText(bruno, 'stairGlyphLow')).toBe('L')
+    expect(await climbText(bruno, 'stairGlyphHigh')).toBe('M')
     const clockText = await climbText(bruno, 'stairClock')
     expect(clockText?.endsWith('s')).toBe(true)
     // The breath window is 2 s — start waiting for it BEFORE the transit
@@ -237,6 +257,10 @@ test.describe('client:stairs', () => {
       await walkToMouth(victim) // the victim is on the lobby floor
       await pressToRoute(victim, 'ArrowUp', 'L → M') // lobby → mezzanine
       await pressToRoute(saboteur, 'ArrowDown', 'M → L') // mezzanine → lobby
+      // Down-transit plates stay positional: descending M → L, the low plate
+      // is still L (the destination) — the 2026-09-10 inversion regression.
+      expect(await climbText(saboteur, 'stairGlyphLow')).toBe('L')
+      expect(await climbText(saboteur, 'stairGlyphHigh')).toBe('M')
     } else {
       // Both on the lobby: the victim rides up first, frees at the mezzanine
       // mouth, then descends into the saboteur's up-transit.
@@ -260,6 +284,9 @@ test.describe('client:stairs', () => {
       )
       await victim.waitForTimeout(1000)
       await pressToRoute(victim, 'ArrowDown', 'M → L')
+      // Down-transit plates stay positional (see the saboteur branch above).
+      expect(await climbText(victim, 'stairGlyphLow')).toBe('L')
+      expect(await climbText(victim, 'stairGlyphHigh')).toBe('M')
       await saboteur.waitForTimeout(800)
       await pressToRoute(saboteur, 'ArrowUp', 'L → M')
     }
