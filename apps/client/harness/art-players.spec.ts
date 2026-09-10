@@ -162,6 +162,39 @@ test.describe('client:art_players', () => {
     expect(left[0]?.flipX).toBe(true)
     await own.keyboard.up('ArrowLeft')
 
+    // ART-02 (remote half): a REMOTE walker plays the cycle on the viewer's
+    // screen. The 20 Hz stream chases via targetX — if a player:moved ever
+    // snaps the display x instead, the moving test zeroes out and the remote
+    // body slides on its idle frame (own is idle here, so any playing
+    // staff-walk sprite is a remote one).
+    await (pages[1] as Page).keyboard.down('ArrowRight')
+    await own.waitForFunction(
+      () =>
+        (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: {
+                  list: {
+                    type: string
+                    texture: { key: string }
+                    anims: { isPlaying: boolean }
+                  }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+          .scene('Round')
+          ?.children.list.some(
+            (c) =>
+              c.type === 'Sprite' && c.texture?.key === 'staff-walk' && c.anims.isPlaying === true,
+          ) === true,
+      undefined,
+      { timeout: 5000 },
+    )
+    await (pages[1] as Page).keyboard.up('ArrowRight')
+
     // ART-03/FR-9: identical presentation for every player — same texture,
     // same walk cycle availability, and identical animation timing (no
     // per-role timeScale offset anywhere in the sprite set).

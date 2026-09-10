@@ -415,7 +415,10 @@ export class WorldScene extends Phaser.Scene {
     if (this.textures.exists('staff-walk') && !this.anims.exists('staff-walk')) {
       // 34x64 body sheet (Phase 4.1): frame 0 = idle, the rest = the walk
       // cycle (derived from the sheet — no art constant duplicated here).
-      const last = this.textures.get('staff-walk').frameTotal - 1
+      // frameTotal counts __BASE, so the last real frame comes from the
+      // frame-name list — frameTotal - 1 asks for one past the sheet end
+      // ("Frame 7 not found" on every boot).
+      const last = this.textures.get('staff-walk').getFrameNames().length - 1
       this.anims.create({
         key: 'staff-walk',
         frames: this.anims.generateFrameNumbers('staff-walk', { start: 1, end: last }),
@@ -426,7 +429,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.textures.exists('staff-shadow') && !this.anims.exists('staff-shadow-walk')) {
       // The shadow-play climber mirrors the staff-walk cycle 1:1 (derived
       // sheet, same grid) — the climb stage's own-body silhouette.
-      const last = this.textures.get('staff-shadow').frameTotal - 1
+      const last = this.textures.get('staff-shadow').getFrameNames().length - 1
       this.anims.create({
         key: 'staff-shadow-walk',
         frames: this.anims.generateFrameNumbers('staff-shadow', { start: 1, end: last }),
@@ -854,10 +857,10 @@ export class WorldScene extends Phaser.Scene {
           if (display === undefined) return
         }
         display.floor = action.floor
-        display.x = action.x
         display.left = false
         display.facing = action.facing
         if (action.playerId === this.ownId) {
+          display.x = action.x
           display.targetX = null
           this.viewFloor = action.floor
           // The stairs mirror (AD-040) owns the visit-end transition — the
@@ -865,6 +868,11 @@ export class WorldScene extends Phaser.Scene {
           // breath) reconciles the display position; the anchor stays until
           // the local breath clock runs out.
         } else {
+          // Remote positions are a chase target, not a teleport: the update
+          // loop's exponential approach both smooths the 20 Hz stream and
+          // holds the walk cycle playing — snapping x here (to targetX)
+          // zeroes the moving test every frame and the remote body slides
+          // on its idle frame.
           display.targetX = action.x
         }
         break
