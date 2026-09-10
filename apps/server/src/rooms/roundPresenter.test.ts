@@ -64,7 +64,7 @@ function startTinyRound(
       startMove: () => {},
       stopMove: () => {},
       callElevator: () => 'ignored',
-      pressFloor: () => {},
+      pressFloor: () => 'ignored',
     },
     totalTicks: 2,
   })
