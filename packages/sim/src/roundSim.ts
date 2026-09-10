@@ -106,6 +106,20 @@ export class RoundSim {
    *  input — wrong-delivery door complaints never touch it (AD-039). The 8th
    *  (COMPLAINT_BUDGET, §7) is an instant staff loss. */
   private complaintTotal = 0
+  /** The verdict of the most recent resolved accusation (telemetry-only,
+   *  FR-23: `justice.accuse`'s return "is for tests/telemetry") — never a
+   *  client-bound payload; the room reads it right after a resolved accuse
+   *  intent to record the accusation fact. `null` until the first one. */
+  private accusationVerdict: {
+    readonly accuserId: string
+    readonly targetId: string
+    readonly correct: boolean
+    readonly wasTargetSaboteur: boolean
+  } | null = null
+
+  get lastAccusation() {
+    return this.accusationVerdict
+  }
 
   constructor(config: RoundSimConfig) {
     if (
@@ -428,6 +442,15 @@ export class RoundSim {
       targetId,
       correct: verdict === 'correct',
     })
+    // Telemetry (FR-23): the room records the accusation fact from this
+    // verdict — wasTargetSaboteur is the grace-aware half (a saboteur target
+    // still in grace is `wrong` on the wire but WAS the saboteur).
+    this.accusationVerdict = {
+      accuserId,
+      targetId,
+      correct: verdict === 'correct',
+      wasTargetSaboteur: targetId === this.justice.saboteurId,
+    }
     return 'resolved'
   }
 

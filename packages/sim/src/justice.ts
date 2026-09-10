@@ -62,7 +62,7 @@ export class Justice {
   walkIn(entrantId: string, channelOwnerId: string | null): string | null {
     if (channelOwnerId === null || channelOwnerId === entrantId) return null
     if (this.isFired(entrantId) || this.isFired(channelOwnerId)) return null
-    this.fire(channelOwnerId, 'walkin')
+    this.fire(channelOwnerId, 'walkin', entrantId)
     return channelOwnerId
   }
 
@@ -88,9 +88,14 @@ export class Justice {
     return this.pending.splice(0)
   }
 
-  fire(playerId: string, reason: FireReason): void {
+  fire(playerId: string, reason: FireReason, caughtById?: string): void {
     if (this.firedIds.has(playerId)) return
     this.firedIds.add(playerId)
-    this.pending.push({ type: 'player:fired', playerId, reason })
+    this.pending.push({
+      type: 'player:fired',
+      playerId,
+      reason,
+      ...(caughtById !== undefined ? { caughtById } : {}),
+    })
   }
 }

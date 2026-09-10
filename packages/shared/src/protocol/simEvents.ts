@@ -56,11 +56,14 @@ export type SimEvent =
   // `reason` is server-internal — the registry projection strips it, so the
   // wire payload is exactly {playerId} (FR-18; leak rules 3/4: no role, no
   // grace state, no validity verdict on the wire). Telemetry (2.10) reads the
-  // reason from this event stream 1:1 (FR-23).
+  // reason from this event stream 1:1 (FR-23). `caughtById` is telemetry-only
+  // (set for reason 'walkin': who walked in on the un-prep) — the registry
+  // projection strips it, so the wire payload stays exactly {playerId}.
   | {
       readonly type: 'player:fired'
       readonly playerId: string
       readonly reason: FireReason
+      readonly caughtById?: string
     }
   // --- Round end (cycle 2.9, §6.6): the winner reveal is legal ONLY because
   // the round is over (FR-21). `saboteurId` must never appear on any

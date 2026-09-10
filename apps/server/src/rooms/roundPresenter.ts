@@ -77,6 +77,21 @@ export class RoundPresenter {
     return this.fired.has(sessionId)
   }
 
+  /** Record one resolved accusation (telemetry FR-23): the room calls this
+   *  from the accuse intent with the sim's verdict facts; the tick stamp is
+   *  the presenter's (the room no longer keeps a round clock). Flushed by
+   *  the next tick like every other line. */
+  recordAccusation(
+    accuserId: string,
+    targetId: string,
+    wasTargetSaboteur: boolean,
+    crimeOccurred: boolean,
+  ): void {
+    this.io
+      .sink()
+      ?.recordAccusation(accuserId, targetId, wasTargetSaboteur, crimeOccurred, this.roundTick)
+  }
+
   /** A fresh deal: the presenter resets its round-scoped state around the
    *  new sim and takes the participant roster (already purged by the room). */
   startRound(sim: RoundSim, participants: readonly string[]): void {

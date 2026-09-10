@@ -84,6 +84,25 @@ describe('telemetry projections — completeness audit', () => {
     expect(justice.drain()).toHaveLength(0)
   })
 
+  it('a walkin firing records the catch: entrant as actor, saboteur as caught', () => {
+    const sink = new TelemetrySink('saboteur-1', 7)
+    projectSimEventToTelemetry(
+      sink,
+      {
+        type: 'player:fired',
+        playerId: 'saboteur-1',
+        reason: 'walkin',
+        caughtById: 'staff-9',
+      },
+      33,
+      { saboteurId: 'saboteur-1' },
+    )
+    const line = sink.drain()[0] as unknown as Record<string, unknown>
+    expect(line.kind).toBe('walk-in-catch')
+    expect(line.actor).toBe('staff-9')
+    expect(line.caughtPlayer).toBe('saboteur-1')
+  })
+
   it('untracked kinds are a no-op', () => {
     const sink = new TelemetrySink(null, 7)
     projectSimEventToTelemetry(sink, { type: 'round:buzzer' }, 99, { saboteurId: 's1' })

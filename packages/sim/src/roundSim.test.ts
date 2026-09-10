@@ -223,6 +223,14 @@ describe('sim:win_checks', () => {
     expect(sim.accuse(a, b)).toBe('resolved') // wrong → accuser a fired
     let flush = feed(placement)
     expect(flush.map((e) => e.type)).toEqual(['player:fired'])
+    // Telemetry verdict (FR-23): the wrong accusation's grace-aware halves —
+    // b was innocent, so wasTargetSaboteur is false with correct false.
+    expect(sim.lastAccusation).toEqual({
+      accuserId: a,
+      targetId: b,
+      correct: false,
+      wasTargetSaboteur: false,
+    })
     expect(sim.accuse(c, b)).toBe('resolved') // wrong → accuser c fired
     flush = feed(placement)
     // Staff live count dropped to 1 → the verdict joins the same flush.

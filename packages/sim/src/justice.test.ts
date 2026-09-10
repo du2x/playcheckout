@@ -68,7 +68,7 @@ describe('sim:walkin_conviction', () => {
       ),
     )
     expect(firedOf(conviction)).toEqual([
-      { type: 'player:fired', playerId: saboteur, reason: 'walkin' },
+      { type: 'player:fired', playerId: saboteur, reason: 'walkin', caughtById: watcher },
     ])
     // The fired saboteur's own channel is cancelled SILENTLY (JUST-04, WORK-12):
     // no work:ended names them.
@@ -138,7 +138,9 @@ describe('sim:walkin_conviction', () => {
       positions(at(a, pos(F1, WEST_HALL)), at(saboteur, pos(F1, CENTER)), at(b, pos(F1, CENTER))),
     )
     // The channel was active at b's entry tick: conviction + completion, both.
-    expect(firedOf(last)).toEqual([{ type: 'player:fired', playerId: saboteur, reason: 'walkin' }])
+    expect(firedOf(last)).toEqual([
+      { type: 'player:fired', playerId: saboteur, reason: 'walkin', caughtById: b },
+    ])
     expect(last.some((e) => e.type === 'room:trashed')).toBe(true)
   })
 
@@ -388,6 +390,7 @@ describe('sim:firing_toast', () => {
       type: 'player:fired',
       playerId: walk.saboteur,
       reason: 'walkin',
+      caughtById: b,
     })
 
     // Path 2: wrong accusation (innocent target).

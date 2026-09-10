@@ -252,6 +252,19 @@ export class TurnoverRoom extends Room {
           code: 'justice-rejected',
           message: messages[result],
         })
+      } else {
+        // Telemetry (FR-23): the accusation fact — accuser, target, and the
+        // verdict halves the wire never carries (wasTargetSaboteur is the
+        // grace-aware one). Server-internal only.
+        const verdict = sim.lastAccusation
+        if (verdict !== null && verdict.accuserId === client.sessionId) {
+          this.presenter.recordAccusation(
+            verdict.accuserId,
+            verdict.targetId,
+            verdict.wasTargetSaboteur,
+            verdict.correct,
+          )
+        }
       }
     })
     // Work intents (cycle 2.5, FR-7/8/9): the action matrix lives in the sim —

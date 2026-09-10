@@ -326,12 +326,13 @@ export type { Kpis, TelemetryLine } from '@turnover/shared'
 // mapping was an if/else in the tick loop that drifted silently (a new
 // event simply was not logged).
 //
-// Known-honest gap, surfaced by the 2026-09-10 audit and left open on
-// purpose: `recordAccusation` / `recordWalkIn` have no production caller —
-// the accuse intent and justice walk-in catches are not recorded, so the
-// `correctAccusationRate` / `catchesPerHour` / `meanTimeToFirstCrime` /
-// `decoyCallRate` KPI fields read from nothing in real rounds. Wiring them
-// changes what rounds record and is a deliberate follow-up, not drift.
+// Wire (2026-09-10, user-approved): the accusation and walk-in gaps are
+// CLOSED — the room records accuse intents from the sim's verdict
+// (`RoundSim.lastAccusation`), and walk-in catches ride the `player:fired`
+// event's telemetry-only `caughtById` (stripped from the wire by the
+// registry projection). `decoyCallRate` needs no actor at all: it is
+// call-pattern based (a call with no same-car ride within 60 ticks), fed by
+// the elevator-call/ride lines the movement trio already records.
 
 /** Extra round facts a row may need (the event stream does not carry them). */
 export interface TelemetryProjectionCtx {
@@ -406,6 +407,8 @@ export const TELEMETRY_PROJECTIONS: { readonly [K in SimEvent['type']]?: Project
     sink.recordTenancy(e.floor as GuestFloorId, e.room as RoomIndex, e.occupied, tick),
   'player:fired': (e, sink, tick) => {
     if (e.reason === 'carry-clock') sink.recordCarryClockExpiry(e.playerId, tick)
+    else if (e.reason === 'walkin' && e.caughtById !== undefined)
+      sink.recordWalkIn(e.caughtById, e.playerId, tick)
   },
   'round:ended': (e, sink, tick) =>
     sink.recordRoundEnded(e.winner as 'staff' | 'saboteur', e.reason, e.saboteurId, tick),
