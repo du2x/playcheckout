@@ -26,13 +26,6 @@ import Phaser from 'phaser'
 import type { AccuseSession } from '../accuseSession'
 import { ACCUSE_HOLD_MS } from '../accuseSession'
 import { sfx } from '../audio/sfx'
-import {
-  dropCues,
-  type EvidenceSession,
-  initialEvidenceSession,
-  liveCues,
-  reduceEvidence,
-} from '../evidenceSession'
 import type { RiderUpdate } from '../riderSession'
 import type { SceneAction } from '../state'
 import {
@@ -48,18 +41,24 @@ import { syncStairScreen } from '../ui/stairScreen'
 import { CarInteriorView } from './carInteriorView'
 import { ClimbView } from './climbView'
 import { DEFAULT_ANIMATION_CONFIG, doorsOpenAmount, ElevatorPresenter } from './elevatorPresenter'
+import { EvidenceView } from './evidenceView'
 import {
   CHAIR_SEAT_TOP_PX,
+  DINING_FILL,
   diningFurniture,
   diningSlotAtXTiles,
   diningSlotFacesEast,
   type FurnitureAnchor,
+  GROUND_Y,
   LOBBY_FURNITURE,
   MEZZANINE_FURNITURE,
   SEATED_GUEST_DEPTH,
+  TILE_PX,
 } from './furniture'
+import { GuestsView } from './guestsView'
 import { JUICE, shouldShake } from './juice'
 import { StairsVisit, type StairsVisitReadout } from './stairsVisit'
+import { SuitcasesView } from './suitcasesView'
 import {
   advanceZoom,
   REST_ZOOM,
@@ -68,43 +67,6 @@ import {
   zoomLayerTransform,
   zoomTarget,
 } from './zoomPresenter'
-
-/** Guest archetype + palette derivation (Phase 4.1, VPOL-06; 10 kinds per the
- *  2026-09-05 user direction): pure seed → {archetype, palette}. The first
- *  four archetypes keep their historical order so seed 0..3 stays
- *  suite/tourist/clerk/elder. Palette tints are civil Deco tones — never the
- *  staff ivory `0xf2ead8`/`0xf6f1e6` or brass `0xc9a13b`/`0xb3873a` (VPOL-07). */
-const GUEST_ARCHETYPES = [
-  'guest-suite',
-  'guest-tourist',
-  'guest-clerk',
-  'guest-elder',
-  'guest-dandy',
-  'guest-diva',
-  'guest-flapper',
-  'guest-merchant',
-  'guest-professor',
-  'guest-child',
-] as const
-const GUEST_PALETTES = [0x5a9aaa, 0xb06a7a, 0x8aa06a, 0x9a7a9a] as const
-function guestVariantOf(seed: number): { archetype: number; palette: number } {
-  const u = (seed >>> 0) % GUEST_ARCHETYPES.length
-  return {
-    archetype: u >>> 0,
-    palette: (Math.floor((seed >>> 0) / GUEST_ARCHETYPES.length) % GUEST_PALETTES.length) >>> 0,
-  }
-}
-/** Per-channel tint blend toward the dining amber (VPOL-08). */
-function blendTint(a: number, b: number, t: number): number {
-  const ar = (a >> 16) & 0xff
-  const ag = (a >> 8) & 0xff
-  const ab = a & 0xff
-  const br = (b >> 16) & 0xff
-  const bg = (b >> 8) & 0xff
-  const bb = b & 0xff
-  const mix = (x: number, y: number) => Math.round(x + (y - x) * t)
-  return (mix(ar, br) << 16) | (mix(ag, bg) << 8) | mix(ab, bb)
-}
 
 /**
  * The persistent world (cycle 2.4, AD-005): mounts when the player first joins
@@ -118,14 +80,8 @@ function blendTint(a: number, b: number, t: number): number {
  * toward their last server position. The view shows the local player's floor.
  */
 
-const TILE_PX = 32 // hall width in px per tile (960 / 30, integer grid — AD-030)
-const GROUND_Y = 430
-/** Front-facing landing door width (Phase 4.2: shared by the car mount and
- *  the landing-panel mount so the two never drift apart). */
 const ELEVATOR_DOOR_PX = 80
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
-/** Dining tint target (VPOL-08): the lobby→mezzanine dining cue. */
-const DINING_FILL = 0xffd27a
 /** Staff variant buckets (Phase 4.1, VPOL-02): the client mirror of
  *  packages/sim cosmetic.ts — pure seed → head-frame index. Pinned equal to
  *  the sim's variantIndex by the sim suite; a drift here is a defect. */
@@ -253,10 +209,9 @@ export class WorldScene extends Phaser.Scene {
   /** In-world anger cues (cycle 3.3, FR-29b stage 1): short-lived Text "!" at
    *  the room door — sameFloor only — TTL-bound and pruned per frame. */
   private angerCues: { view: Phaser.GameObjects.Text; until: number; floor: FloorId }[] = []
-  /** Suitcase markers (cycle 3.B, SUI-24): one Rectangle per suitcase —
-   *  carried rides the carrier, rest pins the doorway (never a Sprite —
-   *  scene-children contract). */
-  private suitcaseViews = new Map<string, Phaser.GameObjects.Rectangle>()
+  /** The suitcase markers as a view module (scenes/suitcasesView.ts): the
+   *  state map stays here (message-driven); the view derives every pixel. */
+  private suitcasesView!: SuitcasesView
   /** The blind-place confirm is REMOVED (AD-034) — kept only the
    *  owned-assignment hint (SUI-27, convenience surface). */
   private assignmentHint: HTMLElement | null = null
@@ -291,8 +246,10 @@ export class WorldScene extends Phaser.Scene {
   private work: { startedAt: number; seconds: number } | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
-  /** Evidence view state + its DOM layer (cycle 2.7, EVID-19). */
-  private evidence: EvidenceSession = initialEvidenceSession()
+  /** The evidence session + card/cue markers as a view module
+   *  (scenes/evidenceView.ts); the shared world-anchored DOM layer stays
+   *  scene-owned (tenancy signs + the stairwell marker ride it too). */
+  private evidenceView!: EvidenceView
   private evidenceLayer: HTMLElement | null = null
   /** The screen-space DOM layer (sfx toggle, ambush toasts): evidenceLayer's
    *  untransformed sibling — the room zoom (below) transforms only the
@@ -308,10 +265,10 @@ export class WorldScene extends Phaser.Scene {
    *  countdown; the saboteur instead gets a private confirmation line. */
   private ambushToast: { el: HTMLElement; until: number } | null = null
   private ambushConfirm: { el: HTMLElement; until: number } | null = null
-  /** Guest NPC markers (Phase 4.1): one archetype Sprite per guest —
-   *  texture + palette derive from the decorrelated guest seed (VPOL-06/07);
-   *  created lazily, pruned on guest:left. */
-  private guestViews = new Map<string, Phaser.GameObjects.Sprite>()
+  /** The guest sprites as a view module (scenes/guestsView.ts): archetype/
+   *  palette variants, the dining pose and the foot-tap proxies live there;
+   *  the state maps below stay message-driven scene facts. */
+  private guestsView!: GuestsView
   /** The desk-bell DOM line (GUEST-13) — visible while an impatient guest
    *  queues on the viewed floor. */
   private deskBell: HTMLElement | null = null
@@ -326,12 +283,8 @@ export class WorldScene extends Phaser.Scene {
     string,
     { carrierId: string | null; rest: { floor: FloorId; room: RoomIndex } | null }
   >()
-  /** Foot-tap proxies (Phase 4.1, VPOL-14) live in syncGuests; the phase
-   *  counter is gone — the Tween clock owns the bounce. */
-  private cardMarkers = new Map<string, HTMLElement>()
   private tenancies = new Map<string, boolean>()
   private tenancyMarkers = new Map<string, HTMLElement>()
-  private cueNodes = new Map<number, HTMLElement>()
   private audio: AudioContext | null = null
   /** Production door Images per room segment per guest floor (ART-06) —
    *  phase-free; the name `door:<floor>:<room>` drives harness filtering. */
@@ -403,12 +356,10 @@ export class WorldScene extends Phaser.Scene {
     this.interior = null
     this.stairsVisit.reset()
     this.breathSprite = null
-    this.evidence = initialEvidenceSession()
-    this.cardMarkers.clear()
+    this.evidenceView?.reset()
     this.tenancies.clear()
     for (const el of this.tenancyMarkers.values()) el.remove()
     this.tenancyMarkers.clear()
-    this.cueNodes.clear()
     this.doorImages.clear()
     this.wallField = null
     this.wallFallback = null
@@ -417,6 +368,17 @@ export class WorldScene extends Phaser.Scene {
     this.buildGuestLayer()
     this.buildDeskLayer()
     this.buildDoorImages()
+    // The per-subsystem view modules (Card 1): facts stay scene-owned, the
+    // views derive every pixel. Constructed after the DOM layers exist —
+    // guests and suitcases take their hint elements from them.
+    this.guestsView = new GuestsView(this, (floor) => this.laneY(floor), this.deskBell)
+    this.suitcasesView = new SuitcasesView(this, this.assignmentHint)
+    this.evidenceView = new EvidenceView(
+      this,
+      this.evidenceLayer,
+      (room) => this.roomCenterPx(room),
+      (floor) => this.laneY(floor),
+    )
     this.buildFurniture()
     this.syncTenancyMarkers()
 
@@ -805,14 +767,8 @@ export class WorldScene extends Phaser.Scene {
     }
     // All carded rooms of every floor become card markers (FR-20: door cards
     // are floor-public, and the spectator sees every floor).
-    let cards = this.evidence
-    for (const floorRow of snapshot.cardedRooms) {
-      for (const room of floorRow.rooms) {
-        cards = reduceEvidence(cards, { type: 'carded', floor: floorRow.floor, room }, Date.now())
-      }
-    }
-    this.evidence = cards
-    this.syncCardMarkers()
+    this.evidenceView.seedCardedRooms(snapshot.cardedRooms, Date.now())
+    this.evidenceView.syncCardMarkers()
     // FR-33 (3.4): tenancy signs for every floor (spectator sees every floor)
     for (const t of snapshot.tenancies ?? []) {
       this.tenancies.set(`${t.floor}:${t.room}`, t.occupied)
@@ -998,16 +954,14 @@ export class WorldScene extends Phaser.Scene {
       // Evidence cues (cycle 2.7, EVID-19): hallway-visible gray-box rendering
       // — cards accumulate, door-open and rustle cues flash at the room front.
       case 'room-carded':
-        this.evidence = reduceEvidence(
-          this.evidence,
+        this.evidenceView.reduce(
           { type: 'carded', floor: action.floor, room: action.room },
           Date.now(),
         )
-        this.syncCardMarkers()
+        this.evidenceView.syncCardMarkers()
         break
       case 'room-entered':
-        this.evidence = reduceEvidence(
-          this.evidence,
+        this.evidenceView.reduce(
           {
             type: 'entered',
             playerId: action.playerId,
@@ -1019,8 +973,7 @@ export class WorldScene extends Phaser.Scene {
         this.beep(660)
         break
       case 'room-rustle':
-        this.evidence = reduceEvidence(
-          this.evidence,
+        this.evidenceView.reduce(
           { type: 'rustle', floor: action.floor, room: action.room },
           Date.now(),
         )
@@ -1193,7 +1146,7 @@ export class WorldScene extends Phaser.Scene {
         // Phase 4.1 (VPOL-06): the guest seed precedes/rides the guest stream;
         // the archetype renderer (T6) derives texture + tint from it.
         this.guestSeeds.set(action.guestId, action.seed)
-        this.applyGuestVariant(action.guestId)
+        this.guestsView.applyVariant(action.guestId)
         break
       default: {
         // Exhaustiveness: SceneAction covers every 'scene'-routed member of
@@ -1225,52 +1178,6 @@ export class WorldScene extends Phaser.Scene {
     if (display === undefined || seed === undefined) return
     display.seed = seed
     if (display.variant !== null) display.variant.setFrame(variantIndexOf(seed))
-  }
-
-  /**
-   * The archetype texture a guest renders right now: the standing silhouette,
-   * or its derived `-sit` variant while seated at a restaurant table (the sit
-   * art keeps the grayscale tint-carrier contract, VPOL-06). Falls back to
-   * the standing texture when the sit variant failed to load.
-   */
-  private guestTextureFor(guestId: string, seated: boolean): string {
-    const seed = this.guestSeeds.get(guestId) ?? 0
-    const { archetype } = guestVariantOf(seed)
-    const base = GUEST_ARCHETYPES[archetype] ?? 'guest-clerk'
-    if (!seated) return base
-    const sit = `${base}-sit`
-    return this.textures.exists(sit) ? sit : base
-  }
-
-  /**
-   * The dining slot a guest currently occupies, or null when it renders
-   * standing. Seated ⇔ the client heard the check-in (guest:assigned →
-   * diningGuests) AND the guest's authoritative position is at a dining
-   * slot on the mezzanine — the floor gate also absorbs a dropCarry
-   * re-queue, which emits no dedicated message.
-   */
-  private seatedSlotOf(guestId: string, g: { floor: FloorId; x: number }): number | null {
-    if (!this.diningGuests.has(guestId) || g.floor !== 'mezzanine') return null
-    return diningSlotAtXTiles(g.x)
-  }
-
-  /**
-   * Phase 4.1 (VPOL-06): apply the stored guest seed to a live guest view —
-   * re-derives texture + palette tint. The seed may arrive before the view
-   * exists (then syncGuests consumes it at creation) or after (this path
-   * re-textures in place).
-   */
-  private applyGuestVariant(guestId: string): void {
-    const view = this.guestViews.get(guestId)
-    const seed = this.guestSeeds.get(guestId)
-    if (view === undefined || seed === undefined) return
-    const { palette } = guestVariantOf(seed)
-    const g = this.guests.get(guestId)
-    const seated = g !== undefined && this.seatedSlotOf(guestId, g) !== null
-    const texture = this.guestTextureFor(guestId, seated)
-    if (this.textures.exists(texture)) view.setTexture(texture)
-    const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
-    view.setTint(g?.floor === 'mezzanine' ? blendTint(base, DINING_FILL, 0.45) : base)
   }
 
   /**
@@ -1449,6 +1356,14 @@ export class WorldScene extends Phaser.Scene {
   private accuseHoldTimer: number | null = null
 
   /** The guest whose suitcase the local player carries, or null (SUI-25). */
+  /** The SUI-27 hint text for the own carried suitcase's heard assignment,
+   *  or null while nothing owned is carried (the suitcases view renders it). */
+  private assignmentHintText(): string | null {
+    const carried = this.ownCarriedGuest()
+    const heard = carried !== null ? this.heardAssignments.get(carried) : undefined
+    return heard !== undefined ? `guest's room: ${heard.floor}:${heard.room}` : null
+  }
+
   private ownCarriedGuest(): string | null {
     return carriedGuestIdOf(this.suitcaseRefs(), this.ownId)
   }
@@ -1685,134 +1600,6 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** Suitcase marker sync (SUI-24, called every frame): carried rides the
-   *  carrier's display position, rest pins the doorway; sameFloor view filter
-   *  like the guests. Also renders the SUI-27 assignment hint for the own
-   *  carried suitcase (own knowledge only). */
-  private syncSuitcases(): void {
-    for (const [id, sc] of this.suitcases) {
-      let view = this.suitcaseViews.get(id)
-      if (view === undefined) {
-        view = this.add.rectangle(0, GROUND_Y - 22, 14, 10, 0xffd27f)
-        this.suitcaseViews.set(id, view)
-      }
-      let x: number | null = null
-      let floor: string | null = null
-      if (sc.carrierId !== null) {
-        const carrier = this.players.get(sc.carrierId)
-        if (carrier !== undefined) {
-          x = carrier.x
-          floor = carrier.floor
-        }
-      } else if (sc.rest !== null) {
-        x = roomDoorXMilli(sc.rest.room) / 1000
-        floor = sc.rest.floor
-      }
-      if (x === null || floor === null) {
-        view.setVisible(false)
-        continue
-      }
-      view.setVisible(this.spectator || floor === this.viewFloor)
-      view.x = x * TILE_PX
-    }
-    for (const [id, view] of this.suitcaseViews) {
-      if (!this.suitcases.has(id)) {
-        view.destroy()
-        this.suitcaseViews.delete(id)
-      }
-    }
-    if (this.assignmentHint !== null) {
-      const carried = this.ownCarriedGuest()
-      const heard = carried !== null ? this.heardAssignments.get(carried) : undefined
-      if (heard !== undefined) {
-        this.assignmentHint.textContent = `guest's room: ${heard.floor}:${heard.room}`
-        this.assignmentHint.style.visibility = 'visible'
-      } else {
-        this.assignmentHint.style.visibility = 'hidden'
-      }
-    }
-  }
-
-  /** Guest marker sync (called every frame): one archetype Sprite per guest
-   *  on the viewed floor (Phase 4.1, VPOL-06) — texture + palette from the
-   *  decorrelated guest seed; dining guests shift toward amber (VPOL-08) and
-   *  sit at their restaurant slot (furnishing slice); foot-tap yoyo while its
-   *  free impatience cue is active (GUEST-13/VPOL-14). */
-  private tapProxies = new Map<string, { offset: number }>()
-
-  private syncGuests(delta: number): void {
-    void delta
-    for (const [id, g] of this.guests) {
-      let view = this.guestViews.get(id)
-      const laneY = this.laneY(g.floor)
-      const seatedSlot = this.seatedSlotOf(id, g)
-      if (view === undefined) {
-        const texture = this.guestTextureFor(id, seatedSlot !== null)
-        if (!this.textures.exists(texture)) continue
-        view = this.add.sprite(g.x * TILE_PX, laneY, texture)
-        view.setOrigin(0.5, 1)
-        this.guestViews.set(id, view)
-      }
-      const visible = this.spectator || g.floor === this.viewFloor
-      view.setVisible(visible)
-      view.x = g.x * TILE_PX
-      // Seated pose (furnishing slice): the sit texture rides the seat-top
-      // lift, tucked behind the shared table; west-facing slots flip. A
-      // texture change here also covers the dining→standing transitions the
-      // seed event can miss (applyGuestVariant re-derives the same way).
-      const wantTexture = this.guestTextureFor(id, seatedSlot !== null)
-      if (view.texture.key !== wantTexture && this.textures.exists(wantTexture)) {
-        view.setTexture(wantTexture)
-      }
-      view.setDepth(seatedSlot !== null ? SEATED_GUEST_DEPTH : 0)
-      view.setFlipX(seatedSlot !== null && !diningSlotFacesEast(seatedSlot))
-      // VPOL-14: the impatience cue is a Tween-driven yoyo bounce around the
-      // lane line (a proxy offset survives floor teleports; the frame sync
-      // only reads it).
-      const impatient = this.impatientGuests.has(id)
-      let proxy = this.tapProxies.get(id)
-      if (impatient && proxy === undefined) {
-        proxy = { offset: 0 }
-        this.tapProxies.set(id, proxy)
-        this.tweens.add({
-          targets: proxy,
-          offset: { from: 0, to: -JUICE.footTap.distancePx },
-          duration: JUICE.footTap.durationMs,
-          ease: 'Sine.easeInOut',
-          yoyo: true,
-          repeat: -1,
-        })
-      } else if (!impatient && proxy !== undefined) {
-        this.tweens.killTweensOf(proxy)
-        this.tapProxies.delete(id)
-      }
-      const seatLift = seatedSlot !== null ? CHAIR_SEAT_TOP_PX : 0
-      view.y = laneY - seatLift - (proxy?.offset ?? 0)
-      const seed = this.guestSeeds.get(id) ?? 0
-      const { palette } = guestVariantOf(seed)
-      const base = GUEST_PALETTES[palette] ?? 0x5a9aaa
-      view.setTint(g.floor === 'mezzanine' ? blendTint(base, DINING_FILL, 0.45) : base)
-    }
-    for (const [id, view] of this.guestViews) {
-      if (!this.guests.has(id)) {
-        const proxy = this.tapProxies.get(id)
-        if (proxy !== undefined) {
-          this.tweens.killTweensOf(proxy)
-          this.tapProxies.delete(id)
-        }
-        view.destroy()
-        this.guestViews.delete(id)
-      }
-    }
-    if (this.deskBell !== null) {
-      const anyImpatient = [...this.impatientGuests].some(
-        (id) => this.guests.get(id)?.floor === 'lobby',
-      )
-      this.deskBell.style.visibility =
-        anyImpatient && (this.spectator || this.viewFloor === 'lobby') ? 'visible' : 'hidden'
-    }
-  }
-
   private buildEvidenceLayer(): void {
     const gameEl = document.querySelector('#game')
     if (gameEl === null) return
@@ -1968,7 +1755,9 @@ body.interior-full #desk-bell {
         ? this.interior.room
         : null
     const cuedRooms = new Set(
-      this.evidence.cues.filter((c) => c.kind === 'entered').map((c) => `${c.floor}:${c.room}`),
+      this.evidenceView.state.cues
+        .filter((c) => c.kind === 'entered')
+        .map((c) => `${c.floor}:${c.room}`),
     )
     for (const [key, image] of this.doorImages) {
       const [floor, roomText] = String(key).split(':')
@@ -2050,31 +1839,6 @@ body.interior-full #desk-bell {
     }
   }
 
-  /** Create-on-demand card glyph per carded room; own floor live, all floors
-   * as a spectator (the lane offset follows the card's floor). */
-  private syncCardMarkers(): void {
-    const layer = this.evidenceLayer
-    if (layer === null) return
-    for (const key of this.evidence.cards) {
-      if (this.cardMarkers.has(key)) continue
-      const room = Number(key.split(':')[1]) as RoomIndex
-      const marker = document.createElement('div')
-      marker.dataset.roomKey = key
-      marker.textContent = 'CARD'
-      marker.style.position = 'absolute'
-      marker.style.left = `${this.roomCenterPx(room) - 24}px`
-      marker.style.width = '48px'
-      marker.style.padding = '2px 0'
-      marker.style.textAlign = 'center'
-      marker.style.fontSize = '12px'
-      marker.style.background = '#c8a24a'
-      marker.style.color = '#111'
-      marker.style.borderRadius = '3px'
-      layer.appendChild(marker)
-      this.cardMarkers.set(key, marker)
-    }
-  }
-
   /** Tenancy flip-sign per guest door (FR-33, cycle 3.4): Occupied/Vacant, hallway-visible sameFloor. */
   private syncTenancyMarkers(): void {
     const layer = this.evidenceLayer
@@ -2108,45 +1872,16 @@ body.interior-full #desk-bell {
     }
   }
 
-  /** Expire cue DOM nodes and prune the session (called every frame). */
-  private syncCues(): void {
-    const now = Date.now()
-    const live = liveCues(this.evidence, now)
-    const expired = new Set(
-      this.evidence.cues.filter((c) => !live.some((l) => l.id === c.id)).map((c) => c.id),
-    )
-    for (const id of expired) {
-      this.cueNodes.get(id)?.remove()
-      this.cueNodes.delete(id)
-    }
-    this.evidence = dropCues(this.evidence, expired)
-    for (const cue of live) {
-      if (this.cueNodes.has(cue.id)) continue
-      const node = document.createElement('div')
-      node.dataset.cueId = String(cue.id)
-      node.dataset.cueKind = cue.kind
-      node.textContent = cue.kind === 'rustle' ? 'rustle' : 'door'
-      node.style.position = 'absolute'
-      node.style.left = `${this.roomCenterPx(cue.room) - 30}px`
-      node.style.width = '60px'
-      node.style.textAlign = 'center'
-      node.style.fontSize = '12px'
-      node.style.color = cue.kind === 'rustle' ? '#e2705a' : '#8ad07a'
-      this.evidenceLayer?.appendChild(node)
-      this.cueNodes.set(cue.id, node)
-    }
-  }
-
-  /** Reset for a fresh round deal: cards and cues die with the previous sim. */
+  /** Reset for a fresh round deal: cards and cues die with the previous sim
+   *  (the evidence view removes only its own nodes — the shared layer also
+   *  carries tenancy signs and the stairwell marker); tenancy signs are
+   *  round-scoped too — guests die with the sim (GUEST-11) and the vacant
+   *  set is recreated. */
   resetEvidence(): void {
-    this.evidence = initialEvidenceSession()
-    this.cardMarkers.clear()
-    // Tenancy signs are round-scoped like cards — guests die with the sim (GUEST-11)
+    this.evidenceView.reset()
     this.tenancies.clear()
     for (const el of this.tenancyMarkers.values()) el.remove()
     this.tenancyMarkers.clear()
-    this.cueNodes.clear()
-    if (this.evidenceLayer !== null) this.evidenceLayer.replaceChildren()
     // Recreate the vacant sign set so every door shows Vacant on the fresh deal
     this.syncTenancyMarkers()
   }
@@ -2472,7 +2207,14 @@ body.interior-full #desk-bell {
     }
     // The presenter drives every car's y (base lane + arrival slide) in tick.
     this.elevatorPresenter?.tick(delta, this.viewFloor as FloorId, this.riderSession)
-    this.syncGuests(delta)
+    this.guestsView.sync({
+      guests: this.guests,
+      seeds: this.guestSeeds,
+      dining: this.diningGuests,
+      impatient: this.impatientGuests,
+      spectator: this.spectator,
+      viewFloor: this.viewFloor,
+    })
     // Anger cues (cycle 3.3, FR-29b stage 1): TTL-bound Text "!" at the room
     // door — sameFloor visibility, pruned here so the harness pollution
     // window stays short.
@@ -2487,15 +2229,17 @@ body.interior-full #desk-bell {
         return true
       })
     }
-    this.syncSuitcases()
+    this.suitcasesView.sync({
+      suitcases: this.suitcases,
+      carriers: this.players,
+      spectator: this.spectator,
+      viewFloor: this.viewFloor,
+      hint: this.assignmentHintText(),
+    })
     this.syncDesk()
     // Card glyph position/visibility follow the floor lanes; cues expire here.
-    this.syncCardMarkers()
-    for (const [key, marker] of this.cardMarkers) {
-      const floor = key.split(':')[0] ?? ''
-      marker.style.top = `${this.laneY(floor) - 130}px`
-      marker.style.visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
-    }
+    this.evidenceView.syncCardMarkers()
+    this.evidenceView.syncCardPositions(this.spectator, this.viewFloor)
     // FR-33 (3.4): tenancy signs follow the same floor-lane visibility rule
     this.syncTenancyMarkers()
     for (const [key, marker] of this.tenancyMarkers) {
@@ -2503,12 +2247,8 @@ body.interior-full #desk-bell {
       marker.style.top = `${this.laneY(floor) - 148}px`
       marker.style.visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
     }
-    for (const [cueId, node] of this.cueNodes) {
-      const cue = this.evidence.cues.find((c) => c.id === cueId)
-      if (cue === undefined) continue
-      node.style.top = `${this.laneY(cue.floor) - (cue.kind === 'rustle' ? 100 : 160)}px`
-    }
-    this.syncCues()
+    this.evidenceView.syncCuePositions()
+    this.evidenceView.syncCues(Date.now())
     this.syncDoors()
     this.syncFurniture()
     // The elevator panel is self-healing: view re-renders rebuild the DOM

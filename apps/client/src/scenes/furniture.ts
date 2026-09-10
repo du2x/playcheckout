@@ -136,3 +136,11 @@ export const MEZZANINE_FURNITURE: readonly FurnitureAnchor[] = [
     depth: -1,
   },
 ]
+
+/** Hall width in px per tile (960 / 30, integer grid — AD-030). Shared by
+ *  every world-anchored renderer that maps tile x to canvas px. */
+export const TILE_PX = 32
+/** Dining tint target (VPOL-08): the lobby→mezzanine dining cue. */
+export const DINING_FILL = 0xffd27a
+/** The lane ground line in canvas px (the walkers' baseline). */
+export const GROUND_Y = 430
