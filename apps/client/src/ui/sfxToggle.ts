@@ -15,7 +15,7 @@ const STYLE = `
 #sfx-toggle {
   position: absolute;
   right: 10px;
-  top: 10px;
+  top: 36px;
   z-index: 30;
   pointer-events: auto;
   padding: 3px 10px;

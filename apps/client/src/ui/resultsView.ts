@@ -27,7 +27,101 @@ const KIND_LABEL: Record<RecapEntry['kind'], string> = {
   complaint: 'complaint',
 }
 
+const STYLE_ID = 'results-view-styles'
+
+const STYLE = `
+#results-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(20, 28, 40, 0.82) 0%, rgba(10, 14, 19, 0.92) 70%);
+}
+#results-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 420px;
+  max-height: 540px;
+  padding: 22px 26px;
+  background: rgba(13, 18, 24, 0.92);
+  border: 1px solid #2a3542;
+  border-top: 3px solid #e6c56a;
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
+  font-family: ui-monospace, monospace;
+  color: #dfe8f2;
+}
+#results-banner {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  text-align: center;
+  color: #ffd98a;
+  text-shadow: 0 0 18px rgba(230, 197, 106, 0.5);
+}
+#results-traitor, #results-score, #results-complaints, #results-reason {
+  margin: 0;
+  font-size: 12px;
+  text-align: center;
+  color: #9fb0c0;
+}
+#results-traitor { color: #dfe8f2; }
+#results-reason { color: #ff9a8a; }
+#results-card h3 {
+  margin: 8px 0 0;
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #8899aa;
+  border-top: 1px solid #2a3542;
+  padding-top: 10px;
+}
+#recap-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#recap-list li {
+  padding: 4px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9fb0c0;
+  background: rgba(26, 37, 48, 0.62);
+  border: 1px solid #2a3542;
+  border-radius: 4px;
+}
+#recap-list .recap-crime { color: #ffb0a0; border-color: #7a3a30; }
+#recap-list .recap-catch, #recap-list .recap-accusation { color: #8ad07a; border-color: #3d5a3a; }
+#start-button {
+  margin-top: 6px;
+  padding: 9px 12px;
+  font: bold 12px ui-monospace, monospace;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #14100a;
+  background: linear-gradient(180deg, #ffd98a, #c8a24a);
+  border: 1px solid #e6c56a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#start-button:hover { filter: brightness(1.1); }
+#start-button[hidden] { display: none; }
+`
+
 export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCallbacks): void {
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null
+  if (style === null) {
+    style = document.createElement('style')
+    style.id = STYLE_ID
+    document.head.appendChild(style)
+  }
+  style.textContent = STYLE
+
   const results = state.results
   const banner = el('h2', { id: 'results-banner' }, [results ? WINNER_LABEL[results.winner] : ''])
   const traitorLine = el('p', { id: 'results-traitor' })
@@ -75,14 +169,16 @@ export function renderResults(root: HTMLElement, state: ViewState, cb: ResultsCa
 
   root.append(
     el('div', { id: 'results-view' }, [
-      banner,
-      traitorLine,
-      scoreLine,
-      complaintsLine,
-      reasonLine,
-      el('h3', {}, ['recap']),
-      recapList,
-      startButton,
+      el('div', { id: 'results-card' }, [
+        banner,
+        traitorLine,
+        scoreLine,
+        complaintsLine,
+        reasonLine,
+        el('h3', {}, ['recap']),
+        recapList,
+        startButton,
+      ]),
       buildAccuseHud(),
     ]),
   )

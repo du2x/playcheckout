@@ -1475,7 +1475,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** The desk-bell DOM line + guest layer root (GUEST-13, AD-018 pattern). */
   private buildGuestLayer(): void {
-    const gameEl = document.querySelector('#game')
+    const gameEl = document.querySelector('#game-dom')
     if (gameEl === null) return
     const bell = document.createElement('div')
     bell.id = 'desk-bell'
@@ -1483,7 +1483,7 @@ export class WorldScene extends Phaser.Scene {
     bell.style.position = 'absolute'
     bell.style.left = '50%'
     bell.style.transform = 'translateX(-50%)'
-    bell.style.top = '12px'
+    bell.style.top = '44px'
     bell.style.padding = '4px 10px'
     bell.style.fontSize = '14px'
     bell.style.background = '#3a3a52'
@@ -1511,7 +1511,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private buildDeskLayer(): void {
-    const gameEl = document.querySelector('#game')
+    const gameEl = document.querySelector('#game-dom')
     if (gameEl === null) return
     const hint = document.createElement('div')
     hint.id = 'desk-hint'
@@ -1519,7 +1519,7 @@ export class WorldScene extends Phaser.Scene {
     hint.style.position = 'absolute'
     hint.style.left = '50%'
     hint.style.transform = 'translateX(-50%)'
-    hint.style.top = '40px'
+    hint.style.top = '72px'
     hint.style.padding = '4px 10px'
     hint.style.fontSize = '14px'
     hint.style.background = '#2b3a4a'
@@ -1533,7 +1533,7 @@ export class WorldScene extends Phaser.Scene {
     log.id = 'walkie-log'
     log.style.position = 'absolute'
     log.style.right = '8px'
-    log.style.top = '12px'
+    log.style.top = '64px'
     log.style.padding = '4px 8px'
     log.style.fontSize = '13px'
     log.style.color = '#ffe9a8'
@@ -1574,7 +1574,7 @@ export class WorldScene extends Phaser.Scene {
     assignment.id = 'suitcase-assignment'
     assignment.style.position = 'absolute'
     assignment.style.left = '50%'
-    assignment.style.top = '64px'
+    assignment.style.top = '100px'
     assignment.style.transform = 'translateX(-50%)'
     assignment.style.padding = '4px 10px'
     assignment.style.fontSize = '13px'
@@ -1601,7 +1601,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private buildEvidenceLayer(): void {
-    const gameEl = document.querySelector('#game')
+    const gameEl = document.querySelector('#game-dom')
     if (gameEl === null) return
     const layer = document.createElement('div')
     layer.id = 'evidence-layer'

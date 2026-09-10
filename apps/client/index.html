@@ -14,11 +14,16 @@
     <meta property="og:image" content="/cover-og.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <title>Turnover</title>
+    <style>
+      /* Pre-module reset: kills the white flash before ui/stage.ts mounts. */
+      html, body { margin: 0; height: 100%; background: #0f1419; }
+    </style>
   </head>
   <body>
     <div id="game-wrapper">
-      <!-- Phaser renders the game world here (prd §11) -->
-      <div id="game"></div>
+      <!-- Phaser renders the game world here (prd §11); #game-dom is the
+           scaled design surface for the scene's DOM layers (ui/stage.ts) -->
+      <div id="game"><div id="game-dom"></div></div>
       <!-- DOM overlay root: lobby, HUD, firing toasts, results, recap (Phase 3) -->
       <div id="overlay"></div>
     </div>

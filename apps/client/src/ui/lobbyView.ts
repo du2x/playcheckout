@@ -17,6 +17,95 @@ export interface LobbyCallbacks {
   onStart: () => void
 }
 
+const STYLE_ID = 'lobby-view-styles'
+
+const STYLE = `
+#lobby-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#lobby-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 380px;
+  max-height: 540px;
+  padding: 20px 24px;
+  background: rgba(13, 18, 24, 0.9);
+  border: 1px solid #2a3542;
+  border-top: 3px solid #e6c56a;
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
+  font-family: ui-monospace, monospace;
+  color: #dfe8f2;
+}
+#lobby-card h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #ffd98a;
+  text-shadow: 0 0 14px rgba(230, 197, 106, 0.45);
+}
+#share-row { display: flex; gap: 6px; }
+#share-link {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font: 11px ui-monospace, monospace;
+  color: #9fb0c0;
+  background: #0a0f14;
+  border: 1px solid #2a3542;
+  border-radius: 4px;
+}
+#share-copy {
+  padding: 4px 10px;
+  font: 10px ui-monospace, monospace;
+  letter-spacing: 1px;
+  color: #9fb0c0;
+  background: #1a2530;
+  border: 1px solid #3d4a58;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#share-copy:hover { color: #dfe8f2; }
+#roster {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#roster li {
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #dfe8f2;
+  background: rgba(26, 37, 48, 0.62);
+  border: 1px solid #2a3542;
+  border-radius: 4px;
+}
+#roster li.own { border-color: #55492c; color: #ffd98a; }
+#start-button {
+  padding: 9px 12px;
+  font: bold 12px ui-monospace, monospace;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #14100a;
+  background: linear-gradient(180deg, #ffd98a, #c8a24a);
+  border: 1px solid #e6c56a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#start-button:hover { filter: brightness(1.1); }
+#start-button[hidden] { display: none; }
+#lobby-error { margin: 0; font-size: 11px; color: #ff9a8a; text-align: center; }
+#lobby-error[hidden] { display: none; }
+`
+
 export function renderLobby(
   root: HTMLElement,
   snapshot: LobbySnapshot,
@@ -64,6 +153,16 @@ export function renderLobby(
   if (error !== null) errorLine.textContent = error
   else errorLine.setAttribute('hidden', '')
 
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null
+  if (style === null) {
+    style = document.createElement('style')
+    style.id = STYLE_ID
+    document.head.appendChild(style)
+  }
+  style.textContent = STYLE
+
+  // The roster card floats over the live world (the staff walks the lobby
+  // behind it); the ride-along HUD mounts stay full-surface placements.
   root.append(
     el('div', { id: 'lobby-view' }, [
       // Elevator + stairs — inline HUD bars at the very top of the main
@@ -75,11 +174,13 @@ export function renderLobby(
       buildTutorialHud(),
       // Fullscreen toggle — always visible top-right.
       buildFullscreenToggle(game),
-      el('h2', {}, [`lobby — room ${roomCode}`]),
-      el('div', { id: 'share-row' }, [shareInput, copyButton]),
-      roster,
-      startButton,
-      errorLine,
+      el('div', { id: 'lobby-card' }, [
+        el('h2', {}, [`lobby — room ${roomCode}`]),
+        el('div', { id: 'share-row' }, [shareInput, copyButton]),
+        roster,
+        startButton,
+        errorLine,
+      ]),
       // The elevator runs from room creation (AD-011): the position-only
       // panel is visible pre-round too, so the machine is observable and
       // testable. Single car (cycle 3.E, AD-040): one hall-call light +
