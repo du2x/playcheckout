@@ -545,9 +545,12 @@ describe('server:protocol_registry', () => {
     const elinStarted = await elinCollector.waitFor('round:started')
     // 8 lobby envelopes: own join, bruno, caro, caro's leave, elin, dina, plus
     // ada's and elin's movement snapshots are self-only (host got its own).
-    expect(hostStarted.seq).toBe(9)
-    // 3 lobby envelopes for elin: own join, movement snapshot, dina's join.
-    expect(elinStarted.seq).toBe(4)
+    // The round-open position baseline adds one player:moved per player (4
+    // alive) before round:started on the same first tick.
+    expect(hostStarted.seq).toBe(13)
+    // 3 lobby envelopes for elin: own join, movement snapshot, dina's join —
+    // plus the same 4 baseline moveds.
+    expect(elinStarted.seq).toBe(8)
     hostCollector.stop()
     elinCollector.stop()
     host.leave()
@@ -2716,8 +2719,14 @@ describe('server:reconnect', () => {
         expect(resumed.payload.complaints).toBe(discoveredCount(hostCollector))
         await restoredCollector.waitFor('movement:snapshot')
         // Others see the rectangle come back: one re-announcing player:moved.
+        // The predicate picks the leaver's own — the round-open position
+        // baseline (startRound announces) leaves earlier moveds in the queue.
         instance.__driveTicks(2)
-        const back = await hostCollector.waitFor('player:moved')
+        const back = await hostCollector.waitFor(
+          'player:moved',
+          2000,
+          (p) => p.playerId === leaver.sessionId,
+        )
         expect(back.payload.playerId).toBe(leaver.sessionId)
 
         // Drive out the shift: the recap must carry the LIVE final score —
@@ -3613,10 +3622,16 @@ describe('server:spectator_view', () => {
 
     // Live same-floor stream reaches the slotless session: walk the host.
     // The send must LAND before the ticks drive (walkToEastLanding's 30 ms).
+    // The predicate skips the host's own round-open baseline announce (x =
+    // spawn row) — the walk's moveds carry a genuinely walked x.
     host.send('move:start', { type: 'move:start', dir: 'right' })
     await new Promise((resolve) => setTimeout(resolve, 30))
     instance?.__driveTicks(6)
-    const moved = await watcherFeed.waitFor('player:moved')
+    const moved = await watcherFeed.waitFor(
+      'player:moved',
+      2000,
+      (p) => p.playerId === host.sessionId && typeof p.x === 'number' && p.x > 12.5,
+    )
     expect((moved.payload as { playerId: string }).playerId).toBe(host.sessionId)
     host.send('move:stop', { type: 'move:stop' })
     await new Promise((resolve) => setTimeout(resolve, 30))
@@ -3677,11 +3692,16 @@ describe('server:spectator_late_join', () => {
     expect(Array.isArray(baseline.payload.players)).toBe(true)
     expect(baseline.payload.rooms).toHaveLength(21)
 
-    // And the live stream flows to the late watcher from then on.
+    // And the live stream flows to the late watcher from then on. Same
+    // predicate shape as the round watcher: skip the baseline announces.
     host.send('move:start', { type: 'move:start', dir: 'right' })
     await new Promise((resolve) => setTimeout(resolve, 30))
     instance?.__driveTicks(6)
-    const moved = await feed.waitFor('player:moved')
+    const moved = await feed.waitFor(
+      'player:moved',
+      2000,
+      (p) => p.playerId === host.sessionId && typeof p.x === 'number' && p.x > 12.5,
+    )
     expect((moved.payload as { playerId: string }).playerId).toBe(host.sessionId)
     host.send('move:stop', { type: 'move:stop' })
 
