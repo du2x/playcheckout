@@ -11,6 +11,9 @@ Three families, all deterministic Pillow authoring (no generation model):
                on the knees) for the stairs arrival breath (AD-040
                amendment); same headless contract, collar pinned to the walk
                frames' neck line so the overlay never shifts.
+  staff-body-work   34x64 x 4 frames — the work-channel scrub loop (staff
+               prep, saboteur un-prep/fake all play it identically, FR-9);
+               same headless contract, collar pinned at y18.
   staff-shadow 34x64 x 7 frames — the walk sheet flattened to one near-black
                ink: the stairwell shadow-play climber (the climb, user
                direction 2026-09-08). Same grid as staff-body, so the anim
@@ -211,6 +214,78 @@ def draw_body_breath() -> Image.Image:
     return px
 
 
+# Work-channel scrub cycle (staff-work, FR-9: ONE loop for every role —
+# prep, un-prep, and fake prep play the identical presentation). A bent
+# scrub stroke: the near arm reaches down-east with the glove and pulls
+# back while the torso leans into the stroke; legs stay planted.
+WORK_REACH = [10, 6, 2, 6]   # glove x offset from the shoulder per frame
+WORK_LEAN = [3, 2, 1, 2]     # torso parallelogram east-shift per frame
+WORK_BOB = [0, 1, 1, 0]      # 1 px settle into the stroke
+WORK_FRAMES = 4
+
+
+def draw_body_work_arm(px: Image.Image, shoulder_x: int, reach: int, far: bool) -> None:
+    """Scrub arm: slants from the shoulder down-east into a working glove
+    (same slant language as the breath arm, reach-driven per frame)."""
+    sleeve = IVORY_SHADE if far else IVORY
+    for y in range(22, 47):
+        t = (y - 22) / 24
+        x = shoulder_x + round(reach * t)
+        rect(px, x, y, x + 2, y, sleeve)
+    glove_x = shoulder_x + reach
+    rect(px, glove_x, 46, glove_x + 2, 49, GLOVE)
+    rect(px, glove_x, 46, glove_x + 2, 46, BRASS_SHADE)
+
+
+def draw_body_work_leg(px: Image.Image, hip_x: int, far: bool) -> None:
+    """Planted work stance: both feet down, knees nudged east under the lean."""
+    pants = CHARCOAL_SHADE if far else CHARCOAL
+    top, bottom = 36, 56
+    for y in range(top, bottom + 1):
+        bend = 2 if 42 <= y <= 50 else 0
+        x = hip_x + bend
+        rect(px, x, y, x + 3, y, pants)
+    rect(px, hip_x, bottom + 1, hip_x + 5, GROUND_ROW, INK)
+
+
+def draw_body_work(frame: int) -> Image.Image:
+    """Headless scrub-cycle frame; the collar row stays at y18 so the
+    variant overlay keeps its pixel lock, rows 0..17 transparent."""
+    px = Image.new("RGBA", (FRAME_W, FRAME_H), TRANSPARENT)
+    reach = WORK_REACH[frame]
+    lean = WORK_LEAN[frame]
+    bob = WORK_BOB[frame]
+
+    # far arm braced back-west, far leg planted behind the lean
+    draw_body_work_arm(px, 11, -2, far=True)
+    draw_body_work_leg(px, 17, far=True)
+
+    # torso: ivory mess jacket leaning east into the stroke (parallelogram,
+    # top rows shifted east by `lean`); collar row stays put for the overlay
+    for y in range(18, 39):
+        x0 = 9 + round((38 - y) / 20 * lean)
+        rect(px, x0, y + bob, x0 + 14, y + bob, IVORY)
+        rect(px, x0, y + bob, x0 + 1, y + bob, IVORY_SHADE)
+        if y in (22, 27, 32):
+            rect(px, x0 + 12, y + bob, x0 + 12, y + bob, BRASS)
+    rect(px, 8, 38 + bob, 11, 42 + bob, IVORY)
+    hline(px, 9, 23, 37 + bob, BRASS_SHADE)
+
+    # near leg over the hem, then the scrubbing near arm
+    draw_body_work_leg(px, 12, far=False)
+    draw_body_work_arm(px, 19, reach, far=False)
+    # collar — identical to the walk/breath frames so the overlay never shifts
+    hline(px, 14, 21, 18, IVORY_SHADE)
+    return px
+
+
+def build_work_sheet() -> Image.Image:
+    sheet = Image.new("RGBA", (FRAME_W * WORK_FRAMES, FRAME_H), TRANSPARENT)
+    for i in range(WORK_FRAMES):
+        sheet.paste(draw_body_work(i), (i * FRAME_W, 0))
+    return sheet
+
+
 def build_body_sheet() -> Image.Image:
     sheet = Image.new("RGBA", (FRAME_W * BODY_FRAMES, FRAME_H), TRANSPARENT)
     for i in range(BODY_FRAMES):
@@ -239,6 +314,24 @@ def build_shadow_sheet() -> Image.Image:
         frame.alpha_composite(head)
         composited.paste(frame, (i * FRAME_W, 0))
     shadow = Image.new("RGBA", body.size, SHADOW_INK[:3] + (0,))
+    shadow.putalpha(composited.getchannel("A"))
+    return shadow
+
+
+def build_work_shadow_sheet() -> Image.Image:
+    """The scrub sheet + variant-0 head flattened to SHADOW_INK — the
+    work-visit silhouette: once the room door seats shut, the worker reads
+    only as a dark figure against the slab (the stairwell shadow-play
+    language carried into the doorway). Same 4-frame grid as the work sheet,
+    so the anim mirrors staff-work 1:1; derived, never redrawn."""
+    work = build_work_sheet()
+    head = draw_variant_head(0)
+    composited = Image.new("RGBA", work.size, TRANSPARENT)
+    for i in range(WORK_FRAMES):
+        frame = work.crop((i * FRAME_W, 0, (i + 1) * FRAME_W, FRAME_H)).copy()
+        frame.alpha_composite(head)
+        composited.paste(frame, (i * FRAME_W, 0))
+    shadow = Image.new("RGBA", work.size, SHADOW_INK[:3] + (0,))
     shadow.putalpha(composited.getchannel("A"))
     return shadow
 
@@ -518,6 +611,10 @@ def main() -> None:
     body.save(out / "staff-body-34x64-7f.png")
     breath = draw_body_breath()
     breath.save(out / "staff-body-breath.png")
+    work = build_work_sheet()
+    work.save(out / "staff-body-work-4f.png")
+    work_shadow = build_work_shadow_sheet()
+    work_shadow.save(out / "staff-work-shadow-4f.png")
     shadow = build_shadow_sheet()
     shadow.save(out / "staff-shadow-7f.png")
     variants = build_variant_sheet()
@@ -537,14 +634,14 @@ def main() -> None:
     for name, img in guests.items():
         img.save(out / name)
 
-    for name in ["staff-body-34x64-7f.png", "staff-body-breath.png", "staff-shadow-7f.png", "staff-variant-8f.png", *guests.keys()]:
+    for name in ["staff-body-34x64-7f.png", "staff-body-breath.png", "staff-body-work-4f.png", "staff-work-shadow-4f.png", "staff-shadow-7f.png", "staff-variant-8f.png", *guests.keys()]:
         p = out / name
         print(f"wrote {p} ({p and Image.open(p).size})")
 
     # Contact sheet at 3x over a dark backdrop, wrapped rows
     tmp = Path("/tmp/opencode")
     tmp.mkdir(parents=True, exist_ok=True)
-    items = [body] + [breath] + [shadow] + [variants] + list(guests.values())
+    items = [body] + [breath] + [work] + [work_shadow] + [shadow] + [variants] + list(guests.values())
     scale = 3
     margin = 8
     row_w = 1200

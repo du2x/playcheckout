@@ -60,6 +60,7 @@ import { GuestsView } from './guestsView'
 import { JUICE, shouldShake } from './juice'
 import { StairsVisit, type StairsVisitReadout } from './stairsVisit'
 import { SuitcasesView } from './suitcasesView'
+import { WORK_VISIT, type WorkDoorState, WorkVisit, type WorkVisitReadout } from './workVisit'
 import {
   advanceZoom,
   REST_ZOOM,
@@ -82,6 +83,13 @@ import {
  */
 
 const ELEVATOR_DOOR_PX = 80
+/** Doorway band (interior-sheet px, ART-06 geometry): the 112 px interior
+ *  sheet is cropped to the open door's jamb-to-jamb span so no interior
+ *  pixel ever renders outside the door frame — the wall owns the rest. The
+ *  door (72 px) seats at the segment center, jambs at x20..92 of the sheet;
+ *  the crop keeps a 2 px seat inside each jamb edge. */
+const INTERIOR_DOORWAY_CROP_X = 24
+const INTERIOR_DOORWAY_CROP_W = 68
 const SPEED_TILES_PER_SEC = TUNING.PLAYER_SPEED_TILES_PER_SEC
 /** Staff variant buckets (Phase 4.1, VPOL-02): the client mirror of
  *  packages/sim cosmetic.ts — pure seed → head-frame index. Pinned equal to
@@ -158,9 +166,9 @@ interface PlayerDisplay {
   /** Juice state (VPOL-13): whether the last frame counted as moving — the
    *  settle pop fires on the moving→idle transition only. */
   wasMoving?: boolean
-  /** The own display wears the staff-breath pose while the arrival breath
-   *  runs (own-viewer only — the stairs row is personal-snapshot truth). */
-  breathing?: boolean
+  /** The pose texture currently on the body sprite (staff-walk / staff-breath
+   *  / staff-work / staff-work-shadow) — the pose swaps ride its edge. */
+  poseTexture?: string
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -249,6 +257,13 @@ export class WorldScene extends Phaser.Scene {
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
   private work: { startedAt: number; seconds: number } | null = null
+  /** The own player's room-work choreography (presentation-only offsets +
+   *  door override); null whenever no channel is live or rendering its exit. */
+  private workVisit: WorkVisit | null = null
+  /** The visit's latest frame — consumed by the render loop and syncDoors. */
+  private visitReadout: WorkVisitReadout | null = null
+  /** Which room the active visit plays in (door-override targeting). */
+  private visitRoom: { floor: string; room: RoomIndex } | null = null
   /** Cached per-frame DOM refs, self-healing: app.ts rebuilds the HUD root on
    *  message batches, so a cached element is re-queried once it detaches
    *  (isConnected) instead of re-querying the document every frame. */
@@ -297,6 +312,10 @@ export class WorldScene extends Phaser.Scene {
     string,
     { carrierId: string | null; rest: { floor: FloorId; room: RoomIndex } | null }
   >()
+  /** Suitcase ids that left play since the last view sync (SUI-18 amended:
+   *  carry-clock give-up) — the view fades their markers once and the queue
+   *  drains at the sync call site. */
+  private fadingSuitcases: string[] = []
   private tenancies = new Map<string, boolean>()
   private tenancyMarkers = new Map<string, HTMLElement>()
   private audio: AudioContext | null = null
@@ -376,6 +395,9 @@ export class WorldScene extends Phaser.Scene {
     this.heldMoveKeys = []
     this.viewFloor = 'lobby'
     this.work = null
+    this.workVisit = null
+    this.visitReadout = null
+    this.visitRoom = null
     this.interior = null
     this.stairsVisit.reset()
     this.breathSprite = null
@@ -465,6 +487,28 @@ export class WorldScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers('fx-rustle', { start: 0, end: 3 }),
         frameRate: 12,
         hideOnComplete: true,
+      })
+    }
+    if (this.textures.exists('staff-work') && !this.anims.exists('staff-work')) {
+      // The work-channel scrub loop (work-visit): every frame of the 4f sheet
+      // is part of the cycle — no idle frame, the pose only exists mid-channel.
+      const last = this.textures.get('staff-work').getFrameNames().length - 1
+      this.anims.create({
+        key: 'staff-work',
+        frames: this.anims.generateFrameNumbers('staff-work', { start: 0, end: last }),
+        frameRate: 7,
+        repeat: -1,
+      })
+    }
+    if (this.textures.exists('staff-work-shadow') && !this.anims.exists('staff-work-shadow')) {
+      // The closed-door silhouette mirrors the scrub loop 1:1 (derived sheet,
+      // same grid) — the dark figure behind the seated door.
+      const last = this.textures.get('staff-work-shadow').getFrameNames().length - 1
+      this.anims.create({
+        key: 'staff-work-shadow',
+        frames: this.anims.generateFrameNumbers('staff-work-shadow', { start: 0, end: last }),
+        frameRate: 7,
+        repeat: -1,
       })
     }
     if (this.textures.exists('fx-breath') && !this.anims.exists('breath')) {
@@ -959,11 +1003,19 @@ export class WorldScene extends Phaser.Scene {
       case 'work-started':
         if (action.playerId !== this.ownId) return
         this.work = { startedAt: Date.now(), seconds: action.seconds }
+        // The visit owns the choreography from here: walk in, door shut, scrub.
+        this.workVisit = new WorkVisit(this.roomCenterPx(action.room) + WORK_VISIT.spotDxPx)
+        this.visitReadout = null
+        this.visitRoom = { floor: action.floor, room: action.room }
         this.updateWorkBar()
         break
       case 'work-ended':
         if (action.playerId !== this.ownId) return
         this.work = null
+        // completed → the unhurried walk back out; cancelled (walked out,
+        // FR-16) → the fast walk-free snap back to sim truth.
+        if (action.outcome === 'completed') this.workVisit?.complete()
+        else this.workVisit?.abort()
         this.updateWorkBar()
         break
       case 'room-observed':
@@ -1086,6 +1138,20 @@ export class WorldScene extends Phaser.Scene {
         )
         this.beep(140)
         break
+      case 'guest-gave-up': {
+        // SUI-18 amended: the carry clock lapsed — the guest gives up instead
+        // of the carrier being fired. The suitcase left play server-side; the
+        // marker fades from its last position and the walkie line is the
+        // complaint (building-wide, counts toward nothing — AD-039). The
+        // walk-out itself rides the guest:moved stream to guest:left.
+        this.suitcases.delete(action.guestId)
+        this.fadingSuitcases.push(action.guestId)
+        this.diningGuests.delete(action.guestId)
+        this.impatientGuests.delete(action.guestId)
+        this.appendWalkieLine('a guest gives up on their suitcase')
+        this.beep(140)
+        break
+      }
       case 'spectator-snapshot': {
         // FR-20 baseline: kept for the spectator overview (own client only —
         // the server routes it 'self' to fired sessions and to the from-t0
@@ -1216,6 +1282,13 @@ export class WorldScene extends Phaser.Scene {
     display.variant?.destroy()
     display.label.destroy()
     this.players.delete(playerId)
+    // A fired own player's channel dies silently (WORK-12: no work:ended
+    // comes) — the choreography must die with it, offsets and all.
+    if (playerId === this.ownId) {
+      this.workVisit = null
+      this.visitReadout = null
+      this.visitRoom = null
+    }
   }
 
   /**
@@ -1236,11 +1309,40 @@ export class WorldScene extends Phaser.Scene {
    * visual half). Sprite-based: adds no Rectangle/Ellipse/Text (harness
    * contract), no payload carries a role (FR-9 — the cue is location-only).
    */
+  /** The visit's door override for one room — null when no live visit plays
+   *  there (the standing open/closed rule governs every other door). */
+  private visitDoorState(floor: string, room: RoomIndex): WorkDoorState | null {
+    if (
+      this.workVisit === null ||
+      this.visitReadout === null ||
+      this.visitRoom === null ||
+      this.visitRoom.floor !== floor ||
+      this.visitRoom.room !== room
+    ) {
+      return null
+    }
+    return this.visitReadout.door
+  }
+
+  /** WorkDoorState → texture key; the ajar frame falls back to open when the
+   *  texture failed to load (spec edge: the fallback boot path). */
+  private doorTextureFor(state: WorkDoorState): string {
+    if (state === 'open') return 'door-open'
+    if (state === 'ajar') return this.textures.exists('door-ajar') ? 'door-ajar' : 'door-open'
+    return 'door-closed'
+  }
+
   private playRustleFx(floor: string, room: RoomIndex): void {
-    if (!this.textures.exists('fx-rustle') || !this.anims.exists('fx-rustle')) return
     const startPx = (roomSegmentStartMilli(room) / 1000) * TILE_PX
     const endPx = (roomSegmentEndMilli(room) / 1000) * TILE_PX
-    const sprite = this.add.sprite((startPx + endPx) / 2, this.laneY(floor), 'fx-rustle')
+    this.spawnRustlePuff((startPx + endPx) / 2, this.laneY(floor))
+  }
+
+  /** One fx-rustle one-shot at a world point — the sabotage rustle cue at a
+   *  room front and the work-visit's scrub dust share the sheet. */
+  private spawnRustlePuff(xPx: number, yPx: number): void {
+    if (!this.textures.exists('fx-rustle') || !this.anims.exists('fx-rustle')) return
+    const sprite = this.add.sprite(xPx, yPx, 'fx-rustle')
     sprite.setOrigin(0.5, 1)
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy())
     sprite.play('fx-rustle')
@@ -1842,7 +1944,14 @@ body.interior-full #desk-bell {
           (!this.spectator &&
             (ownRoom === room ||
               (ownRoom === null && cuedRooms.has(String(key)) && floor === this.viewFloor))))
-      image.setTexture(open ? 'door-open' : 'door-closed')
+      // The work-visit owns the visited room's door leaf while it renders:
+      // open through the enter stride, ajar → closed over the working phase,
+      // and the reverse swing on the way out (work-visit spec). Every other
+      // door keeps the standing open/closed rule (ART-08/ART-10).
+      const visitState = this.visitDoorState(floor ?? '', room)
+      image.setTexture(
+        visitState !== null ? this.doorTextureFor(visitState) : open ? 'door-open' : 'door-closed',
+      )
       if (this.spectator) {
         this.syncSpectatorInterior(floor ?? '', room, visible && open, state)
       }
@@ -1872,6 +1981,10 @@ body.interior-full #desk-bell {
       this.interiorImage.setOrigin(0, 1)
       this.interiorImage.setDepth(-1)
       this.interiorImage.setName(`interior:${this.interior.floor}:${room}`)
+      // The interior exists only through the doorway: everything outside the
+      // open door's jamb-to-jamb span is wall (ART-06's sheet is wider than
+      // the door it sits behind).
+      this.interiorImage.setCrop(INTERIOR_DOORWAY_CROP_X, 0, INTERIOR_DOORWAY_CROP_W, 96)
     }
     this.interiorImage.setTexture(this.interiorTexture(this.interior.state))
     this.interiorImage.x = (roomSegmentStartMilli(room) / 1000) * TILE_PX
@@ -1897,6 +2010,8 @@ body.interior-full #desk-bell {
       image.setOrigin(0, 1)
       image.setDepth(-1)
       image.setName(`interior:${key}`)
+      // Same doorway-band crop as the own interior (no leak past the frame).
+      image.setCrop(INTERIOR_DOORWAY_CROP_X, 0, INTERIOR_DOORWAY_CROP_W, 96)
       this.spectatorInteriors.set(key, image)
     }
     if (image !== undefined) {
@@ -2215,12 +2330,48 @@ body.interior-full #desk-bell {
       own.x += this.ownMoving === 'left' ? -SPEED_TILES_PER_SEC * dt : SPEED_TILES_PER_SEC * dt
       own.x = Math.min(30, Math.max(0, own.x))
     }
+    // Work-visit choreography (work-visit spec, presentation-only): one step
+    // per frame while the channel — or its exit walk — renders. The one-shot
+    // edges fire the door audio and the scrub dust here, once per edge. The
+    // offsets always resolve against live sim truth, so the cancel walk never
+    // strands the sprite away from its body.
+    if (this.workVisit !== null) {
+      const readout = this.workVisit.step(dt, (own?.x ?? 0) * TILE_PX)
+      this.visitReadout = readout.done ? null : readout
+      if (readout.done) this.workVisit = null
+      if (readout.doorJustClosed) {
+        sfx.doorThunk()
+        if (this.visitRoom !== null) {
+          this.spawnRustlePuff(
+            this.roomCenterPx(this.visitRoom.room),
+            this.laneY(this.visitRoom.floor),
+          )
+        }
+      }
+      if (readout.doorJustOpened) sfx.doorWhoosh()
+      if (readout.dustPuff && own !== undefined && this.visitRoom !== null) {
+        this.spawnRustlePuff(
+          own.x * TILE_PX + readout.offsetX,
+          this.laneY(this.visitRoom.floor) + readout.offsetY,
+        )
+      }
+    }
     // Room zoom (room-zoom spec): integer 2× focus WHILE the own player
     // runs a work channel (FR-7/8/9) — eased per frame, EXACT identity at
     // rest. The policy lives in the presenter (one home, AD-037 pinch);
     // the camera and the world-anchored DOM marker layer apply the same
-    // view, so markers stay in lockstep with the canvas (R4).
-    this.syncRoomZoom(dt, own, ownInStairBox, this.work !== null)
+    // view, so markers stay in lockstep with the canvas (R4). While the
+    // visit renders, the ease frames the body's RENDER position — the spot
+    // inside the room, not the standing sim x.
+    this.syncRoomZoom(
+      dt,
+      own,
+      ownInStairBox,
+      this.work !== null,
+      this.visitReadout !== null && own !== undefined
+        ? own.x * TILE_PX + this.visitReadout.offsetX
+        : undefined,
+    )
     // Catching-breath pose inputs (AD-040 amendment): the own body wears the
     // braced pose while the breath runs — own-viewer only (the stairs row is
     // personal-snapshot truth, never broadcast).
@@ -2245,44 +2396,84 @@ body.interior-full #desk-bell {
         // destination floor and renders like any occupant.
         !(id === this.ownId && ownInStairBox) &&
         (this.spectator || display.floor === this.viewFloor)
-      display.sprite.setVisible(visible)
-      display.variant?.setVisible(visible)
-      display.label.setVisible(visible)
-      // The pose swap rides the texture, once per edge: breath in → the
-      // braced frame (walk anim suppressed — the sim pins the breather),
-      // breath out → back to the walk sheet. The breather's x is sim truth
-      // (STAIRS_ARRIVAL_X_TILES east of the wall) — no render offset.
+      // Pose facts precede the visibility writes so the silhouette hides the
+      // variant overlay on the very frame the texture flips.
+      // - Catching-breath (AD-040 amendment): the braced pose while the
+      //   arrival breath runs — own-viewer only.
+      // - Work-visit scrub (own-viewer only): the loop owns the body from the
+      //   working phase to the channel's end; the variant overlay keeps its
+      //   collar pixel-lock. The enter/exit strides stay on the walk sheet.
+      // - Closed-door silhouette: once the door seats shut, the worker reads
+      //   only as a dark figure against the slab (the stairwell shadow-play
+      //   ink carried into the doorway) — the shadow sheet bakes the head,
+      //   so the variant overlay drops for the silhouette frames.
       const breathing = id === this.ownId && ownBreathing && breathPoseOk
-      if (display.breathing !== breathing) {
-        display.breathing = breathing
-        display.sprite.setTexture(breathing ? 'staff-breath' : 'staff-walk')
+      const workingPose =
+        id === this.ownId &&
+        !breathing &&
+        this.visitReadout !== null &&
+        this.visitReadout.scrubbing &&
+        this.textures.exists('staff-work')
+      const silhouette =
+        workingPose &&
+        this.visitReadout !== null &&
+        this.visitReadout.door === 'closed' &&
+        this.textures.exists('staff-work-shadow')
+      const wanted = breathing
+        ? 'staff-breath'
+        : silhouette
+          ? 'staff-work-shadow'
+          : workingPose
+            ? 'staff-work'
+            : 'staff-walk'
+      if (display.poseTexture !== wanted) {
+        display.poseTexture = wanted
+        display.sprite.setTexture(wanted)
         display.sprite.anims.stop()
         display.sprite.setFrame(0)
       }
+      display.sprite.setVisible(visible)
+      display.variant?.setVisible(visible && !silhouette)
+      display.label.setVisible(visible)
+      // The visit's render offsets (walk to the work spot, step into the
+      // room's depth) ride on top of the sim truth — the label follows the
+      // body's x but stays on the lane line.
+      const visit = id === this.ownId && this.visitReadout !== null ? this.visitReadout : null
+      const vx = visit?.offsetX ?? 0
+      const vy = visit?.offsetY ?? 0
       const px = display.x * TILE_PX
-      display.sprite.x = px
-      display.variant?.setPosition(px, laneY)
-      display.label.x = px
-      display.sprite.y = laneY
+      display.sprite.x = px + vx
+      display.variant?.setPosition(px + vx, laneY + vy)
+      display.label.x = px + vx
+      display.sprite.y = laneY + vy
       display.label.y = laneY + 48
       // ART-02/03: facing + walk cycle. The own player's facing follows the
       // local prediction; remote players keep their last moved facing. The
-      // walk plays while the display is live (predicted own movement or an
+      // visit's strides steer the facing while the prediction stands still.
+      // The walk plays while the display is live (predicted own movement or an
       // unsettled lerp target) and settles back to frame 0 when stopped —
       // identical presentation for every role (FR-9). The variant overlay
       // mirrors facing pixel-for-pixel (VPOL-02 flipX parity).
       if (id === this.ownId && this.ownMoving !== null) display.facing = this.ownMoving
+      else if (visit !== null && visit.moveDir !== 0) {
+        display.facing = visit.moveDir < 0 ? 'left' : 'right'
+      }
       const moving =
         !breathing &&
-        ((id === this.ownId && this.ownMoving !== null) ||
+        !workingPose &&
+        ((id === this.ownId && (this.ownMoving !== null || visit?.walking === true)) ||
           (display.targetX !== null && Math.abs(display.targetX - display.x) > 0.01))
       const flip = display.facing === 'left'
       display.sprite.flipX = flip
       if (display.variant !== null) {
         display.variant.flipX = flip
-        display.variant.setVisible(visible)
+        display.variant.setVisible(visible && !silhouette)
       }
-      if (moving) {
+      if (workingPose) {
+        if (!display.sprite.anims.isPlaying) {
+          display.sprite.play(silhouette ? 'staff-work-shadow' : 'staff-work')
+        }
+      } else if (moving) {
         if (!display.sprite.anims.isPlaying) display.sprite.play('staff-walk')
       } else if (display.sprite.anims.isPlaying) {
         display.sprite.anims.stop()
@@ -2333,7 +2524,9 @@ body.interior-full #desk-bell {
       spectator: this.spectator,
       viewFloor: this.viewFloor,
       hint: this.assignmentHintText(),
+      fadingIds: this.fadingSuitcases,
     })
+    this.fadingSuitcases = []
     this.syncDesk()
     // Card glyph position/visibility follow the floor lanes; cues expire here.
     this.evidenceView.syncCardMarkers()
@@ -2432,6 +2625,7 @@ body.interior-full #desk-bell {
     own: PlayerDisplay | undefined,
     ownInStairBox: boolean,
     channeling: boolean,
+    centerXPx?: number,
   ): void {
     const active = roomZoomActive({
       spectator: this.spectator,
@@ -2444,7 +2638,7 @@ body.interior-full #desk-bell {
     const cam = this.cameras.main
     const target = zoomTarget(
       active,
-      (own?.x ?? 0) * TILE_PX,
+      centerXPx ?? (own?.x ?? 0) * TILE_PX,
       this.laneY(own?.floor ?? this.viewFloor),
       cam.width,
       cam.height,

@@ -28,6 +28,18 @@ export class BootScene extends Phaser.Scene {
     // while the arrival breath runs; collar-pinned to the walk frames so the
     // variant overlay keeps its pixel lock.
     this.load.image('staff-breath', 'art/chars/staff-body-breath.png')
+    // Work-channel scrub loop (work-visit): same 34x64 headless contract,
+    // collar pinned at y18 — prep, un-prep, and fake prep all play it (FR-9).
+    this.load.spritesheet('staff-work', 'art/chars/staff-body-work-4f.png', {
+      frameWidth: 34,
+      frameHeight: 64,
+    })
+    // Its shadow-play twin (derived: variant-0 head + near-black ink) — the
+    // worker behind a seated door reads only as a dark figure on the slab.
+    this.load.spritesheet('staff-work-shadow', 'art/chars/staff-work-shadow-4f.png', {
+      frameWidth: 34,
+      frameHeight: 64,
+    })
     // Stairwell shadow-play climber (the climb): the walk sheet flattened to
     // one near-black ink — same 34x64 x 7f grid, anim mirrors staff-walk.
     this.load.spritesheet('staff-shadow', 'art/chars/staff-shadow-7f.png', {
@@ -79,6 +91,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('npc-receptionist', 'art/chars/npc-receptionist.png')
     this.load.image('door-closed', 'art/doors/door-closed.png')
     this.load.image('door-open', 'art/doors/door-open.png')
+    // Mid-swing tween frame: the work-visit's door shut/open choreography.
+    this.load.image('door-ajar', 'art/doors/door-ajar.png')
     this.load.image('door-card', 'art/doors/door-card.png')
     this.load.spritesheet('elevator-door', 'art/elevator/elevator-door.png', {
       frameWidth: 80,

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "art_direction_brief": "docs/art/alternative/art-direction-brief.md (Deco Noir, AD-029)",
-  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains); staff-work-channel deferred (Phase 3, FR-9 audit required). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050, amended AD-052; guest family expanded to 10 kinds 2026-09-05; staff-body-breath pose added 2026-09-08; staff-shadow climb sheet added 2026-09-08): 18 entries / 24 loaded textures / 26 files, ~12 KB total against ≤20 sheets / <2 MB. AD-052: the `sconce` entry, sheet, and generator were removed (user ruling 2026-09-04 — no candle props).",
+  "notes": "Deco Noir restyle (AD-029) landed over the same sheet contracts from cycle 2.10 art-swap: rendering-only, zero protocol/sim/tuning changes. door-card authored but unwired (DOM glyph remains). Statuses: approved | in-review | deferred | planned. Count 4.2 (AD-050, amended AD-052; guest family expanded to 10 kinds 2026-09-05; staff-body-breath pose added 2026-09-08; staff-shadow climb sheet added 2026-09-08): 20 entries / 27 loaded textures / 29 files, ~14 KB total against ≤20 sheets / <2 MB. AD-052: the `sconce` entry, sheet, and generator were removed (user ruling 2026-09-04 — no candle props). staff-body-work + door-ajar landed 2026-09-11 with the work-visit door choreography (presentation-only; FR-9: one scrub loop for every channel kind); staff-work-shadow followed the same day — the seated door silhouettes the worker (user direction: a full-color body behind a closed door reads confusing), and interiors crop to the doorway band so nothing renders outside the door frame.",
   "assets": [
     {
       "id": "staff-body",
@@ -185,31 +185,60 @@
     },
     {
       "id": "staff-work-channel",
-      "role": "work channel loop; MUST be identical for every role (FR-9)",
-      "path": "apps/client/public/art/chars/staff-work-6f.png",
-      "status": "deferred",
+      "role": "work-channel scrub loop (work-visit choreography: walk in, door shut, scrub, walk out); MUST be identical for every role (FR-9) — prep, un-prep, and fake prep all play it",
+      "path": "apps/client/public/art/chars/staff-body-work-4f.png",
+      "status": "approved",
       "technical": {
-        "dimensions": "28x60",
+        "dimensions": "136x64 (4 frames of 34x64)",
         "alpha": true,
         "anchor": "bottom-center",
-        "frames": 6,
+        "frames": 4,
         "filtering": "nearest"
       },
       "visual_locks": ["palette", "proportions", "facing", "light-direction"],
       "source": {
         "kind": "authored",
-        "url_or_tool": "",
-        "creator": "",
-        "created_at": "",
-        "license": "",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-11",
+        "license": "project-internal",
         "attribution": "",
-        "prompt_or_source_record": "deferred to Phase 3 per art-swap spec assumption: the channel keeps the idle pose during work (safest FR-9 presentation); a shared work loop needs its own FR-9 audit Restyled to Deco Noir palette (AD-029); sheet contract unchanged."
+        "prompt_or_source_record": "Landed with the work-visit choreography: 34x64 headless contract, collar pinned at y18 so the variant overlay keeps its pixel lock; the scrub stroke reads through arm reach + torso lean. FR-9 audit: one loop for every channel kind, no role tell."
       },
       "verification": {
-        "native_scale_reviewed": false,
+        "native_scale_reviewed": true,
         "in_engine_reviewed": false,
-        "technical_checks_passed": false,
-        "approved_by": ""
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (4x contact preview + in-room composite 2026-09-11); in-engine review rides the work-visit Gate 3/4"
+      }
+    },
+    {
+      "id": "staff-work-shadow",
+      "role": "closed-door silhouette of the work-visit scrub: the worker behind a seated door reads only as a dark figure on the slab (stairwell shadow-play language)",
+      "path": "apps/client/public/art/chars/staff-work-shadow-4f.png",
+      "status": "approved",
+      "technical": {
+        "dimensions": "136x64 (4 frames of 34x64)",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 4,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette", "proportions", "facing", "light-direction"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-cast-4-1.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-11",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "Derived, never redrawn: build_work_sheet() + draw_variant_head(0) flattened to SHADOW_INK (the staff-shadow derivation); same 4-frame grid, anim mirrors staff-work 1:1. The head bakes into the sheet, so the variant overlay drops for silhouette frames."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (4x preview against the walnut slab 2026-09-11); in-engine review rides the work-visit Gate 3/4"
       }
     },
     {
@@ -268,6 +297,35 @@
         "in_engine_reviewed": true,
         "technical_checks_passed": true,
         "approved_by": "art workstream + design owner (Gate 4 capture 2026-08-30, /tmp/opencode/art-swap-floor1.png + art-swap-lobby.png)"
+      }
+    },
+    {
+      "id": "door-ajar",
+      "role": "mid-swing room-door tween frame: the work-visit's shut/open choreography plays closed -> ajar -> open (and back)",
+      "path": "apps/client/public/art/doors/door-ajar.png",
+      "status": "approved",
+      "technical": {
+        "dimensions": "72x96",
+        "alpha": true,
+        "anchor": "bottom-center",
+        "frames": 1,
+        "filtering": "nearest"
+      },
+      "visual_locks": ["palette", "silhouette", "proportions", "light-direction"],
+      "source": {
+        "kind": "authored",
+        "url_or_tool": "scripts/art/generate-doors-elevator.py (deterministic Pillow authoring, no generation model)",
+        "creator": "art workstream",
+        "created_at": "2026-09-11",
+        "license": "project-internal",
+        "attribution": "",
+        "prompt_or_source_record": "Mostly-shut slab with a dark sliver of opening on the hinge side, compressed panel hints, knob near the leading edge; same jamb + threshold language as door-closed/door-open."
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": false,
+        "technical_checks_passed": true,
+        "approved_by": "art workstream (3x frame-family preview 2026-09-11); in-engine review rides the work-visit Gate 3/4"
       }
     },
     {

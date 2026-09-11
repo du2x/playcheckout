@@ -143,6 +143,101 @@ test.describe('client:work_channels', () => {
     await host.keyboard.up('ArrowLeft')
     await host.waitForTimeout(300)
 
+    // Arm the work-visit recorder (50 ms sampler) BEFORE the channel starts:
+    // the choreography gate. The visited room's door is identified at arm
+    // time — the visible door nearest ada's name label, which the standing
+    // ART-08 rule holds OPEN while she stands inside — then tracked across
+    // the channel: it must swing fully shut while the body wears the scrub
+    // pose (silhouetted to the shadow ink while the door seats closed), with
+    // the interior cropped to the doorway band (no leak past the frame), and
+    // swing back open after the body strides out.
+    await host.evaluate(() => {
+      const w = window as unknown as {
+        __workRecorder?: {
+          ownDoorName: string | null
+          sawWorkPose: boolean
+          sawSilhouette: boolean
+          sawDoorShut: boolean
+          sawInteriorWhileWorking: boolean
+          croppedInterior: boolean
+          minPoseY: number | null
+          sawOpenAfter: number
+          stopped: boolean
+        }
+      }
+      w.__workRecorder = {
+        ownDoorName: null,
+        sawWorkPose: false,
+        sawSilhouette: false,
+        sawDoorShut: false,
+        sawInteriorWhileWorking: false,
+        croppedInterior: false,
+        minPoseY: null,
+        sawOpenAfter: 0,
+        stopped: false,
+      }
+      const sample = () => {
+        const rec = w.__workRecorder
+        if (rec === undefined || rec.stopped) return
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (name: string) => {
+                children: {
+                  list: {
+                    type: string
+                    name: string
+                    text?: string
+                    visible: boolean
+                    x: number
+                    y: number
+                    isCropped?: boolean
+                    texture?: { key: string }
+                  }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const list = t.scene('Round')?.children.list ?? []
+        const doors = list.filter(
+          (c) => c.type === 'Image' && c.name.startsWith('door:') && c.visible,
+        )
+        const interior = list.find(
+          (c) => c.type === 'Image' && c.name.startsWith('interior:') && c.visible,
+        )
+        const interiors = interior === undefined ? 0 : 1
+        const worker = list.find(
+          (c) =>
+            c.type === 'Sprite' &&
+            (c.texture?.key === 'staff-work' || c.texture?.key === 'staff-work-shadow'),
+        )
+        if (worker !== undefined) {
+          rec.sawWorkPose = true
+          if (worker.texture?.key === 'staff-work-shadow') rec.sawSilhouette = true
+          rec.minPoseY = rec.minPoseY === null ? worker.y : Math.min(rec.minPoseY, worker.y)
+          if (interiors >= 1) rec.sawInteriorWhileWorking = true
+        }
+        if (interior !== undefined && interior.isCropped === true) rec.croppedInterior = true
+        if (rec.ownDoorName === null && !rec.sawWorkPose) {
+          const label = list.find((c) => c.type === 'Text' && c.text === 'ada' && c.visible)
+          if (label !== undefined && doors.length > 0) {
+            const nearest = doors.reduce((a, b) =>
+              Math.abs(b.x - label.x) < Math.abs(a.x - label.x) ? b : a,
+            )
+            rec.ownDoorName = nearest.name
+          }
+        }
+        const ownDoor = doors.find((c) => c.name === rec.ownDoorName)
+        if (ownDoor === undefined || ownDoor.texture === undefined) return
+        if (worker !== undefined && ownDoor.texture.key === 'door-closed') {
+          rec.sawDoorShut = true
+        }
+        if (rec.sawDoorShut && ownDoor.texture.key === 'door-open') rec.sawOpenAfter += 1
+      }
+      window.setInterval(sample, 50)
+    })
+
     // Space starts the channel: the own progress bar appears.
     await host.keyboard.press('Space')
     await host.waitForFunction(
@@ -182,6 +277,43 @@ test.describe('client:work_channels', () => {
       undefined,
       { timeout: 5000 },
     )
+
+    // The visit's exit walk: the visited room's door swings back open once
+    // the body strides out (the 50 ms sampler catches the reopened doorway).
+    await host.waitForFunction(
+      () =>
+        ((window as unknown as { __workRecorder?: { sawOpenAfter: number } }).__workRecorder
+          ?.sawOpenAfter ?? 0) > 0,
+      undefined,
+      { timeout: 5000 },
+    )
+    await host.evaluate(() => {
+      const w = window as unknown as { __workRecorder?: { stopped: boolean } }
+      if (w.__workRecorder !== undefined) w.__workRecorder.stopped = true
+    })
+    const visit = await host.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __workRecorder?: {
+              sawWorkPose: boolean
+              sawSilhouette: boolean
+              sawDoorShut: boolean
+              sawInteriorWhileWorking: boolean
+              croppedInterior: boolean
+              minPoseY: number | null
+            }
+          }
+        ).__workRecorder,
+    )
+    expect(visit?.sawWorkPose).toBe(true) // the scrub pose owned the body
+    expect(visit?.sawSilhouette).toBe(true) // the seated door silhouetted it
+    expect(visit?.sawDoorShut).toBe(true) // the door closed behind the worker
+    expect(visit?.sawInteriorWhileWorking).toBe(true) // the doorway slice stayed
+    expect(visit?.croppedInterior).toBe(true) // interior cropped to the doorway band
+    // The body walked up into the room's depth (spot is 14 px above the lane;
+    // standing feet live at 430).
+    expect(visit?.minPoseY ?? 430).toBeLessThanOrEqual(424)
 
     // The interior was observed on entry and the transition updated the label
     // while standing inside (WORK-14/15/16 client half).

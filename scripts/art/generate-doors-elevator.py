@@ -7,6 +7,9 @@ unchanged from AD-020):
   apps/client/public/art/doors/door-open.png       (72x96, opening transparent
                                                     so the room interior renders
                                                     behind it — FR-10)
+  apps/client/public/art/doors/door-ajar.png       (72x96, mid-swing tween
+                                                    frame for the work-visit
+                                                    door close/open)
    apps/client/public/art/doors/door-card.png       (24x16, hallway-readable, FR-11)
    apps/client/public/art/elevator/elevator-door.png (160x96 sheet, open|closed,
                                                      AD-036 front-facing
@@ -111,6 +114,33 @@ def door_open() -> Image.Image:
     return px
 
 
+def door_ajar() -> Image.Image:
+    """Mid-swing frame for the room-door close/open tween (work-visit): the
+    slab swung most of the way shut — a dark sliver of opening remains on the
+    hinge (west) side, the slab foreshortened with one compressed panel and
+    the knob near its leading edge. Same jamb + threshold language."""
+    px = new(72, 96)
+    door_frame(px)
+    # opening: transparent interior with the inner-jamb shadow family
+    rect(px, 4, 6, 67, 95, TRANSPARENT)
+    rect(px, 4, 6, 7, 95, WALNUT_DEEP)       # inner shadow, hinge side
+    rect(px, 64, 6, 67, 95, WALNUT_DEEP)     # inner shadow, latch side
+    rect(px, 4, 6, 67, 9, WALNUT_DEEP)       # inner shadow, head
+    # the last sliver of opening before the slab seats
+    rect(px, 8, 6, 15, 95, WALNUT_DEEP)
+    # slab nearly home: covers the latch side of the opening
+    rect(px, 16, 6, 63, 95, WALNUT)
+    rect(px, 16, 6, 19, 95, WALNUT_SHADE)    # leading-edge shade
+    for py0, py1 in ((14, 46), (54, 86)):    # compressed panel hints
+        rect(px, 24, py0, 58, py1, WALNUT_SHADE)
+        rect(px, 26, py0 + 2, 56, py1 - 2, WALNUT)
+    rect(px, 54, 47, 57, 51, BRASS)          # knob near the leading edge
+    # threshold strip exposed by the remaining gap
+    rect(px, 4, 92, 15, 95, BRASS_SHADE)
+    rect(px, 4, 92, 15, 92, BRASS)
+    return px
+
+
 def door_card() -> Image.Image:
     px = new(24, 16)
     rect(px, 11, 0, 12, 2, INK)              # hook nail
@@ -196,6 +226,7 @@ def main() -> None:
     files = {
         OUT / "doors/door-closed.png": door_closed(),
         OUT / "doors/door-open.png": door_open(),
+        OUT / "doors/door-ajar.png": door_ajar(),
         OUT / "doors/door-card.png": door_card(),
         OUT / "elevator/elevator-door.png": _hstack(
             [elevator_door(True), elevator_door(False)]
