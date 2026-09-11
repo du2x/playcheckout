@@ -57,6 +57,9 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
 /** Process-local set of live room codes (AD-001: single-process deploy). */
 const activeCodes = new Set<string>()
 
+/** Minimum wall-clock gap between telemetry file drains (see flushTelemetry). */
+const TELEMETRY_FLUSH_MS = 1000
+
 /**
  * AD-004 test seam: outside production, TURNOVER_TEST_SHIFT_SECONDS shortens the
  * shift so gate-3 harness rounds reach a real buzzer. Production ignores the
@@ -90,6 +93,16 @@ function testGuestTiming(): GuestTiming | undefined {
     dwellScale: scale,
     diningScale: scale,
   }
+}
+
+/**
+ * Ops toggle for the per-round JSONL telemetry (FR-23): TURNOVER_TELEMETRY=off
+ * skips the data/telemetry file entirely — no dir, no stream, and a null sink,
+ * which turns the presenter's projections into no-ops. Default stays on: the
+ * server-authoritative round record ships unless explicitly muted.
+ */
+function telemetryEnabled(): boolean {
+  return process.env.TURNOVER_TELEMETRY !== 'off'
 }
 
 interface LobbyPlayer {
@@ -146,6 +159,7 @@ export class TurnoverRoom extends Room {
   private telemetryStream: import('node:fs').WriteStream | null = null
   private telemetryPath: string | null = null
   private telemetryRoundIdx = 0
+  private telemetryLastFlushMs = 0
 
   /** The round sim lives in the presenter; these delegations keep the
    *  transport shell's reads one-hop (intents, restore, guest port). */
@@ -663,6 +677,7 @@ export class TurnoverRoom extends Room {
   }
 
   private openTelemetry(seed: number, saboteurId: string): void {
+    if (!telemetryEnabled()) return
     try {
       const dir = path.join(process.cwd(), 'data', 'telemetry')
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
@@ -670,6 +685,7 @@ export class TurnoverRoom extends Room {
       this.telemetryPath = file
       this.telemetrySink = new TelemetrySink(saboteurId, seed)
       this.telemetryStream = createWriteStream(file, { flags: 'a' })
+      this.telemetryLastFlushMs = 0
       this.telemetryStream.on('error', (err) =>
         console.error('[telemetry] write failed', file, err),
       )
@@ -678,7 +694,18 @@ export class TurnoverRoom extends Room {
     }
   }
 
+  /** The tick loop asks every tick; the file takes at most one drain per
+   *  TELEMETRY_FLUSH_MS (stringify + write leave the hot path). The close
+   *  drains unthrottled, so nothing buffered is ever lost. */
   private flushTelemetry(): void {
+    if (this.telemetrySink === null || this.telemetryStream === null) return
+    const now = Date.now()
+    if (now - this.telemetryLastFlushMs < TELEMETRY_FLUSH_MS) return
+    this.telemetryLastFlushMs = now
+    this.drainTelemetry()
+  }
+
+  private drainTelemetry(): void {
     if (this.telemetrySink === null || this.telemetryStream === null) return
     const lines = this.telemetrySink.drain()
     for (const line of lines) {
@@ -691,6 +718,7 @@ export class TurnoverRoom extends Room {
   }
 
   private closeTelemetry(): void {
+    this.drainTelemetry()
     if (this.telemetryStream !== null) {
       try {
         this.telemetryStream.end()

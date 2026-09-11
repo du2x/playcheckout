@@ -3641,3 +3641,46 @@ describe('server:spectator_prod_locked', () => {
     host.leave()
   })
 })
+
+// FR-23 ops seam: TURNOVER_TELEMETRY=off mutes the per-round JSONL record —
+// no file window opens (null path, stream stays closed) and the round runs
+// unharmed; the default (any other value, unset included) still records.
+describe('server:telemetry_toggle', () => {
+  it('TURNOVER_TELEMETRY=off opens no telemetry file and the round still ticks', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const instance = TurnoverRoom.instances.at(-1)
+    vi.stubEnv('TURNOVER_TELEMETRY', 'off')
+    try {
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+      instance?.__driveTicks(2)
+      expect(instance?.__telemetryPath()).toBeNull()
+      expect(instance?.__telemetryClosed()).toBe(true)
+    } finally {
+      vi.unstubAllEnvs()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    }
+  })
+
+  it('default keeps recording: the per-round file opens and stays open mid-round', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const instance = TurnoverRoom.instances.at(-1)
+    vi.stubEnv('TURNOVER_TELEMETRY', '')
+    try {
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+      instance?.__driveTicks(2)
+      expect(instance?.__telemetryPath()).toMatch(/\.jsonl$/)
+      expect(instance?.__telemetryClosed()).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    }
+  })
+})
