@@ -175,6 +175,9 @@ export class App {
             // The complaint counter restarts against the §7 budget (3.3).
             this.world()?.resetComplaints()
           }
+          // A dealt role means THIS client is playing again — the dev
+          // spectator seat (world scene overview) ends with the old round.
+          if (action.type === 'role-dealt') this.world()?.onOwnRoleDealt()
           // Reconnect re-store: re-seed the counters to the server's truth.
           if (action.type === 'round-resumed') {
             this.world()?.seedScore(action.settleScore)

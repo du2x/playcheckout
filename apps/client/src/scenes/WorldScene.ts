@@ -326,6 +326,14 @@ export class WorldScene extends Phaser.Scene {
   spectatorSnapshot: SpectatorSnapshot | null = null
   /** FR-20 spectator mode: the whole building renders as stacked lanes. */
   private spectator = false
+  /**
+   * The dev-spectator SEAT latch: set when the client receives the spectator
+   * baseline, cleared only when a fresh deal deals THIS client a role again.
+   * Without it, any `player:fired` broadcast would push an accuse session
+   * with selfFired=false and switch the watcher back to the live lobby view
+   * mid-watch (the accuse session legitimately resets per round).
+   */
+  private spectatorSeat = false
   /** Current room states known to this client — own interior via room:observed,
    * the whole building via the spectator baseline (door tints). */
   private roomStates = new Map<string, RoomState>()
@@ -716,12 +724,25 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** The self-fired flag arrives with every accusation-session change; its
-   * flip toggles the FR-20 spectator overview (all-floor lanes). */
+   * flip toggles the FR-20 spectator overview (all-floor lanes). The dev
+   * spectator seat latches through these resets — a watcher only leaves the
+   * overview when a deal hands them a role again (onOwnRoleDealt). */
   setAccuseSession(session: AccuseSession): void {
     const wasSpectator = this.spectator
     this.selfFired = session.selfFired
-    this.spectator = session.selfFired
+    this.spectator = session.selfFired || this.spectatorSeat
     if (wasSpectator !== this.spectator) this.applyViewMode()
+  }
+
+  /** A fresh deal dealt THIS client a role: they are playing again, so the
+   * dev-spectator seat ends (the fired-player path is untouched — their
+   * role:dealt re-send is always followed by a fresh spectator baseline). */
+  onOwnRoleDealt(): void {
+    this.spectatorSeat = false
+    if (this.spectator && !this.selfFired) {
+      this.spectator = false
+      this.applyViewMode()
+    }
   }
 
   /** Lane y for a floor: the own-floor lane in live play, stacked lanes as a spectator. */
@@ -1071,6 +1092,7 @@ export class WorldScene extends Phaser.Scene {
         // dev spectators). The message's existence IS the spectator flag for
         // the latter: they were never fired, so this is their activation.
         this.spectatorSnapshot = action.snapshot
+        this.spectatorSeat = true
         // Guest rows seed every floor's public weather at once — a mid-round
         // spectator would otherwise wait for each guest's first move.
         for (const g of action.snapshot.guests ?? []) {
