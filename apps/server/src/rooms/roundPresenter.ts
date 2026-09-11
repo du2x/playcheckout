@@ -160,6 +160,15 @@ export class RoundPresenter {
    *  whole world. */
   spectatorSnapshot(): SpectatorSnapshot {
     const sim = this.sim
+    // Guest rows for every floor: guests are public weather, and a mid-round
+    // spectator otherwise waits for each guest's first move to see it at all.
+    const guests = this.movement
+      .guestIds()
+      .map((guestId) => {
+        const p = this.movement.positionOf(guestId)
+        return p === undefined ? null : { guestId, floor: p.floor, x: p.x }
+      })
+      .filter((row): row is { guestId: string; floor: FloorId; x: number } => row !== null)
     const base: SpectatorSnapshot = {
       players: this.movement.allPositions(),
       cars: this.movement.carFloors(),
@@ -170,6 +179,7 @@ export class RoundPresenter {
             rooms: sim.cardedOn(floor),
           }))
         : [],
+      ...(guests.length !== 0 ? { guests } : {}),
     }
     if (sim !== null) {
       const ten = sim.allTenancies()

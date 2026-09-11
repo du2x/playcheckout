@@ -387,10 +387,6 @@ export class TurnoverRoom extends Room {
   }
 
   override onJoin(client: Client, options: { name?: unknown; spectator?: unknown }) {
-    // Results (cycle 2.9) is lobby-like: a new player may join between rounds.
-    if (this.phase === 'round') {
-      throw new Error('round in progress')
-    }
     const name = typeof options?.name === 'string' ? options.name.trim() : ''
     if (name.length < 1 || name.length > 16) {
       throw new Error('invalid name')
@@ -399,12 +395,33 @@ export class TurnoverRoom extends Room {
       // A dev-only watching tool, never a live-game seat: the omniscient view
       // is legitimate for a fired player (FR-20) but would leak the building
       // to a non-participant in a real match — production refuses the join.
+      // Unlike players, spectators may join at ANY moment: the resumed clock
+      // mounts their round view and the FR-20 baseline seeds the building.
       if (process.env.NODE_ENV === 'production') {
         throw new Error('spectator joins are dev-only')
       }
+      const sim = this.sim
       this.spectators.set(client.sessionId, name)
-      this.sendLobbySnapshots()
+      this.router.toSelf('lobby:snapshot', client.sessionId, this.buildSnapshot(client.sessionId))
+      if (this.phase === 'round' && sim !== null) {
+        this.router.toSelf('round:resumed', client.sessionId, {
+          remainingTicks: sim.clockTicksRemaining,
+          playerIds: sim.playerIds,
+          ownFired: false,
+          settleScore: sim.settledCount,
+          complaints: sim.complaintCount,
+        })
+        this.router.toSelf(
+          'spectator:snapshot',
+          client.sessionId,
+          this.presenter.spectatorSnapshot(),
+        )
+      }
       return
+    }
+    // Results (cycle 2.9) is lobby-like: a new player may join between rounds.
+    if (this.phase === 'round') {
+      throw new Error('round in progress')
     }
     if (this.players.size >= TUNING.PLAYERS_MAX) {
       throw new Error('room full')
@@ -645,6 +662,12 @@ export class TurnoverRoom extends Room {
       isSaboteur: (id) => sim.saboteurId === id,
       isLiveStaff: (id) => sim.isLiveStaff(id),
     })
+    // Round-open position baseline (the FR-25 announce mechanism): clients
+    // build remote displays from the lobby roster, which carries no position,
+    // and a player standing still never enters the moved stream — one
+    // announce per player pins every display to its spawn-row truth before
+    // the first input.
+    for (const sessionId of playerIds) this.movement.announcePosition(sessionId)
     // The FR-20 baseline reaches the dev spectators too — the round:started
     // broadcast follows on the first tick; the baseline must precede it so
     // the overview seeds before the HUD mounts.

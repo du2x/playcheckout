@@ -276,10 +276,14 @@ function collectAll(room: ClientRoom) {
     for (const w of wake.splice(0)) w()
   })
   return {
-    async waitFor(type: string, timeoutMs = 2000) {
+    async waitFor(
+      type: string,
+      timeoutMs = 2000,
+      pred?: (payload: Record<string, unknown>) => boolean,
+    ) {
       const deadline = Date.now() + timeoutMs
       for (;;) {
-        const found = snaps.find((m) => m.type === type)
+        const found = snaps.find((m) => m.type === type && (pred === undefined || pred(m.payload)))
         if (found !== undefined) {
           snaps.splice(snaps.indexOf(found), 1)
           return found
@@ -3556,12 +3560,22 @@ describe('server:spectator_join', () => {
     const watcherFeed = collectAll(watcher)
     const hostFeed = collectAll(host)
 
-    const snap = await watcherFeed.waitFor('lobby:snapshot')
+    // A later PLAYER join refreshes every roster view — deterministic, unlike
+    // the watcher's own join-time snapshot (it races the collector attach).
+    // The predicate skips that stale roster-4 frame if it did land.
+    const edi = await newClient().joinById(host.roomId, { name: 'edi' })
+    const snap = await watcherFeed.waitFor(
+      'lobby:snapshot',
+      2000,
+      (p) => (p.roster as unknown[]).length === 5,
+    )
     expect(snap.payload.isHost).toBe(false)
     expect(snap.payload.ownName).toBe('watcher')
-    expect(snap.payload.roster).toHaveLength(4)
-    const hostSnap = await hostFeed.waitFor('lobby:snapshot')
-    expect(hostSnap.payload.roster).toHaveLength(4) // the watcher is absent
+    const hostSnap = await hostFeed.waitFor(
+      'lobby:snapshot',
+      2000,
+      (p) => (p.roster as unknown[]).length === 5,
+    ) // the watcher is absent
 
     watcher.send('lobby:start', { type: 'lobby:start' })
     const err = await watcherFeed.waitFor('error')
@@ -3573,6 +3587,7 @@ describe('server:spectator_join', () => {
     a.leave()
     b.leave()
     c.leave()
+    edi.leave()
     watcher.leave()
   })
 })
@@ -3639,6 +3654,43 @@ describe('server:spectator_prod_locked', () => {
       vi.unstubAllEnvs()
     }
     host.leave()
+  })
+})
+
+describe('server:spectator_late_join', () => {
+  it('a spectator may join MID-round: resumed clock + baseline, still no role', async () => {
+    const [host, a, b, c] = await roomWithFour()
+    const instance = TurnoverRoom.instances.at(-1)
+    host.send('lobby:start', { type: 'lobby:start' })
+    await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+    instance?.__driveTicks(40) // the round is already running
+
+    const watcher = await newClient().joinById(host.roomId, {
+      name: 'watcher',
+      spectator: true,
+    })
+    const feed = collectAll(watcher)
+    const resumed = await feed.waitFor('round:resumed')
+    expect(resumed.payload.ownFired).toBe(false) // a dev watcher is not "fired"
+    expect(resumed.payload.settleScore).toBe(0)
+    const baseline = await feed.waitFor('spectator:snapshot')
+    expect(Array.isArray(baseline.payload.players)).toBe(true)
+    expect(baseline.payload.rooms).toHaveLength(21)
+
+    // And the live stream flows to the late watcher from then on.
+    host.send('move:start', { type: 'move:start', dir: 'right' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    instance?.__driveTicks(6)
+    const moved = await feed.waitFor('player:moved')
+    expect((moved.payload as { playerId: string }).playerId).toBe(host.sessionId)
+    host.send('move:stop', { type: 'move:stop' })
+
+    feed.stop()
+    host.leave()
+    a.leave()
+    b.leave()
+    c.leave()
+    watcher.leave()
   })
 })
 

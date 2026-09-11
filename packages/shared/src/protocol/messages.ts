@@ -597,9 +597,10 @@ export interface SpectatorCarded {
 }
 
 /**
- * server → one fired player (self). The full-world spectator baseline (FR-20):
- * every player's position on every floor, car floors, every room's state, all
- * carded rooms. Live deltas then arrive through the spectator over-delivery.
+ * server → one fired player or dev spectator (self). The full-world spectator
+ * baseline (FR-20): every player's position on every floor, car floors, every
+ * room's state, all carded rooms. Live deltas then arrive through the
+ * spectator over-delivery.
  */
 export interface SpectatorSnapshot {
   readonly players: readonly MovementSnapshotPlayer[]
@@ -608,6 +609,12 @@ export interface SpectatorSnapshot {
   readonly cardedRooms: readonly SpectatorCarded[]
   /** Tenancy signs per room (FR-33, cycle 3.4) — full-building baseline, present only when non-empty. */
   readonly tenancies?: readonly SpectatorTenancy[]
+  /**
+   * Guest NPC rows for every floor (cycle 3.1) — guests are public weather,
+   * and a mid-round spectator otherwise waits for each guest's first move to
+   * see it at all. Present only when non-empty.
+   */
+  readonly guests?: readonly MovementSnapshotGuest[]
   /**
    * Cosmetic seed rows (Phase 4.1, VPOL-05) — every round player plus every
    * guest seed, all floors. Present only when non-empty.

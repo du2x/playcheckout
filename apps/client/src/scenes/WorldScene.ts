@@ -1071,6 +1071,11 @@ export class WorldScene extends Phaser.Scene {
         // dev spectators). The message's existence IS the spectator flag for
         // the latter: they were never fired, so this is their activation.
         this.spectatorSnapshot = action.snapshot
+        // Guest rows seed every floor's public weather at once — a mid-round
+        // spectator would otherwise wait for each guest's first move.
+        for (const g of action.snapshot.guests ?? []) {
+          this.guests.set(g.guestId, { floor: g.floor, x: g.x })
+        }
         if (!this.spectator) {
           this.spectator = true
           this.applyViewMode()

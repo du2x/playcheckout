@@ -99,4 +99,41 @@ test.describe('client:spectator_join', () => {
     for (const guest of guests) guest.close()
     watcher.close()
   })
+
+  test('a watcher may join MID-round: the overview mounts with an honest clock', async ({
+    browser,
+  }) => {
+    test.setTimeout(100_000)
+    const host = await browser.newContext().then((c) => c.newPage())
+    const code = await createRoom(host, 'ada')
+    const guests: Page[] = []
+    for (const name of ['bruno', 'caro', 'dina']) {
+      const guest = await browser.newContext().then((c) => c.newPage())
+      await join(guest, code, name, false)
+      await guest.waitForSelector('#lobby-view')
+      guests.push(guest)
+    }
+
+    // The round starts BEFORE the watcher ever shows up — the exact order
+    // that used to answer "round in progress".
+    await host.click('#start-button')
+    for (const page of [host, ...guests]) await page.waitForSelector('#round-hud')
+
+    const watcher = await browser.newContext().then((c) => c.newPage())
+    await join(watcher, code, 'watcher', true)
+
+    // The resumed clock mounts the round view directly — no lobby detour.
+    await watcher.waitForSelector('#round-hud')
+    const wire = await watcher.evaluate(() => {
+      const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__
+      return t.events.map((e) => e.type)
+    })
+    expect(wire).toContain('round:resumed')
+    expect(wire).toContain('spectator:snapshot')
+    expect(wire).not.toContain('role:dealt')
+
+    host.close()
+    for (const guest of guests) guest.close()
+    watcher.close()
+  })
 })
