@@ -40,6 +40,35 @@ async function fourPlayerRound(pages: Page[]): Promise<void> {
   }
 }
 
+/** The round spawns the staff row 3 tiles WEST of the desk (AD-028 spawn
+ *  row), outside the E zone [DESK_X±1] — check-in starts with a walk in,
+ *  position-gated on the own label like every landing walk. Callers pass
+ *  disjoint px windows so two checkers don't stack on the same spot. */
+async function walkToDeskZone(page: Page, who: string, window: [number, number]): Promise<void> {
+  const [minPx, maxPx] = window
+  await page.keyboard.down('ArrowRight')
+  await page.waitForFunction(
+    ([name, lo, hi]) => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (n: string) => {
+              children: { list: { type: string; text?: string; x: number; visible?: boolean }[] }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const label = t
+        .scene('Round')
+        ?.children.list.find((c) => c.type === 'Text' && c.text === name && c.visible)
+      return label !== undefined && label.x >= (lo ?? 0) && label.x <= (hi ?? 0)
+    },
+    [who, minPx, maxPx] as const,
+    { timeout: 20_000 },
+  )
+  await page.keyboard.up('ArrowRight')
+}
+
 async function readLabel(page: Page, who: string): Promise<{ x: number; visible: boolean }> {
   return page.evaluate((name) => {
     const t = (
@@ -238,6 +267,7 @@ test.describe('client:suitcase', () => {
     await fourPlayerRound(pages)
     const own = pages[0] as Page
     const bruno = pages[1] as Page
+    await walkToDeskZone(own, 'ada', [466, 490])
 
     // A guest queues (≈6 s scaled), the desk hint shows at the desk.
     await own.waitForFunction(() => {
@@ -331,6 +361,7 @@ test.describe('client:suitcase', () => {
       const t = (window as unknown as { __TURNOVER__: { events: { type: string }[] } }).__TURNOVER__
       return t.events.filter((e) => e.type === 'guest:arrived').length >= 2
     })
+    await walkToDeskZone(bruno, 'bruno', [496, 516])
     await pressEUntil(bruno, () =>
       (document.querySelector('#walkie-log')?.textContent ?? '').includes('«bruno» takes a guest'),
     )
@@ -363,6 +394,7 @@ test.describe('client:suitcase', () => {
     const pages = await Promise.all(contexts.map((c) => c.newPage()))
     await fourPlayerRound(pages)
     const own = pages[0] as Page
+    await walkToDeskZone(own, 'ada', [466, 490])
 
     // Guest queues, check in at the desk (the assignment is announced
     // building-wide — AD-034).

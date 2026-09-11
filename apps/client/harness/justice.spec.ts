@@ -61,9 +61,11 @@ async function roleOf(page: Page): Promise<string> {
 }
 
 /**
- * Burst-walk the own player into the accuse band — past the 1-tile desk zone
- * (edge x=16) yet within ACCUSATION_RANGE_TILES (edge x=17) of the desk
- * cluster. Short key bursts with a position read between them: standing still
+ * Burst-walk the own player into the accuse band — a half-tile east of the
+ * spawn row's east slots (12.0 / 10.5, one vacated by the accuser's own walk,
+ * so a candidate stands within ACCUSATION_RANGE_TILES=2 whichever role dealt)
+ * and clear of the 1-tile desk zone [14,16] where the hold is suppressed.
+ * Short key bursts with a position read between them: standing still
  * lets the moved-event stream catch up, so lag can never hide an overshoot
  * (the 3.C single held walk drifted out of the band under parallel-worker
  * load, one level deeper: even a gated walk reads a stale event mid-stride).
@@ -96,21 +98,21 @@ async function seekAccuseBand(page: Page): Promise<void> {
     const move = await newestOwnMove()
     // Settled read: in band AND the newest move is ≥250 ms old (the stream
     // caught up — the true position cannot be further down the last walk).
-    if (move !== null && move.ageMs >= 250 && move.x !== null && move.x >= 16.2 && move.x <= 16.8) {
+    if (move !== null && move.ageMs >= 250 && move.x !== null && move.x >= 10.9 && move.x <= 11.5) {
       return
     }
     // Degraded read: under heavy load the stream can freeze entirely. If the
     // position was ever seen in band, proceed anyway — the menu wait after
     // the hold is the real arbiter.
-    if (move !== null && move.x !== null && move.x >= 16.2 && move.x <= 16.8) bandSeen = true
-    const key = move === null || move.x === null || move.x < 16.2 ? 'ArrowRight' : 'ArrowLeft'
+    if (move !== null && move.x !== null && move.x >= 10.9 && move.x <= 11.5) bandSeen = true
+    const key = move === null || move.x === null || move.x < 10.9 ? 'ArrowRight' : 'ArrowLeft'
     await page.keyboard.down(key)
     await page.waitForTimeout(60)
     await page.keyboard.up(key)
     await page.waitForTimeout(40)
   }
   if (bandSeen) return
-  throw new Error('seekAccuseBand: own player never settled in x ∈ [16.2, 16.8]')
+  throw new Error('seekAccuseBand: own player never settled in x ∈ [10.9, 11.5]')
 }
 
 test.describe('client:accuse_ui', () => {
@@ -141,51 +143,31 @@ test.describe('client:accuse_ui', () => {
 
     // --- Tap E (< 400 ms): the elevator call fires exactly as before, and no
     // menu opens (JUST-17). The landing gate (AD-022) means the call must be
-    // tapped AT a landing, and the landing call press BOARDS the parked car
-    // (AD-025): the accuser walks west, taps ArrowUp to board, rides to
-    // floor1 and walks off there. ---
+    // tapped AT a landing: the accuser walks to the east landing at round
+    // start — the car still parks there, before the pre-seeded tenants'
+    // traffic owns it — and the landing call press BOARDS the parked car
+    // (AD-025) while still announcing the call. ---
     await accuser.keyboard.down('ArrowRight')
-    await accuser.waitForTimeout(3000) // walk to the west landing
-    await accuser.keyboard.up('ArrowRight')
-    // AD-028: guests are elevator citizens, so car 1 is no longer guaranteed
-    // parked here — an ambient call may have it elsewhere. The landing press
-    // BOARDS when the car stands here (AD-025) and SUMMONS/pins otherwise;
-    // keep pressing until the rider chip shows (what a real player does).
-    for (let i = 0; i < 15; i++) {
-      await accuser.keyboard.press('ArrowUp')
-      try {
-        await accuser.waitForFunction(
-          () =>
-            document.querySelector('#elevator-riders') !== null &&
-            !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
-          undefined,
-          { timeout: 2000 },
-        )
-        break
-      } catch {
-        // The summoned car is still en route — press again when it arrives.
-      }
-    }
+    // Walk to the east landing position-gated on the own label: the corridor
+    // crowd slows a fixed walk-sleep, and every mid-hall press is a decoy.
     await accuser.waitForFunction(
-      () =>
-        document.querySelector('#elevator-riders') !== null &&
-        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
-      undefined,
-      { timeout: 8000 },
-    )
-    await accuser.keyboard.press('1') // ride to floor1
-    await accuser.waitForFunction(
-      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
-      undefined,
-      { timeout: 10_000 },
-    )
-    await accuser.keyboard.down('ArrowRight') // walk off at the floor1 landing
-    // The pending exit (AD-026) applies when the doors finish opening — the
-    // rider chip hiding is the truth that she is back on the floor stream.
-    await accuser.waitForFunction(
-      () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
-      undefined,
-      { timeout: 8000 },
+      (name) => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (n: string) => {
+                children: { list: { type: string; text?: string; x: number; visible?: boolean }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const label = t
+          .scene('Round')
+          ?.children.list.find((c) => c.type === 'Text' && c.text === name && c.visible)
+        return label !== undefined && label.x >= 920
+      },
+      accuserName,
+      { timeout: 30_000 },
     )
     await accuser.keyboard.up('ArrowRight')
     const calledBefore = await accuser.evaluate(
@@ -195,8 +177,8 @@ test.describe('client:accuse_ui', () => {
         ).__TURNOVER__.events.filter((e) => e.type === 'elevator:called').length,
     )
     await accuser.keyboard.press('e')
-    // The tap fires a NEW call — at the floor1 landing with car 1 parked
-    // open-doors there, the press boards her (AD-025) and still announces.
+    // The tap fires a NEW call — at the lobby landing with the car parked
+    // there, the press boards her (AD-025) and still announces.
     await accuser.waitForFunction(
       (before) =>
         (
@@ -208,35 +190,10 @@ test.describe('client:accuse_ui', () => {
     const menuHidden = await accuser.$eval('#accuse-menu', (m) => m.hasAttribute('hidden'))
     expect(menuHidden).toBe(true)
 
-    // --- Return to the lobby center near the other players: walk out of the
-    // boarding zone, back to the landing, board with the call press (AD-025),
-    // ride down, then walk to the spawn cluster (within ACCUSATION_RANGE_TILES
-    // of a candidate). ---
-    await accuser.keyboard.down('ArrowRight')
-    await accuser.waitForTimeout(1500) // ~9 tiles out
-    await accuser.keyboard.up('ArrowRight')
-    await accuser.keyboard.down('ArrowRight')
-    await accuser.waitForTimeout(3000) // walk back to the west landing
-    await accuser.keyboard.up('ArrowRight')
-    // AD-028: guests are elevator citizens, so car 1 is no longer guaranteed
-    // parked here — an ambient call may have it elsewhere. The landing press
-    // BOARDS when the car stands here (AD-025) and SUMMONS/pins otherwise;
-    // keep pressing until the rider chip shows (what a real player does).
-    for (let i = 0; i < 15; i++) {
-      await accuser.keyboard.press('ArrowUp')
-      try {
-        await accuser.waitForFunction(
-          () =>
-            document.querySelector('#elevator-riders') !== null &&
-            !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
-          undefined,
-          { timeout: 2000 },
-        )
-        break
-      } catch {
-        // The summoned car is still en route — press again when it arrives.
-      }
-    }
+    // --- Back on the floor near the other players: step out of the car she
+    // just boarded (the exit intent applies at the open doors — AD-026),
+    // then walk home to the spawn cluster west (within
+    // ACCUSATION_RANGE_TILES of a candidate). ---
     await accuser.waitForFunction(
       () =>
         document.querySelector('#elevator-riders') !== null &&
@@ -244,22 +201,37 @@ test.describe('client:accuse_ui', () => {
       undefined,
       { timeout: 8000 },
     )
-    await accuser.keyboard.press('0') // ride back to the lobby (guest traffic
-    // may dispatch the single car elsewhere first — AD-028 retries apply)
-    await accuser.waitForFunction(
-      () => document.querySelector('#panel-floor')?.textContent === 'lobby',
-      undefined,
-      { timeout: 25000 },
-    )
-    // Exit the car: hold the exit direction through the door swing — the
-    // pending exit (AD-026) applies at full-open — until the rider chip hides
-    // (she is back on the floor stream). Then seek the accuse band.
     await accuser.keyboard.down('ArrowLeft')
+    // The rider chip hiding is the truth that she is back on the floor
+    // stream; keep the hold until the walk west reads at the spawn cluster.
     await accuser.waitForFunction(
       () => document.querySelector('#elevator-riders')?.hasAttribute('hidden') === true,
       undefined,
-      { timeout: 15000 },
+      { timeout: 8000 },
     )
+    await accuser.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              events: { type: string; payload?: { playerId?: string; x?: number } }[]
+              local: { playerId: string | null }
+            }
+          }
+        ).__TURNOVER__
+        const own = t.local.playerId
+        for (let i = t.events.length - 1; i >= 0; i--) {
+          const e = t.events[i]
+          if (e === undefined || e.type !== 'player:moved') continue
+          if (e.payload?.playerId !== own) continue
+          return typeof e.payload.x === 'number' && (e.payload.x ?? 0) <= 12.8
+        }
+        return false
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+    await accuser.keyboard.up('ArrowLeft')
     await seekAccuseBand(accuser)
 
     // --- Hold E (≥ 400 ms): the confirm menu opens naming a nearby player —

@@ -438,39 +438,41 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     await host.click('#start-button')
     await follower.waitForSelector('#round-hud')
 
-    // Ada rides the WEST car to floor1, exits, and walks ~6 tiles east; then
-    // she stands still for the rest of the test — no further events.
+    // Ada rides to floor1, exits, and stands at the landing mouth; then she
+    // stands still for the rest of the test — no further events. The ride
+    // legs run at ROUND START, before the pre-seeded tenants' traffic owns
+    // the single car (a boarding attempt ~20 s in can wait past the buzzer
+    // for a free seat): both riders board the parked car first — the same
+    // capacity-2 pattern as the evidence spec — and one ride carries both.
+    // Walks are position-gated on the own label (the corridor crowd slows a
+    // fixed walk-sleep, and every mid-hall press is a decoy).
     await host.keyboard.down('ArrowRight')
-    await host.waitForTimeout(3000)
-    await host.keyboard.up('ArrowRight')
-    await host.keyboard.press('ArrowUp') // parked-car press: boards (AD-025)
     await host.waitForFunction(
-      () =>
-        document.querySelector('#elevator-riders') !== null &&
-        !document.querySelector('#elevator-riders')?.hasAttribute('hidden'),
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (n: string) => {
+                children: { list: { type: string; text?: string; x: number; visible?: boolean }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const label = t
+          .scene('Round')
+          ?.children.list.find((c) => c.type === 'Text' && c.text === 'ada' && c.visible)
+        return label !== undefined && label.x >= 920
+      },
       undefined,
-      { timeout: 8000 },
+      { timeout: 30_000 },
     )
-    await host.keyboard.press('1')
-    await host.waitForFunction(
-      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
-      undefined,
-      { timeout: 15000 },
-    )
-    await host.keyboard.down('ArrowRight')
-    await host.waitForTimeout(1000)
     await host.keyboard.up('ArrowRight')
-    const adaScene = await readScene(host)
-    expect(adaScene.labels.find((l) => l.text === 'ada')?.visible).toBe(true)
-    const adaX = adaScene.labels.find((l) => l.text === 'ada')?.x ?? 0
-
-    // Bruno rides the EAST car (car 1 is away): walk to the east landing and
-    // board with the landing call press (AD-025); he steps off only briefly
-    // after the ride.
-    // Walk to the east landing position-gated (x ≥ 28.4 of the 30-tile hall):
-    // a fixed walk-sleep strands bruno short of the call zone under worker
-    // lag, and every landing press then misses (AD-028 retries can't board a
-    // player who isn't there).
+    await pressUntilRiderChip(host)
+    // Bruno joins the same boarding while the car still stands parked at the
+    // lobby — walk to the east landing position-gated (x ≥ 28.4 of the
+    // 30-tile hall): a fixed walk-sleep strands bruno short of the call zone
+    // under worker lag, and every landing press then misses (AD-028 retries
+    // can't board a player who isn't there).
     await follower.keyboard.down('ArrowRight')
     await follower.waitForFunction(
       () => {
@@ -496,13 +498,48 @@ test.describe('client:elevator_riders — arrival floor reveal', () => {
     )
     await follower.keyboard.up('ArrowRight')
     await pressUntilRiderChip(follower)
-    await follower.keyboard.press('1')
+    await host.keyboard.press('1')
+    await host.waitForFunction(
+      () => document.querySelector('#panel-floor')?.textContent === 'floor1',
+      undefined,
+      { timeout: 15000 },
+    )
     await follower.waitForFunction(
       () => document.querySelector('#panel-floor')?.textContent === 'floor1',
       undefined,
       { timeout: 25000 },
     )
-    // Hold PAST the 0.5 s opening swing (AD-026): the exit is a held intent.
+    // Ada exits at the floor1 landing: the held direction is the pending
+    // exit (AD-026), applied when the doors finish opening — she ends at the
+    // landing mouth and stands.
+    await host.keyboard.down('ArrowRight')
+    await host.waitForTimeout(1000)
+    await host.keyboard.up('ArrowRight')
+    await host.waitForFunction(
+      () => {
+        const t = (
+          window as unknown as {
+            __TURNOVER__: {
+              scene: (n: string) => {
+                children: { list: { type: string; text?: string; visible: boolean }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        return (
+          t.scene('Round')?.children.list.find((c) => c.type === 'Text' && c.text === 'ada')
+            ?.visible === true
+        )
+      },
+      undefined,
+      { timeout: 5000 },
+    )
+    const adaScene = await readScene(host)
+    expect(adaScene.labels.find((l) => l.text === 'ada')?.visible).toBe(true)
+    const adaX = adaScene.labels.find((l) => l.text === 'ada')?.x ?? 0
+
+    // Bruno steps off only briefly after the ride: hold PAST the 0.5 s
+    // opening swing (AD-026) — the exit is a held intent.
     await follower.keyboard.down('ArrowLeft')
     await follower.waitForTimeout(700)
     await follower.keyboard.up('ArrowLeft')

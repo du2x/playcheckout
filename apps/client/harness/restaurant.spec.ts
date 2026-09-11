@@ -97,9 +97,34 @@ test.describe('client:restaurant', () => {
       // The rider walks to the west landing and boards with the call press —
       // guests are elevator citizens (AD-028), so press until the chip shows.
       await rider.keyboard.down('ArrowRight')
-      await rider.waitForTimeout(3000)
+      // Walk to the east landing position-gated on the own label: the
+      // corridor crowd slows a fixed walk-sleep, and every mid-hall press
+      // is a decoy. Then keep pressing (AD-028) — the pre-seeded tenants
+      // own the car before the walk lands, so the loop must cover a busy
+      // stretch.
+      await rider.waitForFunction(
+        () => {
+          const t = (
+            window as unknown as {
+              __TURNOVER__: {
+                scene: (n: string) => {
+                  children: {
+                    list: { type: string; text?: string; x: number; visible?: boolean }[]
+                  }
+                } | null
+              }
+            }
+          ).__TURNOVER__
+          const label = t
+            .scene('Round')
+            ?.children.list.find((c) => c.type === 'Text' && c.text === 'ada' && c.visible)
+          return label !== undefined && label.x >= 920
+        },
+        undefined,
+        { timeout: 30_000 },
+      )
       await rider.keyboard.up('ArrowRight')
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 40; i++) {
         await rider.keyboard.press('ArrowUp')
         try {
           await rider.waitForFunction(
@@ -142,9 +167,33 @@ test.describe('client:restaurant', () => {
         { timeout: 20000 },
       )
 
-      // The clerk stays at the spawn cluster (the desk zone) and checks the
-      // front guest in once one is queued — the desk hint gates the press,
-      // and E retries mirror the suitcase-spec pattern (AD-028 play).
+      // The clerk checks the front guest in once one is queued — the desk
+      // hint gates the press, and E retries mirror the suitcase-spec pattern
+      // (AD-028 play). The spawn row stands 3 tiles WEST of the desk zone
+      // (AD-028 spawn row): walk in position-gated on the own label first.
+      await clerk.keyboard.down('ArrowRight')
+      await clerk.waitForFunction(
+        () => {
+          const t = (
+            window as unknown as {
+              __TURNOVER__: {
+                scene: (n: string) => {
+                  children: {
+                    list: { type: string; text?: string; x: number; visible?: boolean }[]
+                  }
+                } | null
+              }
+            }
+          ).__TURNOVER__
+          const label = t
+            .scene('Round')
+            ?.children.list.find((c) => c.type === 'Text' && c.text === 'bruno' && c.visible)
+          return label !== undefined && label.x >= 466 && label.x <= 490
+        },
+        undefined,
+        { timeout: 30_000 },
+      )
+      await clerk.keyboard.up('ArrowRight')
       await clerk.waitForFunction(
         () =>
           (

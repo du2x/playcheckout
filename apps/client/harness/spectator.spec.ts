@@ -100,21 +100,21 @@ async function seekAccuseBand(page: Page): Promise<void> {
     const move = await newestOwnMove()
     // Settled read: in band AND the newest move is ≥250 ms old (the stream
     // caught up — the true position cannot be further down the last walk).
-    if (move !== null && move.ageMs >= 250 && move.x !== null && move.x >= 16.2 && move.x <= 16.8) {
+    if (move !== null && move.ageMs >= 250 && move.x !== null && move.x >= 10.9 && move.x <= 11.5) {
       return
     }
     // Degraded read: under heavy load the stream can freeze entirely. If the
     // position was ever seen in band, proceed anyway — the menu wait after
     // the hold is the real arbiter.
-    if (move !== null && move.x !== null && move.x >= 16.2 && move.x <= 16.8) bandSeen = true
-    const key = move === null || move.x === null || move.x < 16.2 ? 'ArrowRight' : 'ArrowLeft'
+    if (move !== null && move.x !== null && move.x >= 10.9 && move.x <= 11.5) bandSeen = true
+    const key = move === null || move.x === null || move.x < 10.9 ? 'ArrowRight' : 'ArrowLeft'
     await page.keyboard.down(key)
     await page.waitForTimeout(60)
     await page.keyboard.up(key)
     await page.waitForTimeout(40)
   }
   if (bandSeen) return
-  throw new Error('seekAccuseBand: own player never settled in x ∈ [16.2, 16.8]')
+  throw new Error('seekAccuseBand: own player never settled in x ∈ [10.9, 11.5]')
 }
 
 async function roleOf(page: Page): Promise<string> {
@@ -156,11 +156,10 @@ test.describe('client:spectator_view', () => {
     const accuserName = NAMES[accuserIndex]
     if (accuserName === undefined) throw new Error('no accuser name')
 
-    // Cycle 3.2: everyone spawns inside the desk zone (x=15 = DESK_X), where
-    // E is the desk key and the accuse hold is suppressed (spec decision) —
-    // accusing at the desk requires stepping out of the zone first. Seek the
-    // accuse band east of the desk: past the zone, within range of the
-    // players still at the desk.
+    // The spawn row stands west of the desk (12.0/10.5/9.0/7.5), where E is
+    // free for accusations — the desk zone itself ([14,16]) suppresses the
+    // hold. Seek the accuse band beside the row: within ACCUSATION_RANGE_TILES
+    // of a candidate still on their spawn slot (see seekAccuseBand).
     await seekAccuseBand(accuser)
 
     // Hold E → confirm menu → confirm: a WRONG accusation (innocent target or

@@ -21,8 +21,10 @@ async function createRoom(page: Page, name: string): Promise<string> {
 /** AD-028: guests are elevator citizens, so the car a player means to board
  * may be away on ambient traffic. The landing press BOARDS when the car
  * stands here (AD-025) and summons/pins otherwise — keep pressing until the
- * rider chip shows, exactly what a real player does. */
-async function pressUntilRiderChip(page: Page, attempts = 15): Promise<void> {
+ * rider chip shows, exactly what a real player does. Attempts must cover a
+ * full busy stretch: the pre-seeded tenants own the single car for tens of
+ * seconds before a slot frees. */
+async function pressUntilRiderChip(page: Page, attempts = 40): Promise<void> {
   const chipShown = () =>
     page.waitForFunction(
       () =>
@@ -43,6 +45,36 @@ async function pressUntilRiderChip(page: Page, attempts = 15): Promise<void> {
   await chipShown()
 }
 
+/** The landing press only boards AT the landing (AD-022/025): walk east
+ *  position-gated on the own label (the corridor crowd slows a fixed
+ *  sleep past the 3-s-landed assumption). */
+async function boardWestCar(page: Page) {
+  await page.keyboard.down('ArrowRight')
+  await page.waitForFunction(
+    () => {
+      const t = (
+        window as unknown as {
+          __TURNOVER__: {
+            scene: (n: string) => {
+              children: { list: { type: string; text?: string; x: number; visible?: boolean }[] }
+            } | null
+          }
+        }
+      ).__TURNOVER__
+      const label = t
+        .scene('Round')
+        ?.children.list.find(
+          (c) => c.type === 'Text' && c.text !== undefined && c.visible && c.x >= 920,
+        )
+      return label !== undefined
+    },
+    undefined,
+    { timeout: 30_000 },
+  )
+  await page.keyboard.up('ArrowRight')
+  await pressUntilRiderChip(page)
+}
+
 async function join(page: Page, code: string, name: string) {
   await page.goto('/')
   await page.fill('#join-code', code)
@@ -61,16 +93,6 @@ function eventsOf(
   return page.evaluate(
     () => (window as unknown as { __TURNOVER__: { events: never[] } }).__TURNOVER__.events,
   )
-}
-
-/** Walk to the west landing and board the parked car with the call press
- * (AD-025, retrying under AD-028 ambient guest traffic) — the rider chip
- * confirms the board. No ride press. */
-async function boardWestCar(page: Page) {
-  await page.keyboard.down('ArrowRight')
-  await page.waitForTimeout(3000)
-  await page.keyboard.up('ArrowRight')
-  await pressUntilRiderChip(page)
 }
 
 test.describe('client:evidence_cues', () => {
