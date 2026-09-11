@@ -639,6 +639,19 @@ export class TurnoverRoom extends Room {
     const playerIds = [...this.players.values()]
       .sort((a, b) => a.joinedAt - b.joinedAt)
       .map((p) => p.sessionId)
+    // A firing (or mid-round ghosting) tore the player's movement slot down;
+    // MOVE-07 persistence covers only surviving slots, so the re-deal
+    // re-registers the missing ones join-shaped at the spawn row. Without
+    // this, the re-dealt player spends the whole round slot-less: intents
+    // silently dropped, no position stream, no segments (caught by the bot
+    // smoke as mid-round zombies in every round that followed a firing).
+    const restored: string[] = []
+    for (const [index, sessionId] of playerIds.entries()) {
+      if (this.movement.positionOf(sessionId) === undefined) {
+        this.movement.join(sessionId, { xMilli: playerSpawnXMilli(index) })
+        restored.push(sessionId)
+      }
+    }
     // Seed never leaves the server: it appears in no event and no payload.
     const shiftTicks = testShiftTicks()
     const seed = randomInt(2 ** 31)
@@ -655,6 +668,16 @@ export class TurnoverRoom extends Room {
     // The presenter takes the deal + the roster: phase → round, journal and
     // fired state reset, car floors seeded for the first ride leg's `from`.
     this.presenter.startRound(sim, playerIds)
+    // A restored slot sits at the spawn row while the client still shows the
+    // old round's position — the join-shaped personal snapshot is the first
+    // paint that reconciles them (the same one onJoin sends).
+    for (const sessionId of restored) {
+      this.router.toSelf(
+        'movement:snapshot',
+        sessionId,
+        this.presenter.movementSnapshotFor(sessionId),
+      )
+    }
     // AD-040 ambush authority (design: the AD-028 adapter inverted): the room
     // pushes its role/liveness view INTO the movement layer at round start.
     // The sim's own REND-02 liveness rule is the single home of "live staff".

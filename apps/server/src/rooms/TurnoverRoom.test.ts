@@ -2034,6 +2034,66 @@ describe('server:justice', () => {
     }
   })
 
+  it('re-deals the fired player join-shaped: movement slot restored at the next start (JUST-04, round-scoped teardown)', async () => {
+    vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
+    try {
+      const [host, a, b, c] = await roomWithFour()
+      const clients = [host, a, b, c]
+      const collectors = clients.map((room) => collectAll(room))
+      const { instance, staff, saboteur } = await startWithRoles(clients)
+      const worker = staff[0]
+      if (worker === undefined) throw new Error('no staff player')
+
+      // Conviction evidence: staff preps room 1, the saboteur un-preps it,
+      // the witness accuses — the saboteur is fired and the round ends.
+      await rideToRoom1(instance, worker)
+      worker.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(collectorOf(collectors, clients, worker), 'work:ended', instance)
+      await rideToRoom1(instance, saboteur)
+      saboteur.send('work:start', { type: 'work:start', floor: 'floor1', room: 1 })
+      await driveUntil(collectorOf(collectors, clients, saboteur), 'work:ended', instance)
+      worker.send('accuse', { type: 'accuse', targetId: saboteur.sessionId })
+      const saboteurCollector = collectorOf(collectors, clients, saboteur)
+      await driveUntil(collectorOf(collectors, clients, host), 'player:fired', instance)
+      await saboteurCollector.waitFor('spectator:snapshot')
+      // The in-round teardown holds: the saboteur's movement slot is gone.
+      const tornDown = instance.__movementDebug() as { positions: { playerId: string }[] }
+      expect(tornDown.positions.some((p) => p.playerId === saboteur.sessionId)).toBe(false)
+
+      // A fresh deal re-registers the slot join-shaped: a personal movement
+      // snapshot carrying their own row — the first paint after the old
+      // position went away with the slot.
+      const fresh = collectAll(saboteur)
+      const restored = fresh.waitFor('movement:snapshot', 4000, (payload) =>
+        (payload.players as { playerId: string }[]).some(
+          (p) => p.playerId === saboteur.sessionId,
+        ),
+      )
+      host.send('lobby:start', { type: 'lobby:start' })
+      await vi.waitFor(() => expect(instance?.__phase()).toBe('round'))
+      instance?.__driveTicks(1)
+      await restored
+      // And the slot is live: their own held walk streams again (the zombie
+      // regression this pins — a slot-less re-dealt player's intents were
+      // silently dropped and no stream ever carried them).
+      saboteur.send('move:start', { type: 'move:start', dir: 'left' })
+      const moved = await fresh.waitFor('player:moved', 4000, (payload) =>
+        payload.playerId === saboteur.sessionId,
+      )
+      expect(moved.payload.playerId).toBe(saboteur.sessionId)
+      saboteur.send('move:stop', { type: 'move:stop' })
+      const live = instance.__movementDebug() as { positions: { playerId: string }[] }
+      expect(live.positions.some((p) => p.playerId === saboteur.sessionId)).toBe(true)
+      fresh.stop()
+      host.leave()
+      a.leave()
+      b.leave()
+      c.leave()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('fires the accuser on a wrong accusation and rejects ineligible ones (JUST-09)', async () => {
     vi.stubEnv('TURNOVER_TEST_SHIFT_SECONDS', '60')
     try {

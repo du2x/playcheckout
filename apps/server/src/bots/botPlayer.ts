@@ -56,6 +56,8 @@ export interface BotWorld {
   recap: RoundRecap | null
   ambushesLanded: number
   stunsTaken: number
+  /** This bot was fired this round — intents would only earn justice errors. */
+  fired: boolean
   errors: number
   intentCount: number
   selfMoveCount: number
@@ -94,6 +96,7 @@ export function newBotWorld(name: string, selfId: string, shiftSeconds: number):
     recap: null,
     ambushesLanded: 0,
     stunsTaken: 0,
+    fired: false,
     errors: 0,
     intentCount: 0,
     selfMoveCount: 0,
@@ -121,6 +124,7 @@ function resetRoundState(world: BotWorld): void {
   world.riding = false
   world.verdict = null
   world.recap = null
+  world.fired = false
   world.roundStartedAtMs = Date.now()
 }
 
@@ -322,6 +326,20 @@ export function applyMessage(
     case 'stairs:ambush':
       world.ambushesLanded += 1
       return
+    case 'player:fired': {
+      const fired = payload as { playerId: string }
+      world.players.delete(fired.playerId)
+      if (fired.playerId === world.selfId) {
+        // The teardown cancels the channel silently (WORK-12) and drops the
+        // carry; mirroring that lets the policy idle instead of re-sending
+        // intents the room now answers with justice errors.
+        world.fired = true
+        world.work = null
+        world.carryGuest = null
+        world.moving = null
+      }
+      return
+    }
     case 'error':
       world.errors += 1
       return
@@ -421,6 +439,7 @@ export class BotPlayer {
       world.stairs = null
     }
     if (world.phase !== 'round' || world.role === null) return
+    if (world.fired) return
     if (world.work !== null && nowMs < world.work.endsAtMs) return
     const intent = this.decide(world, nowMs)
     if (intent === null) return

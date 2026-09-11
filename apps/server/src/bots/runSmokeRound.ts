@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util'
 import { Client } from '@colyseus/sdk'
-import { TUNING } from '@turnover/shared'
+import { PROTOCOL_REGISTRY, TUNING } from '@turnover/shared'
 import { BotPlayer, type BotRoom } from './botPlayer.js'
 import { newBotMemory, saboteurDecide, staffDecide } from './policies.js'
 
@@ -212,6 +212,38 @@ async function main(): Promise<number> {
     bot.listen()
     bot.start(120)
     sessions.push({ bot, room, memory })
+  }
+
+  // Wire echo under --trace: per-bot receipt of the low-rate lifecycle and
+  // work/room/justice messages (20 Hz position noise excluded). Diagnosis
+  // surface for zombie bots — a model that stopped emitting intents mid-round.
+  if (cli.trace) {
+    const echoed = new Set([
+      'work:started',
+      'work:ended',
+      'room:prepped',
+      'room:trashed',
+      'room:carded',
+      'room:observed',
+      'player:fired',
+      'stairs:ambush',
+      'stairs:ambushed',
+      'error',
+      'round:ended',
+      'round:recap',
+    ])
+    for (const session of sessions) {
+      for (const name of [...Object.keys(PROTOCOL_REGISTRY), 'error']) {
+        if (!echoed.has(name)) continue
+        session.room.onMessage(name, (envelope: unknown) => {
+          const payload = (envelope as { payload?: unknown }).payload
+          console.log(
+            `  [wire] t=${Math.round(Date.now() / 1000) % 1000} ${session.bot.world.name} ` +
+              `${name} ${JSON.stringify(payload)?.slice(0, 130)}`,
+          )
+        })
+      }
+    }
   }
 
   if (cli['hold-start'] > 0) {
