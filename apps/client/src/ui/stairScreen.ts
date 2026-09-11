@@ -210,30 +210,34 @@ export function syncStairScreen(breath: StairBreathView | null): void {
   const screen = document.getElementById('elevator-stair-screen')
   if (screen === null) return
   if (breath === null) {
+    // Fed every frame while no breath runs — setAttribute only on the edge.
+    if (screen.hasAttribute('hidden')) return
     screen.setAttribute('hidden', '')
     return
   }
   screen.removeAttribute('hidden')
   const dir = stairDirection(breath.from, breath.to)
   const badge = screen.querySelector('.stair-screen-dir')
-  if (badge !== null) badge.textContent = dir === 'up' ? '▲ up' : '▼ down'
+  const badgeText = dir === 'up' ? '▲ up' : '▼ down'
+  if (badge !== null && badge.textContent !== badgeText) badge.textContent = badgeText
   const clock = screen.querySelector<HTMLElement>('.stair-screen-clock')
   if (clock !== null) {
     clock.dataset.phase = 'breath'
-    clock.textContent = `${Math.ceil(breath.remainingMs / 1000)}s`
+    const clockText = `${Math.ceil(breath.remainingMs / 1000)}s`
+    if (clock.textContent !== clockText) clock.textContent = clockText
   }
   const route = screen.querySelector('.stair-screen-route')
-  if (route !== null) {
-    route.textContent = `${floorLabel(breath.from)} → ${floorLabel(breath.to)}`
-  }
+  const routeText = `${floorLabel(breath.from)} → ${floorLabel(breath.to)}`
+  if (route !== null && route.textContent !== routeText) route.textContent = routeText
   const phase = screen.querySelector<HTMLElement>('.stair-screen-phase')
   if (phase !== null) {
     phase.dataset.phase = 'breath'
-    phase.textContent = 'catching breath'
+    if (phase.textContent !== 'catching breath') phase.textContent = 'catching breath'
   }
   const arrow = screen.querySelector<HTMLElement>('.stair-screen-arrow')
   if (arrow !== null) {
     arrow.dataset.phase = 'breath'
-    arrow.textContent = dir === 'up' ? '▲' : '▼'
+    const arrowText = dir === 'up' ? '▲' : '▼'
+    if (arrow.textContent !== arrowText) arrow.textContent = arrowText
   }
 }

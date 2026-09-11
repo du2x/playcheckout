@@ -249,6 +249,15 @@ export class WorldScene extends Phaser.Scene {
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
   private work: { startedAt: number; seconds: number } | null = null
+  /** Cached per-frame DOM refs, self-healing: app.ts rebuilds the HUD root on
+   *  message batches, so a cached element is re-queried once it detaches
+   *  (isConnected) instead of re-querying the document every frame. */
+  private panelRefs: {
+    panel: HTMLElement
+    floor: Element | null
+    light: HTMLElement | null
+  } | null = null
+  private workFill: HTMLElement | null = null
   /** The interior last observed for the own segment (FR-10 read half). */
   private interior: { floor: string; room: number; state: RoomState } | null = null
   /** The evidence session + card/cue markers as a view module
@@ -639,7 +648,8 @@ export class WorldScene extends Phaser.Scene {
     if (this.breathChip !== null) {
       this.breathChip.setVisible(breathRemaining !== null)
       if (breathRemaining !== null && this.breathChipClock !== null) {
-        this.breathChipClock.setText(`${Math.ceil(breathRemaining / 1000)}s`)
+        const text = `${Math.ceil(breathRemaining / 1000)}s`
+        if (this.breathChipClock.text !== text) this.breathChipClock.setText(text)
       }
     }
     this.syncBreathSprite(breathRemaining !== null)
@@ -1531,7 +1541,10 @@ export class WorldScene extends Phaser.Scene {
   private syncDesk(): void {
     if (this.deskHint !== null) {
       const guestQueued = [...this.guests.values()].some((g) => g.floor === 'lobby')
-      this.deskHint.style.visibility = this.ownInDeskZone() && guestQueued ? 'visible' : 'hidden'
+      const visibility = this.ownInDeskZone() && guestQueued ? 'visible' : 'hidden'
+      if (this.deskHint.style.visibility !== visibility) {
+        this.deskHint.style.visibility = visibility
+      }
     }
   }
 
@@ -1987,17 +2000,35 @@ body.interior-full #desk-bell {
   }
 
   private updatePanel(): void {
-    const panel = document.querySelector('#elevator-panel')
-    if (panel === null) return
+    // The panel is self-healing: view re-renders rebuild the DOM element, so
+    // the cached refs are dropped the frame they detach (isConnected) —
+    // queries happen on rebuild only, not every frame.
+    let refs = this.panelRefs
+    if (refs === null || !refs.panel.isConnected) {
+      const panel = document.querySelector<HTMLElement>('#elevator-panel')
+      if (panel === null) {
+        this.panelRefs = null
+        return
+      }
+      refs = {
+        panel,
+        floor: panel.querySelector('#panel-floor'),
+        light: panel.querySelector<HTMLElement>('#panel-light'),
+      }
+      this.panelRefs = refs
+    }
     // Car floor + hall-call light read from the presenter (AD-038); single
-    // car (cycle 3.E, AD-040) — one readout, position-only.
+    // car (cycle 3.E, AD-040) — one readout, position-only. Writes only on
+    // change: same-value text/style writes still dirty the DOM.
     const p = this.elevatorPresenter?.panelState()
-    const floorEl = panel.querySelector('#panel-floor')
-    if (floorEl !== null) floorEl.textContent = p?.floor ?? '?'
+    const floorText = p?.floor ?? '?'
+    if (refs.floor !== null && refs.floor.textContent !== floorText) {
+      refs.floor.textContent = floorText
+    }
     // Hall-call light (AD-024): amber while the car owes the floor a stop.
-    const light = panel.querySelector('#panel-light')
-    if (light instanceof HTMLElement) {
-      light.style.color = (p?.light ?? false) ? '#e8c34a' : '#4a5568'
+    const lightColor = (p?.light ?? false) ? '#e8c34a' : '#4a5568'
+    if (refs.light !== null && refs.light.style.color !== lightColor) {
+      refs.light.style.color = lightColor
     }
   }
 
@@ -2258,7 +2289,7 @@ body.interior-full #desk-bell {
     // Anger cues (cycle 3.3, FR-29b stage 1): TTL-bound Text "!" at the room
     // door — sameFloor visibility, pruned here so the harness pollution
     // window stays short.
-    {
+    if (this.angerCues.length !== 0) {
       const now = Date.now()
       this.angerCues = this.angerCues.filter((cue) => {
         if (now >= cue.until) {
@@ -2284,8 +2315,10 @@ body.interior-full #desk-bell {
     this.syncTenancyMarkers()
     for (const [key, marker] of this.tenancyMarkers) {
       const floor = key.split(':')[0] ?? ''
-      marker.style.top = `${this.laneY(floor) - 148}px`
-      marker.style.visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
+      const top = `${this.laneY(floor) - 148}px`
+      if (marker.style.top !== top) marker.style.top = top
+      const visibility = this.spectator || floor === this.viewFloor ? 'visible' : 'hidden'
+      if (marker.style.visibility !== visibility) marker.style.visibility = visibility
     }
     this.evidenceView.syncCuePositions()
     this.evidenceView.syncCues(Date.now())
@@ -2338,16 +2371,20 @@ body.interior-full #desk-bell {
     // The stairwell marker sits at the west landing of the rendered lane
     // (every floor has one); the ambush DOM expires per frame.
     if (this.stairMarker !== null) {
-      this.stairMarker.style.top = `${this.laneY(this.viewFloor) - 150}px`
+      const top = `${this.laneY(this.viewFloor) - 150}px`
+      if (this.stairMarker.style.top !== top) this.stairMarker.style.top = top
     }
     this.syncAmbushDom()
     // Work-channel DOM state: bar fill follows elapsed time; the interior
     // label lives only while the own rectangle stands inside the segment.
     if (this.work !== null) {
-      const fill = document.querySelector('#work-progress-fill')
-      if (fill instanceof HTMLElement) {
+      if (this.workFill === null || !this.workFill.isConnected) {
+        this.workFill = document.querySelector<HTMLElement>('#work-progress-fill')
+      }
+      if (this.workFill !== null) {
         const elapsed = (Date.now() - this.work.startedAt) / 1000
-        fill.style.width = `${Math.min(100, (elapsed / this.work.seconds) * 100)}%`
+        const width = `${Math.min(100, (elapsed / this.work.seconds) * 100)}%`
+        if (this.workFill.style.width !== width) this.workFill.style.width = width
       }
     }
     this.updateRoomLabel()

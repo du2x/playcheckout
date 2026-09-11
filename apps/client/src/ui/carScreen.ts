@@ -432,7 +432,10 @@ export function setCarScreenFloor(floor: string | null): void {
   const screen = document.getElementById('elevator-car-screen')
   if (screen === null) return
   const readout = screen.querySelector('.car-screen-floor')
-  if (readout !== null) readout.textContent = floor === null ? '' : floorLabel(floor as FloorId)
+  if (readout !== null) {
+    const text = floor === null ? '' : floorLabel(floor as FloorId)
+    if (readout.textContent !== text) readout.textContent = text
+  }
   syncHereHalo()
 }
 
@@ -447,9 +450,9 @@ export function setCarScreenState(state: string | null): void {
   const screen = document.getElementById('elevator-car-screen')
   if (screen === null) return
   const line = screen.querySelector('.car-screen-state')
-  if (line !== null) line.textContent = state ?? ''
+  if (line !== null && line.textContent !== (state ?? '')) line.textContent = state ?? ''
   const busy = state !== null && state !== 'doors open' && state !== 'doors closed'
-  if (line !== null) line.classList.toggle('busy', busy)
+  line?.classList.toggle('busy', busy)
   const arrow = screen.querySelector<HTMLElement>('.car-screen-arrow')
   if (arrow === null) return
   let dir: 'up' | 'down' | 'none' = 'none'
@@ -459,10 +462,13 @@ export function setCarScreenState(state: string | null): void {
     const there = target === null ? -1 : FLOOR_ORDER.indexOf(target)
     if (there >= 0 && here >= 0 && there !== here) dir = there > here ? 'up' : 'down'
   }
-  arrow.dataset.dir = dir
-  arrow.classList.toggle('up', dir === 'up')
-  arrow.classList.toggle('down', dir === 'down')
-  arrow.textContent = dir === 'down' ? '▼' : '▲'
+  // The arrow is fed every frame while riding; writes ride the dir edge.
+  if (arrow.dataset.dir !== dir) {
+    arrow.dataset.dir = dir
+    arrow.classList.toggle('up', dir === 'up')
+    arrow.classList.toggle('down', dir === 'down')
+    arrow.textContent = dir === 'down' ? '▼' : '▲'
+  }
 }
 
 /**
@@ -477,6 +483,7 @@ export function setCarScreenDoors(openAmount: number): void {
   for (const leaf of screen.querySelectorAll<HTMLElement>('.car-door-leaf')) {
     const isLeft = leaf.classList.contains('car-door-left')
     const shift = isLeft ? -clamped * 100 : clamped * 100
-    leaf.style.transform = `translateX(${shift}%)`
+    const transform = `translateX(${shift}%)`
+    if (leaf.style.transform !== transform) leaf.style.transform = transform
   }
 }

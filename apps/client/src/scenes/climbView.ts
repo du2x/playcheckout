@@ -43,6 +43,10 @@ export class ClimbView {
   private route: Phaser.GameObjects.Text | null = null
   private phaseLabel: Phaser.GameObjects.Text | null = null
   private arrow: Phaser.GameObjects.Text | null = null
+  private dirLabel: Phaser.GameObjects.Text | null = null
+  /** The stun palette edge — text/color writes re-raster their texture, so
+   *  the per-frame sync writes only on change. */
+  private lastStunned: boolean | null = null
   private fx: {
     flashWhite: Phaser.GameObjects.Rectangle
     flashRed: Phaser.GameObjects.Rectangle
@@ -75,7 +79,7 @@ export class ClimbView {
     if (this.canvas === null || this.band === null) return
     if (readout === null || readout.phase === 'breath') {
       this.canvas.setVisible(false)
-      this.destroyClimber()
+      this.hideClimber()
     } else {
       this.canvas.setVisible(true)
       this.syncClimb(readout, nowMs)
@@ -193,6 +197,7 @@ export class ClimbView {
     dirLabel.setOrigin(1, 0.5)
     dirLabel.setName('stairDir')
     container.add(dirLabel)
+    this.dirLabel = dirLabel
     const route = scene.add.text(-150, -192, '', {
       fontSize: '13px',
       color: '#9fb0c0',
@@ -329,8 +334,13 @@ export class ClimbView {
     // The landing plates are positional (low = walk w=0): on a down-transit
     // the walker departs HIGH, so `to` is the low plate, `from` the high one.
     const landings = climbLandingFloors(readout.from, readout.to, dir)
-    if (this.glyphLow !== null) this.glyphLow.setText(label(landings.low))
-    if (this.glyphHigh !== null) this.glyphHigh.setText(label(landings.high))
+    // Per-frame text syncs write only on change — setText re-rasters.
+    const lowLabel = label(landings.low)
+    const highLabel = label(landings.high)
+    if (this.glyphLow !== null && this.glyphLow.text !== lowLabel) this.glyphLow.setText(lowLabel)
+    if (this.glyphHigh !== null && this.glyphHigh.text !== highLabel) {
+      this.glyphHigh.setText(highLabel)
+    }
     const stunned = readout.phase === 'stunned'
     // Band scroll: the walker sits at the fixed screen point (-60, 120); the
     // band slides so the stair surface stays under the feet (the lurch adds
@@ -353,6 +363,7 @@ export class ClimbView {
     // cast shadow lags the walker ever so slightly.
     const climber = this.ensureClimber()
     if (climber !== null) {
+      climber.setVisible(true)
       climber.setPosition(-60, 120 - climbBobY(shown))
       climber.flipX = dir === 'down'
       if (readout.phase === 'transit') {
@@ -369,13 +380,15 @@ export class ClimbView {
     }
     // Light-well flicker (night-juice): every core wobbles on its own seed.
     for (const { glow, seed } of this.glows) glow.setAlpha(0.15 * glowFlicker(nowMs, seed))
-    // The wall sign readouts — the climb owns the countdown.
+    // The wall sign readouts — the climb owns the countdown. Writes only on
+    // change (setText/setColor re-raster the text texture every touched frame).
     if (this.clock !== null) {
-      this.clock.setText(`${Math.ceil(readout.remainingMs / 1000)}s`)
-      this.clock.setColor(stunned ? '#ff9a8a' : '#ffd98a')
+      const text = `${Math.ceil(readout.remainingMs / 1000)}s`
+      if (this.clock.text !== text) this.clock.setText(text)
     }
     if (this.route !== null) {
-      this.route.setText(`${label(readout.from)} → ${label(readout.to)}`)
+      const text = `${label(readout.from)} → ${label(readout.to)}`
+      if (this.route.text !== text) this.route.setText(text)
     }
     if (this.phaseLabel !== null) {
       const labels: Record<string, string> = {
@@ -383,21 +396,32 @@ export class ClimbView {
         breath: 'catching breath',
         stunned: 'stunned',
       }
-      this.phaseLabel.setText(labels[readout.phase] ?? readout.phase)
-      this.phaseLabel.setColor(stunned ? '#ff7a6a' : '#e6c56a')
+      const text = labels[readout.phase] ?? readout.phase
+      if (this.phaseLabel.text !== text) this.phaseLabel.setText(text)
     }
     if (this.arrow !== null) {
-      this.arrow.setText(dir === 'up' ? '▲' : '▼')
-      this.arrow.setColor(stunned ? '#ff7a6a' : '#e6c56a')
+      const text = dir === 'up' ? '▲' : '▼'
+      if (this.arrow.text !== text) this.arrow.setText(text)
     }
-    const dirLabel = this.canvas?.getByName('stairDir') as Phaser.GameObjects.Text | null
-    if (dirLabel !== null) dirLabel.setText(dir === 'up' ? '▲ up' : '▼ down')
+    if (this.dirLabel !== null) {
+      const text = dir === 'up' ? '▲ up' : '▼ down'
+      if (this.dirLabel.text !== text) this.dirLabel.setText(text)
+    }
+    // The stun palette rides one edge guard.
+    if (this.lastStunned !== stunned) {
+      this.lastStunned = stunned
+      this.clock?.setColor(stunned ? '#ff9a8a' : '#ffd98a')
+      this.phaseLabel?.setColor(stunned ? '#ff7a6a' : '#e6c56a')
+      this.arrow?.setColor(stunned ? '#ff7a6a' : '#e6c56a')
+    }
     // The scuffle/blackout sequence (victim only, abstract — no silhouette).
     this.syncFx(readout, nowMs)
   }
 
   /** The container-owned shadow climber sprite, created on first need, never
-   *  top-level (the ART staff-walk harness counts must not see it). */
+   *  top-level (the ART staff-walk harness counts must not see it). It
+   *  survives the breath and the visit end as a hidden member — visit edges
+   *  toggle visibility instead of churning GameObjects. */
   private ensureClimber(): Phaser.GameObjects.Sprite | null {
     if (this.canvas === null) return null
     if (this.climber === null) {
@@ -411,9 +435,9 @@ export class ClimbView {
     return this.climber
   }
 
-  private destroyClimber(): void {
-    this.climber?.destroy()
-    this.climber = null
+  private hideClimber(): void {
+    this.climber?.setVisible(false)
+    this.shade?.setVisible(false)
   }
 
   /** Drive the scuffle/blackout FX stack from the stun clock (victim only). */
