@@ -105,6 +105,14 @@ export class StairsVisit {
   /** The derived phase last tick — the breath edge detector's memory. */
   private lastPhase: StairPhase | null = null
 
+  /** True while a visit anchor is live (any phase). The sim drops every move
+   *  intent for a player its `stairs` map holds — transit and breath alike —
+   *  so input handlers outside the frame loop gate on this, not on a cached
+   *  tick readout. */
+  active(): boolean {
+    return this.anchor !== null
+  }
+
   /** A personal snapshot's stairs row re-anchors the clock; absent = the
    *  visit is over server-side (the row's presence IS the stairs truth). */
   onSnapshot(row: MovementSnapshotStairs | null, nowMs: number): void {

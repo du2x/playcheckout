@@ -242,6 +242,10 @@ export class WorldScene extends Phaser.Scene {
    *  by the own readout, destroyed when the breath ends. Own-viewer only. */
   private breathSprite: Phaser.GameObjects.Sprite | null = null
   private ownMoving: 'left' | 'right' | null = null
+  /** Direction keys physically held, most-recent last — the stairs visit
+   *  swallows move intents whole, so the keydown record survives the visit
+   *  and the visit-end re-arm replays the newest held key as a fresh intent. */
+  private heldMoveKeys: ('left' | 'right')[] = []
   private viewFloor = 'lobby'
   /** The actor's own running channel: DOM progress bar state (never a kind). */
   private work: { startedAt: number; seconds: number } | null = null
@@ -352,6 +356,7 @@ export class WorldScene extends Phaser.Scene {
     this.guestSeeds.clear()
     this.cars.clear()
     this.ownMoving = null
+    this.heldMoveKeys = []
     this.viewFloor = 'lobby'
     this.work = null
     this.interior = null
@@ -1327,13 +1332,24 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private beginMove(dir: 'left' | 'right'): void {
+    // Record the held key before any gate: keyup must always unrecord, and
+    // the visit-end re-arm replays the newest still-held key (two keys held
+    // → the later keydown wins, matching the ungated order below).
+    this.heldMoveKeys = [...this.heldMoveKeys.filter((d) => d !== dir), dir]
     if (this.selfFired) return
+    // AD-040: the whole stairs visit is server-immobile — the sim drops move
+    // intents while its `stairs` map holds the player (transit AND breath),
+    // so a predicted walk here would drift off the server's x with no stream
+    // to pull it back (the server only speaks when its own position moves).
+    // The visit-end re-arm replays the held key as a fresh intent.
+    if (this.stairsVisit.active()) return
     if (this.ownMoving === dir) return
     this.ownMoving = dir
     this.sendMoveStart(dir)
   }
 
   private endMove(dir: 'left' | 'right'): void {
+    this.heldMoveKeys = this.heldMoveKeys.filter((d) => d !== dir)
     if (this.selfFired) return
     if (this.ownMoving !== dir) return
     this.ownMoving = null
@@ -2117,14 +2133,27 @@ body.interior-full #desk-bell {
           ownEnd.x = STAIRS_ARRIVAL_X_TILES
           ownEnd.targetX = null
         }
+        // The visit swallowed every move intent (the sim cleared the walk at
+        // stairs entry), so a key still held replays as a FRESH intent —
+        // ownMoving may be stale from before the visit and would early-return
+        // beginMove without a send, walking the client off a standing server.
+        const held = this.heldMoveKeys[this.heldMoveKeys.length - 1]
+        if (held !== undefined) {
+          this.ownMoving = null
+          this.beginMove(held)
+        }
       }
       // 'stun-resumed': the heartbeat dies in the audio watcher below; the
       // lurch t0 came with the transition (readout.lurchElapsedMs).
     }
     const ownInStairBox = stairReadout !== null && stairReadout.phase !== 'breath'
     // Local prediction for the own rectangle; server positions reconcile it.
+    // The stairs visit freezes prediction for EVERY phase — the sim holds the
+    // player immobile the whole visit, so a predicted walk (breath included)
+    // drifts with no correction coming: the stream only speaks when the
+    // server's own position changes, and it never does mid-visit.
     const own = this.players.get(this.ownId)
-    if (own !== undefined && this.ownMoving !== null) {
+    if (own !== undefined && this.ownMoving !== null && stairReadout === null) {
       own.x += this.ownMoving === 'left' ? -SPEED_TILES_PER_SEC * dt : SPEED_TILES_PER_SEC * dt
       own.x = Math.min(30, Math.max(0, own.x))
     }

@@ -132,6 +132,43 @@ async function pressToRoute(page: Page, key: string, route: string): Promise<voi
   }
 }
 
+/** The own body's x (px) via its top-level name label, plus whether the
+ *  catching-breath pose sprite is currently the visible own body. The label
+ *  mirrors display.x every frame, so it tracks the body across the
+ *  breath→walk texture swap without naming sprites. */
+async function ownBodyProbe(
+  page: Page,
+  name: string,
+): Promise<{ x: number | null; posing: boolean }> {
+  return page.evaluate((playerName) => {
+    const hook = (
+      window as unknown as {
+        __TURNOVER__?: {
+          scene: (name: string) => {
+            children: {
+              list: {
+                type: string
+                text?: string
+                x: number
+                visible?: boolean
+                texture?: { key?: string }
+              }[]
+            }
+          } | null
+        }
+      }
+    ).__TURNOVER__
+    const scene = hook?.scene('Round')
+    if (scene === null || scene === undefined) return { x: null, posing: false }
+    const list = scene.children.list
+    const label = list.find((c) => c.type === 'Text' && c.text === playerName)
+    const posing = list.some(
+      (c) => c.type === 'Sprite' && c.texture?.key === 'staff-breath' && c.visible === true,
+    )
+    return { x: label?.x ?? null, posing }
+  }, name)
+}
+
 test.describe('client:stairs', () => {
   test('marker, stairs screen, ambush toast + confirmation, single panel (STAIRS-04/17/18/19)', async ({
     browser,
@@ -312,6 +349,94 @@ test.describe('client:stairs', () => {
       { timeout: 8000 },
     )
     expect(await saboteur.textContent('#ambush-confirm')).toContain(`landed on ${victimName}`)
+
+    for (const page of pages) await page.context().close()
+  })
+
+  // STAIRS-06/09 (gate scenario client:stairs-breath-lock): the sim holds a
+  // stairs visitor immobile for the WHOLE visit — move intents are dropped
+  // while its `stairs` map holds the player, breath included — so the client
+  // must not predict a walk during the breath, and a key held across the
+  // visit replays as a fresh intent when it frees (the entry cleared the
+  // server's walk; no new keydown will ever arrive while the key stays down).
+  test('breath freezes the own walk; a held key replays fresh at visit end (STAIRS-06/09)', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000)
+    const pages = await Promise.all(
+      Array.from({ length: 2 }, () => browser.newContext().then((c) => c.newPage())),
+    )
+    const host = pages[0] as Page
+    const code = await createRoom(host, 'ada')
+    const rider = pages[1] as Page
+    await join(rider, code, 'bruno')
+    await host.waitForFunction(() => document.querySelectorAll('#roster li').length === 2)
+
+    // Pre-round ride (AD-005/015): bruno walks west and rides up; the arrival
+    // breath stands him at STAIRS_ARRIVAL_X_TILES (32 px) on the mezzanine.
+    await walkToMouth(rider)
+    await rider.keyboard.press('ArrowUp')
+    await rider.waitForFunction(
+      () => {
+        const hook = (
+          window as unknown as {
+            __TURNOVER__?: {
+              scene: (name: string) => {
+                children: {
+                  list: { type: string; visible?: boolean; texture?: { key?: string } }[]
+                }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = hook?.scene('Round')
+        const list = scene?.children.list ?? []
+        return list.some(
+          (c) => c.type === 'Sprite' && c.texture?.key === 'staff-breath' && c.visible === true,
+        )
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+
+    // Hold a direction through the whole breath: the pin — every sample while
+    // the pose is up reads the arrival x exactly. The buggy build predicts the
+    // walk here (6 tiles/s ≈ 2 full tiles of drift inside the 2 s window)
+    // while the server stands still and no position stream ever corrects it.
+    await rider.keyboard.down('ArrowRight')
+    const samples: number[] = []
+    for (let i = 0; i < 12; i++) {
+      const probe = await ownBodyProbe(rider, 'bruno')
+      if (!probe.posing || probe.x === null) break
+      samples.push(probe.x)
+      await rider.waitForTimeout(120)
+    }
+    expect(samples.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(samples)).toEqual(new Set([32]))
+
+    // The re-arm: the visit ended under a still-held key, so the client
+    // replays it as a FRESH move intent (Playwright sends no key repeats —
+    // without the replay the body would stand at 32 px forever) and the walk
+    // resumes east, client and server stepping from the same arrival x.
+    await rider.waitForFunction(
+      (playerName) => {
+        const hook = (
+          window as unknown as {
+            __TURNOVER__?: {
+              scene: (name: string) => {
+                children: { list: { type: string; text?: string; x: number }[] }
+              } | null
+            }
+          }
+        ).__TURNOVER__
+        const scene = hook?.scene('Round')
+        const label = scene?.children.list.find((c) => c.type === 'Text' && c.text === playerName)
+        return label !== undefined && label.x > 64
+      },
+      'bruno',
+      { timeout: 5000 },
+    )
+    await rider.keyboard.up('ArrowRight')
 
     for (const page of pages) await page.context().close()
   })

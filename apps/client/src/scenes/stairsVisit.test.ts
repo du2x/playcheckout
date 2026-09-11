@@ -167,3 +167,30 @@ describe('stairsVisit — transitions', () => {
     expect(visit.tick(11_500)).toEqual({ readout: null, transitions: [] })
   })
 })
+
+describe('stairsVisit — active', () => {
+  const row = (phase: 'transit' | 'breath' | 'stunned', remainingSeconds: number) => ({
+    from: 'floor2' as FloorId,
+    to: 'floor3' as FloorId,
+    phase,
+    remainingSeconds,
+  })
+
+  // The movement lock's source of truth (the sim drops move intents for the
+  // whole visit): active() must track the anchor across every phase and both
+  // expiry paths — the tick's visit-ended edge and the null snapshot row.
+  it('tracks the anchor through every phase and both expiry paths', () => {
+    const visit = new StairsVisit()
+    expect(visit.active()).toBe(false)
+    visit.onSnapshot(row('transit', 3), 10_000)
+    expect(visit.active()).toBe(true)
+    visit.onSnapshot(row('breath', 2), 13_000)
+    expect(visit.active()).toBe(true)
+    visit.tick(15_000) // breath expired → visit-ended cleared the anchor
+    expect(visit.active()).toBe(false)
+    visit.onSnapshot(row('stunned', 20), 20_000)
+    expect(visit.active()).toBe(true)
+    visit.onSnapshot(null, 20_500)
+    expect(visit.active()).toBe(false)
+  })
+})
