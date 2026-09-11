@@ -62,7 +62,11 @@ CI runs gates 1–3 on every push and PR (`.github/workflows/ci.yml`).
 
 `pnpm bots:smoke` runs AI staff members (staff churn policy + one saboteur policy, dealt by the room like any player) through full rounds as real Colyseus clients — protocol intents only, no hidden state. It is deliberately NOT a CI gate: it is the automated pre-check before gate 4's human round. Standalone (`--players 4..6`, `--rounds`, `--shift-seconds`, `--guest-scale`, `--expect staff|saboteur`) it boots its own server; `--connect ws://… --code CÓDIGO` sends the bots into a live `pnpm boot` room instead (add `--auto-start` to let a bot host start the round, otherwise a human host starts). Exit 0 = every round reached a verdict + recap; a stall aborts with a per-bot state dump.
 
-To WATCH a bot round, join the room from the browser before it starts and tick **watch (spectator)** on the join form: a dev-only building-wide spectator seat (the FR-20 fired-player overview from t=0) — no roster slot, no role, every floor rendered as stacked lanes. The server refuses spectator joins in production.
+To WATCH a bot round, join the room from the browser before the round starts and tick **watch (spectator)** on the join form: a dev-only building-wide spectator seat (the FR-20 fired-player overview from t=0) — no roster slot, no role, every floor rendered as stacked lanes. The server refuses spectator joins in production. Three orders work:
+
+- **Bots create the room on your dev server (recommended):** with `pnpm boot` running, `pnpm bots:smoke --connect ws://127.0.0.1:2567 --hold-start 30` → the smoke creates the room, prints the code, and holds the start for 30 s → open `http://localhost:5173/?room=CÓDIGO`, join with **watch** checked → the round deals and plays by itself.
+- **Browser first:** create the room in the browser (you are the host) → `pnpm bots:smoke --connect ws://127.0.0.1:2567 --code CÓDIGO --players 4` → join a second tab with **watch** checked → click **Start round**.
+- **No boot needed:** `pnpm bots:smoke --players 4 --hold-start 30` boots its own server and prints its URL (needs the client dist built).
 
 ## Architecture notes
 

@@ -87,6 +87,7 @@ async function main(): Promise<number> {
       connect: { type: 'string' },
       code: { type: 'string' },
       'auto-start': { type: 'boolean', default: false },
+      'hold-start': { type: 'string' },
       trace: { type: 'boolean', default: false },
     },
   })
@@ -97,6 +98,7 @@ async function main(): Promise<number> {
     rounds: num(values.rounds, 1),
     'shift-seconds': num(values['shift-seconds'], 90),
     'guest-scale': num(values['guest-scale'], 0.25),
+    'hold-start': num(values['hold-start'], 0),
     expect: values.expect,
     connect: values.connect,
     code: values.code,
@@ -106,13 +108,20 @@ async function main(): Promise<number> {
   if (!Number.isInteger(cli.players) || !Number.isInteger(cli.rounds)) {
     fail('--players and --rounds take integers')
   }
+  if (cli['hold-start'] < 0 || !Number.isFinite(cli['hold-start'])) {
+    fail('--hold-start takes seconds ≥ 0')
+  }
   if (cli.players < 1 || cli.players > TUNING.PLAYERS_MAX) {
     fail(`--players must be 1..${TUNING.PLAYERS_MAX}`)
   }
-  if (cli.connect === undefined && cli.players < TUNING.PLAYERS_MIN) {
+  // Create mode (default self-hosted, or --connect without --code): the bots
+  // ARE the whole roster, so the room needs a full deal. Join mode
+  // (--connect --code): --players counts only the bots entering the room.
+  const createsRoom = cli.code === undefined
+  if (createsRoom && cli.players < TUNING.PLAYERS_MIN) {
     fail(
-      `self-hosted --players must be ${TUNING.PLAYERS_MIN}..${TUNING.PLAYERS_MAX} ` +
-        `(with --connect it counts only the bots joining an existing room)`,
+      `--players must be ${TUNING.PLAYERS_MIN}..${TUNING.PLAYERS_MAX} when the bots create ` +
+        `the room (with --connect --code it counts only the joining bots)`,
     )
   }
   if (cli.rounds < 1) fail('--rounds must be ≥ 1')
@@ -125,10 +134,12 @@ async function main(): Promise<number> {
   if (cli.expect !== undefined && cli.expect !== 'staff' && cli.expect !== 'saboteur') {
     fail('--expect must be "staff" or "saboteur"')
   }
-  if (cli.connect !== undefined && cli.code === undefined) fail('--connect requires --code')
   if (cli.connect === undefined && cli.code !== undefined) fail('--code requires --connect')
-  if (cli.connect === undefined && cli['auto-start']) {
-    fail('--auto-start only applies to --connect')
+  if (createsRoom && cli['auto-start']) {
+    fail(
+      '--auto-start only applies to --connect --code: rooms the bots create ' +
+        'start on their own (use --hold-start to leave a spectator window)',
+    )
   }
   if (process.env.NODE_ENV === 'production') {
     fail('refusing to run under NODE_ENV=production — the shift seam is inert there')
@@ -158,7 +169,7 @@ async function main(): Promise<number> {
   console.log(
     `turnover bot smoke — ${cli.players} bots · ${cli.rounds} round(s) · ` +
       `shift ${cli['shift-seconds']}s · guest scale ${cli['guest-scale']} · ${url}` +
-      (cli.connect !== undefined ? ` room ${cli.code}` : ''),
+      (cli.code !== undefined ? ` room ${cli.code}` : createsRoom ? ' (creating the room)' : ''),
   )
 
   const sessions: Session[] = []
@@ -173,11 +184,20 @@ async function main(): Promise<number> {
       : await client.joinById(code, { name })) as unknown as BotRoom
     if (code === null) {
       code = room.roomId
-      console.log(`room ${code} created — humans may join it too while the smoke runs`)
-      console.log(
-        `spectate: open ${url.replace('ws', 'http')} and join ${code} ` +
-          `with "watch (spectator)" checked (dev builds only)`,
-      )
+      if (cli.connect !== undefined) {
+        // Created on the user's dev server: their vite client already talks
+        // to it, so the ?room= deep link is the shortest path to spectating.
+        console.log(
+          `room ${code} created on the dev server — spectate: open ` +
+            `http://localhost:5173/?room=${code} and join with "watch (spectator)" checked`,
+        )
+      } else {
+        console.log(`room ${code} created — humans may join it too while the smoke runs`)
+        console.log(
+          `spectate: open ${url.replace('ws', 'http')} and join ${code} ` +
+            `with "watch (spectator)" checked (dev builds only)`,
+        )
+      }
     }
     const memory = newBotMemory()
     const bot = new BotPlayer(room, {
@@ -194,14 +214,26 @@ async function main(): Promise<number> {
     sessions.push({ bot, room, memory })
   }
 
+  if (cli['hold-start'] > 0) {
+    console.log(
+      `holding the first start for ${cli['hold-start']}s — join ${code} with ` +
+        `"watch (spectator)" checked to watch this round live`,
+    )
+  }
+
   // Lobby kicker: the host bot sends lobby:start whenever the room sits
-  // outside a round (self-hosted always; --connect only with --auto-start).
+  // outside a round. Bot-created rooms always self-start (self-hosted and
+  // --connect without --code); joining an existing room needs --auto-start
+  // (a bot only becomes host there by migration). --hold-start N keeps the
+  // first start on hold for N seconds so a browser spectator can join first.
+  const holdUntil = Date.now() + cli['hold-start'] * 1000
   let lastKick = 0
   const kicker = setInterval(() => {
+    if (Date.now() < holdUntil) return
     if (sessions.some((s) => s.bot.world.phase === 'round')) return
     const host = sessions.find((s) => s.bot.world.isHost)
     if (host === undefined) return
-    if (cli.connect !== undefined && !cli['auto-start']) return
+    if (!createsRoom && !cli['auto-start']) return
     if (host.bot.world.roster.length < TUNING.PLAYERS_MIN) return
     if (Date.now() - lastKick < 3000) return
     lastKick = Date.now()
